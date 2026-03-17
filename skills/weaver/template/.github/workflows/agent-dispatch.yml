@@ -1,0 +1,837 @@
+# Agent Dispatch Workflow — Self-Chaining Queue Processor
+#
+# Picks the next eligible issue from the queue, runs the appropriate CLI agent
+# in an isolated git worktree, pushes a branch and opens a PR, then chains
+# itself to process the next issue.
+#
+# Triggers: workflow_dispatch (from planning, review, sweep, or manual)
+#
+# Queue priority: status:pr-open issues first, then oldest issue number.
+# Chain stops when: no eligible issues, deps unmet, budget exhausted, or
+# chain depth exceeds 25.
+
+name: Agent – Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Specific issue to dispatch (blank = pick next eligible)"
+        required: false
+        type: string
+      chain_depth:
+        description: "Internal: chain iteration counter (do not set manually)"
+        required: false
+        type: string
+        default: "0"
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  # All dispatch runs share one concurrency group so agents run sequentially.
+  # GitHub behavior: when a new run enters while another is IN_PROGRESS, the
+  # new run queues. But if a THIRD run arrives while the second is still
+  # PENDING (queued), GitHub cancels the pending run. The cancelled issue's
+  # labels are unchanged, so agent-dispatch-sweep.yml (cron every hour) catches
+  # orphaned status:ready issues and re-triggers them.
+  group: {{RUNNER_LABEL}}-build
+  cancel-in-progress: false
+
+env:
+  # Budget: max issues dispatched per agent per day (resets at 00:00 UTC)
+  DAILY_ISSUE_LIMIT: "{{LIMIT_CODING}}"
+  TOKEN_LOG_DIR: /home/{{RUNNER_USER}}/kite-token-logs
+
+jobs:
+  dispatch:
+    name: Dispatch Coding Agent
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    environment: dev
+    timeout-minutes: 60
+
+    steps:
+      # ── 0. Find next eligible issue ──────────────────────────────────
+      # Replaces the old issues.labeled event trigger. Picks the highest
+      # priority eligible issue from the queue, or validates a specific
+      # issue_number input. Exits cleanly if nothing to dispatch.
+      - name: Find next eligible issue
+        id: eligible
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_ISSUE: ${{ inputs.issue_number }}
+          CHAIN_DEPTH: ${{ inputs.chain_depth }}
+        run: |
+          set -euo pipefail
+
+          # ── Chain depth safety cap ──
+          if [ "${CHAIN_DEPTH:-0}" -ge 25 ]; then
+            echo "::warning::Chain depth limit reached ($CHAIN_DEPTH) — stopping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ── If specific issue requested, validate it ──
+          if [ -n "${INPUT_ISSUE:-}" ]; then
+            ISSUE_JSON=$(gh issue view "$INPUT_ISSUE" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json number,state,labels 2>/dev/null || echo '{}')
+
+            STATE=$(echo "$ISSUE_JSON" | jq -r '.state // "UNKNOWN"')
+            HAS_READY=$(echo "$ISSUE_JSON" | jq '[.labels[].name | select(. == "status:ready")] | length')
+            AGENT_LABEL=$(echo "$ISSUE_JSON" | jq -r '[.labels[].name | select(startswith("agent:"))] | first // ""')
+
+            if [ "$STATE" = "OPEN" ] && [ "$HAS_READY" -gt 0 ] && [ -n "$AGENT_LABEL" ]; then
+              echo "Using requested issue #${INPUT_ISSUE}"
+              echo "issue_number=$INPUT_ISSUE" >> "$GITHUB_OUTPUT"
+              echo "agent_label=$AGENT_LABEL" >> "$GITHUB_OUTPUT"
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::notice::Requested issue #${INPUT_ISSUE} not eligible (state=$STATE, ready=$HAS_READY) — scanning queue"
+          fi
+
+          # ── Scan for highest-priority eligible issue ──
+          CANDIDATES=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --label "status:ready" \
+            --json number,title,labels \
+            --limit 50)
+
+          # Filter: must have agent:* label, must NOT have blocked/exhausted labels
+          # Sort: pr-open first, then lowest issue number (oldest first)
+          ELIGIBLE=$(echo "$CANDIDATES" | jq '[
+            .[] | select(
+              ([.labels[].name | select(startswith("agent:"))] | length > 0) and
+              ([.labels[].name | select(. == "status:blocked" or . == "budget:exhausted")] | length == 0)
+            ) | {
+              number: .number,
+              title: .title,
+              agent_label: ([.labels[].name | select(startswith("agent:"))] | first),
+              has_pr_open: ([.labels[].name | select(. == "status:pr-open")] | length > 0)
+            }
+          ] | sort_by(if .has_pr_open then 0 else 1 end, .number)')
+
+          TOTAL=$(echo "$ELIGIBLE" | jq 'length')
+          echo "Found $TOTAL eligible issue(s)"
+
+          if [ "$TOTAL" = "0" ]; then
+            echo "::notice::No eligible issues found — exiting cleanly"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ── Build directory-conflict map from in-progress issues ──────
+          # Fetch all in-progress issues and extract their target directories
+          # (from spec paths and open PR file diffs) to prevent dispatching
+          # issues that would touch the same directories concurrently.
+          IN_PROGRESS=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --label "status:in-progress" \
+            --json number,body \
+            --limit 20 2>/dev/null || echo '[]')
+
+          # Extract spec paths from in-progress issue bodies → derive service dirs
+          # e.g., specs/agent-runtime-providers.md → "agent-runtime"
+          IN_PROGRESS_DIRS=""
+          while IFS= read -r IP_ROW; do
+            IP_NUM=$(echo "$IP_ROW" | jq -r '.number')
+            IP_BODY=$(echo "$IP_ROW" | jq -r '.body // ""')
+            IP_SPEC=$(echo "$IP_BODY" | grep -oE 'specs/[a-z0-9_-]+\.md' | head -1 || true)
+            if [ -n "$IP_SPEC" ]; then
+              # Extract service prefix: specs/agent-runtime-core.md → agent-runtime
+              IP_SVC=$(echo "$IP_SPEC" | sed 's|specs/||; s|-[^-]*\.md$||')
+              IN_PROGRESS_DIRS="${IN_PROGRESS_DIRS} ${IP_SVC}"
+              echo "  In-progress #${IP_NUM} targets: ${IP_SVC} (from ${IP_SPEC})"
+            fi
+          done < <(echo "$IN_PROGRESS" | jq -c '.[]')
+
+          # Also check open agent PRs for file-level overlap
+          OPEN_PR_DIRS=""
+          OPEN_PRS=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --base main \
+            --json number,headRefName,files \
+            --limit 20 2>/dev/null || echo '[]')
+
+          while IFS= read -r PR_ROW; do
+            PR_HEAD=$(echo "$PR_ROW" | jq -r '.headRefName // ""')
+            if echo "$PR_HEAD" | grep -q '^agent/'; then
+              # Extract top-level service dirs from changed files
+              PR_SVCS=$(echo "$PR_ROW" | jq -r '.files[].path' 2>/dev/null \
+                | grep '^services/' | cut -d/ -f2 | sort -u || true)
+              if [ -n "$PR_SVCS" ]; then
+                OPEN_PR_DIRS="${OPEN_PR_DIRS} ${PR_SVCS}"
+              fi
+            fi
+          done < <(echo "$OPEN_PRS" | jq -c '.[]')
+
+          # Combine both signal sources
+          BLOCKED_DIRS=$(echo "$IN_PROGRESS_DIRS $OPEN_PR_DIRS" | tr ' ' '\n' | sort -u | grep -v '^$' || true)
+          if [ -n "$BLOCKED_DIRS" ]; then
+            echo "Directories with in-progress work: $(echo $BLOCKED_DIRS | tr '\n' ' ')"
+          fi
+
+          # Pick the first issue with all dependencies met and no directory conflict.
+          # Use jq to extract number/agent/title per line (tab-separated)
+          # to avoid JSON parsing issues with shell word splitting.
+          FOUND=false
+          echo "$ELIGIBLE" | jq -r '.[] | [.number, .agent_label, .title] | @tsv' | while IFS=$'\t' read -r ISSUE_NUM AGENT_LBL TITLE; do
+
+            # ── Check dependencies inline ──
+            BODY=$(gh issue view "$ISSUE_NUM" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json body --jq '.body // ""' 2>/dev/null || echo "")
+
+            DEP_LINE=$(echo "$BODY" | grep -i 'depends on:' || true)
+            DEP_ISSUES=$(echo "$DEP_LINE" | grep -oE '#[0-9]+' || true)
+
+            if [ -n "$DEP_ISSUES" ]; then
+              ALL_MET=true
+              for DEP in $DEP_ISSUES; do
+                DEP_NUM="${DEP#\#}"
+                STATE=$(gh issue view "$DEP_NUM" --repo "$GITHUB_REPOSITORY" \
+                  --json state --jq '.state' 2>/dev/null || echo "UNKNOWN")
+                if [ "$STATE" != "CLOSED" ]; then
+                  ALL_MET=false
+                  break
+                fi
+              done
+              if [ "$ALL_MET" != "true" ]; then
+                echo "Skipping #${ISSUE_NUM}: deps not met ($DEP_ISSUES)"
+                continue
+              fi
+            fi
+
+            # ── Check directory conflict ──────────────────────────────────
+            # Skip issues targeting directories with in-progress work to
+            # prevent merge conflicts from concurrent file modifications.
+            if [ -n "$BLOCKED_DIRS" ]; then
+              CAND_SPEC=$(echo "$BODY" | grep -oE 'specs/[a-z0-9_-]+\.md' | head -1 || true)
+              if [ -n "$CAND_SPEC" ]; then
+                CAND_SVC=$(echo "$CAND_SPEC" | sed 's|specs/||; s|-[^-]*\.md$||')
+                if echo "$BLOCKED_DIRS" | grep -qx "$CAND_SVC"; then
+                  echo "Skipping #${ISSUE_NUM}: directory conflict (${CAND_SVC} has in-progress work)"
+                  continue
+                fi
+              fi
+            fi
+
+            DEP_MSG="no deps"
+            if [ -n "$DEP_ISSUES" ]; then DEP_MSG="deps met"; fi
+            echo "Dispatching #${ISSUE_NUM}: ${TITLE} [${AGENT_LBL}] (${DEP_MSG})"
+            echo "issue_number=$ISSUE_NUM" >> "$GITHUB_OUTPUT"
+            echo "agent_label=$AGENT_LBL" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "FOUND" > /tmp/dispatch-found
+            break
+          done
+
+          if [ ! -f /tmp/dispatch-found ]; then
+            echo "::notice::All $TOTAL eligible issues have unmet dependencies — exiting cleanly"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+          rm -f /tmp/dispatch-found
+
+      - name: Checkout repository
+        if: steps.eligible.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clean: false
+
+      - name: Determine agent and task metadata
+        id: meta
+        if: steps.eligible.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LABEL_NAME: ${{ steps.eligible.outputs.agent_label }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          case "$LABEL_NAME" in
+            "agent:claude-code") AGENT_ID="claude-code" ;;
+            "agent:codex-cli")   AGENT_ID="codex-cli" ;;
+            *)                   echo "::error::Unknown agent label"; exit 1 ;;
+          esac
+          echo "agent_id=$AGENT_ID" >> "$GITHUB_OUTPUT"
+
+          gh issue view "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json title,body,labels,milestone \
+            > /tmp/task.json
+
+          SLUG=$(jq -r '.title' /tmp/task.json \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed 's/\[stage [0-9]*\] //' \
+            | sed 's/[^a-z0-9]/-/g' \
+            | sed 's/--*/-/g' \
+            | head -c 50)
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+
+          BRANCH="agent/${AGENT_ID}/${ISSUE_NUMBER}-${SLUG}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+          echo "Agent: $AGENT_ID | Issue: #$ISSUE_NUMBER | Branch: $BRANCH"
+
+      # ── Pre-flight: skip if issue already has an open/merged PR ────────
+      # Root cause of duplicate work: sweep re-triggers issues that were
+      # already completed under a different issue number, or the same issue
+      # gets re-labeled after its PR was merged.
+      - name: Check for existing PR
+        id: existing_pr
+        if: steps.eligible.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Search for PRs that reference this issue (in title or body)
+          OPEN_PRS=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --search "issue #${ISSUE_NUMBER} in:title,body" \
+            --json number --jq 'length')
+
+          MERGED_PRS=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state merged \
+            --search "Closes #${ISSUE_NUMBER}" \
+            --json number --jq 'length')
+
+          if [ "${MERGED_PRS:-0}" -gt 0 ]; then
+            echo "::notice::Issue #${ISSUE_NUMBER} already has a merged PR — closing zombie issue"
+
+            # Auto-heal: close the zombie issue so it stops blocking the dispatch chain
+            gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --remove-label "status:ready,status:in-progress,status:pr-open" \
+              --add-label "status:done" 2>/dev/null || true
+            gh issue close "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --comment "PR already merged. Auto-closing (label missed during prior processing)." 2>/dev/null || true
+
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "reason=merged_pr" >> "$GITHUB_OUTPUT"
+          elif [ "${OPEN_PRS:-0}" -gt 0 ]; then
+            echo "::notice::Issue #${ISSUE_NUMBER} already has an open PR — skipping dispatch"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "reason=open_pr" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check daily issue budget
+        id: budget
+        if: steps.eligible.outputs.skip != 'true' && steps.existing_pr.outputs.skip != 'true'
+        env:
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+          LOG_FILE="${TOKEN_LOG_DIR}/${AGENT_ID}/${TODAY}.jsonl"
+
+          if [ -f "$LOG_FILE" ]; then
+            USED=$(wc -l < "$LOG_FILE")
+          else
+            USED=0
+          fi
+
+          REMAINING=$((DAILY_ISSUE_LIMIT - USED))
+          echo "used=$USED" >> "$GITHUB_OUTPUT"
+          echo "remaining=$REMAINING" >> "$GITHUB_OUTPUT"
+
+          if [ "$REMAINING" -le 0 ]; then
+            echo "::warning::Agent ${AGENT_ID} daily issue limit reached ($USED / $DAILY_ISSUE_LIMIT)"
+            echo "budget_ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "budget_ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Label budget-exhausted and comment
+        if: steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+        run: |
+          gh issue edit "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --add-label "budget:exhausted,status:blocked"
+
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            -F - <<EOF
+          <!-- AGENT_MSG agent=planning action=budget-block -->
+          **Daily Limit Reached** — Agent \`${AGENT_ID}\` has reached its daily issue limit ($DAILY_ISSUE_LIMIT issues/day).
+          Task will be retried when the limit resets at 00:00 UTC.
+          EOF
+
+      - name: Check dependencies are complete
+        id: deps
+        if: steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          ISSUE_BODY=$(jq -r '.body // ""' /tmp/task.json)
+          # Parse "Depends on: #8, #9" or "Depends on: #8 (A1: ...), #9 (A2: ...)"
+          DEP_ISSUES=$(echo "$ISSUE_BODY" | grep -ioP 'depends on:.*' | grep -oP '#\d+' || true)
+
+          if [ -z "$DEP_ISSUES" ]; then
+            echo "No dependencies found"
+            echo "deps_ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          ALL_DONE=true
+          for DEP in $DEP_ISSUES; do
+            DEP_NUM="${DEP#\#}"
+            STATE=$(gh issue view "$DEP_NUM" --repo "$GITHUB_REPOSITORY" --json state --jq '.state' 2>/dev/null || echo "UNKNOWN")
+            echo "Dependency $DEP: $STATE"
+            if [ "$STATE" != "CLOSED" ]; then
+              echo "::warning::Dependency $DEP is not closed (state: $STATE)"
+              ALL_DONE=false
+            fi
+          done
+
+          if [ "$ALL_DONE" = "false" ]; then
+            echo "deps_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping dispatch — dependencies not met for #${ISSUE_NUMBER}"
+
+            # Comment on the issue
+            gh issue comment "$ISSUE_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              -F - <<EOF
+          <!-- AGENT_MSG agent=dispatch action=deps-blocked -->
+          ⏳ **Dependencies not ready** — This issue depends on open issues ($DEP_ISSUES).
+          Dispatch will retry automatically when dependencies are closed.
+          EOF
+          else
+            echo "deps_ok=true" >> "$GITHUB_OUTPUT"
+            echo "All dependencies met"
+          fi
+
+      - name: Mark issue as in-progress
+        if: >-
+          steps.eligible.outputs.skip != 'true' &&
+          steps.budget.outputs.budget_ok == 'true' &&
+          steps.deps.outputs.deps_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+          BRANCH: ${{ steps.meta.outputs.branch }}
+          REMAINING: ${{ steps.budget.outputs.remaining }}
+        run: |
+          gh issue edit "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --remove-label "status:ready,status:assigned" \
+            --add-label "status:in-progress"
+
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            -F - <<EOF
+          <!-- AGENT_MSG agent=${AGENT_ID} action=start issue=#${ISSUE_NUMBER} -->
+          Agent \`${AGENT_ID}\` starting work on this task.
+          Branch: \`${BRANCH}\`
+          Token budget remaining: ${REMAINING}
+          EOF
+
+      - name: Sync project board → In progress
+        if: >-
+          steps.eligible.outputs.skip != 'true' &&
+          steps.budget.outputs.budget_ok == 'true' &&
+          steps.deps.outputs.deps_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+          PROJECT_OWNER: {{GITHUB_ORG}}
+          PROJECT_NUMBER: "1"
+        run: |
+          if [ -f ".github/scripts/sync-project-status.sh" ]; then
+            bash .github/scripts/sync-project-status.sh "$ISSUE_NUMBER" "In progress"
+          fi
+
+      - name: Create agent worktree
+        if: steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'true' && steps.deps.outputs.deps_ok == 'true'
+        env:
+          BRANCH: ${{ steps.meta.outputs.branch }}
+        run: |
+          set -euo pipefail
+          WORKTREE_DIR="/tmp/agent-worktree"
+
+          # Clean up any leftover branch from a previous dispatch attempt
+          git worktree remove "$WORKTREE_DIR" --force 2>/dev/null || true
+          git branch -D "$BRANCH" 2>/dev/null || true
+          git push origin --delete "$BRANCH" 2>/dev/null || true
+
+          # Always base the worktree on the latest origin/main to avoid
+          # diverging from main (which causes push rejections when main
+          # has received workflow file changes since the runner's checkout)
+          git fetch origin main
+          git worktree add -b "$BRANCH" "$WORKTREE_DIR" origin/main
+          echo "WORKTREE_DIR=$WORKTREE_DIR" >> "$GITHUB_ENV"
+
+      - name: Prepare task prompt
+        if: steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'true' && steps.deps.outputs.deps_ok == 'true'
+        env:
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+        run: |
+          set -euo pipefail
+
+          ISSUE_TITLE=$(jq -r '.title' /tmp/task.json)
+          ISSUE_BODY=$(jq -r '.body' /tmp/task.json)
+          LAYER=$(jq -r '[.labels[].name | select(startswith("layer:"))] | first // "unknown"' /tmp/task.json)
+          STAGE=$(jq -r '.milestone.title // "unknown"' /tmp/task.json)
+
+          # Determine which handbook to prepend based on agent
+          case "$AGENT_ID" in
+            "claude-code") HANDBOOK_FILE="coding-agent/AGENTS.md" ;;
+            "codex-cli")   HANDBOOK_FILE="coding-agent/AGENTS.md" ;;
+          esac
+
+          HANDBOOK=$(cat "$HANDBOOK_FILE")
+
+          # ── Resolve spec content from issue body ──
+          # Extract specs/ paths referenced in the issue (e.g., "specs/repo-scaffold.md")
+          SPEC_CONTENT=""
+          SPEC_PATHS=$(echo "$ISSUE_BODY" | grep -oP 'specs/[a-zA-Z0-9_-]+\.md' || true)
+
+          # Also try to match bare spec names (e.g., "deployment-architecture.md")
+          # and map them to specs/ directory
+          BARE_SPECS=$(echo "$ISSUE_BODY" | grep -oP '[a-z0-9_-]+\.md' | grep -v '^specs/' || true)
+          for BARE in $BARE_SPECS; do
+            # Try to find a matching file in specs/
+            MATCH=$(find specs/ -name "*${BARE%.md}*" -name "*.md" 2>/dev/null | head -1 || true)
+            if [ -n "$MATCH" ] && [ -f "$MATCH" ]; then
+              SPEC_PATHS="${SPEC_PATHS}"$'\n'"${MATCH}"
+            fi
+          done
+
+          # Deduplicate and read spec content
+          SPEC_PATHS=$(echo "$SPEC_PATHS" | sort -u | grep -v '^$' || true)
+          for SPEC_PATH in $SPEC_PATHS; do
+            if [ -f "$SPEC_PATH" ]; then
+              echo "Including spec: $SPEC_PATH"
+              TOTAL_LINES=$(wc -l < "$SPEC_PATH")
+              SPEC_CONTENT="${SPEC_CONTENT}
+
+          --- SPEC: ${SPEC_PATH} ---
+          $(head -300 "$SPEC_PATH")
+          "
+              if [ "$TOTAL_LINES" -gt 300 ]; then
+                SPEC_CONTENT="${SPEC_CONTENT}
+          ⚠️ NOTICE: Spec truncated to 300/${TOTAL_LINES} lines. Read full spec at: ${SPEC_PATH}
+          "
+              fi
+            fi
+          done
+
+          if [ -z "$SPEC_CONTENT" ]; then
+            SPEC_CONTENT="No spec files found in specs/ matching issue references."
+            echo "::warning::No spec content resolved for issue #${ISSUE_NUMBER}"
+          fi
+
+          # Build task prompt: handbook + task metadata + issue body + spec content
+          cat > /tmp/agent-prompt.txt <<PROMPT_EOF
+          ${HANDBOOK}
+
+          ---
+
+          TASK: ${ISSUE_TITLE}
+          ISSUE: #${ISSUE_NUMBER}
+          LAYER: ${LAYER}
+          STAGE: ${STAGE}
+          AGENT: ${AGENT_ID}
+
+          INSTRUCTIONS:
+          ${ISSUE_BODY}
+
+          SPEC CONTENT (read carefully — specs define acceptance criteria):
+          ${SPEC_CONTENT}
+          PROMPT_EOF
+
+      - name: Run Claude Code agent
+        if: steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'true' && steps.deps.outputs.deps_ok == 'true' && steps.meta.outputs.agent_id == 'claude-code'
+        working-directory: /tmp/agent-worktree
+        run: |
+          set -euo pipefail
+          claude \
+            -p "$(cat /tmp/agent-prompt.txt)" \
+            --model claude-opus-4-6 \
+            --dangerously-skip-permissions \
+            --verbose \
+            --output-format stream-json \
+            2>&1 | tee /tmp/agent-output.jsonl
+
+      - name: Run Codex CLI agent
+        if: steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'true' && steps.deps.outputs.deps_ok == 'true' && steps.meta.outputs.agent_id == 'codex-cli'
+        working-directory: /tmp/agent-worktree
+        run: |
+          set -euo pipefail
+          codex exec \
+            --model gpt-5.4 \
+            --full-auto \
+            --json \
+            "$(cat /tmp/agent-prompt.txt)" \
+            2>&1 | tee /tmp/agent-output.jsonl
+
+      - name: Commit and push agent work
+        id: commit
+        if: steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'true' && steps.deps.outputs.deps_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.meta.outputs.branch }}
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+        working-directory: /tmp/agent-worktree
+        run: |
+          set -euo pipefail
+
+          # Check for ANY changes: tracked modifications, staged changes, AND new untracked files
+          if git diff --quiet && git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
+            echo "::warning::Agent produced no changes"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+          git config user.name "kite-${AGENT_ID}[bot]"
+          git config user.email "kite-${AGENT_ID}[bot]@users.noreply.github.com"
+
+          # Exclude workflow files — agents must not modify CI/CD pipelines,
+          # and GITHUB_TOKEN lacks the 'workflows' permission to push them.
+          # Also explicitly reset any staged workflow changes.
+          git add -A -- ':!.github/workflows/'
+          git reset HEAD -- .github/workflows/ 2>/dev/null || true
+
+          # Guard: remove files > 50 MB to prevent push rejection
+          LARGE_FILES=$(git diff --cached --name-only | while read f; do
+            if [ -f "$f" ]; then
+              SIZE=$(wc -c < "$f")
+              if [ "$SIZE" -gt 52428800 ]; then echo "$f"; fi
+            fi
+          done || true)
+          if [ -n "$LARGE_FILES" ]; then
+            echo "::warning::Removing large files from commit: $LARGE_FILES"
+            echo "$LARGE_FILES" | xargs git reset HEAD -- 2>/dev/null || true
+          fi
+
+          ISSUE_TITLE=$(jq -r '.title' /tmp/task.json)
+          git commit -m "${AGENT_ID}: ${ISSUE_TITLE}
+
+          Closes #${ISSUE_NUMBER}
+
+          Co-Authored-By: kite-${AGENT_ID}[bot] <kite-${AGENT_ID}[bot]@users.noreply.github.com>"
+
+          git push origin "$BRANCH"
+
+      - name: Create Pull Request
+        if: steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'true' && steps.deps.outputs.deps_ok == 'true' && steps.commit.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.meta.outputs.branch }}
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          ISSUE_TITLE=$(jq -r '.title' /tmp/task.json)
+
+          # Build PR body in a file to avoid shell quoting issues
+          cat > /tmp/pr-body.md <<EOF
+          ## Agent Work Product
+
+          **Agent:** \`${AGENT_ID}\`
+          **Task:** #${ISSUE_NUMBER}
+          **Branch:** \`${BRANCH}\`
+
+          ---
+
+          Closes #${ISSUE_NUMBER}
+
+          <!-- AGENT_MSG agent=${AGENT_ID} action=pr-created issue=#${ISSUE_NUMBER} -->
+          EOF
+
+          # Use REST API to create PR (gh pr create uses GraphQL which has
+          # permission issues with GITHUB_TOKEN from issues.labeled events)
+          PR_BODY=$(cat /tmp/pr-body.md)
+
+          PR_NUMBER=$(gh api "repos/${GITHUB_REPOSITORY}/pulls" \
+            -f title="${AGENT_ID}: ${ISSUE_TITLE}" \
+            -f body="$PR_BODY" \
+            -f head="$BRANCH" \
+            -f base="main" \
+            --jq '.number')
+
+          echo "Created PR #${PR_NUMBER}"
+
+          # Apply label (non-fatal)
+          gh pr edit "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --add-label "status:pr-open" || true
+
+          # Trigger review workflow (GITHUB_TOKEN PRs don't trigger pull_request events)
+          gh workflow run agent-review.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            -f pr_number="$PR_NUMBER"
+
+          echo "Triggered review workflow for PR #${PR_NUMBER}"
+
+      - name: Post completion comment
+        if: always() && steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'true' && steps.deps.outputs.deps_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            -F - <<EOF
+          <!-- AGENT_MSG agent=${AGENT_ID} action=complete issue=#${ISSUE_NUMBER} status=${JOB_STATUS} -->
+          Agent \`${AGENT_ID}\` finished with status: **${JOB_STATUS}**
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+
+      # ── Failure recovery: reset issue to status:ready so sweep can retry ──
+      - name: Reset issue on failure
+        if: >-
+          failure() &&
+          steps.eligible.outputs.skip != 'true' &&
+          steps.budget.outputs.budget_ok == 'true' &&
+          steps.deps.outputs.deps_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+        run: |
+          echo "::warning::Dispatch failed — resetting #${ISSUE_NUMBER} to status:ready"
+          gh issue edit "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --remove-label "status:in-progress" \
+            --add-label "status:ready" || true
+
+      # IMPORTANT: This step is non-fatal. Token logging must NEVER cause the
+      # workflow to fail — the dispatch result is the real output.
+      # Each line = 1 invocation. Budget check counts lines (not token sums).
+      - name: Log invocation and token usage
+        if: always() && steps.eligible.outputs.skip != 'true' && steps.budget.outputs.budget_ok == 'true' && steps.deps.outputs.deps_ok == 'true'
+        env:
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+          ISSUE_NUMBER: ${{ steps.eligible.outputs.issue_number }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -u  # No -e or pipefail — logging must not crash the workflow
+          TODAY=$(date -u +%Y-%m-%d)
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LOG_DIR="${TOKEN_LOG_DIR}/${AGENT_ID}"
+          mkdir -p "$LOG_DIR" || true
+
+          # Extract tokens from agent output — handles both Claude CLI
+          # (type:"result") and Codex CLI (type:"turn.completed") formats.
+          TOKENS=0
+          COST_USD=0
+          if [ -f /tmp/agent-output.jsonl ]; then
+            TOKENS=$(jq -s '
+              [.[] | select(.type == "result" or .type == "turn.completed") | .usage |
+              ((.input_tokens // 0) + (.cache_creation_input_tokens // 0) +
+               (.cache_read_input_tokens // 0) + (.cached_input_tokens // 0) +
+               (.output_tokens // 0))] | add // 0' \
+              /tmp/agent-output.jsonl 2>/dev/null || echo 0)
+            COST_USD=$(jq -s '
+              [.[] | select(.type == "result") | .total_cost_usd // 0] | add // 0' \
+              /tmp/agent-output.jsonl 2>/dev/null || echo 0)
+          fi
+
+          jq -cn \
+            --arg ts "$TIMESTAMP" \
+            --arg agent "$AGENT_ID" \
+            --argjson tokens "${TOKENS:-0}" \
+            --argjson cost_usd "${COST_USD:-0}" \
+            --arg issue "$ISSUE_NUMBER" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg status "$JOB_STATUS" \
+            '{timestamp: $ts, agent: $agent, tokens_used: $tokens, cost_usd: $cost_usd, issue: $issue, run_id: $run_id, status: $status}' \
+            >> "${LOG_DIR}/${TODAY}.jsonl" 2>/dev/null || echo "::warning::Token logging failed (non-fatal)"
+
+      - name: Cleanup worktree
+        if: always()
+        run: |
+          git worktree remove /tmp/agent-worktree --force 2>/dev/null || true
+
+      - name: Upload agent artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-output-${{ github.run_id }}
+          path: |
+            /tmp/agent-output.jsonl
+          retention-days: 30
+
+      # ── Chain: trigger next dispatch run ─────────────────────────────
+      # Self-chaining: after completing (or skipping) one issue, check if
+      # more eligible issues exist and trigger the next dispatch run.
+      - name: Chain next dispatch
+        if: always() && steps.eligible.outputs.skip != 'true'
+        env:
+          # MUST use PROJECT_PAT — GITHUB_TOKEN cannot trigger workflow_dispatch
+          # events due to GitHub's anti-recursion rule.
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          CHAIN_DEPTH: ${{ inputs.chain_depth }}
+        run: |
+          # No set -e — this step must NEVER break the chain.
+          # Individual command failures are handled inline.
+
+          NEXT_DEPTH=$(( ${CHAIN_DEPTH:-0} + 1 ))
+
+          # Guard: skip if a dispatch run is already queued
+          QUEUED=$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow="Agent – Dispatch" \
+            --status=queued \
+            --json databaseId --jq 'length' 2>/dev/null || echo 0)
+
+          if [ "${QUEUED:-0}" -gt 0 ]; then
+            echo "Dispatch already queued — skipping chain"
+            exit 0
+          fi
+
+          # Check for more eligible issues
+          NEXT_COUNT=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --label "status:ready" \
+            --json number,labels \
+            --jq '[.[] | select([.labels[].name] | any(startswith("agent:")))] | length' \
+            2>/dev/null || echo 0)
+
+          if [ "${NEXT_COUNT:-0}" -gt 0 ]; then
+            # Retry chain trigger up to 3 times on transient failures
+            TRIGGERED=false
+            for ATTEMPT in 1 2 3; do
+              if gh workflow run "Agent – Dispatch" \
+                --repo "$GITHUB_REPOSITORY" \
+                -f chain_depth="$NEXT_DEPTH" 2>/dev/null; then
+                echo "Chained next dispatch (depth=$NEXT_DEPTH, $NEXT_COUNT issues remaining)"
+                TRIGGERED=true
+                break
+              fi
+              echo "::warning::Chain trigger attempt $ATTEMPT failed — retrying in 10s..."
+              sleep 10
+            done
+
+            if [ "$TRIGGERED" = "false" ]; then
+              echo "::warning::Could not chain next dispatch after 3 attempts (rate limit?). The hourly sweep will resume processing."
+            fi
+          else
+            echo "No more eligible issues — chain complete"
+          fi

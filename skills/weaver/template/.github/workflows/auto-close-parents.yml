@@ -1,0 +1,125 @@
+# =============================================================================
+# Auto-Close Parent Issues
+# =============================================================================
+# When a sub-issue is closed, checks if all sibling sub-issues are also closed.
+# If so, auto-closes the parent issue with a summary comment.
+#
+# Detection: Scans open issues with `status:planning` label (parent issues)
+# and checks if all their sub-issues (referenced in the body) are closed.
+#
+# Triggers:
+#   - When any issue is closed
+#   - Daily at 10:00 UTC (catch any missed closures)
+# =============================================================================
+
+name: Auto-Close Parent Issues
+
+on:
+  issues:
+    types: [closed]
+
+  schedule:
+    - cron: "0 10 * * *"
+
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency:
+  group: auto-close-parents
+  cancel-in-progress: true
+
+jobs:
+  check-parents:
+    name: Check Parent Issues
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    timeout-minutes: 5
+
+    steps:
+      - name: Find and close completed parent issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          echo "Scanning for parent issues with all sub-issues closed..."
+
+          # Parent issues have status:planning label and contain sub-issue references
+          PARENTS=$(gh issue list --repo "$REPO" --state open --label "status:planning" \
+            --json number,title,body --limit 50)
+
+          PARENT_COUNT=$(echo "$PARENTS" | jq length)
+          echo "Found ${PARENT_COUNT} open parent issue(s) to check"
+
+          if [ "$PARENT_COUNT" = "0" ]; then
+            echo "No parent issues to check"
+            exit 0
+          fi
+
+          # Batch-fetch all closed issue numbers in one API call (instead of
+          # N+1 individual gh issue view calls per sub-issue — saves API quota)
+          CLOSED_ISSUES=$(gh issue list --repo "$REPO" --state closed \
+            --json number --limit 300 | jq -r '.[].number' | sort -n)
+
+          CLOSED_COUNT=0
+
+          # Use process substitution (not pipe) so the while loop runs in the
+          # main shell — avoids subshell variable scoping and pipefail issues.
+          while IFS= read -r PARENT; do
+            NUMBER=$(echo "$PARENT" | jq -r '.number')
+            TITLE=$(echo "$PARENT" | jq -r '.title')
+            BODY=$(echo "$PARENT" | jq -r '.body')
+
+            # Extract sub-issue references from body
+            # Patterns: #NN, GH-NN, or full URLs
+            # Note: grep returns exit 1 on no match — || true prevents pipefail death
+            SUB_ISSUES=$(echo "$BODY" | { grep -oE '#[0-9]+' || true; } | { grep -oE '[0-9]+' || true; } | sort -un)
+
+            if [ -z "$SUB_ISSUES" ]; then
+              echo "  #${NUMBER}: no sub-issue references found — skipping"
+              continue
+            fi
+
+            # Filter: only count issues that are actually sub-issues (not self-references)
+            SUB_ISSUES=$(echo "$SUB_ISSUES" | grep -v "^${NUMBER}$" || true)
+            if [ -z "$SUB_ISSUES" ]; then
+              echo "  #${NUMBER}: only self-references found — skipping"
+              continue
+            fi
+
+            SUB_COUNT=$(echo "$SUB_ISSUES" | wc -l | tr -d ' ')
+            ALL_CLOSED=true
+            CLOSED_SUBS=""
+            OPEN_SUBS=""
+
+            for SUB in $SUB_ISSUES; do
+              # Check against the batch-fetched closed issues list (no API call per sub-issue)
+              if echo "$CLOSED_ISSUES" | grep -qx "$SUB"; then
+                CLOSED_SUBS="${CLOSED_SUBS:+$CLOSED_SUBS, }#${SUB}"
+              else
+                ALL_CLOSED=false
+                OPEN_SUBS="${OPEN_SUBS:+$OPEN_SUBS, }#${SUB}"
+              fi
+            done
+
+            if [ "$ALL_CLOSED" = "true" ]; then
+              echo "  #${NUMBER}: all ${SUB_COUNT} sub-issues closed — closing parent"
+
+              gh issue close "$NUMBER" --repo "$REPO" \
+                --comment "All ${SUB_COUNT} sub-issue(s) completed (${CLOSED_SUBS}). Auto-closing parent." \
+                || echo "::warning::Failed to close #${NUMBER} (rate limit?)"
+
+              # Update labels: remove status:planning, add status:done
+              gh issue edit "$NUMBER" --repo "$REPO" \
+                --remove-label "status:planning" --add-label "status:done" 2>/dev/null || true
+
+              CLOSED_COUNT=$((CLOSED_COUNT + 1))
+            else
+              echo "  #${NUMBER}: ${SUB_COUNT} sub-issues, still open: ${OPEN_SUBS}"
+            fi
+          done < <(echo "$PARENTS" | jq -c '.[]')
+
+          echo ""
+          echo "Closed ${CLOSED_COUNT} parent issue(s)."

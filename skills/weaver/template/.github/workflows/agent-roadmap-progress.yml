@@ -1,0 +1,150 @@
+# =============================================================================
+# Roadmap Progress Scoring Workflow
+# =============================================================================
+# Runs daily (and on-demand) to cognitively assess actual source code against
+# ROADMAP.md deliverables using Claude. Produces per-deliverable 0-100% scores,
+# updates ROADMAP.md, README.md progress table, roadmap-status.json, and
+# regenerates the architecture SVG with color-coded progress.
+#
+# Separated from the deploy workflow to avoid burning tokens on every merge.
+# =============================================================================
+
+name: Agent – Roadmap Progress
+
+on:
+  schedule:
+    # Run daily at 06:00 UTC
+    - cron: "0 6 * * *"
+
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run — score but don't commit"
+        type: boolean
+        default: false
+
+concurrency:
+  group: kite-roadmap-progress
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  TOKEN_LOG_DIR: /home/{{RUNNER_USER}}/kite-token-logs
+
+jobs:
+  score-progress:
+    name: Cognitive Roadmap Scoring
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    timeout-minutes: 15
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Check daily budget ──────────────────────────────────────────
+      - name: Check daily scoring budget
+        id: budget
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          LOG_DIR="${TOKEN_LOG_DIR}/roadmap-progress"
+          LOG_FILE="${LOG_DIR}/${DATE}.jsonl"
+          mkdir -p "$LOG_DIR"
+
+          DAILY_LIMIT=6
+
+          if [ -f "$LOG_FILE" ]; then
+            COUNT=$(wc -l < "$LOG_FILE" | tr -d ' ')
+          else
+            COUNT=0
+          fi
+
+          echo "Daily scoring count: ${COUNT}/${DAILY_LIMIT}"
+
+          if [ "$COUNT" -ge "$DAILY_LIMIT" ]; then
+            echo "budget_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Daily roadmap scoring limit reached (${COUNT}/${DAILY_LIMIT})"
+          else
+            echo "budget_ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if budget exhausted
+        if: steps.budget.outputs.budget_ok != 'true'
+        run: |
+          echo "Daily roadmap scoring limit reached — skipping"
+          exit 0
+
+      # ── 3. Run cognitive scoring ───────────────────────────────────────
+      - name: Score roadmap progress
+        id: score
+        if: steps.budget.outputs.budget_ok == 'true'
+        run: |
+          set -euo pipefail
+
+          if ! command -v claude >/dev/null 2>&1; then
+            echo "::warning::Claude CLI not installed — skipping roadmap progress scoring"
+            echo "scored=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Running cognitive roadmap progress scoring..."
+          bash deployment-agent/scripts/update-roadmap-progress.sh
+
+          echo "scored=true" >> "$GITHUB_OUTPUT"
+
+      # ── 4. Regenerate architecture SVG ─────────────────────────────────
+      - name: Regenerate architecture SVG
+        if: steps.score.outputs.scored == 'true'
+        run: |
+          python3 scripts/generate-architecture-svg.py || echo "::warning::SVG generation failed"
+
+      # ── 5. Commit and push ─────────────────────────────────────────────
+      - name: Commit progress updates
+        if: steps.score.outputs.scored == 'true'
+        env:
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          if [ "$DRY_RUN_INPUT" = "true" ]; then
+            echo "Dry run — skipping commit"
+            git diff --stat ROADMAP.md README.md scripts/roadmap-status.json docs/architecture.svg || true
+            exit 0
+          fi
+
+          if ! git diff --quiet ROADMAP.md README.md scripts/roadmap-status.json docs/architecture.svg 2>/dev/null; then
+            git config user.name "kite-deploy-agent[bot]"
+            git config user.email "kite-deploy-agent[bot]@users.noreply.github.com"
+            git add ROADMAP.md README.md scripts/roadmap-status.json docs/architecture.svg
+            git commit -m "docs: update roadmap progress scores (daily cognitive assessment)"
+            git push origin main || echo "::warning::Could not push roadmap progress update"
+            echo "Changes committed and pushed"
+          else
+            echo "No progress changes detected"
+          fi
+
+      # ── 6. Log invocation ──────────────────────────────────────────────
+      - name: Log scoring invocation
+        if: always() && steps.budget.outputs.budget_ok == 'true' && steps.score.outputs.scored == 'true'
+        env:
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LOG_DIR="${TOKEN_LOG_DIR}/roadmap-progress"
+          mkdir -p "$LOG_DIR"
+
+          [ "$DRY_RUN_INPUT" = "true" ] && MODE="dry-run" || MODE="live"
+
+          echo "{\"timestamp\":\"${TIMESTAMP}\",\"agent\":\"roadmap-progress\",\"run_id\":\"${RUN_ID}\",\"mode\":\"${MODE}\"}" \
+            >> "${LOG_DIR}/${DATE}.jsonl"
+
+          echo "Scoring logged"

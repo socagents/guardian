@@ -1,0 +1,163 @@
+# Pipeline Health Check Workflow
+#
+# Runs the deterministic health check suite every 5 minutes on ubuntu-latest
+# (NOT self-hosted — must work even when the runner is down).
+# Posts alerts to #alerts Slack channel for non-healthy results.
+#
+# Self-healing (--heal): When enabled, auto-remediates known-fixable issues:
+#   - Triggers dispatch when ready issues have no active dispatch
+#   - Resets stale in-progress issues back to ready
+#   - Retries merge on approved but unmerged PRs
+#   - Cancels stuck workflow runs (>90 min)
+# All healing actions are rate-guarded to prevent repeated firing.
+#
+# Checks: runner, dispatch, sweep, review, notifications, budget, YAML integrity
+# See: healthcheck/pipeline-health-criteria.md for full specification
+
+name: Agent – Pipeline Health
+
+on:
+  schedule:
+    # Every 5 minutes — GitHub Actions cron has ~1-5 min drift
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      categories:
+        description: "Comma-separated categories (blank = all)"
+        required: false
+        default: ""
+      slack:
+        description: "Post to Slack"
+        required: false
+        default: "true"
+      heal:
+        description: "Enable self-healing"
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
+  issues: write         # Self-healing: reset stale issue labels
+  pull-requests: write  # Self-healing: retry merge on approved PRs
+  actions: write        # Self-healing: cancel stuck runs, trigger workflows
+
+# Allow overlapping runs — health checks are fast
+concurrency:
+  group: pipeline-health
+  cancel-in-progress: true
+
+jobs:
+  health-check:
+    name: Pipeline Health Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: dev
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.PROJECT_PAT || secrets.GITHUB_TOKEN }}
+      PROJECT_PAT: ${{ secrets.PROJECT_PAT }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+      SLACK_ALERTS_CHANNEL: ${{ secrets.SLACK_ALERTS_CHANNEL }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      # ── 1. Checkout (needed for static YAML analysis in X4/D5) ──────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            healthcheck
+            .github/workflows
+
+      # ── 2. Set up Python ────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ── 3. Run health checks with self-healing ─────────────────────
+      - name: Run health checks
+        id: health
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          INPUT_SLACK: ${{ inputs.slack || 'true' }}
+          INPUT_CATEGORIES: ${{ inputs.categories }}
+          INPUT_HEAL: ${{ inputs.heal || 'true' }}
+        run: |
+          set -uo pipefail
+
+          ARGS="--json"
+
+          # Add --slack if enabled
+          if [ "$INPUT_SLACK" = "true" ]; then
+            ARGS="$ARGS --slack"
+          fi
+
+          # Add --heal if enabled (default: true for scheduled runs)
+          if [ "$INPUT_HEAL" = "true" ]; then
+            ARGS="$ARGS --heal"
+          fi
+
+          # Add category filter if specified
+          if [ -n "$INPUT_CATEGORIES" ]; then
+            ARGS="$ARGS --category $INPUT_CATEGORIES"
+          fi
+
+          echo "Running: python -m healthcheck $ARGS"
+
+          # Run checks — capture exit code (0=healthy, 1=degraded, 2=unhealthy, 3=critical)
+          set +e
+          python -m healthcheck $ARGS | tee /tmp/health-report.json
+          EXIT_CODE=$?
+          set -e
+
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          # Map exit code to status label
+          case $EXIT_CODE in
+            0) echo "status=HEALTHY" >> "$GITHUB_OUTPUT" ;;
+            1) echo "status=DEGRADED" >> "$GITHUB_OUTPUT" ;;
+            2) echo "status=UNHEALTHY" >> "$GITHUB_OUTPUT" ;;
+            3) echo "status=CRITICAL" >> "$GITHUB_OUTPUT" ;;
+            *) echo "status=ERROR" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # ── 4. Upload report artifact ──────────────────────────────────
+      - name: Upload health report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-report-${{ github.run_number }}
+          path: /tmp/health-report.json
+          retention-days: 7
+
+      # ── 5. Post Slack fallback alert ────────────────────────────────
+      # The Python script handles Slack posting directly via SLACK_BOT_TOKEN.
+      # This step is a fallback using curl if the Python post failed.
+      - name: Slack fallback alert
+        if: always() && steps.health.outputs.exit_code != '0' && env.SLACK_ALERTS_CHANNEL != '' && env.SLACK_BOT_TOKEN != ''
+        env:
+          HC_STATUS: ${{ steps.health.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          EMOJI="🟡"
+          [ "$HC_STATUS" = "UNHEALTHY" ] && EMOJI="🟠"
+          [ "$HC_STATUS" = "CRITICAL" ] && EMOJI="🔴"
+          [ "$HC_STATUS" = "ERROR" ] && EMOJI="⚠️"
+
+          PAYLOAD=$(jq -n \
+            --arg channel "$SLACK_ALERTS_CHANNEL" \
+            --arg text "${EMOJI} *Pipeline Health Alert* — Status: *${HC_STATUS}*\n\nRun: ${RUN_URL}" \
+            '{channel: $channel, text: $text, unfurl_links: false}')
+
+          curl -s -X POST "https://slack.com/api/chat.postMessage" \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" > /dev/null 2>&1 || echo "::warning::Slack fallback also failed"
+
+      # ── 6. Fail the workflow for CRITICAL status ────────────────────
+      - name: Check critical status
+        if: steps.health.outputs.exit_code == '3'
+        run: |
+          echo "::error::Pipeline health is CRITICAL — see report for details"
+          exit 1

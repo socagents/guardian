@@ -1,0 +1,27 @@
+# Deployment Agent — Codex CLI Configuration
+model = "codex-mini"
+
+[approval]
+mode = "full-auto"
+
+[permissions]
+# Allow Docker operations, file inspection, and git queries
+allow = [
+  "docker *",
+  "docker compose *",
+  "git diff *",
+  "git log *",
+  "git show *",
+  "cat *",
+  "head *",
+  "tail *",
+  "ls *",
+  "find *",
+  "grep *",
+]
+
+deny = [
+  "rm -rf /",
+  "git push --force *",
+  "git reset --hard *",
+]

@@ -1,0 +1,105 @@
+name: Agent Task
+description: A task for an AI coding agent to implement
+title: "[Stage X] "
+labels: ["status:planning"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is used by the planning agent to create tasks for coding agents.
+        Each task targets a specific service and build stage from the replication plan.
+
+  - type: input
+    id: service
+    attributes:
+      label: Target Service
+      description: Which {{PROJECT_NAME}} microservice does this task modify?
+      placeholder: e.g., api-gateway, agent-runtime, control-plane
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Feature Layer
+      description: Which architectural layer does this task belong to?
+      options:
+        - Cognitive (Python)
+        - Integration (Go)
+        - Runtime/Connector (Go)
+        - Presentation (Next.js)
+        - Cross-cutting
+    validations:
+      required: true
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Build Stage
+      description: Which stage from the replication plan?
+      options:
+        - "Stage 1: Foundations, Contracts, Repo Layout"
+        - "Stage 2: API Gateway and Control Plane"
+        - "Stage 3: Agent Runtime in Python"
+        - "Stage 4: Model and Provider Services"
+        - "Stage 5: Memory Service with LanceDB"
+        - "Stage 6: Tool Execution and Skills"
+        - "Stage 7: UI in Next.js"
+        - "Stage 8: Connectors, Routing, Delivery"
+        - "Stage 9: Plugins and Extension Packaging"
+        - "Stage 10: Automation, Devices, Hardening"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: Approximate token budget for this task
+      options:
+        - "S (~100K tokens)"
+        - "M (~250K tokens)"
+        - "L (~400K tokens)"
+        - "XL (~500K tokens)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: What must be true for this task to be considered complete?
+      placeholder: |
+        - [ ] Service compiles and passes lint
+        - [ ] Unit tests cover new code (>70%)
+        - [ ] gRPC contract tests pass
+        - [ ] Integration with control-plane verified
+    validations:
+      required: true
+
+  - type: textarea
+    id: spec-references
+    attributes:
+      label: Spec References
+      description: Which spec files should the agent read for context?
+      placeholder: |
+        - contracts-spec.md (sections 2, 5)
+        - deployment-architecture.md (section 3)
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: List any blocking issues (use "depends on #N" format)
+      placeholder: |
+        depends on #12
+        depends on #15
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Implementation Notes
+      description: Any additional context for the coding agent
+      placeholder: Additional guidance, design decisions, or constraints

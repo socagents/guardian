@@ -1,0 +1,729 @@
+# =============================================================================
+# Agent Slack Notification Workflow
+# =============================================================================
+# Sends Slack notifications for events that need human attention:
+#   - needs-human escalations
+#   - Issue closed notifications
+#   - PR merged notifications
+#   - Stale agent PRs (daily check)
+#   - Planning agent summaries
+#   - Budget alerts
+#   - Daily token consumption summaries
+#
+# Uses: archive/github-actions-slack@v2.10.1
+#   https://github.com/marketplace/actions/send-message-to-slack
+#
+# Requires (all secrets in `dev` environment):
+#   - SLACK_BOT_USER_OAUTH_ACCESS_TOKEN  (Bot User OAuth Token)
+#   - SLACK_BUILD_CHANNEL                (#builds channel ID)
+#   - SLACK_ISSUES_CHANNEL               (#issues channel ID)
+#   - SLACK_TOKENS_CHANNEL               (#tokens channel ID)
+#
+# Related workflows:
+#   - agent-dispatch-sweep.yml — catches orphaned issues (no Slack notification)
+#
+# References:
+#   - workforce-orchestration.md §8 Human-in-the-Loop Protocol
+#   - cicd-agent-integration.md §5 Token Tracking Workflow
+# =============================================================================
+
+name: Agent – Slack Notify
+
+on:
+  workflow_dispatch:
+    inputs:
+      escalation_issue:
+        description: "Issue number for needs-human escalation notification"
+        required: false
+        type: string
+
+  # Trigger when an issue is closed (NOT labeled — labeled fires for every
+  # label addition and floods the Actions log during planning agent runs)
+  issues:
+    types: [closed]
+
+  # Trigger when a PR is closed (merged)
+  pull_request:
+    types: [closed]
+
+  # Trigger after planning and token tracking workflows
+  workflow_run:
+    workflows:
+      - "Agent – Planning"
+      - "Agent – Token Tracking"
+    types: [completed]
+
+  # Daily stale PR check
+  schedule:
+    - cron: "0 9 * * *"            # 9:00 UTC daily
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+# Deduplicate rapid-fire issue/PR close events. When multiple issues close
+# simultaneously (e.g., batch merge), only the last event runs.
+concurrency:
+  group: slack-notify-${{ github.event_name }}-${{ github.event.action || 'scheduled' }}
+  cancel-in-progress: true
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 1: Escalation notification (needs-human label)
+  # ═══════════════════════════════════════════════════════════════════════════
+  escalation:
+    name: Notify Escalation
+    runs-on: ubuntu-latest
+    environment: dev
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.escalation_issue != ''
+    timeout-minutes: 5
+
+    steps:
+      - name: Gather issue metadata
+        id: meta
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.escalation_issue }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          ISSUE_JSON=$(gh issue view "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json title,url,labels)
+
+          ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
+          ISSUE_URL=$(echo "$ISSUE_JSON" | jq -r '.url')
+
+          REASON=$(echo "$ISSUE_JSON" | jq -r '
+            [.labels[].name | select(startswith("reason:"))]
+            | first // "unknown"
+            | ltrimstr("reason:")')
+
+          AGENT=$(echo "$ISSUE_JSON" | jq -r '
+            [.labels[].name | select(startswith("agent:"))]
+            | first // "none"
+            | ltrimstr("agent:")')
+
+          # Build Block Kit JSON
+          BLOCKS=$(jq -n \
+            --arg title "$ISSUE_TITLE" \
+            --arg url "$ISSUE_URL" \
+            --arg reason "$REASON" \
+            --arg agent "$AGENT" \
+            --arg number "$ISSUE_NUMBER" \
+            '[
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": "🚨 Human Action Required" }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ("*<" + $url + "|#" + $number + ": " + $title + ">*")
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  { "type": "mrkdwn", "text": ("*Reason:* `" + $reason + "`") },
+                  { "type": "mrkdwn", "text": ("*Agent:* `" + $agent + "`") }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": { "type": "plain_text", "text": "View Issue" },
+                    "url": $url
+                  }
+                ]
+              }
+            ]')
+
+          echo "blocks<<BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+          echo "$BLOCKS" >> "$GITHUB_OUTPUT"
+          echo "BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        uses: archive/github-actions-slack@v2.10.1
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: ${{ secrets.SLACK_ISSUES_CHANNEL }}
+          slack-text: "🚨 Human Action Required"
+          slack-optional-blocks: ${{ steps.meta.outputs.blocks }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 2: Stale agent PRs (daily check)
+  # ═══════════════════════════════════════════════════════════════════════════
+  stale-prs:
+    name: Notify Stale PRs
+    runs-on: ubuntu-latest
+    environment: dev
+    if: github.event_name == 'schedule'
+    timeout-minutes: 5
+
+    steps:
+      - name: Check for stale agent PRs
+        id: prs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Only report agent PRs open for more than 1 hour
+          CUTOFF=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+            || date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ')
+
+          STALE_PRS=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --json number,title,url,headRefName,createdAt \
+            --jq "[.[] | select(.headRefName | startswith(\"agent/\")) | select(.createdAt < \"$CUTOFF\")]")
+
+          PR_COUNT=$(echo "$STALE_PRS" | jq 'length')
+          echo "count=$PR_COUNT" >> "$GITHUB_OUTPUT"
+
+          if [ "$PR_COUNT" = "0" ]; then
+            echo "No open agent PRs found"
+            exit 0
+          fi
+
+          PR_LIST=$(echo "$STALE_PRS" | jq -r '
+            .[] | "• <\(.url)|#\(.number)>: \(.title)"
+          ' | head -10)
+
+          BLOCKS=$(jq -n \
+            --arg count "$PR_COUNT" \
+            --arg list "$PR_LIST" \
+            '[
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": ("📋 " + $count + " Open Agent PR(s)") }
+              },
+              {
+                "type": "section",
+                "text": { "type": "mrkdwn", "text": $list }
+              },
+              {
+                "type": "context",
+                "elements": [
+                  { "type": "mrkdwn", "text": "Daily check — review or merge these PRs" }
+                ]
+              }
+            ]')
+
+          echo "blocks<<BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+          echo "$BLOCKS" >> "$GITHUB_OUTPUT"
+          echo "BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        if: steps.prs.outputs.count != '0'
+        uses: archive/github-actions-slack@v2.10.1
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: ${{ secrets.SLACK_BUILD_CHANNEL }}
+          slack-text: "📋 Open agent PRs need review"
+          slack-optional-blocks: ${{ steps.prs.outputs.blocks }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 3: Planning agent summary
+  # ═══════════════════════════════════════════════════════════════════════════
+  planning-summary:
+    name: Notify Planning Summary
+    runs-on: ubuntu-latest
+    environment: dev
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow.name == 'Agent – Planning' &&
+      github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 5
+
+    steps:
+      - name: Build planning summary
+        id: summary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+
+          READY_COUNT=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --label "status:ready" \
+            --json number --jq 'length')
+
+          IN_PROGRESS_COUNT=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --label "status:in-progress" \
+            --json number --jq 'length')
+
+          NEEDS_HUMAN_COUNT=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --label "needs-human" \
+            --json number --jq 'length')
+
+          BLOCKS=$(jq -n \
+            --arg ready "$READY_COUNT" \
+            --arg progress "$IN_PROGRESS_COUNT" \
+            --arg human "$NEEDS_HUMAN_COUNT" \
+            --arg run_url "$RUN_URL" \
+            '[
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": "🤖 Planning Agent Run Complete" }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  { "type": "mrkdwn", "text": ("*Ready for agents:* " + $ready) },
+                  { "type": "mrkdwn", "text": ("*In progress:* " + $progress) },
+                  { "type": "mrkdwn", "text": ("*Needs human:* " + $human) }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": { "type": "plain_text", "text": "View Run" },
+                    "url": $run_url
+                  }
+                ]
+              }
+            ]')
+
+          echo "blocks<<BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+          echo "$BLOCKS" >> "$GITHUB_OUTPUT"
+          echo "BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        uses: archive/github-actions-slack@v2.10.1
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: ${{ secrets.SLACK_ISSUES_CHANNEL }}
+          slack-text: "🤖 Planning Agent completed"
+          slack-optional-blocks: ${{ steps.summary.outputs.blocks }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 4: Budget alert notification
+  # ═══════════════════════════════════════════════════════════════════════════
+  budget-alert:
+    name: Notify Budget Alert
+    runs-on: ubuntu-latest
+    environment: dev
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow.name == 'Agent – Token Tracking' &&
+      github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 5
+
+    steps:
+      - name: Check for budget alert issues
+        id: alert
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          TODAY=$(date -u +%Y-%m-%d)
+
+          ALERT_ISSUES=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --label "reason:budget" \
+            --search "Budget Alert ${TODAY}" \
+            --json number,title,url \
+            --limit 1)
+
+          ALERT_COUNT=$(echo "$ALERT_ISSUES" | jq 'length')
+          echo "count=$ALERT_COUNT" >> "$GITHUB_OUTPUT"
+
+          if [ "$ALERT_COUNT" = "0" ]; then
+            echo "No budget alerts today"
+            exit 0
+          fi
+
+          ALERT_URL=$(echo "$ALERT_ISSUES" | jq -r '.[0].url')
+          ALERT_TITLE=$(echo "$ALERT_ISSUES" | jq -r '.[0].title')
+
+          BLOCKS=$(jq -n \
+            --arg title "$ALERT_TITLE" \
+            --arg url "$ALERT_URL" \
+            '[
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": "⚠️ Daily Limit Alert" }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ("One or more agents are approaching their daily invocation limit.\n*<" + $url + "|" + $title + ">*")
+                }
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": { "type": "plain_text", "text": "Review Limits" },
+                    "url": $url,
+                    "style": "danger"
+                  }
+                ]
+              }
+            ]')
+
+          echo "blocks<<BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+          echo "$BLOCKS" >> "$GITHUB_OUTPUT"
+          echo "BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        if: steps.alert.outputs.count != '0'
+        uses: archive/github-actions-slack@v2.10.1
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: ${{ secrets.SLACK_TOKENS_CHANNEL }}
+          slack-text: "⚠️ Daily Limit Alert"
+          slack-optional-blocks: ${{ steps.alert.outputs.blocks }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 5: Daily agent activity summary (invocations + tokens + cost)
+  # ═══════════════════════════════════════════════════════════════════════════
+  token-summary:
+    name: Notify Daily Activity Summary
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    environment: dev
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow.name == 'Agent – Token Tracking' &&
+      github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 5
+
+    steps:
+      - name: Aggregate daily activity
+        id: summary
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+          TOKEN_LOG_DIR="/home/{{RUNNER_USER}}/kite-token-logs"
+
+          # Check if any agent directories exist
+          if [ ! -d "$TOKEN_LOG_DIR" ] || ! ls -d "${TOKEN_LOG_DIR}"/*/ 2>/dev/null | head -1 | grep -q .; then
+            echo "No token log directories found"
+            echo "has_data=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Daily limits per agent (must match workflow env vars)
+          declare -A LIMITS
+          LIMITS[claude-code]={{LIMIT_CODING}}
+          LIMITS[codex-cli]={{LIMIT_CODING}}
+          LIMITS[review-agent]={{LIMIT_REVIEW}}
+          LIMITS[planning-agent]={{LIMIT_PLANNING}}
+          LIMITS[validation-agent]={{LIMIT_VALIDATION}}
+          LIMITS[deployment-agent]={{LIMIT_DEPLOY}}
+
+          # Display names for Slack reporting
+          declare -A DISPLAY_NAMES
+          DISPLAY_NAMES[claude-code]="coding-claude"
+          DISPLAY_NAMES[codex-cli]="coding-codex"
+          DISPLAY_NAMES[review-agent]="review-agent"
+          DISPLAY_NAMES[planning-agent]="planning-agent"
+          DISPLAY_NAMES[validation-agent]="validation-agent"
+          DISPLAY_NAMES[deployment-agent]="deployment-agent"
+
+          TOTAL_TOKENS=0
+          TOTAL_COST=0
+          TOTAL_INVOCATIONS=0
+          ROWS=""
+
+          for AGENT_DIR in "${TOKEN_LOG_DIR}"/*/; do
+            AGENT=$(basename "$AGENT_DIR")
+            [ "$AGENT" = "summaries" ] && continue
+            DISPLAY_NAME=${DISPLAY_NAMES[$AGENT]:-$AGENT}
+            LOG="${AGENT_DIR}${TODAY}.jsonl"
+            if [ -f "$LOG" ]; then
+              INVOCATIONS=$(wc -l < "$LOG")
+              TOKENS=$(jq -s '[.[].tokens_used] | add // 0' "$LOG")
+              COST=$(jq -s '[.[].cost_usd // 0] | add // 0' "$LOG" 2>/dev/null || echo 0)
+              LIMIT=${LIMITS[$AGENT]:-10}
+
+              TOTAL_TOKENS=$((TOTAL_TOKENS + TOKENS))
+              TOTAL_COST=$(echo "$TOTAL_COST + $COST" | bc 2>/dev/null || echo "$TOTAL_COST")
+              TOTAL_INVOCATIONS=$((TOTAL_INVOCATIONS + INVOCATIONS))
+
+              # Format tokens with K/M suffix
+              if [ "$TOKENS" -ge 1000000 ]; then
+                TOK_DISPLAY="$(awk "BEGIN { printf \"%.1f\", $TOKENS / 1000000 }")M"
+              elif [ "$TOKENS" -ge 1000 ]; then
+                TOK_DISPLAY="$(awk "BEGIN { printf \"%.0f\", $TOKENS / 1000 }")K"
+              else
+                TOK_DISPLAY="$TOKENS"
+              fi
+
+              COST_DISPLAY=$(awk "BEGIN { printf \"%.2f\", $COST }")
+
+              # Progress bar (5 chars wide)
+              PCT=$((INVOCATIONS * 100 / LIMIT))
+              if [ "$PCT" -ge 100 ]; then
+                BAR="█████"
+              elif [ "$PCT" -ge 80 ]; then
+                BAR="████░"
+              elif [ "$PCT" -ge 60 ]; then
+                BAR="███░░"
+              elif [ "$PCT" -ge 40 ]; then
+                BAR="██░░░"
+              elif [ "$PCT" -ge 20 ]; then
+                BAR="█░░░░"
+              else
+                BAR="░░░░░"
+              fi
+
+              ROWS="${ROWS}${BAR}  *${DISPLAY_NAME}*  ${INVOCATIONS}/${LIMIT} runs · ${TOK_DISPLAY} tokens · \$${COST_DISPLAY}\n"
+              echo "  ${DISPLAY_NAME}: ${INVOCATIONS}/${LIMIT} runs, ${TOKENS} tokens, \$${COST_DISPLAY}"
+            fi
+          done
+
+          if [ "$TOTAL_INVOCATIONS" = "0" ]; then
+            echo "No activity today"
+            echo "has_data=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "has_data=true" >> "$GITHUB_OUTPUT"
+
+          # Format totals
+          if [ "$TOTAL_TOKENS" -ge 1000000 ]; then
+            TOTAL_TOK_DISPLAY="$(awk "BEGIN { printf \"%.1f\", $TOTAL_TOKENS / 1000000 }")M"
+          elif [ "$TOTAL_TOKENS" -ge 1000 ]; then
+            TOTAL_TOK_DISPLAY="$(awk "BEGIN { printf \"%.0f\", $TOTAL_TOKENS / 1000 }")K"
+          else
+            TOTAL_TOK_DISPLAY="$TOTAL_TOKENS"
+          fi
+          TOTAL_COST_DISPLAY=$(awk "BEGIN { printf \"%.2f\", $TOTAL_COST }")
+
+          # Build Slack blocks — combined activity + token summary
+          BLOCKS=$(cat <<BLOCKS_EOF
+          [
+            {
+              "type": "header",
+              "text": { "type": "plain_text", "text": "📊 Daily Agent Activity — ${TODAY}" }
+            },
+            {
+              "type": "section",
+              "text": { "type": "mrkdwn", "text": "$(printf '%b' "$ROWS")" }
+            },
+            {
+              "type": "divider"
+            },
+            {
+              "type": "section",
+              "text": { "type": "mrkdwn", "text": "*Totals:* ${TOTAL_INVOCATIONS} invocations · ${TOTAL_TOK_DISPLAY} tokens · \$${TOTAL_COST_DISPLAY}" }
+            },
+            {
+              "type": "context",
+              "elements": [
+                { "type": "mrkdwn", "text": "Daily limits: planning 5 · coding 10 · review 15 · validation 5 | Resets 00:00 UTC" }
+              ]
+            }
+          ]
+          BLOCKS_EOF
+          )
+
+          echo "blocks<<BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+          echo "$BLOCKS" >> "$GITHUB_OUTPUT"
+          echo "BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        if: steps.summary.outputs.has_data == 'true'
+        uses: archive/github-actions-slack@v2.10.1
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: ${{ secrets.SLACK_TOKENS_CHANNEL }}
+          slack-text: "📊 Daily Agent Activity Summary"
+          slack-optional-blocks: ${{ steps.summary.outputs.blocks }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 6: Issue closed notification
+  # ═══════════════════════════════════════════════════════════════════════════
+  issue-closed:
+    name: Notify Issue Closed
+    runs-on: ubuntu-latest
+    environment: dev
+    if: >-
+      github.event_name == 'issues' &&
+      github.event.action == 'closed'
+    timeout-minutes: 5
+
+    steps:
+      - name: Build issue closed message
+        id: meta
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          CLOSED_BY: ${{ github.event.sender.login }}
+          ISSUE_LABELS: ${{ toJSON(github.event.issue.labels) }}
+        run: |
+          set -euo pipefail
+
+          # Determine if this was completed or just closed
+          STATE_REASON="${{ github.event.issue.state_reason }}"
+          if [ "$STATE_REASON" = "completed" ]; then
+            EMOJI="✅"
+            STATUS="Completed"
+          else
+            EMOJI="🔒"
+            STATUS="Closed"
+          fi
+
+          # Extract milestone if present
+          MILESTONE="${{ github.event.issue.milestone.title }}"
+          MILESTONE_TEXT=""
+          if [ -n "$MILESTONE" ]; then
+            MILESTONE_TEXT="*Milestone:* ${MILESTONE}"
+          fi
+
+          # Extract key labels
+          LABELS=$(echo "$ISSUE_LABELS" | jq -r '[.[].name] | join(", ")')
+
+          BLOCKS=$(jq -n \
+            --arg emoji "$EMOJI" \
+            --arg status "$STATUS" \
+            --arg title "$ISSUE_TITLE" \
+            --arg url "$ISSUE_URL" \
+            --arg number "$ISSUE_NUMBER" \
+            --arg closed_by "$CLOSED_BY" \
+            --arg labels "$LABELS" \
+            --arg milestone "$MILESTONE_TEXT" \
+            '[
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": ($emoji + " Issue " + $status) }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ("*<" + $url + "|#" + $number + ": " + $title + ">*")
+                }
+              },
+              {
+                "type": "section",
+                "fields": (
+                  [
+                    { "type": "mrkdwn", "text": ("*Closed by:* " + $closed_by) },
+                    { "type": "mrkdwn", "text": ("*Labels:* " + (if $labels == "" then "_none_" else ("`" + $labels + "`") end)) }
+                  ] + (if $milestone != "" then [{ "type": "mrkdwn", "text": $milestone }] else [] end)
+                )
+              }
+            ]')
+
+          echo "blocks<<BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+          echo "$BLOCKS" >> "$GITHUB_OUTPUT"
+          echo "BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        uses: archive/github-actions-slack@v2.10.1
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: ${{ secrets.SLACK_ISSUES_CHANNEL }}
+          slack-text: "Issue closed: #${{ github.event.issue.number }}"
+          slack-optional-blocks: ${{ steps.meta.outputs.blocks }}
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 7: PR merged notification
+  # ═══════════════════════════════════════════════════════════════════════════
+  pr-merged:
+    name: Notify PR Merged
+    runs-on: ubuntu-latest
+    environment: dev
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true
+    timeout-minutes: 5
+
+    steps:
+      - name: Build PR merged message
+        id: meta
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          MERGED_BY: ${{ github.event.sender.login }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: |
+          set -euo pipefail
+
+          # Determine if this is an agent PR
+          IS_AGENT="false"
+          if echo "$HEAD_BRANCH" | grep -q "^agent/"; then
+            IS_AGENT="true"
+          fi
+
+          if [ "$IS_AGENT" = "true" ]; then
+            EMOJI="🤖"
+            LABEL="Agent PR Merged"
+          else
+            EMOJI="🔀"
+            LABEL="PR Merged"
+          fi
+
+          BLOCKS=$(jq -n \
+            --arg emoji "$EMOJI" \
+            --arg label "$LABEL" \
+            --arg title "$PR_TITLE" \
+            --arg url "$PR_URL" \
+            --arg number "$PR_NUMBER" \
+            --arg author "$PR_AUTHOR" \
+            --arg merged_by "$MERGED_BY" \
+            --arg base "$BASE_BRANCH" \
+            --arg head "$HEAD_BRANCH" \
+            --arg additions "$ADDITIONS" \
+            --arg deletions "$DELETIONS" \
+            --arg files "$CHANGED_FILES" \
+            '[
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": ($emoji + " " + $label) }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ("*<" + $url + "|#" + $number + ": " + $title + ">*")
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  { "type": "mrkdwn", "text": ("*Author:* " + $author) },
+                  { "type": "mrkdwn", "text": ("*Merged by:* " + $merged_by) },
+                  { "type": "mrkdwn", "text": ("*Branch:* `" + $head + "` → `" + $base + "`") },
+                  { "type": "mrkdwn", "text": ("*Changes:* +" + $additions + " −" + $deletions + " in " + $files + " file(s)") }
+                ]
+              }
+            ]')
+
+          echo "blocks<<BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+          echo "$BLOCKS" >> "$GITHUB_OUTPUT"
+          echo "BLOCKS_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        uses: archive/github-actions-slack@v2.10.1
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: ${{ secrets.SLACK_BUILD_CHANNEL }}
+          slack-text: "PR merged: #${{ github.event.pull_request.number }}"
+          slack-optional-blocks: ${{ steps.meta.outputs.blocks }}

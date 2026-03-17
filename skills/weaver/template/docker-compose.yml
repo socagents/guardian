@@ -1,0 +1,64 @@
+# =============================================================================
+# {{PROJECT_NAME}} — Docker Compose
+# =============================================================================
+#
+# This is a skeleton docker-compose.yml for the Dream Maker pipeline.
+# The deployment agent (agent-deploy.yml) uses `docker compose build` and
+# `docker compose up -d` to build and deploy services.
+#
+# Add your services below. Each service should have a health check so the
+# deployment agent can verify successful startup.
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Example service (replace with your actual services)
+  # ---------------------------------------------------------------------------
+  # api:
+  #   build:
+  #     context: ./services/api
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     PORT: 8080
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 30s
+  #   restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Infrastructure services (uncomment as needed)
+  # ---------------------------------------------------------------------------
+
+  # postgres:
+  #   image: postgres:16-alpine
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     POSTGRES_USER: ${DB_USER:-app}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+  #     POSTGRES_DB: ${DB_NAME:-app}
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-app}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+# volumes:
+#   postgres-data:

@@ -1,0 +1,12 @@
+# Codex CLI global configuration
+# Installed to: ~/.codex/config.toml
+#
+# The model and trust level are set per-project by the coding agent config
+# (coding-agent/config/codex.toml). This file provides global defaults.
+
+model = "gpt-5.4"
+
+# Trust the runner's workspace directory
+# Update the path below to match your runner's work directory
+[projects."/home/runner"]
+trust_level = "trusted"

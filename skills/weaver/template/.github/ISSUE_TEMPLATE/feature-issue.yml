@@ -1,0 +1,80 @@
+name: Feature Issue
+description: A parent feature issue created by the Delivery Manager from a spec
+title: "[Feature] "
+labels: ["status:planning"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is used by the Delivery Manager to create parent feature issues.
+        Each feature issue represents the top-level work item for a spec decomposition.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Brief description of the feature
+    validations:
+      required: true
+
+  - type: input
+    id: spec-path
+    attributes:
+      label: Spec File Path
+      description: Repository-relative path to the spec file
+      placeholder: specs/my-feature.md
+    validations:
+      required: true
+
+  - type: input
+    id: spec-commit
+    attributes:
+      label: Spec Commit SHA
+      description: The commit SHA of the spec version used for this decomposition
+      placeholder: abc1234def5678
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What this feature covers
+    validations:
+      required: true
+
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Non-Goals
+      description: What is explicitly excluded from this feature
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: High-Level Acceptance Criteria
+      description: What must be true for this feature to be considered complete?
+      placeholder: |
+        - [ ] All sub-issues implemented and merged
+        - [ ] Integration tests pass
+        - [ ] Documentation updated
+    validations:
+      required: true
+
+  - type: textarea
+    id: sub-issues
+    attributes:
+      label: Sub-Issues
+      description: Links to sub-issues created from this feature (filled after creation)
+      placeholder: |
+        - #20 Implement backend API
+        - #21 Add frontend form
+        - #22 Write integration tests
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Cross-feature dependencies or prerequisites
+      placeholder: |
+        depends on #15 (contracts must be defined first)

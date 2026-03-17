@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Workforce Orchestration Spec
+    url: https://github.com/{{GITHUB_ORG}}/research
+    about: Reference the workforce orchestration and agent interaction protocol specs

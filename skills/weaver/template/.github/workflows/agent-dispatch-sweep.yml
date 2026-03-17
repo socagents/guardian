@@ -1,0 +1,301 @@
+# =============================================================================
+# Agent Dispatch Sweep Workflow
+# =============================================================================
+# Periodic sweep that acts as a safety net for the self-chaining dispatch.
+#
+# Three phases:
+#
+# 1. STALE IN-PROGRESS (status:in-progress + agent label, no activity):
+#    Issues where the agent run failed silently. Reset to status:ready
+#    after 2 hours with no activity.
+#
+# 2. CHAIN RESTART:
+#    If the dispatch chain has stopped (no running or queued dispatch runs)
+#    and eligible issues exist, restart the chain via workflow_dispatch.
+#
+# 3. ORPHANED REVIEWS (open PRs with status:pr-open, no review comment):
+#    PRs where the review workflow was cancelled or never ran. Triggers
+#    the review workflow via workflow_dispatch.
+#
+# Triggers:
+#   - Every hour (cron)
+#   - Manual dispatch
+#
+# References:
+#   - workforce-orchestration.md §3 Dispatch
+#   - cicd-agent-integration.md §3 Dispatch Workflow
+# =============================================================================
+
+name: Agent – Dispatch Sweep
+
+on:
+  schedule:
+    - cron: "15 * * * *"            # Every hour (at :15)
+  workflow_dispatch:                # Manual trigger
+
+permissions:
+  contents: read
+  issues: write
+  actions: write                        # Needed to trigger review workflow
+  pull-requests: read                   # Needed to list PRs and comments
+
+concurrency:
+  group: kite-dispatch-sweep
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    name: Sweep Orphaned Issues
+    runs-on: ubuntu-latest
+    environment: dev
+    timeout-minutes: 10
+
+    steps:
+      # ── 1. Find stale status:in-progress issues ────────────────────────
+      - name: Find stale in-progress issues
+        id: stale
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          STALE_THRESHOLD_HOURS: "2"
+        run: |
+          set -euo pipefail
+
+          echo "=== Phase 2: Scanning for stale status:in-progress issues ==="
+
+          IN_PROGRESS=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --label "status:in-progress" \
+            --json number,title,labels,updatedAt \
+            --limit 50)
+
+          # Filter: must have agent label AND be older than threshold
+          THRESHOLD_EPOCH=$(date -u -d "${STALE_THRESHOLD_HOURS} hours ago" +%s 2>/dev/null \
+            || date -u -v-${STALE_THRESHOLD_HOURS}H +%s)
+
+          STALE_ISSUES=$(echo "$IN_PROGRESS" | jq --argjson threshold "$THRESHOLD_EPOCH" '[
+            .[] | select(
+              ([.labels[].name | select(startswith("agent:"))] | length > 0) and
+              ((.updatedAt | sub("\\.[0-9]+Z$"; "Z") | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime) < $threshold)
+            ) | {
+              number: .number,
+              title: .title,
+              agent_label: ([.labels[].name | select(startswith("agent:"))] | first),
+              updated: .updatedAt,
+              has_pr: false,
+              source: "stale-in-progress"
+            }
+          ]')
+
+          STALE_COUNT=$(echo "$STALE_ISSUES" | jq 'length')
+          echo "stale_count=$STALE_COUNT" >> "$GITHUB_OUTPUT"
+          echo "Found $STALE_COUNT stale in-progress issue(s)"
+
+          if [ "$STALE_COUNT" != "0" ]; then
+            echo "$STALE_ISSUES" | jq -r '.[] | "  #\(.number): \(.title) [\(.agent_label)] (last updated: \(.updated))"'
+          fi
+
+          echo "$STALE_ISSUES" > /tmp/stale-issues.json
+
+      # ── 3. Reset stale in-progress issues to ready ─────────────────────
+      - name: Reset stale in-progress to ready
+        if: steps.stale.outputs.stale_count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+
+          jq -c '.[]' /tmp/stale-issues.json | while IFS= read -r ISSUE; do
+            NUMBER=$(echo "$ISSUE" | jq -r '.number')
+            TITLE=$(echo "$ISSUE" | jq -r '.title')
+
+            echo "Resetting stale #${NUMBER}: ${TITLE}..."
+            gh issue edit "$NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --remove-label "status:in-progress" \
+              --add-label "status:ready"
+
+            gh issue comment "$NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              -F - <<EOF
+          <!-- AGENT_MSG agent=dispatch-sweep action=stale-reset -->
+          ♻️ **Stale Reset** — This issue was in \`status:in-progress\` for over 2 hours
+          with no activity. Reset to \`status:ready\` for re-dispatch.
+          EOF
+
+            echo "  ✅ Reset #${NUMBER} to status:ready"
+          done
+
+      # ── 3. Restart dispatch chain if stopped ─────────────────────────
+      # The dispatch workflow is self-chaining — it processes one issue then
+      # triggers itself for the next. This step restarts the chain if it
+      # stopped (e.g., runner went offline, budget reset, deps unblocked).
+      - name: Restart dispatch chain if stopped
+        id: trigger
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+
+          echo "=== Phase 2: Checking dispatch chain status ==="
+
+          # Check if dispatch is already running or queued
+          ACTIVE=$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow="Agent – Dispatch" \
+            --status=in_progress \
+            --json databaseId --jq 'length' 2>/dev/null || echo 0)
+
+          QUEUED=$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow="Agent – Dispatch" \
+            --status=queued \
+            --json databaseId --jq 'length' 2>/dev/null || echo 0)
+
+          if [ "${ACTIVE:-0}" -gt 0 ] || [ "${QUEUED:-0}" -gt 0 ]; then
+            echo "Dispatch chain is active (running=$ACTIVE, queued=$QUEUED) — no action needed"
+            echo "triggered=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Check for eligible issues
+          ELIGIBLE=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --label "status:ready" \
+            --json number,labels \
+            --jq '[.[] | select([.labels[].name] | any(startswith("agent:")))] | length')
+
+          if [ "${ELIGIBLE:-0}" -eq 0 ]; then
+            echo "No eligible issues — nothing to dispatch"
+            echo "triggered=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Dispatch chain stopped with $ELIGIBLE eligible issues — restarting"
+          gh workflow run "Agent – Dispatch" --repo "$GITHUB_REPOSITORY"
+          echo "triggered=1" >> "$GITHUB_OUTPUT"
+
+      # ── 4. Find orphaned PRs missing review ────────────────────────────
+      # A PR is "orphaned" if it's OPEN, has status:pr-open label, was created
+      # more than 30 minutes ago, and has NO review comment from the bot.
+      # This catches cases where the review workflow was cancelled (e.g. runner
+      # contention, manual cleanup) and never retried.
+      - name: Find orphaned PRs needing review
+        id: orphaned_reviews
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          REVIEW_AGE_MINUTES: "30"
+        run: |
+          set -euo pipefail
+
+          echo "=== Phase 3: Scanning for orphaned PRs missing review ==="
+
+          # List open PRs targeting main with agent branch prefix
+          OPEN_PRS=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --base main \
+            --json number,title,headRefName,createdAt \
+            --limit 20)
+
+          # Filter to agent PRs only
+          AGENT_PRS=$(echo "$OPEN_PRS" | jq '[.[] | select(.headRefName | startswith("agent/"))]')
+          AGENT_PR_COUNT=$(echo "$AGENT_PRS" | jq 'length')
+          echo "Found $AGENT_PR_COUNT open agent PR(s)"
+
+          if [ "$AGENT_PR_COUNT" = "0" ]; then
+            echo "review_count=0" >> "$GITHUB_OUTPUT"
+            echo '[]' > /tmp/orphaned-reviews.json
+            exit 0
+          fi
+
+          # Calculate age threshold
+          THRESHOLD_EPOCH=$(date -u -d "${REVIEW_AGE_MINUTES} minutes ago" +%s 2>/dev/null \
+            || date -u -v-${REVIEW_AGE_MINUTES}M +%s)
+
+          # Use a temp file to accumulate orphaned PRs (avoids subshell
+          # variable scoping issues with piped while-loops)
+          echo '[]' > /tmp/orphaned-reviews.json
+
+          while IFS= read -r ROW; do
+            PR_NUM=$(echo "$ROW" | jq -r '.number')
+            PR_TITLE=$(echo "$ROW" | jq -r '.title')
+            CREATED=$(echo "$ROW" | jq -r '.createdAt')
+
+            # Check age — skip if too recent (review may still be running)
+            CREATED_CLEAN=$(echo "$CREATED" | sed 's/\.[0-9]*Z$/Z/')
+            CREATED_EPOCH=$(date -u -d "$CREATED_CLEAN" +%s 2>/dev/null \
+              || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$CREATED_CLEAN" +%s)
+
+            if [ "$CREATED_EPOCH" -gt "$THRESHOLD_EPOCH" ]; then
+              echo "  PR #${PR_NUM}: too recent (created $CREATED), skipping"
+              continue
+            fi
+
+            # Check for review bot comment (AGENT_MSG from review-agent)
+            HAS_REVIEW=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUM}/comments" \
+              --jq '[.[] | select(.body | test("AGENT_MSG agent=review-agent"))] | length')
+
+            if [ "${HAS_REVIEW:-0}" -gt 0 ]; then
+              echo "  PR #${PR_NUM}: has review comment, skipping"
+              continue
+            fi
+
+            echo "  PR #${PR_NUM}: ORPHANED — no review comment, created $CREATED"
+            jq --argjson num "$PR_NUM" --arg title "$PR_TITLE" \
+              '. + [{number: $num, title: $title}]' /tmp/orphaned-reviews.json > /tmp/orphaned-reviews.tmp \
+              && mv /tmp/orphaned-reviews.tmp /tmp/orphaned-reviews.json
+          done < <(echo "$AGENT_PRS" | jq -c '.[]')
+
+          REVIEW_COUNT=$(jq 'length' /tmp/orphaned-reviews.json)
+          echo "review_count=$REVIEW_COUNT" >> "$GITHUB_OUTPUT"
+          echo "Found $REVIEW_COUNT orphaned PR(s) needing review"
+
+      # ── 5. Re-trigger review for orphaned PRs ─────────────────────────
+      - name: Re-trigger review for orphaned PRs
+        id: review_trigger
+        if: steps.orphaned_reviews.outputs.review_count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+
+          REVIEW_TRIGGERED=0
+          REVIEW_PRS=""
+
+          jq -c '.[]' /tmp/orphaned-reviews.json | while IFS= read -r PR; do
+            PR_NUM=$(echo "$PR" | jq -r '.number')
+            PR_TITLE=$(echo "$PR" | jq -r '.title')
+
+            echo "Triggering review for PR #${PR_NUM}: ${PR_TITLE}"
+
+            gh workflow run "Agent – Review" \
+              --repo "$GITHUB_REPOSITORY" \
+              -f pr_number="$PR_NUM"
+
+            echo "  ✅ Review dispatched for PR #${PR_NUM}"
+            REVIEW_TRIGGERED=$((REVIEW_TRIGGERED + 1))
+            REVIEW_PRS="${REVIEW_PRS}#${PR_NUM} "
+
+            # Brief pause between triggers
+            sleep 3
+          done
+
+          # Use file-based output since while loop runs in subshell
+          REVIEW_TRIGGERED=$(jq 'length' /tmp/orphaned-reviews.json)
+          REVIEW_PRS=$(jq -r '[.[].number | "#\(.)"] | join(" ")' /tmp/orphaned-reviews.json)
+
+          echo "review_triggered=$REVIEW_TRIGGERED" >> "$GITHUB_OUTPUT"
+          echo "review_prs=$REVIEW_PRS" >> "$GITHUB_OUTPUT"
+
+      # ── 7. Post sweep summary ──────────────────────────────────────────
+      - name: Post sweep summary
+        if: always()
+        env:
+          STALE_COUNT: ${{ steps.stale.outputs.stale_count || '0' }}
+          CHAIN_RESTARTED: ${{ steps.trigger.outputs.triggered || '0' }}
+          REVIEW_COUNT: ${{ steps.orphaned_reviews.outputs.review_count || '0' }}
+          REVIEW_PRS: ${{ steps.review_trigger.outputs.review_prs || 'none' }}
+        run: |
+          echo "::notice::Sweep summary: stale_reset=$STALE_COUNT chain_restarted=$CHAIN_RESTARTED orphaned_reviews=$REVIEW_COUNT review_triggered=${REVIEW_PRS}"

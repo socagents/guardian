@@ -1,0 +1,524 @@
+# =============================================================================
+# Agent Deployment Workflow
+# =============================================================================
+# Triggers on every push to main. Detects which services changed, builds and
+# deploys them, verifies health checks, and invokes the Codex deployment agent
+# to fix any failures. Updates README access table with live service data.
+#
+# References:
+#   - specs/deployment-agent.md
+#   - deployment-agent/AGENTS.md
+# =============================================================================
+
+name: Agent – Deploy
+
+on:
+  push:
+    branches: [main]
+
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: "Force rebuild all services"
+        type: boolean
+        default: false
+
+concurrency:
+  group: kite-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  TOKEN_LOG_DIR: /home/{{RUNNER_USER}}/kite-token-logs
+  DEPLOY_STATE_DIR: /home/{{RUNNER_USER}}/kite-deploy
+  DAILY_DEPLOY_LIMIT: "{{LIMIT_DEPLOY}}"
+  MAX_FIX_ATTEMPTS: "3"
+
+jobs:
+  deploy:
+    name: Build & Deploy Services
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Check daily budget ──────────────────────────────────────────
+      - name: Check daily deployment budget
+        id: budget
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          LOG_FILE="${TOKEN_LOG_DIR}/deployment-agent/${DATE}.jsonl"
+          mkdir -p "${TOKEN_LOG_DIR}/deployment-agent"
+
+          if [ -f "$LOG_FILE" ]; then
+            COUNT=$(wc -l < "$LOG_FILE" | tr -d ' ')
+          else
+            COUNT=0
+          fi
+
+          echo "Daily deployment count: ${COUNT}/${DAILY_DEPLOY_LIMIT}"
+
+          if [ "$COUNT" -ge "$DAILY_DEPLOY_LIMIT" ]; then
+            echo "budget_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Daily deployment limit reached (${COUNT}/${DAILY_DEPLOY_LIMIT})"
+          else
+            echo "budget_ok=true" >> "$GITHUB_OUTPUT"
+            echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if budget exhausted
+        if: steps.budget.outputs.budget_ok != 'true'
+        run: |
+          echo "Daily deployment limit reached — skipping"
+          exit 0
+
+      # ── 3. Detect changed services ────────────────────────────────────
+      - name: Detect changed services
+        id: changes
+        if: steps.budget.outputs.budget_ok == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$DEPLOY_STATE_DIR"
+
+          FORCE_ALL="${{ inputs.force_all }}"
+          if [ "$FORCE_ALL" = "true" ]; then
+            echo "Force rebuild all services requested"
+            echo "mode=all" >> "$GITHUB_OUTPUT"
+            echo "services=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          AFFECTED=$(bash deployment-agent/scripts/detect-changes.sh)
+          echo "Affected services: ${AFFECTED}"
+
+          if [ "$AFFECTED" = "NONE" ]; then
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+          elif [ "$AFFECTED" = "ALL" ]; then
+            echo "mode=all" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=selective" >> "$GITHUB_OUTPUT"
+            echo "services=${AFFECTED}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── 4. Skip if no changes ─────────────────────────────────────────
+      - name: Skip if no service changes
+        if: steps.changes.outputs.mode == 'none'
+        run: echo "No service changes detected — skipping deployment"
+
+      # ── 5. Build affected services ────────────────────────────────────
+      - name: Build services
+        id: build
+        if: steps.changes.outputs.mode != 'none' && steps.budget.outputs.budget_ok == 'true'
+        run: |
+          set -euo pipefail
+          MODE="${{ steps.changes.outputs.mode }}"
+          SERVICES="${{ steps.changes.outputs.services }}"
+
+          BUILT=""
+          FAILED=""
+
+          if [ "$MODE" = "all" ]; then
+            echo "Building ALL services..."
+            # Get actual service names from docker-compose.yml
+            ALL_SVCS=$(docker compose config --services 2>/dev/null | tr '\n' ' ')
+            if docker compose build 2>&1 | tee /tmp/build-output.log; then
+              BUILT="$ALL_SVCS"
+            else
+              # Build failed — try each service individually to find which ones work
+              echo "Full build failed — trying individual services..."
+              for SVC in $ALL_SVCS; do
+                if docker compose build "$SVC" 2>&1 | tee "/tmp/build-${SVC}.log"; then
+                  BUILT="${BUILT:+$BUILT }${SVC}"
+                else
+                  FAILED="${FAILED:+$FAILED }${SVC}"
+                fi
+              done
+            fi
+          else
+            for SVC in $SERVICES; do
+              echo "========================================"
+              echo "Building ${SVC}..."
+              echo "========================================"
+              if docker compose build "$SVC" 2>&1 | tee "/tmp/build-${SVC}.log"; then
+                BUILT="${BUILT:+$BUILT }${SVC}"
+              else
+                FAILED="${FAILED:+$FAILED }${SVC}"
+                echo "::warning::Build failed for ${SVC}"
+              fi
+            done
+          fi
+
+          echo "built=${BUILT}" >> "$GITHUB_OUTPUT"
+          echo "failed=${FAILED}" >> "$GITHUB_OUTPUT"
+
+      # ── 6. Deploy built services ──────────────────────────────────────
+      - name: Deploy services
+        id: deploy
+        if: steps.build.outputs.built != ''
+        run: |
+          set -euo pipefail
+          MODE="${{ steps.changes.outputs.mode }}"
+          BUILT="${{ steps.build.outputs.built }}"
+
+          for SVC in $BUILT; do
+            echo "Deploying ${SVC}..."
+            docker compose up -d --no-deps "$SVC"
+          done
+
+      # ── 7. Verify health checks ───────────────────────────────────────
+      - name: Verify health checks
+        id: health
+        if: steps.deploy.outcome == 'success'
+        run: |
+          set -euo pipefail
+          MODE="${{ steps.changes.outputs.mode }}"
+          BUILT="${{ steps.build.outputs.built }}"
+
+          HEALTHY=""
+          UNHEALTHY=""
+
+          # Check all services that were built and deployed
+          CHECK_SERVICES="$BUILT"
+
+          for SVC in $CHECK_SERVICES; do
+            [ -z "$SVC" ] && continue
+            echo "Checking health: ${SVC}..."
+
+            CONTAINER_ID=$(docker compose ps -q "$SVC" 2>/dev/null || echo "")
+            if [ -z "$CONTAINER_ID" ]; then
+              echo "  No container for ${SVC} — skipping"
+              continue
+            fi
+
+            # Check if service has a health check defined
+            HAS_HEALTH=$(docker inspect --format='{{if .State.Health}}yes{{else}}no{{end}}' "$CONTAINER_ID" 2>/dev/null || echo "no")
+            if [ "$HAS_HEALTH" = "no" ]; then
+              echo "  ${SVC} has no health check — assuming OK"
+              HEALTHY="${HEALTHY:+$HEALTHY }${SVC}"
+              continue
+            fi
+
+            # Exponential backoff: 5s, 10s, 20s, 30s (total ~65s before timeout)
+            WAITS=(5 10 20 30)
+            IS_HEALTHY=false
+
+            for WAIT in "${WAITS[@]}"; do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_ID" 2>/dev/null || echo "unknown")
+
+              if [ "$STATUS" = "healthy" ]; then
+                IS_HEALTHY=true
+                break
+              fi
+
+              echo "  ${SVC} status: ${STATUS} — waiting ${WAIT}s..."
+              sleep "$WAIT"
+            done
+
+            # One final check
+            if [ "$IS_HEALTHY" = "false" ]; then
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_ID" 2>/dev/null || echo "unknown")
+              [ "$STATUS" = "healthy" ] && IS_HEALTHY=true
+            fi
+
+            if [ "$IS_HEALTHY" = "true" ]; then
+              HEALTHY="${HEALTHY:+$HEALTHY }${SVC}"
+              echo "  ✅ ${SVC} is healthy"
+            else
+              UNHEALTHY="${UNHEALTHY:+$UNHEALTHY }${SVC}"
+              echo "  ❌ ${SVC} failed health check (status: ${STATUS})"
+              docker compose logs --tail=50 "$SVC" > "/tmp/health-fail-${SVC}.log" 2>&1 || true
+            fi
+          done
+
+          echo "healthy=${HEALTHY}" >> "$GITHUB_OUTPUT"
+          echo "unhealthy=${UNHEALTHY}" >> "$GITHUB_OUTPUT"
+
+      # ── 8. Fix failed services (Codex agent) ──────────────────────────
+      - name: Fix failed services
+        id: fix
+        if: steps.build.outputs.failed != '' || (steps.health.outputs.unhealthy != '' && steps.health.outputs.unhealthy != ' ')
+        run: |
+          set -euo pipefail
+          BUILD_FAILED="${{ steps.build.outputs.failed }}"
+          HEALTH_FAILED="${{ steps.health.outputs.unhealthy }}"
+          ALL_FAILED=$(echo "$BUILD_FAILED $HEALTH_FAILED" | xargs -n1 | sort -u | xargs)
+
+          FIXED=""
+          ESCALATED=""
+
+          for SVC in $ALL_FAILED; do
+            [ -z "$SVC" ] && continue
+            echo "========================================="
+            echo "Attempting to fix: ${SVC}"
+            echo "========================================="
+
+            # Collect context for the agent
+            CONTEXT="# Deployment Fix Context for: ${SVC}\n\n"
+
+            if [ -f "/tmp/build-${SVC}.log" ]; then
+              BUILD_ERR=$(tail -100 "/tmp/build-${SVC}.log")
+              CONTEXT+="## Build Error Output\n\`\`\`\n${BUILD_ERR}\n\`\`\`\n\n"
+            fi
+            if [ -f "/tmp/health-fail-${SVC}.log" ]; then
+              HEALTH_ERR=$(tail -50 "/tmp/health-fail-${SVC}.log")
+              CONTEXT+="## Health Check Failure (container logs)\n\`\`\`\n${HEALTH_ERR}\n\`\`\`\n\n"
+            fi
+
+            if [ -f "services/${SVC}/Dockerfile" ]; then
+              DF_CONTENT=$(cat "services/${SVC}/Dockerfile")
+              CONTEXT+="## Dockerfile\n\`\`\`dockerfile\n${DF_CONTENT}\n\`\`\`\n\n"
+            fi
+
+            COMPOSE_BLOCK=$(sed -n "/^  ${SVC}:/,/^  [a-z]/p" docker-compose.yml | head -40)
+            CONTEXT+="## docker-compose.yml service block\n\`\`\`yaml\n${COMPOSE_BLOCK}\n\`\`\`\n\n"
+
+            LAST_SHA=""
+            [ -f "${DEPLOY_STATE_DIR}/last-deployed-sha" ] && LAST_SHA=$(cat "${DEPLOY_STATE_DIR}/last-deployed-sha")
+            if [ -n "$LAST_SHA" ]; then
+              DIFF=$(git diff "${LAST_SHA}..HEAD" -- "services/${SVC}/" 2>/dev/null | head -200 || echo "No diff available")
+              CONTEXT+="## Recent Changes\n\`\`\`\n${DIFF}\n\`\`\`\n\n"
+            fi
+
+            echo -e "$CONTEXT" > /tmp/fix-context.md
+            FIX_PROMPT=$(cat deployment-agent/prompts/deploy-fix-prompt.md)
+
+            ATTEMPT=0
+            SVC_FIXED=false
+
+            while [ "$ATTEMPT" -lt "$MAX_FIX_ATTEMPTS" ]; do
+              ATTEMPT=$((ATTEMPT + 1))
+              echo "Fix attempt ${ATTEMPT}/${MAX_FIX_ATTEMPTS} for ${SVC}..."
+
+              if command -v claude &>/dev/null; then
+                # Build full prompt in a temp file to avoid YAML escaping issues
+                {
+                  cat deployment-agent/prompts/deploy-fix-prompt.md
+                  echo ""
+                  echo "CONTEXT:"
+                  cat /tmp/fix-context.md
+                  echo ""
+                  echo "Fix the failing service: ${SVC}. Apply the minimum change needed."
+                } > /tmp/deploy-fix-prompt.md
+
+                claude \
+                  -p "$(cat /tmp/deploy-fix-prompt.md)" \
+                  --model claude-sonnet-4-6 \
+                  --dangerously-skip-permissions \
+                  --verbose \
+                  --output-format stream-json \
+                  2>&1 | tee "/tmp/fix-output-${SVC}-${ATTEMPT}.jsonl" || true
+              else
+                echo "::warning::Claude CLI not available — skipping agent fix"
+                break
+              fi
+
+              echo "Rebuilding ${SVC} after fix..."
+              if docker compose build "$SVC" 2>&1 | tee "/tmp/rebuild-${SVC}.log"; then
+                docker compose up -d --no-deps "$SVC"
+                echo "Waiting for health check..."
+                sleep 15
+
+                CONTAINER_ID=$(docker compose ps -q "$SVC" 2>/dev/null || echo "")
+                STATUS="unknown"
+                if [ -n "$CONTAINER_ID" ]; then
+                  for i in 1 2 3 4; do
+                    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_ID" 2>/dev/null || echo "unknown")
+                    [ "$STATUS" = "healthy" ] && break
+                    sleep 15
+                  done
+                fi
+
+                if [ "$STATUS" = "healthy" ]; then
+                  echo "✅ ${SVC} fixed on attempt ${ATTEMPT}"
+                  SVC_FIXED=true
+                  FIXED="${FIXED:+$FIXED }${SVC}"
+
+                  git config user.name "kite-deploy-agent[bot]"
+                  git config user.email "kite-deploy-agent[bot]@users.noreply.github.com"
+                  git add -A -- ':!.github/workflows/' ':!specs/'
+                  if ! git diff --cached --quiet; then
+                    git commit -m "fix(deploy): auto-fix ${SVC} build/health failure"
+                    git push origin main || echo "::warning::Could not push fix commit"
+                  fi
+                  break
+                else
+                  echo "Health check still failing (status: ${STATUS})"
+                  docker compose logs --tail=50 "$SVC" > "/tmp/health-fail-${SVC}.log" 2>&1 || true
+                fi
+              else
+                echo "Build still failing after fix attempt ${ATTEMPT}"
+              fi
+            done
+
+            if [ "$SVC_FIXED" = "false" ]; then
+              echo "❌ Could not fix ${SVC} after ${MAX_FIX_ATTEMPTS} attempts — escalating"
+              ESCALATED="${ESCALATED:+$ESCALATED }${SVC}"
+
+              docker compose stop "$SVC" 2>/dev/null || true
+
+              LAYER="integration"
+              case "$SVC" in
+                agent-runtime|memory-service) LAYER="cognitive" ;;
+                ui) LAYER="presentation" ;;
+                automation-service|media-service|device-node-service) LAYER="runtime" ;;
+                connector-*) LAYER="integration" ;;
+              esac
+
+              # Build issue body safely using a temp file
+              {
+                echo "## Deploy Failure: ${SVC}"
+                echo ""
+                echo "### Error Output"
+                echo '```'
+                tail -80 "/tmp/build-${SVC}.log" "/tmp/health-fail-${SVC}.log" 2>/dev/null || echo 'No logs available'
+                echo '```'
+                echo ""
+                echo "### Dockerfile"
+                echo '```dockerfile'
+                cat "services/${SVC}/Dockerfile" 2>/dev/null || echo 'Not found'
+                echo '```'
+                echo ""
+                echo "### Deployment Agent Diagnosis"
+                echo "The deployment agent attempted ${MAX_FIX_ATTEMPTS} fixes but could not resolve this issue."
+                echo "This likely requires source code changes beyond minor fixes."
+                echo ""
+                echo "### Spec Reference"
+                echo "- **File:** \`specs/deployment-agent.md\`"
+              } > /tmp/escalation-body.md
+
+              gh issue create \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "[Deploy Fix] ${SVC}: build/health failure" \
+                --body-file /tmp/escalation-body.md \
+                --label "agent:claude-code,status:ready,priority:high,layer:${LAYER}" \
+                2>/dev/null || echo "::warning::Failed to create escalation issue for ${SVC}"
+            fi
+          done
+
+          echo "fixed=${FIXED}" >> "$GITHUB_OUTPUT"
+          echo "escalated=${ESCALATED}" >> "$GITHUB_OUTPUT"
+
+      # ── 9. Update README access table ──────────────────────────────────
+      - name: Update README access table
+        if: steps.deploy.outcome == 'success' || steps.fix.outputs.fixed != ''
+        run: |
+          set -euo pipefail
+          bash deployment-agent/scripts/update-access-table.sh "localhost"
+
+          if ! git diff --quiet README.md 2>/dev/null; then
+            git config user.name "kite-deploy-agent[bot]"
+            git config user.email "kite-deploy-agent[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "docs: update README access table with live service data"
+            git push origin main || echo "::warning::Could not push README update"
+          else
+            echo "README access table unchanged"
+          fi
+
+      # ── 10. Update last deployed SHA ────────────────────────────────────
+      # NOTE: Cognitive roadmap progress scoring has been moved to a separate
+      # daily workflow (agent-roadmap-progress.yml) to avoid burning tokens
+      # on every deployment.
+      - name: Update last deployed SHA
+        if: steps.deploy.outcome == 'success'
+        run: |
+          mkdir -p "$DEPLOY_STATE_DIR"
+          git rev-parse HEAD > "${DEPLOY_STATE_DIR}/last-deployed-sha"
+          echo "Last deployed SHA updated: $(cat "${DEPLOY_STATE_DIR}/last-deployed-sha")"
+
+      # ── 11. Log deployment ─────────────────────────────────────────────
+      - name: Log deployment invocation
+        if: always() && steps.budget.outputs.budget_ok == 'true' && steps.changes.outputs.mode != 'none'
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LOG_DIR="${TOKEN_LOG_DIR}/deployment-agent"
+          mkdir -p "$LOG_DIR"
+
+          MODE="${{ steps.changes.outputs.mode }}"
+          SERVICES="${{ steps.changes.outputs.services }}"
+          HEALTHY="${{ steps.health.outputs.healthy }}"
+          FIXED="${{ steps.fix.outputs.fixed }}"
+          ESCALATED="${{ steps.fix.outputs.escalated }}"
+
+          ESCALATED_TRIMMED=$(echo "$ESCALATED" | xargs)
+          HEALTHY_TRIMMED=$(echo "$HEALTHY" | xargs)
+
+          if [ -z "$ESCALATED_TRIMMED" ]; then
+            if [ -n "$HEALTHY_TRIMMED" ]; then
+              STATUS="success"
+            else
+              STATUS="skipped"
+            fi
+          elif [ -n "$HEALTHY_TRIMMED" ]; then
+            STATUS="partial"
+          else
+            STATUS="failure"
+          fi
+
+          echo "{\"timestamp\":\"${TIMESTAMP}\",\"agent\":\"deployment-agent\",\"run_id\":\"${{ github.run_id }}\",\"mode\":\"${MODE}\",\"services_affected\":\"${SERVICES}\",\"services_deployed\":\"${HEALTHY_TRIMMED}\",\"services_failed\":\"${ESCALATED_TRIMMED}\",\"fixes_applied\":\"${FIXED}\",\"status\":\"${STATUS}\"}" \
+            >> "${LOG_DIR}/${DATE}.jsonl"
+
+          echo "Deployment logged: status=${STATUS}"
+
+      # ── 12. Post Slack summary ─────────────────────────────────────────
+      - name: Post deployment summary to Slack
+        if: always() && steps.budget.outputs.budget_ok == 'true' && steps.changes.outputs.mode != 'none'
+        env:
+          SLACK_BUILDS_WEBHOOK: ${{ secrets.SLACK_BUILDS_WEBHOOK }}
+        run: |
+          MODE="${{ steps.changes.outputs.mode }}"
+          HEALTHY="${{ steps.health.outputs.healthy }}"
+          ESCALATED="${{ steps.fix.outputs.escalated }}"
+          FIXED="${{ steps.fix.outputs.fixed }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          ESCALATED_TRIMMED=$(echo "$ESCALATED" | xargs)
+          HEALTHY_TRIMMED=$(echo "$HEALTHY" | xargs)
+
+          if [ -z "$ESCALATED_TRIMMED" ]; then
+            EMOJI="✅"
+            TITLE="Deployment Successful"
+          elif [ -n "$HEALTHY_TRIMMED" ]; then
+            EMOJI="⚠️"
+            TITLE="Partial Deployment"
+          else
+            EMOJI="❌"
+            TITLE="Deployment Failed"
+          fi
+
+          MSG="${EMOJI} *${TITLE}*\nMode: ${MODE}"
+          [ -n "$HEALTHY_TRIMMED" ] && MSG+="\nDeployed: ${HEALTHY_TRIMMED}"
+          [ -n "$FIXED" ] && MSG+="\nAuto-fixed: ${FIXED}"
+          [ -n "$ESCALATED_TRIMMED" ] && MSG+="\nFailed: ${ESCALATED_TRIMMED} (issues created)"
+          MSG+="\n<${RUN_URL}|View Run>"
+
+          if [ -n "${SLACK_BUILDS_WEBHOOK:-}" ]; then
+            curl -s -X POST "$SLACK_BUILDS_WEBHOOK" \
+              -H 'Content-type: application/json' \
+              -d "{\"text\": \"$(echo -e "$MSG")\"}" || true
+          else
+            echo "No Slack webhook configured — skipping notification"
+          fi
+
+      # ── 13. Cleanup ────────────────────────────────────────────────────
+      - name: Cleanup build artifacts
+        if: always()
+        run: |
+          rm -f /tmp/build-*.log /tmp/health-fail-*.log /tmp/fix-*.md \
+                /tmp/fix-output-*.jsonl /tmp/rebuild-*.log /tmp/fix-context.md \
+                /tmp/access-table-rows.txt /tmp/readme-updated.md \
+                /tmp/escalation-body.md
+          # Prune old Docker images to save disk
+          docker image prune -f --filter "until=24h" 2>/dev/null || true

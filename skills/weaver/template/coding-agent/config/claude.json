@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.anthropic.com/claude-code/settings-schema.json",
+  "_comment": "Claude Code configuration template. Copy to the target repository as .claude/settings.json and adjust as needed.",
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(go *)",
+      "Bash(make *)",
+      "Bash(cargo *)",
+      "Bash(pytest *)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)"
+    ]
+  },
+  "model": "claude-opus-4-6"
+}

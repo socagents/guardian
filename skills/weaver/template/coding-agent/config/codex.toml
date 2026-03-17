@@ -1,0 +1,16 @@
+# Codex CLI configuration template
+# Copy to the target repository and adjust as needed.
+#
+# Codex reads this file when invoked with --config or from the
+# repository root (codex.toml / .codex.toml).
+#
+# Docs: https://github.com/openai/codex
+
+# Model to use for coding tasks
+model = "gpt-5.4"
+
+# Approval mode: "full-auto" for autonomous operation
+approval_mode = "full-auto"
+
+# Instruction file Codex should load (relative to repo root)
+instructions_file = "AGENTS.md"

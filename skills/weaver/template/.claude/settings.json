@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.anthropic.com/claude-code/settings-schema.json",
+  "_comment": "Project-level Claude Code settings. Hooks fire in headless mode (claude -p) for CI agents.",
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(go *)",
+      "Bash(make *)",
+      "Bash(cargo *)",
+      "Bash(pytest *)",
+      "Bash(ruff *)",
+      "Bash(mypy *)",
+      "Bash(gofmt *)",
+      "Bash(buf *)",
+      "Bash(golangci-lint *)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/coding-agent/hooks/post-edit-format.sh\"",
+            "timeout": 30000
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/coding-agent/hooks/post-edit-typecheck.sh\"",
+            "timeout": 60000
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/coding-agent/hooks/post-edit-go-build.sh\"",
+            "timeout": 60000
+          }
+        ]
+      }
+    ]
+  }
+}

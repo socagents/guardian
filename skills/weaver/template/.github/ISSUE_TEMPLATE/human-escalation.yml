@@ -1,0 +1,67 @@
+name: Human Escalation
+description: An agent is requesting human intervention
+title: "[Escalation] "
+labels: ["needs-human"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An AI agent has encountered a situation that requires human judgment.
+        Please review the details below and respond by commenting on this issue.
+
+  - type: dropdown
+    id: reason
+    attributes:
+      label: Escalation Reason
+      description: Why is human intervention needed?
+      options:
+        - "Ambiguous: Task description is unclear"
+        - "Architecture: Design decision not covered by specs"
+        - "Blocked: Repeated failure after max retries"
+        - "Security: Change touches auth, secrets, or trust boundaries"
+        - "Budget: Token budget exceeded"
+        - "Merge Conflict: Auto-resolution failed"
+        - "Review Limit: 3 review cycles exhausted"
+        - "Governance: Requires human judgment"
+    validations:
+      required: true
+
+  - type: input
+    id: source-issue
+    attributes:
+      label: Source Issue
+      description: Link to the original task issue
+      placeholder: "#42"
+    validations:
+      required: true
+
+  - type: input
+    id: agent
+    attributes:
+      label: Escalating Agent
+      description: Which agent is requesting help?
+      placeholder: e.g., claude-code-coder, codex-cli-coder, review-agent
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What was the agent trying to do and what went wrong?
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Options Considered
+      description: What approaches did the agent consider or attempt?
+
+  - type: textarea
+    id: requested-action
+    attributes:
+      label: Requested Action
+      description: What does the agent need from a human to proceed?
+    validations:
+      required: true
