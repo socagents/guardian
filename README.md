@@ -1,7 +1,7 @@
 <table>
   <tr>
-    <td width="156" valign="top">
-      <img src="logos/guardian-white.gif" alt="GUARDIAN logo" width="136">
+    <td width="180" valign="top">
+      <img src="logos/guardian-white.gif" alt="GUARDIAN logo" width="160">
     </td>
     <td valign="top">
       <h1>GUARDIAN</h1>
