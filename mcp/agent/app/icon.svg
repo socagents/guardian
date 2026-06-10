@@ -18,15 +18,8 @@
         .facet-3 { animation: pipelineFlow 4s infinite 2s; }
         .facet-4 { animation: pipelineFlow 4s infinite 3s; }
     </style>
-    <!-- Faceted Shield: Guardian's mark. Same visual grammar as the
-         four-facet gem it replaces — same gradients, stroke, and
-         staggered pipelineFlow pulse — reshaped into a heater shield
-         (protection) for the incident-response product. Outline:
-         top-center (50,8), shoulders (18,20)/(82,20), waist
-         (24,56)/(76,56), tip (50,92); all facets meet at the
-         keystone (50,46). -->
-    <polygon class="facet-1" fill="url(#wGreen)"  points="50,8 18,20 24,56 50,46"/>
-    <polygon class="facet-2" fill="url(#wBlue)"   points="50,8 82,20 76,56 50,46"/>
-    <polygon class="facet-3" fill="url(#wYellow)" points="76,56 50,92 50,46"/>
-    <polygon class="facet-4" fill="url(#wRed)"    points="24,56 50,92 50,46"/>
+    <polygon class="facet-1" points="50,15 50,45 15,35 15,15" fill="url(#wGreen)" />
+    <polygon class="facet-4" points="50,15 85,15 85,35 50,45" fill="url(#wRed)" />
+    <polygon class="facet-3" points="50,45 85,35 85,60 50,95" fill="url(#wBlue)" />
+    <polygon class="facet-2" points="50,45 50,95 15,60 15,35" fill="url(#wYellow)" />
 </svg>

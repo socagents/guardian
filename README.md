@@ -1,12 +1,12 @@
 <table>
   <tr>
     <td width="180" valign="top">
-      <img src="logos/guardian.svg" alt="GUARDIAN logo" width="160">
+      <img src="logos/guardian-white.gif" alt="GUARDIAN logo" width="160">
     </td>
     <td valign="top">
       <h1>GUARDIAN</h1>
-      <p>AI incident-response agent for Cortex XSIAM/XSOAR. Investigates security incidents over MCP — evidence gathering, XQL queries, case enrichment, and response orchestration.</p>
-      <p><strong>Category:</strong> AI INCIDENT RESPONSE</p>
+      <p>The agentic security platform. Securing autonomous tools across the cognitive, integration, and runtime layers to ensure flawless execution.</p>
+      <p><strong>Category:</strong> AGENTIC SECURITY</p>
     </td>
   </tr>
 </table>
