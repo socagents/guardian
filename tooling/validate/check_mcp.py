@@ -5,7 +5,7 @@ lists tools, and actually calls all three — proving the server does real
 AST-based structured search end to end, not just that the file imports.
 
 Phantom-specific: the call-time assertions reference real symbols that live
-in `bundles/spark/mcp/src/api/data_sources.py` so any regression in the
+in `bundles/spark/mcp/src/api/marketplace.py` so any regression in the
 codebase-search index gets caught.
 
 Run via:  python3 tooling/validate/check_mcp.py
@@ -25,7 +25,9 @@ ROOT = Path(__file__).resolve().parents[2]
 class McpClient:
     def __init__(self) -> None:
         self.proc = subprocess.Popen(
-            ["python3", "tooling/mcp/codebase_search.py"],
+            # sys.executable (not bare "python3") so the server runs in the
+            # same env as the validator — system python3 lacks `mcp[cli]`.
+            [sys.executable, "tooling/mcp/codebase_search.py"],
             cwd=ROOT,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -95,40 +97,38 @@ def main() -> int:
             print(f"FAIL: expected structured tools {sorted(expected)} — got {tools}")
             return 1
 
-        # where_is — must structurally locate compose_data_source_id, a real
-        # function in bundles/spark/mcp/src/api/data_sources.py.
-        where_text = client.call(3, "where_is", {"name": "compose_data_source_id"})
-        if "data_sources" not in where_text or "[function]" not in where_text:
+        # where_is — must structurally locate _scan_catalogue, a real
+        # function in bundles/spark/mcp/src/api/marketplace.py.
+        where_text = client.call(3, "where_is", {"name": "_scan_catalogue"})
+        if "marketplace" not in where_text or "[function]" not in where_text:
             print(
                 f"FAIL: where_is did not structurally locate "
-                f"compose_data_source_id — {where_text!r}"
+                f"_scan_catalogue — {where_text!r}"
             )
             return 1
 
         # find_references — the same function is called from multiple places
-        # in the data_sources REST surface; at least one [call] reference
+        # in the marketplace REST surface; at least one [call] reference
         # must surface.
         refs_text = client.call(
-            4, "find_references", {"name": "compose_data_source_id"}
+            4, "find_references", {"name": "_scan_catalogue"}
         )
         if "[call]" not in refs_text:
             print(
                 f"FAIL: find_references did not find a call site for "
-                f"compose_data_source_id — {refs_text!r}"
+                f"_scan_catalogue — {refs_text!r}"
             )
             return 1
 
-        # outline — module-level API for data_sources.py must list a few
-        # known top-level functions. compose_data_source_id is IMPORTED into
-        # this file (defined in usecase/data_sources_store.py) so outline
-        # won't list it; assert on the functions that ARE defined here.
-        outline_text = client.call(5, "outline", {"module": "data_sources"})
+        # outline — module-level API for marketplace.py must list a few
+        # known top-level functions defined in the file itself.
+        outline_text = client.call(5, "outline", {"module": "marketplace"})
         if (
-            "data_sources_list" not in outline_text
-            or "data_sources_install" not in outline_text
+            "register_marketplace_routes" not in outline_text
+            or "_connector_summary" not in outline_text
         ):
             print(
-                f"FAIL: outline did not return the data_sources module API "
+                f"FAIL: outline did not return the marketplace module API "
                 f"— {outline_text!r}"
             )
             return 1

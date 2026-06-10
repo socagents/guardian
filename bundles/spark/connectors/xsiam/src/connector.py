@@ -112,7 +112,7 @@ def _get_xsiam_config() -> dict:
     `config.webhook_key` reads (env-driven pydantic settings, captured
     once at MCP boot) with a live InstanceStore lookup. Single source
     of truth = the primary-xsiam instance edited via /connectors.
-    Mirrors the xlog (v0.1.34) and caldera (v0.1.35) patterns.
+    Mirrors the established per-connector module pattern (v0.1.34+).
 
     v0.5.59 (issue #35) — config field names migrated to api_url /
     api_id / api_key (uniform with Cortex XDR connector). Legacy
@@ -703,7 +703,7 @@ async def xsiam_find_xql_examples_rag(intent: str = "", top_k: int = 5, ctx: Con
 
     Prefer the runtime's `knowledge_search` built-in for new callers —
     that's the spec-blessed surface, kb-name agnostic, and works for
-    every loaded KB (phantom-soc, xql-examples, future ones).
+    every loaded KB (xql-examples, future ones).
 
     Example MCP tool call:
     {

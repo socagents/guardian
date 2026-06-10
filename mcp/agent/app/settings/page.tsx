@@ -50,14 +50,14 @@ interface LayerGroup {
 
 // ── Phantom service inventory ──────────────────────────────────────────────
 //
-// Phantom is a 5-service Docker Compose stack — much smaller than the Spark
+// Phantom is a compact Docker Compose stack — much smaller than the Spark
 // workspace. The layer groupings here track the compose topology:
 //   Cognitive    → phantom-agent (Next.js + embedded MCP)
-//   Telemetry    → xlog (log generation)
-//   Adversary    → caldera (MITRE adversary emulation)
 //   Storage      → sqlite (in-process, embedded in MCP)
-// Each service's config and runtime status is derived from real env
-// variables (visible in compose.yml) and live health probes — see the
+// Connector tools (xsiam, cortex-xdr, cortex-docs, cortex-content, web)
+// run inside the embedded MCP / per-instance containers, not as compose
+// services. Each service's config and runtime status is derived from real
+// env variables (visible in compose.yml) and live health probes — see the
 // Services page under Observability for the live status checks.
 const LAYER_GROUPS: LayerGroup[] = [
   {
@@ -83,53 +83,13 @@ const LAYER_GROUPS: LayerGroup[] = [
       },
       {
         name: "phantom-mcp (embedded)", icon: "extension", language: "Python 3.12 / FastMCP",
-        description: "MCP server hosting ~80 tools across xlog/caldera/xsiam. Sqlite-backed audit, sessions, secrets, settings.",
+        description: "MCP server hosting the connector tool catalog (xsiam, cortex-xdr, cortex-docs, cortex-content, web). Sqlite-backed audit, sessions, secrets, settings.",
         layer: "Cognitive", port: ":8080", healthEndpoint: "/api/v1/health",
         envVars: [
           { key: "MCP_TRANSPORT", value: "streamable-http" },
           { key: "MCP_PATH", value: "/api/v1/stream/mcp" },
           { key: "MCP_TOKEN", value: "(generated at boot if absent)", masked: true },
           { key: "PHANTOM_SECRET_KEK", value: "(operator-supplied for encryption-at-rest)", masked: true },
-        ],
-        dependencies: [
-          { name: "xlog", icon: "data_object" },
-          { name: "caldera", icon: "shield" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Telemetry Layer",
-    color: "#00f5ff",
-    textColor: "text-[#00f5ff]",
-    services: [
-      {
-        name: "xlog", icon: "data_object", language: "Python 3.12 / FastAPI",
-        description: "Synthetic log generation engine. GraphQL API; emits SYSLOG/CEF/JSON to webhooks, XSIAM PAPI, or files.",
-        layer: "Telemetry", port: ":8000 (host :8999)", healthEndpoint: "/health",
-        envVars: [
-          { key: "XLOG_API_KEY", value: "(operator-supplied bearer)", masked: true },
-          { key: "WORKERS_NUMBER", value: "4" },
-          { key: "WEBHOOK_ENDPOINT", value: "(downstream sink)" },
-          { key: "WEBHOOK_KEY", value: "(downstream auth)", masked: true },
-        ],
-        dependencies: [],
-      },
-    ],
-  },
-  {
-    name: "Adversary Emulation Layer",
-    color: "#ff5f8a",
-    textColor: "text-[#ff5f8a]",
-    services: [
-      {
-        name: "caldera", icon: "shield", language: "Python 3 / aiohttp",
-        description: "MITRE Caldera 5.3 — adversary emulation server. v2 REST API, abilities + adversaries + operations.",
-        layer: "Adversary", port: ":8888 (host), :8443 (TLS)", healthEndpoint: "/",
-        envVars: [
-          { key: "CALDERA_API_KEY", value: "(operator-supplied)", masked: true },
-          { key: "CALDERA_RED_USER", value: "red" },
-          { key: "CALDERA_RED_PASSWORD", value: "(operator-supplied)", masked: true },
         ],
         dependencies: [],
       },

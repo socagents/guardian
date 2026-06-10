@@ -18,7 +18,6 @@ Commands:
   health      Run local health probes against the Compose network ports.
   logs        Follow Compose logs.
   apply-setup Copy first-run setup values into .env and recreate the stack.
-  export      Build an agent bundle archive.
 EOF
 }
 
@@ -49,10 +48,8 @@ case "$command" in
     docker compose -f "$COMPOSE_FILE" ps
     ;;
   health)
-    health_probe phantom http://localhost:8999/health
     health_probe phantom-mcp http://localhost:8080/ping/
     health_probe phantom-agent http://localhost:3000/api/auth/status
-    health_probe caldera http://localhost:8888/
     ;;
   logs)
     docker compose -f "$COMPOSE_FILE" logs -f
@@ -66,9 +63,6 @@ case "$command" in
     cp "$generated_env" "$ROOT_DIR/.env"
     chmod 600 "$ROOT_DIR/.env"
     docker compose -f "$COMPOSE_FILE" up -d --force-recreate
-    ;;
-  export)
-    "$ROOT_DIR/scripts/export_agent_bundle.sh"
     ;;
   *)
     usage

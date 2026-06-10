@@ -13,7 +13,7 @@ from comments, strings, or unrelated identifiers.
 
 Coverage:
   * Python: full AST coverage of `bundles/spark/mcp/`, `bundles/spark/connectors/*/src/`,
-    `xlog/`, `updater/`, `scripts/`, `tooling/`, `phantom-connector-runtime/`.
+    `updater/`, `scripts/`, `tooling/`, `phantom-connector-runtime/`.
   * TypeScript: NOT covered by this server yet. For `mcp/agent/**` and other
     TS files, prefer VS Code's "go to definition" or `Grep` with `--type=ts`.
     Tree-sitter-typescript integration is tracked as a Phase 3+ follow-up.

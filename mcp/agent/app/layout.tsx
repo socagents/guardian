@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Phantom Agent",
-  description: "Continuous SOC simulation agent — control plane",
+  description: "AI incident-response agent — control plane",
   // Favicon resolves via Next.js's app-icon file convention:
   // app/icon.svg is auto-discovered and emits a hashed
   // <link rel="icon" type="image/svg+xml" href="/icon.svg?<hash>"/>

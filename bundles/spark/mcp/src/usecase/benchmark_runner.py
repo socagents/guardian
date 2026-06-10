@@ -29,7 +29,7 @@ scheduler uses for job dispatches (`_dispatch_chat`).
 
 `bench_run(manifest)` accepts either:
   - An absolute / relative path to a YAML file.
-  - A bundled-corpus id like `"phantom-soc-v1"` (resolved to
+  - A bundled-corpus id like `"guardian-soc-v1"` (resolved to
     `bench_cases/<id>.yaml` next to this module).
 """
 

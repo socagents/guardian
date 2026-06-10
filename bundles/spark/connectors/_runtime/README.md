@@ -41,7 +41,7 @@ A connector container MUST:
      - `phantom_<id>_<tool>` → exposed as `<tool>`  (recommended for
        new connectors — namespace-clear for grep + audit)
      - `<id>_<tool>`         → exposed as `<tool>`  (legacy convention
-       used by xsiam, caldera; both styles work)
+       used by xsiam; both styles work)
      - `phantom_<tool>`      → exposed as `<tool>`  (legacy; single
        prefix without connector id)
      - `<tool>`              → exposed as `<tool>`  (no prefix; works
@@ -107,7 +107,7 @@ add a per-connector image build step to `.github/workflows/release.yml`
 > but it cannot be built as `phantom-connector-_runtime:test` — Docker
 > errors with "invalid reference format". Real connector ids must
 > match `[a-z][a-z0-9-]*` (lowercase, alphanumeric + hyphens, starts
-> with a letter). xlog, xsiam, caldera, web all comply; new
+> with a letter). xsiam, cortex-xdr, web all comply; new
 > connectors should pick names that comply too.
 
 ## Validation checklist before shipping a new connector

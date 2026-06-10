@@ -285,7 +285,7 @@ const SUBAGENT_CREATE_TOOL_SPEC = {
   description:
     'Spawn a scoped subagent to perform a focused task. The subagent ' +
     'runs with its own system prompt and a curated tool subset (e.g. ' +
-    'red-team subagent only sees caldera_*, blue-team only xsiam_*). ' +
+    'triage subagent only sees xsiam_get_*, enrichment subagent only xdr_*). ' +
     'Use when a task needs a different operating posture than this ' +
     "session — don't use it for trivial sub-questions you can answer " +
     'directly. Available agent_name values come from /api/v1/' +
@@ -968,7 +968,6 @@ async function callGeminiRaw(
  * produced wrong connector_ids for connectors whose function prefix
  * differs from their id:
  *   xdr_get_cases_and_issues  → "xdr"      WRONG (id is "cortex-xdr")
- *   phantom_create_data_worker→ "phantom"  WRONG (id is "xlog")
  *   phantom_web_navigate      → "phantom"  WRONG (id is "web")
  *   cortex_search             → "cortex"   WRONG (id is "cortex-docs")
  *
@@ -976,7 +975,7 @@ async function callGeminiRaw(
  * non-existent connector_ids ("xdr", "phantom", "cortex"); the
  * connector_auth_required UI event fired with the wrong id; the
  * /observability/connectors state machine missed real failures for
- * cortex-xdr, cortex-docs, cortex-content, xlog, and web.
+ * cortex-xdr, cortex-docs, cortex-content, and web.
  *
  * The prefix-to-id mapping below is hardcoded against bundles/spark/
  * connectors/*\/connector.yaml's `functionPrefix` field. When a new
@@ -991,9 +990,7 @@ function deriveConnectorId(toolName: string): string | null {
   }
   // Legacy flat aliases — order matters (longer prefixes first).
   if (toolName.startsWith('phantom_web_')) return 'web';
-  if (toolName.startsWith('phantom_')) return 'xlog';
   if (toolName.startsWith('xdr_')) return 'cortex-xdr';
-  if (toolName.startsWith('caldera_')) return 'caldera';
   if (toolName.startsWith('xsiam_')) return 'xsiam';
   if (toolName.startsWith('cortex_')) {
     // cortex-content + cortex-docs both use the `cortex_` prefix.
@@ -1225,8 +1222,8 @@ function renderMessageForReplay(
     // pre-caching; today they bill at ~25% cached for every turn
     // except the first-after-cache-expiry. The 500-byte cap was
     // defending against a cost problem that's no longer load-bearing,
-    // and it had the user-visible cost of cutting `phantom_get_field_info`
-    // (17KB) and `phantom_get_technology_stack` (1.5KB) to 3% and 33%
+    // and it had the user-visible cost of cutting `xsiam_get_dataset_fields`
+    // (17KB) and `xsiam_get_xql_examples` (1.5KB) to 3% and 33%
     // of their actual content on replay — directly observed in
     // session-2d3831d4.md where the model relayed the truncation stub
     // back to the operator instead of synthesizing an answer.
@@ -1234,7 +1231,7 @@ function renderMessageForReplay(
     // 1 MiB ceiling here is a SAFETY VALVE, not a budget cap: catches
     // pathological "tool returns a 100 MB blob" cases without
     // affecting any real phantom workload. Phantom's largest known
-    // tool output (`phantom_get_field_info` field catalog) is ~17 KB,
+    // tool output (`xsiam_get_dataset_fields` field catalog) is ~17 KB,
     // ~62x under this cap.
     //
     // If you find yourself wanting to LOWER this, instead first check:
@@ -1890,7 +1887,6 @@ const _PREFERRED_ARG_KEYS = [
   'name', 'task', 'goal', 'prompt', 'description', 'cron',
   'connector_id', 'instance_id', 'instance_name',
   'url', 'query', 'pattern', 'format', 'destination',
-  'scenario', 'rate_per_second', 'duration_seconds',
   'session_id', 'tool_name', 'reason',
 ];
 const _SECRET_LOOKING_KEYS = /^(api_?key|password|secret|token|bearer|kek|jwt)$/i;
@@ -1960,15 +1956,12 @@ function synthesizeFallbackText(
     'providers_create', 'providers_update', 'providers_delete',
     'api_keys_create', 'api_keys_rotate', 'api_keys_revoke',
     'memory_store', 'notifications_dismiss', 'approvals_resolve',
-    // v0.17.127 — simulation + catalog/data-source mutations the operator
-    // cares about confirming. Previously omitted: a "simulate Okta to
-    // XSIAM" turn that started a data worker recapped only `memory_store`,
-    // hiding the actual action. This set is hand-maintained — when a new
-    // operator-meaningful side-effecting tool ships, add it here so the
-    // no-text fallback recap names it.
-    'phantom_create_data_worker', 'phantom_kill_worker',
+    // v0.17.127 — catalog mutations the operator cares about confirming.
+    // Previously omitted: a turn that installed a connector recapped only
+    // `memory_store`, hiding the actual action. This set is hand-maintained
+    // — when a new operator-meaningful side-effecting tool ships, add it
+    // here so the no-text fallback recap names it.
     'marketplace_install', 'marketplace_uninstall', 'connector_upload',
-    'data_sources_edit', 'data_sources_rollback',
   ]);
 
   const sideEffects = toolCalls.filter((tc) => SIDE_EFFECT_TOOLS.has(tc.tool));
@@ -2452,7 +2445,7 @@ function parseCredentialsInput(input: string) {
  * a 429 / RESOURCE_EXHAUSTED bubbled straight to the operator as
  * `Gemini API error: 429 ...` and to scheduled jobs as
  * `RuntimeError: chat error event: Vertex AI error: 429`. Customer's
- * `automated-caldera-campaign` job last_error showed exactly that.
+ * `scheduled-xql-hunt` job last_error showed exactly that.
  *
  * This wrapper retries 429-class errors with exponential backoff +
  * jitter. Other errors propagate immediately so real bugs aren't masked.
@@ -2669,7 +2662,7 @@ const DEFAULT_ACTION_POLICY: ActionPolicy = {
     'memory',
     'knowledge',
   ],
-  externalCategories: ['xlog', 'caldera', 'xsiam', 'simulations'],
+  externalCategories: ['xsiam', 'xdr', 'web', 'cortex'],
   askWhenUnsure: true,
   confirmLocalActions: 'approve-card',
   confirmExternalActions: 'soft',
@@ -2907,8 +2900,8 @@ async function callGemini(
  *   - Each step names the tool it would invoke and the args.
  *   - Each step has a one-line "why" explaining the operator's
  *     intent (not a tool-doc paste).
- *   - Risk callouts on destructive steps (CALDERA operations,
- *     scenarios against shared destinations, XSIAM PAPI writes).
+ *   - Risk callouts on destructive steps (XSIAM dataset/lookup
+ *     writes against shared tenants, XSIAM PAPI writes).
  *
  * Patterned on SnowAgent's plan-mode instructions
  * (snow-agent-complete/snow-agent/06-tools-permissions/),
@@ -2921,42 +2914,51 @@ calling any tools. Output a numbered plan in plain markdown.
 Each step MUST include:
 
   1. The tool name you'd invoke (use Phantom's actual tool names —
-     xlog.create_scenario_worker, caldera.start_operation,
-     xsiam.execute_xql_query, phantom_get_technology_stack, etc).
+     xsiam.run_xql_query, xdr.get_cases_and_issues,
+     xsiam.get_asset_by_id, xsiam.add_lookup_data, etc).
   2. The key arguments you'd pass (don't paste full schemas; just
-     the operator-relevant fields like scenario name, destination,
-     operation duration).
+     the operator-relevant fields like XQL query, dataset name,
+     case id, lookup name).
   3. One sentence explaining WHY this step is part of the plan.
   4. A risk callout if the step is destructive (writes to a real
-     SOC tool, fires real synthetic logs against a real SIEM,
-     starts a real CALDERA operation). Use **Risk:** prefix.
+     SOC tool, creates or mutates a dataset, adds lookup rows on
+     a real tenant). Use **Risk:** prefix.
 
 Format:
 
 \`\`\`
 ## Proposed plan
 
-1. **xlog.create_scenario_worker** — scenario "fortigate-auth-spray",
-   duration 4h, destination udp:10.10.0.8:514
-   *Why: produces 4h of synthetic FortiGate auth-spray events that
-   the SOC can use for detection tuning.*
-   **Risk:** writes ~1k events/min to the real syslog destination.
-   Stop early with /tasks abort if the volume is wrong.
-
-2. **xsiam.execute_xql_query** — query "dataset = ngfw_logs |
-   filter source_ip in (10.0.0.0/8) | summarize count() by user",
+1. **xsiam.run_xql_query** — query "dataset = xdr_data | filter
+   action_local_ip in (10.0.0.0/8) | comp count() by actor_effective_username",
    tenant default
-   *Why: confirms the spray events landed and lets us baseline how
-   many our existing rules surfaced.*
+   *Why: scopes the suspicious auth activity to the affected users
+   so the rest of the investigation targets the right accounts.*
+
+2. **xdr.get_cases_and_issues** — filter to open cases touching the
+   hosts surfaced in step 1
+   *Why: ties the XQL findings to existing cases so we don't open a
+   duplicate investigation.*
+
+3. **xsiam.get_asset_by_id** — asset id from the top hit in step 2
+   *Why: confirms owner, criticality, and exposure of the impacted
+   asset before recommending containment.*
+
+4. **xsiam.add_lookup_data** — lookup "ir_suspicious_accounts",
+   rows from step 1's account list
+   *Why: persists the flagged accounts so detection rules and later
+   hunts can reference them.*
+   **Risk:** writes rows to a real tenant lookup. Remove the rows
+   if the investigation clears the accounts.
 
 ... (etc)
 
 ## Notes
 
-- Estimated duration: 4h 5m
-- Tools that might require approval: 1 (caldera.start_operation if added)
-- Recommended: review step 1's destination before approving — the
-  events will hit a shared SIEM tenant.
+- Estimated duration: ~15m
+- Tools that might require approval: 1 (xsiam.add_lookup_data — writes lookup rows)
+- Recommended: review step 4's lookup name before approving — the
+  rows land in a shared tenant lookup.
 \`\`\`
 
 Do NOT call any tools. Do NOT emit text outside the structured plan.
@@ -3357,10 +3359,10 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
   // Round-15 / Phase T — list active and recent tasks for THIS
   // session. Operator can also visit /tasks for the full registry.
   // No args today; future args could filter by kind ("/tasks
-  // scenario_worker" → only worker tasks).
+  // hunt" → only hunt tasks).
   {
     name: 'tasks',
-    description: 'Show active background tasks (scenario workers, CALDERA ops, etc).',
+    description: 'Show active background tasks (long-running XQL hunts, evidence-collection jobs, etc).',
     handler: async (ctx) => {
       const { sessionId, trigger, sendEvent, controller } = ctx;
       try {
@@ -3386,7 +3388,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
             text:
               'No active background tasks.\n\n' +
               '_Tasks appear here when long-running work is spawned ' +
-              "(scenario emulation, CALDERA operations, etc). See [/tasks](/tasks) for the full registry including completed and failed tasks._",
+              "(long-running XQL hunts, evidence-collection jobs, etc). See [/tasks](/tasks) for the full registry including completed and failed tasks._",
           });
         } else {
           // Render a table-style summary the operator can act on.
@@ -3425,14 +3427,14 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
 
   // ── /plan <prompt> ─────────────────────────────────────────────
   // Round-15 / Phase P — plan mode. The operator types
-  // "/plan run a 4h FortiGate scenario emulation"; the agent
+  // "/plan investigate the auth-spray alerts on host X"; the agent
   // composes a step-by-step plan WITHOUT executing any tools.
   // The operator then sees the plan, can approve it (executes the
   // run), revise it, or cancel.
   //
   // Why: today's per-tool inline approval cards (Round-12 Phase 11)
-  // work great for ONE tool, but a 4h workflow that fires 12 tools
-  // across xlog + CALDERA + XSIAM is 12 prompt cards. Plan mode
+  // work great for ONE tool, but an investigation that fires 12 tools
+  // across XSIAM + XDR + web is 12 prompt cards. Plan mode
   // collapses that to ONE: agent presents the plan, operator
   // approves once, all 12 tools execute without further prompts.
   //
@@ -3462,7 +3464,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
       if (!prompt) {
         sendEvent('text_delta', {
           text:
-            'Usage: `/plan <prompt>` — e.g. `/plan run a 4h FortiGate auth-spray scenario and verify with XQL`. ' +
+            'Usage: `/plan <prompt>` — e.g. `/plan investigate the auth-spray alerts on host X and verify with XQL`. ' +
             'The agent will propose the steps it would take; you can approve to run.',
         });
         sendEvent('done', { session_id: sessionId });
@@ -3626,7 +3628,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
 // v0.17.130 (#127) — turn-scoped tool-result memoization.
 //
 // The soft system-prompt nudge shipped in v0.17.129 (#126) asked the model to
-// "call data_sources_list at most once per turn." It didn't hold: live smoke
+// "call marketplace_list at most once per turn." It didn't hold: live smoke
 // still showed the model re-listing the catalog (and re-running knowledge_search)
 // 3-4x within a single user turn. A prose nudge can't *guarantee* the model
 // obeys, so this is the mechanical backstop — a per-turn cache that returns the
@@ -3644,16 +3646,10 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
 // source A then source B), so no capability is lost — only verbatim repeats are
 // short-circuited.
 const TURN_CACHEABLE_TOOLS = new Set<string>([
-  'data_sources_list',
-  'data_sources_get_schema',
-  'data_sources_installed_as_vendors',
   'marketplace_list',
-  'log_destinations_list',
   'settings_get',
   'skills_read',
   'knowledge_search',
-  'phantom_get_field_info',
-  'phantom_get_technology_stack',
 ]);
 
 // Catalog / config / credential mutations change what the cacheable reads
@@ -3662,7 +3658,7 @@ const TURN_CACHEABLE_TOOLS = new Set<string>([
 // clear (still correct), while the explicit prefixes cover every agent-reachable
 // mutation that touches the static-read surface above.
 function invalidatesTurnCache(toolName: string): boolean {
-  return /^(marketplace_(install|uninstall)|connector_upload|data_sources_(upload|edit|rollback|delete|create)|log_destinations_(create|update|delete)|settings_set|providers_(create|update|delete)|instances_(create|update|delete)|api_keys_)/.test(
+  return /^(marketplace_(install|uninstall)|connector_upload|settings_set|providers_(create|update|delete)|instances_(create|update|delete)|api_keys_)/.test(
     toolName,
   );
 }
@@ -3685,10 +3681,10 @@ function stableStringify(value: unknown): string {
 }
 
 // v0.17.131 (#129) — detect the {ok:false} failure envelope Phantom MCP tools
-// return on a SOFT failure (not an exception). data_sources_install and many
+// return on a SOFT failure (not an exception). marketplace_install and many
 // others report "not found" / "already exists" / "extraction failed" this way,
 // so a model that retries the identical failing call loops invisibly past the
-// toolError path (observed: data_sources_install ×7 on a not-found pack). Only
+// toolError path (observed: marketplace_install ×7 on a not-found pack). Only
 // the explicit "ok": false envelope counts — never a tool whose output merely
 // contains the word "error" — to avoid false-positive loop-breaking.
 function resultFailureText(result: unknown): string | null {
@@ -3708,7 +3704,7 @@ function resultFailureText(result: unknown): string | null {
 }
 
 // Poll/wait tools legitimately re-issue the SAME (tool, args) call many times
-// (e.g. caldera_wait_for_operation_progress) and may transiently report a
+// (e.g. phantom_web_wait_for) and may transiently report a
 // not-yet-ready state — they must never be short-circuited by the failed-call
 // loop-breaker below.
 function isPollTool(toolName: string): boolean {
@@ -3859,7 +3855,7 @@ export async function POST(request: NextRequest) {
         sendEvent('meta', {
           run_id: `r_${crypto.randomUUID()}`,
           session_id: sessionId,
-          agent_id: 'phantom-soc-simulation',
+          agent_id: 'phantom-soc-ir',
         });
 
         // Round-15 / Phase H — RunStart hook fire-site. Hooks can
@@ -4405,8 +4401,8 @@ export async function POST(request: NextRequest) {
 
         // v0.17.117 — leaked-tool-call recovery counter (issue #114).
         // Gemini thinking models occasionally serialize a LARGE pending
-        // tool call (e.g. phantom_create_data_worker with a ~3,900-token
-        // schema_override) as `thought` text instead of a structured
+        // tool call (e.g. xsiam_add_lookup_data with a ~3,900-token
+        // rows payload) as `thought` text instead of a structured
         // functionCall part. The call is then dropped and the turn ends
         // silently — the operator sees the plan but no tool runs. When we
         // detect that (a thought part carrying Gemini's `default_api`
@@ -4436,15 +4432,15 @@ export async function POST(request: NextRequest) {
         const MAX_IDENTICAL_FAILS = 2;
 
         // v0.6.32 — bumped from 20 → 30 + configurable via env. The
-        // 20-turn cap was hit empirically by the kill-chain skill:
-        // 20-step Caldera chain × ~2 tool calls per turn (poll +
-        // XDR pulse) needed ~15-20 turns just for the wait phase,
-        // plus 5-10 turns for prereqs + setup + final sweep. v0.6.32
-        // pairs the bump with a new caldera_wait_for_operation_progress
-        // tool that internalizes the 30-60s wait per ability — so
-        // each turn now advances the chain by 1-2 abilities (vs
-        // a noop poll). 30 turns covers a 20-step Caldera chain
-        // with room to spare. Operators can tune via env var.
+        // 20-turn cap was hit empirically by long investigation loops:
+        // a 20-step evidence-collection sweep × ~2 tool calls per turn
+        // (poll + XDR pulse) needed ~15-20 turns just for the wait
+        // phase, plus 5-10 turns for prereqs + setup + final sweep.
+        // v0.6.32 pairs the bump with polling tools that internalize
+        // the 30-60s wait per step — so each turn now advances the
+        // hunt by 1-2 steps (vs a noop poll). 30 turns covers a
+        // 20-step evidence-collection sweep with room to spare.
+        // Operators can tune via env var.
         const MAX_AGENT_TURNS = (() => {
           const raw = process.env.PHANTOM_CHAT_MAX_TURNS;
           if (!raw) return 30;
@@ -5422,8 +5418,8 @@ export async function POST(request: NextRequest) {
 
         if (!finalResponse || !finalResponse.trim()) {
           // v0.17.135 (#132) — also catch a WHITESPACE-ONLY finalResponse, not
-          // just a strictly-empty one. A turn that ran read tools (e.g. export-
-          // yaml: data_sources_list + get_schema) but came back with " " was
+          // just a strictly-empty one. A turn that ran read tools (e.g. dataset
+          // review: xsiam_get_datasets + xsiam_get_dataset_fields) but came back with " " was
           // truthy, slipped past `!finalResponse`, and rendered as a blank
           // assistant message. `.trim()` routes it into the recap below.
           //

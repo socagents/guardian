@@ -122,7 +122,7 @@ export interface ConnectorInstance {
   connector_id: string;
   config: Record<string, string>;
   // Redacted secret slot map — keys are slot names (e.g.
-  // "caldera_api_key"), values are the literal "***" sentinel when
+  // "xsiam_api_key"), values are the literal "***" sentinel when
   // a secret is configured. Surfaces "which slots are populated"
   // without exposing values. Empty object when the connector has
   // no secret slots.

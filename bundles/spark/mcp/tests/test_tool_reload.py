@@ -48,12 +48,12 @@ def test_register_all_tools_first_pass(monkeypatch):
     def fake_iter(**kw):
         # Yield 3 connector-like tools + 1 built-in (no legacy alias).
         yield ToolRegistration(
-            namespaced_name="caldera.start", legacy_name="caldera_start",
-            callable=lambda: None, connector_id="caldera",
+            namespaced_name="xdr.start", legacy_name="xdr_start",
+            callable=lambda: None, connector_id="xdr",
         )
         yield ToolRegistration(
-            namespaced_name="caldera.stop", legacy_name="caldera_stop",
-            callable=lambda: None, connector_id="caldera",
+            namespaced_name="xdr.stop", legacy_name="xdr_stop",
+            callable=lambda: None, connector_id="xdr",
         )
         yield ToolRegistration(
             namespaced_name="xsiam.run_xql", legacy_name="xsiam_run_xql_query",
@@ -72,14 +72,14 @@ def test_register_all_tools_first_pass(monkeypatch):
         mcp=mcp, store=None, secret_store=None,
         tool_registry=registry, include_legacy=True,
     )
-    # 4 namespaced (caldera.start, caldera.stop, xsiam.run_xql, builtin_tool)
-    # 3 legacy aliases (caldera_start, caldera_stop, xsiam_run_xql_query)
+    # 4 namespaced (xdr.start, xdr.stop, xsiam.run_xql, builtin_tool)
+    # 3 legacy aliases (xdr_start, xdr_stop, xsiam_run_xql_query)
     # builtin_tool has no legacy alias (legacy_name=None).
     assert ns == 4
     assert legacy == 3
     assert len(registry) == 4 + 3
-    assert "caldera.start" in registry
-    assert "caldera_start" in registry  # legacy alias
+    assert "xdr.start" in registry
+    assert "xdr_start" in registry  # legacy alias
     assert "builtin_tool" in registry
 
 
@@ -124,8 +124,8 @@ def test_register_all_tools_picks_up_new_instances(monkeypatch):
 
     def fake_iter_v1(**kw):
         yield ToolRegistration(
-            namespaced_name="caldera.start", legacy_name="caldera_start",
-            callable=lambda: None, connector_id="caldera",
+            namespaced_name="xdr.start", legacy_name="xdr_start",
+            callable=lambda: None, connector_id="xdr",
         )
 
     monkeypatch.setattr(loader, "iter_registrations", fake_iter_v1)
@@ -142,8 +142,8 @@ def test_register_all_tools_picks_up_new_instances(monkeypatch):
     # now yields more.
     def fake_iter_v2(**kw):
         yield ToolRegistration(
-            namespaced_name="caldera.start", legacy_name="caldera_start",
-            callable=lambda: None, connector_id="caldera",
+            namespaced_name="xdr.start", legacy_name="xdr_start",
+            callable=lambda: None, connector_id="xdr",
         )
         yield ToolRegistration(
             namespaced_name="xsiam.run_xql", legacy_name="xsiam_run_xql_query",
@@ -159,8 +159,8 @@ def test_register_all_tools_picks_up_new_instances(monkeypatch):
     assert (ns2, lg2) == (2, 2)
     assert "xsiam.run_xql" in registry
     assert "xsiam_run_xql_query" in registry
-    # caldera was re-registered too (FastMCP overrides on duplicate).
-    assert sum(1 for n, _ in mcp.registrations if n == "caldera.start") == 2
+    # xdr was re-registered too (FastMCP overrides on duplicate).
+    assert sum(1 for n, _ in mcp.registrations if n == "xdr.start") == 2
 
 
 def test_legacy_alias_off_skips_aliases(monkeypatch):
@@ -171,10 +171,10 @@ def test_legacy_alias_off_skips_aliases(monkeypatch):
         # Helper passes include_legacy_aliases through to iter_registrations,
         # so a real iter_registrations would yield no legacy_name when it's
         # off. We model that here.
-        legacy = "caldera_start" if kw.get("include_legacy_aliases") else None
+        legacy = "xdr_start" if kw.get("include_legacy_aliases") else None
         yield ToolRegistration(
-            namespaced_name="caldera.start", legacy_name=legacy,
-            callable=lambda: None, connector_id="caldera",
+            namespaced_name="xdr.start", legacy_name=legacy,
+            callable=lambda: None, connector_id="xdr",
         )
 
     monkeypatch.setattr(loader, "iter_registrations", fake_iter)
@@ -185,7 +185,7 @@ def test_legacy_alias_off_skips_aliases(monkeypatch):
         tool_registry=registry, include_legacy=False,
     )
     assert (ns, lg) == (1, 0)
-    assert "caldera_start" not in registry
+    assert "xdr_start" not in registry
 
 
 def test_reload_tools_now_returns_none_when_not_wired():

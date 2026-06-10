@@ -39,8 +39,8 @@ phantom-updater reads TWO mounted files from the host:
 
 | File | Mount path | Owns |
 |---|---|---|
-| `/host/.env` | bind mount | Service credentials + the 5 core stack-service digests + `PHANTOM_VERSION` |
-| `/host/connector-digests.env` | bind mount | 7 per-connector image pins (`DIGEST_PHANTOM_CONNECTOR_*`) |
+| `/host/.env` | bind mount | Service credentials + the 3 core stack-service digests + `PHANTOM_VERSION` |
+| `/host/connector-digests.env` | bind mount | Per-connector image pins (`DIGEST_PHANTOM_CONNECTOR_*`) |
 
 **The split is load-bearing (v0.6.7+):** see [`../installer/CLAUDE.md`](../installer/CLAUDE.md) for the install-side contract.
 
@@ -50,7 +50,7 @@ phantom-updater reads TWO mounted files from the host:
 
 ## Dev-cycle deployment (v0.6.12+)
 
-phantom-updater **is** rebuilt + deployed on the dev cycle, same as the agent / xlog / caldera. `Build updater` runs on every push that touches `updater/**`, and `build-dev-installer.yml` resolves the new `:dev` updater digest from GHCR + bakes it into the dev install, so the auto-deploy recreates the `phantom_updater` container with the new image. **Verified (v0.17.128):** a `src/main.py` change deployed to phantom-vm in the same dev cycle and the recreated container ran the new code. Smoke updater fixes directly on phantom-vm — do NOT gate on a customer-release tag.
+phantom-updater **is** rebuilt + deployed on the dev cycle, same as the agent. `Build updater` runs on every push that touches `updater/**`, and `build-dev-installer.yml` resolves the new `:dev` updater digest from GHCR + bakes it into the dev install, so the auto-deploy recreates the `phantom_updater` container with the new image. **Verified (v0.17.128):** a `src/main.py` change deployed to phantom-vm in the same dev cycle and the recreated container ran the new code. Smoke updater fixes directly on phantom-vm — do NOT gate on a customer-release tag.
 
 > Pre-v0.6.12 the updater was customer-release-only; that constraint no longer applies. See `build-dev-installer.yml` — the `Build updater` trigger (workflows list) + the `for SVC in … phantom-updater` digest-resolution loop. (This section previously claimed the opposite; corrected after the v0.17.128 reconcile-gap fix confirmed dev-cycle deployment.)
 

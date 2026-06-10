@@ -117,7 +117,7 @@
       }
     },
     "OperationTimeline": {
-      "description": "Caldera operation timeline linked to generated defensive telemetry.",
+      "description": "Investigation timeline linked to collected evidence.",
       "required": ["operationPath"],
       "props": {
         "operationPath": { "type": "dataPath" }

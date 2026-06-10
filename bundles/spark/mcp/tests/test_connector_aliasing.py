@@ -22,7 +22,7 @@ from usecase.connector_loader import _legacy_alias
 def test_bare_name_gets_prefixed():
     # Normal case: spec.tools[].name is bare → alias = prefix + name.
     assert _legacy_alias("xsiam_", "incidents_list") == "xsiam_incidents_list"
-    assert _legacy_alias("caldera_", "start_operation") == "caldera_start_operation"
+    assert _legacy_alias("web_", "navigate") == "web_navigate"
 
 
 def test_already_prefixed_name_is_not_doubled():

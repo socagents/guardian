@@ -1,7 +1,8 @@
 /**
  * Tool-output evidence truncation — Issue #32 (v0.5.27).
  *
- * Long tool outputs (e.g. `xlog_logs_tail(count=1000)`) blow the
+ * Long tool outputs (e.g. `xsiam_run_xql_query` returning thousands
+ * of rows) blow the
  * agent's context window with 200K of repetitive log noise that
  * crowds out the actual reasoning context AND inflates input-token
  * cost on every subsequent turn until compaction. Octagon hit the

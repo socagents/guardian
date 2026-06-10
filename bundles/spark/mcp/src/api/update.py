@@ -28,7 +28,7 @@ Endpoints (Authorization: Bearer MCP_TOKEN or active API key):
 
 # Why this exists, and what it isn't
 
-Auto-update for a self-hosted SOC simulation agent is operationally
+Auto-update for a self-hosted incident-response agent is operationally
 risky — the operator's deploy cadence is theirs to control. The
 manifest's `autoUpdate: false` reflects that posture. This endpoint
 honestly exposes the situation rather than implementing auto-update

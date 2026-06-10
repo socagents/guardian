@@ -1,10 +1,9 @@
 /**
  * Phantom v0.4.0 — runtime configuration resolution.
  *
- * Reads bundle-internal coordination from container env, operator-set
- * provider credentials from the MCP-side ProviderStore, and xlog URL
- * from the InstanceStore. Returns a single flat `EffectiveRuntimeConfig`
- * the chat handler + agent routes consume.
+ * Reads bundle-internal coordination from container env and operator-set
+ * provider credentials from the MCP-side ProviderStore. Returns a single
+ * flat `EffectiveRuntimeConfig` the chat handler + agent routes consume.
  *
  * # What changed in v0.4.0 (vs pre-v0.4.0)
  *
@@ -29,12 +28,11 @@
  *
  * # Layering
  *
- *   env  →  ProviderStore (Vertex SA JSON)  →  InstanceStore (xlog URL)
+ *   env  →  ProviderStore (Vertex SA JSON)
  *
- * Provider/instance lookups have 30s caches in their own modules
- * (lib/vertex-credentials.ts, lib/xlog-url.ts); a fresh
- * getEffectiveRuntimeConfig() does at most one round-trip per cache
- * window, not per chat turn.
+ * Provider lookups have a 30s cache in their own module
+ * (lib/vertex-credentials.ts); a fresh getEffectiveRuntimeConfig()
+ * does at most one round-trip per cache window, not per chat turn.
  */
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -56,7 +54,6 @@ export type RuntimeConfigValues = {
 
 export type EffectiveRuntimeConfig = RuntimeConfigValues & {
   MCP_URL: string;
-  XLOG_URL: string;
   MCP_TOOL_CACHE_TTL_MS: string;
 };
 
@@ -107,12 +104,6 @@ export async function getEffectiveRuntimeConfig(): Promise<EffectiveRuntimeConfi
   );
   const vertexFromStore = await resolveVertexCredentialsFromStore();
 
-  // v0.1.34 → v0.4.0 — xlog URL lives in the MCP-side InstanceStore.
-  // The instance is created by the operator at /instances post-login.
-  // Pre-instance, falls back to the env default.
-  const { resolveXlogUrlFromStore } = await import("@/lib/xlog-url");
-  const xlogFromStore = await resolveXlogUrlFromStore();
-
   return {
     MCP_URL: get("MCP_URL", "http://localhost:8080/api/v1/stream/mcp"),
     MCP_TOKEN: get("MCP_TOKEN"),
@@ -123,17 +114,6 @@ export async function getEffectiveRuntimeConfig(): Promise<EffectiveRuntimeConfi
     SSL_CERT_PEM: get("SSL_CERT_PEM"),
     SSL_KEY_PEM: get("SSL_KEY_PEM"),
     PHANTOM_TLS_VERIFY: get("PHANTOM_TLS_VERIFY"),
-    // v0.6.22 — default changed from http→https. The architectural
-    // truth from v0.4.0+: xlog serves HTTPS on port 8000
-    // unconditionally because it mounts the shared phantom_tls volume
-    // and uses /tls/cert.pem (priority 1 in its _resolve_ssl_args).
-    // The agent's entrypoint sets NODE_EXTRA_CA_CERTS=/tls/cert.pem
-    // so the Next.js process trusts the self-signed cert; SAN covers
-    // "xlog" hostname. Pre-v0.6.22 the http:// fallback hit
-    // "Empty reply from server" (TLS handshake on plain HTTP).
-    // Operator overrides via InstanceStore (preferred) and the env
-    // var (compose) still win when set.
-    XLOG_URL: xlogFromStore || clean(process.env.XLOG_URL) || "https://xlog:8000",
     MCP_TOOL_CACHE_TTL_MS: clean(process.env.MCP_TOOL_CACHE_TTL_MS) || "300000",
   };
 }

@@ -1,9 +1,9 @@
 # Repo-root pyproject.toml — Phantom AI Layer LSP configuration.
 #
 # Phantom is a polyglot repo (Next.js + TypeScript for the agent UI, Python
-# for the embedded MCP, xlog, updater, connectors). This file does NOT
+# for the embedded MCP, updater, connectors). This file does NOT
 # package Phantom as a Python distribution — each Python subsystem manages
-# its own requirements (`bundles/spark/mcp/requirements*.txt`, `xlog/...`,
+# its own requirements (`bundles/spark/mcp/requirements*.txt`,
 # `updater/requirements.txt`). The root pyproject exists solely to:
 #
 #   1. Configure pyright (the LSP the article recommends, Pattern 1).
@@ -30,7 +30,6 @@ include = [
   "bundles/spark/mcp/src",
   "bundles/spark/mcp/tests",
   "bundles/spark/connectors",
-  "xlog",
   "updater/src",
   "updater/tests",
   "scripts",

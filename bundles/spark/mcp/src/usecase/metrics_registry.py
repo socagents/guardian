@@ -8,8 +8,8 @@ Prometheus 0.0.4 text-exposition string via `format_prometheus()`.
 # Why roll our own vs prometheus_client
 
 The official `prometheus_client` library is ~1MB of code (most of which
-we don't use: pushgateway, multiprocess support, asgi middleware). A
-SOC simulation agent cycles through five counters and a request
+we don't use: pushgateway, multiprocess support, asgi middleware). An
+incident-response agent cycles through five counters and a request
 histogram — the surface fits in 100 lines without a dep. We pay the
 maintenance cost of a tiny registry to keep the image lean.
 

@@ -1,4 +1,4 @@
-# Cortex XDR tool connector for the Phantom SOC simulation agent.
+# Cortex XDR tool connector for the Guardian incident-response agent.
 #
 # Per Spark agent bundle spec v1.2 §7.4. Tool names auto-namespace as
 # `cortex-xdr/<bare_name>` in the agent's tool catalog. The bundle
@@ -11,11 +11,8 @@
 # api_id, api_key — same as XSIAM.
 #
 # v0.5.68 — Description + metadata rewritten to focus on the connector's
-# general-purpose Cortex XDR API surface. Original v0.5.61 framing was
-# narrow ("read-only counterpart for Caldera detection validation");
-# the connector is just as useful for everyday incident response,
-# threat hunting via XQL, and investigation reporting — Caldera-
-# validation is ONE use case, not the only one.
+# general-purpose Cortex XDR API surface: everyday incident response,
+# threat hunting via XQL, and investigation reporting.
 
 id: "cortex-xdr"
 version: "0.1.1"
@@ -117,7 +114,7 @@ spec:
         query is still running so the caller can poll via
         xdr_get_xql_results.
 
-        Use this to validate detection coverage after a Caldera attack:
+        Use this to pull host evidence during an investigation:
         e.g. query 'dataset=xdr_data | filter event_type=ENUM.PROCESS
         and agent_hostname="xdragent" and _time > to_timestamp(...)' to
         list process events on a specific host in a specific time

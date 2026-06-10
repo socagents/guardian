@@ -14,14 +14,14 @@
  *
  * Common patterns the form helps with:
  *
- *   - "Block any caldera_start_operation against production hosts
+ *   - "Block any xsiam_create_dataset against the production tenant
  *      until the on-call approves" → PreToolUse, command transport,
  *      failurePolicy:'block'
  *   - "Inject the active incident's ticket id into every chat" →
  *      UserPromptSubmit, http transport, returns
  *      `{injectContext: 'Active incident: INC-1234'}`
- *   - "Notify #soc-ops when XSIAM detection_validation_recorded
- *      fires" → PostToolUse, http transport (Slack webhook)
+ *   - "Notify #soc-ops when an xsiam_run_xql_query completes" →
+ *      PostToolUse, http transport (Slack webhook)
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -579,7 +579,7 @@ function HookEditor({
             value={draft.name}
             onChange={(e) => update("name", e.target.value)}
             className="input-base"
-            placeholder='e.g. "block prod caldera ops"'
+            placeholder='e.g. "block prod dataset writes"'
           />
         </Field>
 
@@ -619,7 +619,7 @@ function HookEditor({
               })
             }
             className="input-base font-mono"
-            placeholder="e.g. caldera_*, xsiam_*"
+            placeholder="e.g. xdr_*, xsiam_*"
           />
         </Field>
 

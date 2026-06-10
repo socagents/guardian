@@ -15,79 +15,18 @@ def create_mcp_lifespan():
     """
     Factory function to create mcp_lifespan.
 
-    v0.1.34 — replaced the previous `xlog_url: str` parameter (which
-    pinned a single env-driven URL at MCP boot) with a resolver that
-    reads the active xlog instance's baseUrl from the InstanceStore
-    on every invocation. Operators edit baseUrl via /connectors and
-    the next tool call sees the new value with no MCP restart.
-    Single source of truth: `instance.config.baseUrl` for the xlog
-    instance kept in the InstanceStore.
-
-    The resolver looks up `get_instance_store()` lazily because
-    create_mcp_server is called BEFORE the InstanceStore is wired
-    (main.py creates the MCP first, then registers the store via
-    set_instance_store). Late binding keeps the order working.
+    The lifespan context is intentionally minimal — connector tools
+    resolve their per-instance config (URLs, credentials) through the
+    InstanceStore contextvar wrapping in connector_loader, not through
+    lifespan state. The context dict stays as the extension point for
+    future cross-tool shared state.
     """
 
     @asynccontextmanager
     async def mcp_lifespan(mcp_server: FastMCP) -> AsyncIterator[dict]:
-        def get_xlog_url() -> str:
-            # Late-bind: import inside the function so we don't depend
-            # on import order between server.py and instance_store.py.
-            # The getter in instance_store.py is named `instance_store`
-            # (not `get_instance_store`) — see usecase/instance_store.py
-            # bottom of file.
-            try:
-                from usecase.instance_store import instance_store as get_store
-                store = get_store()
-            except Exception as exc:
-                logger.warning("instance_store() lookup failed: %s", exc)
-                store = None
-
-            if store is not None:
-                try:
-                    instances = store.list_for("xlog")
-                except Exception as exc:
-                    logger.warning(
-                        "InstanceStore.list_for('xlog') failed: %s",
-                        exc,
-                    )
-                    instances = []
-                if instances:
-                    cfg = instances[0].config or {}
-                    # v0.6.15 added `xlogUrl` (camelCase) — the pre-
-                    # v0.6.15 marketplace catalog declared the config
-                    # field as name:"xlogUrl" while connector.yaml's
-                    # schema said `baseUrl`. UI-created instances
-                    # stored xlogUrl; the resolver here missed it
-                    # because it tried baseUrl / xlog_url (snake) /
-                    # url but never camelCase. v0.6.15 fixes the
-                    # catalog AND adds xlogUrl to this fallback chain
-                    # so pre-v0.6.15 instances keep working.
-                    base = (
-                        cfg.get("baseUrl")
-                        or cfg.get("xlogUrl")
-                        or cfg.get("xlog_url")
-                        or cfg.get("url")
-                    )
-                    if isinstance(base, str) and base.strip():
-                        return base.strip().rstrip("/")
-
-            raise RuntimeError(
-                "No xlog instance configured. Add a primary-xlog "
-                "instance via /connectors and set its baseUrl, or "
-                "complete first-time setup at /setup."
-            )
-
         try:
             logger.info("Initializing Phantom MCP Server...")
-            context = {
-                # Tool handlers call get_xlog_url() each time they need
-                # the URL. Single source of truth: InstanceStore's
-                # primary-xlog instance.config.baseUrl. /connectors
-                # edits propagate immediately, no MCP restart needed.
-                "get_xlog_url": get_xlog_url,
-            }
+            context: dict = {}
             logger.info("Phantom MCP Server initialized successfully")
             yield context
         except Exception as e:
@@ -98,95 +37,56 @@ def create_mcp_lifespan():
 
 
 def create_mcp_server() -> FastMCP:
-    """Create FastMCP server. xlog URL is resolved lazily from the
-    InstanceStore at each tool call — see create_mcp_lifespan."""
+    """Create FastMCP server. Connector config is resolved lazily from
+    the InstanceStore at each tool call — see connector_loader."""
     lifespan = create_mcp_lifespan()
 
     mcp = FastMCP(
-        name="Phantom MCP Server",
+        name="Guardian MCP Server",
         instructions="""
-# Phantom MCP Server - Security Testing & Simulation Platform
+# Guardian MCP Server - AI Incident Response Platform
 
-You are connected to the Phantom MCP Server, a comprehensive security testing and simulation platform that enables:
+You are connected to the Guardian MCP Server, an AI incident-response platform that investigates security incidents in integration with Cortex XSOAR and XSIAM:
 
 ## Core Capabilities
 
-### 1. Synthetic Log Generation (ARB CISD Standard - 46 Data Sources)
-- Generate realistic security logs for **46 different data sources** across **6 domains**:
-  - Operating System (7): Windows Server, Active Directory, Workstations, Exchange, Sysmon, Linux/Unix, AIX
-  - Network & Infrastructure (14): Load Balancer, Middleware, File Share, DNS, DHCP, Switches, Routers, etc.
-  - Security Controls (11): EDR, CSPM, Email Gateway, FIM, DLP, PAM, MDM, XSOAR, Threat Intel, Vuln Mgmt, EPP
-  - Network Security (9): NDR, TLS Inspection, DDoS Protection, NGFW, IPS/IDS, VPN, WLC, Proxy, NAC
-  - Database (2): Database Engine (RDBMS), Database Security Control (DAM)
-  - Applications (3): API Gateway, WAF, Custom Applications
-
-- Support multiple formats (SYSLOG, CEF, LEEF, WINEVENT, JSON)
-- Create continuous log streams with customizable intervals and observables
-- Send logs to various destinations (UDP, TCP, HTTPS, XSIAM, Webhooks)
-- Simulate attack scenarios following MITRE ATT&CK framework
-
-### 2. CALDERA Attack Simulation Integration
-- Full CALDERA C2 framework control for adversary emulation
-- Manage abilities (atomic attack techniques) mapped to MITRE ATT&CK
-- Create and execute operations with adversary profiles
-- Track execution with links, facts, and relationship graphs
-- Generate comprehensive attack reports and telemetry
-
-### 3. XSIAM (Cortex) Security Platform Integration
+### 1. Cortex XSIAM Security Platform Integration
 - Execute XQL queries for threat hunting and investigation
 - Manage security cases, assets, and issues
 - Interact with lookup tables for enrichment data
-- Send logs via HTTP collectors (webhooks)
 - Access datasets and field information
-- AI-powered XQL query assistance with RAG
+- AI-powered XQL query assistance with knowledge-base retrieval
 
-## Vendor & Product Standards
+### 2. Cortex XDR Integration
+- List and inspect incidents from a Cortex XDR tenant
+- Execute XQL queries against XDR telemetry for evidence gathering
 
-**CRITICAL**: Always use realistic vendor/product names from the Device Vendor Catalog:
-- ✅ Use specific vendors: Palo Alto, CrowdStrike, Microsoft, Cisco, F5, Proofpoint, etc.
-- ❌ NEVER use: "Phantom", "Generic", "Unknown", or made-up names
-- ✅ Create variety: Use different vendors for different logs (e.g., Palo Alto for perimeter firewall, Fortinet for branch firewall)
-- ✅ Match vendors to context: Azure for cloud, Cisco for data center, CrowdStrike for EDR, Proofpoint for email
+### 3. Cortex Documentation & Content Lookup
+- Search the public Palo Alto Networks Cortex documentation (XDR / XSIAM / XSOAR / XQL)
+- Fetch XSIAM/XSOAR content packs from the public demisto/content repository (modeling rules, parsing rules, correlation rules)
 
-**Format-Specific Requirements:**
-- **JSON** (XSIAM): Azure, Corelight, Zscaler, Symantec, Akamai, CrowdStrike, Kong, AWS, Okta, HashiCorp
-- **CEF**: Palo Alto, Cisco, F5, Imperva, Fortinet, Check Point, Suricata
-- **LEEF**: Proofpoint, Mimecast, Zscaler
-- **SYSLOG**: Cisco, Infoblox, Pulse Secure, Red Hat, IBM, Juniper, Arista, Apache, Nginx
-- **WINEVENT**: Microsoft (no vendor/product field needed - use srcHost in observables)
+### 4. Web Research (optional connector)
+- Headless-browser fetch of threat-intel pages, vendor advisories, and CTI portals
 
 ## Common Use Cases
 
-**Security Testing**: Test SIEM ingestion, parsing rules, and correlation logic with realistic synthetic data from all 46 data sources
+**Incident Investigation**: Pull an incident's alerts and artifacts, query the tenant for related telemetry, and build an evidence-grounded timeline
 
-**Red Team Exercises**: Execute end-to-end attack simulations using CALDERA and capture telemetry from multiple security controls
+**Threat Hunting**: Author and execute XQL queries against XSIAM/XDR datasets, refining hypotheses iteratively
 
-**Detection Engineering**: Generate attack scenarios to validate detection rules across different vendor products
+**Alert Enrichment**: Correlate alerts with lookup tables, asset inventory, and external threat intelligence
 
-**Training & Education**: Create realistic security incidents for SOC analyst training with industry-standard vendor logs
-
-**Performance Testing**: Test log processing pipelines with high-volume synthetic data streams from diverse sources
+**Detection Context**: Reference canonical detection/parsing content from the Cortex marketplace when interpreting alerts
 
 ## Best Practices
 
-1. **Start with CALDERA health check** before running operations
-2. **Create workers for continuous log generation**, use scenarios for attack sequences
-3. **Use Device Vendor Catalog** (skills/foundation/DEVICE_VENDOR_CATALOG.md) for vendor selection
-4. **Use XSIAM queries** to validate that generated logs are being ingested correctly
-5. **Track CALDERA operations** through their full lifecycle: create → start → monitor → report
-6. **Build knowledge graphs** using facts and relationships from CALDERA operations
-7. **Generate variety**: Use different vendors for different devices in the same exercise
+1. **Identify the incident scope first** — incident ID, time window, affected assets — before running queries
+2. **Ground every conclusion in retrieved evidence** — cite incident IDs, alert IDs, and query results; never speculate where a query can answer
+3. **Use XSIAM/XDR queries** to validate hypotheses against tenant telemetry
+4. **Prefer bundled skills and documented workflows** before inventing a new investigation flow
+5. **Record incident IDs, alert IDs, and evidence references** in every final answer
 
-## Important Notes
-
-- CALDERA operations start in "paused" state - update state to "running" to execute
-- Workers stream logs continuously until stopped - monitor and stop when done
-- XSIAM webhooks require proper authentication (WEBHOOK_ENDPOINT and WEBHOOK_KEY)
-- Use observables_dict to control specific field values in generated logs
-- Link execution status: 0=success, -1=running, -2=discarded
-- Network devices REQUIRE network fields: localIp, remoteIp, sourcePort, remotePort, protocol
-
-Always verify connectivity to backend services (Phantom, CALDERA, XSIAM) before starting operations.
+Always verify connectivity to the configured Cortex tenant before starting an investigation.
 """,
         lifespan=lifespan,
     )

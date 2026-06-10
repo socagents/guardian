@@ -30,10 +30,10 @@ dataset = xdr_data
 Operator asks variants of:
 
 - "what processes ran on `<hostname>` in the last hour?"
-- "show me unique processes on the XDR endpoint after the Caldera operation"
+- "show me unique processes on the endpoint flagged in this incident"
 - "list distinct process names on this host"
 
-This is the canonical "what fired on host X" probe — used during Caldera detection-validation (the `cortex-xdr` connector's hero example, per the connector.yaml `run_xql_query` description). The agent dispatches via `cortex-xdr/run_xql_query` after the Caldera operation completes.
+This is the canonical "what fired on host X" probe — the first query to run when an incident or alert names a specific endpoint (the `cortex-xdr` connector's hero example, per the connector.yaml `run_xql_query` description). The agent dispatches via `cortex-xdr/run_xql_query` while scoping suspicious activity on the host.
 
 ## Variations
 

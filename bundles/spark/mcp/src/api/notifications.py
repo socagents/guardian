@@ -8,12 +8,12 @@
   GET  /api/v1/notifications/unread_count       → integer
         ?target=user:operator
   POST /api/v1/notifications                    → publish (admin)
-        body: {"topic": "simulation-complete", "payload": {...}, "actor": "ayman"}
+        body: {"topic": "job-run-completed", "payload": {...}, "actor": "ayman"}
   POST /api/v1/notifications/{id}/ack           → mark read
 
 The agent UI's notification bell calls list() + unread_count() to
 render. Tools call publish() at the end of long-running operations
-(e.g. simulation_complete). External integrations could also publish
+(e.g. job-run-completed). External integrations could also publish
 via API key with a future `notifications:write` scope.
 """
 

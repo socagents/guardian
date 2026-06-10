@@ -6,8 +6,7 @@
 #   * localhost, 127.0.0.1            (local browser access)
 #   * the host machine's hostname     (from `hostname`)
 #   * the host machine's primary IP   (from `hostname -I`)
-#   * phantom-agent, xlog, caldera, phantom-updater
-#                                     (compose-internal DNS names)
+#   * phantom-agent, phantom-updater  (compose-internal DNS names)
 #
 # Output formats (controlled by --format):
 #   files       — writes cert.pem + key.pem to --out-dir (default: ./certs/)
@@ -77,7 +76,7 @@ command -v openssl >/dev/null 2>&1 \
 HOSTNAME_VAL="$(hostname 2>/dev/null || echo "")"
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")"
 
-SANS="DNS:localhost,DNS:phantom-agent,DNS:xlog,DNS:caldera,DNS:phantom-updater,IP:127.0.0.1"
+SANS="DNS:localhost,DNS:phantom-agent,DNS:phantom-updater,IP:127.0.0.1"
 [[ -n "$HOSTNAME_VAL" ]] && SANS="$SANS,DNS:$HOSTNAME_VAL"
 [[ -n "$HOST_IP" ]]      && SANS="$SANS,IP:$HOST_IP"
 

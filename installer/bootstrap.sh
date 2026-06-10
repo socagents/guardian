@@ -7,9 +7,8 @@
 #   1. Pre-flight: verifies docker + docker compose are present.
 #   2. Prompts for PHANTOM_VERSION (defaults to "latest" floating tag).
 #   3. Prompts for registry credentials (GHCR user + token).
-#   4. Auto-generates four secrets with `openssl rand`:
-#        MCP_TOKEN, PHANTOM_SECRET_KEK, CALDERA_API_KEY, XLOG_API_KEY,
-#        CALDERA_RED_PASSWORD
+#   4. Auto-generates three secrets with `openssl rand`:
+#        MCP_TOKEN, PHANTOM_SECRET_KEK, PHANTOM_DEFAULT_ADMIN_PASSWORD
 #   5. Writes .env in the current directory (chmod 600).
 #   6. Offers to run ./install.sh immediately.
 #
@@ -170,28 +169,14 @@ info "Generating MCP_TOKEN…"
 MCP_TOKEN="$(openssl rand -hex 32)"
 info "Generating PHANTOM_SECRET_KEK (AES-256 key for SecretStore)…"
 PHANTOM_SECRET_KEK="$(openssl rand -base64 32)"
-info "Generating CALDERA_API_KEY…"
-CALDERA_API_KEY="$(openssl rand -hex 16)"
-info "Generating XLOG_API_KEY…"
-XLOG_API_KEY="$(openssl rand -hex 32)"
-info "Generating CALDERA_RED_PASSWORD…"
-CALDERA_RED_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
 info "Generating PHANTOM_DEFAULT_ADMIN_PASSWORD (v0.5.5+ bootstrap admin)…"
 PHANTOM_DEFAULT_ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
 
 ok "Secrets generated. They'll be written to .env (chmod 600)."
 
-say ""
-say "4) Caldera operator account"
-say ""
-echo "   The red-team driver account inside Caldera. The username can be"
-echo "   anything; the password we just auto-generated above."
-echo ""
-prompt CALDERA_RED_USER "Caldera red-team username" "red"
-
 # ─── Write .env ───────────────────────────────────────────────────────
 say ""
-say "5) Writing .env"
+say "4) Writing .env"
 say ""
 
 # Use a temp file then mv for atomicity (so a partial write doesn't
@@ -225,14 +210,6 @@ PHANTOM_SECRET_KEK=$PHANTOM_SECRET_KEK
 # credential is baked anywhere in any image.
 PHANTOM_DEFAULT_ADMIN_PASSWORD=$PHANTOM_DEFAULT_ADMIN_PASSWORD
 
-# ─── Caldera ───────────────────────────────────────────────────────────
-CALDERA_RED_USER=$CALDERA_RED_USER
-CALDERA_RED_PASSWORD=$CALDERA_RED_PASSWORD
-CALDERA_API_KEY=$CALDERA_API_KEY
-
-# ─── xlog ──────────────────────────────────────────────────────────────
-XLOG_API_KEY=$XLOG_API_KEY
-
 # ─── Operator config (filled in via /providers + /instances after login) ─
 # Leaving these blank is fine. v0.4.0+ — the agent boots with default
 # admin credentials (admin / value of PHANTOM_DEFAULT_ADMIN_PASSWORD
@@ -248,7 +225,7 @@ ok ".env written ($(wc -l < .env) lines, mode 600)"
 
 # ─── Optional: run install.sh ─────────────────────────────────────────
 say ""
-say "6) Ready to install"
+say "5) Ready to install"
 say ""
 echo "   Bootstrap complete. Next step is to run ./install.sh which will:"
 echo "     - docker login ghcr.io (using PHANTOM_REGISTRY_TOKEN)"
@@ -272,13 +249,11 @@ case "${RUN_INSTALL,,}" in
   *)
     ok "Skipping install. Run ./install.sh when ready."
     say ""
-    say "   Saved secrets for your records:"
+    say "   Saved settings for your records:"
     say ""
     say "   PHANTOM_VERSION=$PHANTOM_VERSION"
-    say "   CALDERA_RED_USER=$CALDERA_RED_USER"
-    say "   CALDERA_RED_PASSWORD=$CALDERA_RED_PASSWORD"
     say ""
-    say "   Other secrets are in .env. Browser login URL will be"
+    say "   Secrets are in .env. Browser login URL will be"
     say "   http://<this-host>:3000 after install completes."
     ;;
 esac

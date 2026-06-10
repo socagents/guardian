@@ -3,15 +3,15 @@ description: >
   Builds a single Phantom service image with docker build, retags it for
   GHCR with the dev tag (overwritten on every push to main), pushes it
   to ghcr.io, captures the resulting digest, and surfaces the digest as
-  an output for downstream jobs. Shared by build-xlog.yml,
-  build-agent.yml, build-caldera.yml so the build + push + digest-capture
-  mechanics live in one place — the mechanical enforcement of
+  an output for downstream jobs. Shared by build-agent.yml,
+  build-updater.yml, build-connectors.yml so the build + push +
+  digest-capture mechanics live in one place — the mechanical enforcement of
   CLAUDE.md's "only image tag differs" rule. See input/output
   descriptions on each field below.
 
 inputs:
   service-name:
-    description: 'Service name (phantom-xlog, phantom-agent, phantom-caldera)'
+    description: 'Service name (e.g. phantom-agent, phantom-updater, phantom-connector-xsiam)'
     required: true
   build-context:
     description: 'Path passed to docker build as the build context'

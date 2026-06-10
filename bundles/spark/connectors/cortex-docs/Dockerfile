@@ -14,7 +14,7 @@
 # connector-containers.md) and so the cortex-docs connector code lives
 # at the same FS path inside the agent container as the in-process
 # loader expects (`/app/connectors/cortex-docs/src`). Mirroring the
-# xsiam/xlog/web/caldera Dockerfile pattern keeps the surface uniform
+# xsiam/cortex-xdr/web Dockerfile pattern keeps the surface uniform
 # even though only some connectors are flipped to container mode.
 
 ARG PHANTOM_RUNTIME_VERSION=latest

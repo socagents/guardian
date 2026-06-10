@@ -25,12 +25,6 @@ function actionMeta(action: string): { icon: string; tone: string } {
   if (action === 'chat_cache_hit') return { icon: 'bolt', tone: 'text-amber-400' };
   // Existing phantom audit families.
   if (action === 'tool_call') return { icon: 'build', tone: 'text-primary' };
-  if (action === 'simulation_created' || action === 'scenario_started') {
-    return { icon: 'play_circle', tone: 'text-primary' };
-  }
-  if (action === 'caldera_operation_created') return { icon: 'security', tone: 'text-rose-400' };
-  if (action === 'detection_validation_recorded') return { icon: 'fact_check', tone: 'text-emerald-400' };
-  if (action === 'coverage_report_generated') return { icon: 'assessment', tone: 'text-primary' };
   if (action === 'setup_completed' || action === 'settings_changed') {
     return { icon: 'settings', tone: 'text-slate-300' };
   }

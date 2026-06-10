@@ -59,7 +59,7 @@ export interface SlackApprovalHookConfig {
   webhookUrl: string;
   /** Optional auth header name+value the receiver expects. */
   authHeader?: { name: string; value: string };
-  /** Tool glob — defaults to "caldera_*,xsiam_write_*,*_delete"
+  /** Tool glob — defaults to "xsiam_create_*,xsiam_add_*,*_delete"
    *  (destructive families). Operator can override per-deployment. */
   toolGlob?: string;
   /** Failure policy. Default 'allow' (a slack-receiver outage
@@ -104,7 +104,7 @@ export function buildSlackApprovalHookPayload(
     matcher: {
       toolGlob:
         config.toolGlob ??
-        "caldera_*,xsiam_write_*,*_delete,api_keys_*",
+        "xsiam_create_*,xsiam_add_*,*_delete,api_keys_*",
     },
     transport: {
       type: "http",
@@ -143,7 +143,7 @@ hook to a webhook receiver you deploy.
    receiver decides).
 
 3. **A list of which tools should route through Slack.** Default
-   matches \`caldera_*\`, \`xsiam_write_*\`, \`*_delete\`, and
+   matches \`xsiam_create_*\`, \`xsiam_add_*\`, \`*_delete\`, and
    \`api_keys_*\` — change to taste.
 
 ## Installing the hook
@@ -154,7 +154,7 @@ POST to \`/api/agent/hooks\` (or use the form in /settings/hooks):
 {
   "name": "soc-ops slack approval",
   "event": "PreToolUse",
-  "matcher": { "toolGlob": "caldera_*,xsiam_write_*,*_delete" },
+  "matcher": { "toolGlob": "xsiam_create_*,xsiam_add_*,*_delete" },
   "transport": {
     "type": "http",
     "url": "https://your-receiver.example.com/pre-tool-approval-poll",

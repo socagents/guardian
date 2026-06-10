@@ -11,9 +11,9 @@ connector copied the same fields from the previous one, with no
 automated check that the shape stayed consistent. The class of
 regressions this produced:
 
-  * v0.1.x — caldera's secretSlots[] entries used `name` while xlog's
-    used `slot_name`; the setup form rendered both inconsistently
-    until someone noticed.
+  * v0.1.x — one connector's secretSlots[] entries used `name` while
+    another's used `slot_name`; the setup form rendered both
+    inconsistently until someone noticed.
   * v0.1.27 — web/connector.yaml shipped without a `version` field
     for two releases; instance store fell back to 'unknown' which
     broke version-comparison in the UI.
@@ -161,7 +161,7 @@ def validate_connector_spec(
 
     `expected_id` enables a defense-in-depth check: when the loader
     knows what id it expected (e.g. "the connector dir is named
-    'caldera', so the YAML's id field should also be 'caldera'"),
+    'xsiam', so the YAML's id field should also be 'xsiam'"),
     it can pass that in and we'll fail loudly on mismatch. Catches
     a copy-paste class of error where someone forks a connector
     directory but forgets to update the id.

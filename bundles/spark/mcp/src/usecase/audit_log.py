@@ -25,8 +25,8 @@ adapter over the same interface.
                                           -- secret_*, instance_*, provider_*
                                           -- events introduced here)
       target        TEXT,                 -- the thing acted on:
-                                          --   "connector:caldera"
-                                          --   "tool:xsiam.execute_xql_query"
+                                          --   "connector:xsiam"
+                                          --   "tool:xsiam.run_xql_query"
                                           --   "secret:/agents/phantom/..."
                                           --   "instance:<uuid>"
       status        TEXT,                 -- "success" | "failure" | "skipped"
@@ -52,11 +52,6 @@ elevated privileges.
 Per `manifest.yaml:audit.events`:
 
     tool_call                       — every connector tool invocation
-    simulation_created              — xlog.create_*_worker
-    scenario_started                — xlog.create_scenario_worker_*
-    caldera_operation_created       — caldera.start_operation
-    detection_validation_recorded   — xsiam.execute_xql_query (with intent)
-    coverage_report_generated       — xlog.generate_coverage_report
     setup_completed                 — POST /api/v1/setup
     settings_changed                — POST /api/v1/settings (Phase 12)
     instance_created                — InstanceStore.create / setup_submit
@@ -131,7 +126,7 @@ def reset_current_actor(token: Any) -> None:
 # middleware whenever an inbound HTTP request carries the
 # `X-Phantom-Trigger` header. Audit rows pick it up through
 # `record()` so operators can filter the audit feed by trigger
-# (e.g. `trigger=job:nightly-coverage` to find all activity driven
+# (e.g. `trigger=job:nightly-report` to find all activity driven
 # by a scheduled job vs interactive operator chats).
 #
 # The header value is namespaced with a colon-prefixed type tag:
@@ -206,11 +201,6 @@ def reset_current_approval_bypass(token: Any) -> None:
 
 # Manifest-declared events (the bundle author opted in to these).
 ACTION_TOOL_CALL = "tool_call"
-ACTION_SIMULATION_CREATED = "simulation_created"
-ACTION_SCENARIO_STARTED = "scenario_started"
-ACTION_CALDERA_OPERATION_CREATED = "caldera_operation_created"
-ACTION_DETECTION_VALIDATION_RECORDED = "detection_validation_recorded"
-ACTION_COVERAGE_REPORT_GENERATED = "coverage_report_generated"
 ACTION_SETUP_COMPLETED = "setup_completed"
 ACTION_SETTINGS_CHANGED = "settings_changed"
 ACTION_INSTANCE_CREATED = "instance_created"
@@ -267,18 +257,6 @@ ACTION_KB_DOC_READ = "kb_doc_read"
 ACTION_PERSONALITY_CHANGED = "personality_changed"
 ACTION_AGENT_SELF_MOD_REQUESTED = "agent_self_mod_requested"
 ACTION_AGENT_SELF_MOD_EXECUTED = "agent_self_mod_executed"
-
-# Phase 12 — closed-loop coverage engine.
-# detections_synced: every detections_sync call (per-XSIAM-page upsert).
-# coverage_snapshot_taken: every coverage_snapshot_take.
-# coverage_drift_detected: when a snapshot diff crosses the operator's
-#   drift threshold (e.g. a rule that fired regularly went silent).
-# coverage_gap_observed: when coverage_gaps surfaces a technique with
-#   no detections or no recent fires that the operator hasn't seen.
-ACTION_DETECTIONS_SYNCED = "detections_synced"
-ACTION_COVERAGE_SNAPSHOT_TAKEN = "coverage_snapshot_taken"
-ACTION_COVERAGE_DRIFT_DETECTED = "coverage_drift_detected"
-ACTION_COVERAGE_GAP_OBSERVED = "coverage_gap_observed"
 
 
 class SqliteAuditLog:
@@ -469,7 +447,7 @@ class SqliteAuditLog:
         `target_prefix` does a `LIKE 'X%'` match — useful for "all events
         on instances of connector X" via `target_prefix="instance:"`.
 
-        `trigger` does an exact match (e.g. "job:nightly-coverage");
+        `trigger` does an exact match (e.g. "job:nightly-report");
         `trigger_prefix` does a LIKE prefix match (e.g. "job:" to find
         all scheduler-driven activity regardless of which job).
         """

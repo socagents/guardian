@@ -469,7 +469,7 @@ def test_mixed_builtin_and_connector_batch(tmp_path, monkeypatch):
     from usecase import connector_loader
     monkeypatch.setattr(
         connector_loader, "_reload_state",
-        {"tool_registry": {"caldera.list_agents": None}},
+        {"tool_registry": {"xdr.get_cases_and_issues": None}},
         raising=False,
     )
 
@@ -486,7 +486,7 @@ def test_mixed_builtin_and_connector_batch(tmp_path, monkeypatch):
         asyncio.create_task(_auto_approve_after_delay())
         return await self_mod_tools.agent_batch_propose(actions=[
             {"tool": "jobs_create", "args": {"name": "j1"}},
-            {"tool": "caldera.list_agents", "args": {}},
+            {"tool": "xdr.get_cases_and_issues", "args": {}},
         ])
 
     out = asyncio.run(_race())
@@ -494,7 +494,7 @@ def test_mixed_builtin_and_connector_batch(tmp_path, monkeypatch):
     assert out["failed"] == 0
     # Each route fired exactly once.
     assert builtin_calls == ["ok"]
-    assert dispatched == ["caldera.list_agents"]
+    assert dispatched == ["xdr.get_cases_and_issues"]
 
 
 # ─── Approval card payload shape ────────────────────────────────────

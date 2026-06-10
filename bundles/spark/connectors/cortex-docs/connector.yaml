@@ -1,4 +1,4 @@
-# Cortex Docs tool connector for the Phantom SOC simulation agent.
+# Cortex Docs tool connector for the Guardian incident-response agent.
 #
 # Per Spark agent bundle spec v1.2 §7.4. Tool names auto-namespace as
 # `cortex-docs/<bare_name>` in the agent's tool catalog. The bundle

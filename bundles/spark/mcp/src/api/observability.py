@@ -9,7 +9,7 @@
         ?offset=0
   GET /api/v1/observability/events/summary   → counts-by-name rollup
   POST /api/v1/observability/events          → record one event
-        body: {"event": "rt.simulation.started", "payload": {...}}
+        body: {"event": "rt.tool.failed", "payload": {...}}
 
 The Prometheus endpoint at /api/v1/metrics is in api/metrics.py;
 audit events are at /api/v1/audit. This module is specifically for

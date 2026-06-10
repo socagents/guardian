@@ -10,10 +10,10 @@
 #   3. ./.phantom-agent/ bind-mount directory (if present) — setup
 #      form values and generated env snapshot.
 #
-# Anything else the agent depends on (the Docker image, bundle source,
-# remote xlog/caldera URLs the operator typed at first run) is either
-# carried in the agent bundle archive or recoverable from the setup
-# page. This script captures only what isn't recoverable any other way.
+# Anything else the agent depends on (the Docker images, connector
+# base URLs and credentials the operator typed at first run) is
+# recoverable from the setup flow. This script captures only what
+# isn't recoverable any other way.
 #
 # Usage:
 #   scripts/backup_phantom.sh [--output DIR] [--label LABEL]

@@ -15,7 +15,7 @@ becomes the CHANGELOG / release-notes entry at release time —
 write it like the final doc, not like a TODO list.
 
 Add labels manually after creation:
-  • component:* (one or more — agent / xlog / caldera / connectors /
+  • component:* (one or more — agent / connectors /
                  installer / workflows / docs / help-pages / journeys)
   • scenario:* (exactly one — scenario:1 / scenario:2 / scenario:3 /
                 scenario:docs-only / scenario:trivial)

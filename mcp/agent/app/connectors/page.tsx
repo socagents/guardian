@@ -125,7 +125,7 @@ interface InstanceDef {
   is_channel: boolean;
   config: Record<string, string>;
   // Server-redacted secret slots for the connector (e.g.
-  // {caldera_api_key: "***"}). Surfaced in the edit dialog so
+  // {xsiam_api_key: "***"}). Surfaced in the edit dialog so
   // operators can SEE which credentials are configured (rotate via
   // the setup form). Always strings — backend never returns plaintext.
   secrets: Record<string, string>;

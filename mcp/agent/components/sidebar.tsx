@@ -73,13 +73,6 @@ const navEntries: NavEntry[] = [
     defaultHref: "/connectors",
     children: [
       { href: "/connectors", label: "Connectors", icon: "cable" },
-      // v0.8.0 Phase 3 — Marketplace Data Sources. Separate operator-
-      // facing surface from /connectors per operator design decision #2:
-      // vendor schemas are a different concept from per-instance connector
-      // containers, so they get their own top-level page rather than a
-      // tab inside /connectors. Drill-down vendor → product/rule →
-      // dataset (per decision #3).
-      { href: "/data-sources", label: "Data Sources", icon: "schema" },
       { href: "/approvals", label: "Approvals", icon: "fact_check", badgeKey: "pendingApprovals" },
       // /notifications intentionally NOT listed here — it's promoted
       // to a footer-level standalone link below (cross-cutting bell
@@ -94,11 +87,6 @@ const navEntries: NavEntry[] = [
       // skills, scenarios, memory seeds, and agent definitions via a
       // manifest.yaml.
       { href: "/plugins", label: "Plugins", icon: "extension" },
-      // v0.17.1 R6 — operator-managed log forwarding targets (syslog,
-      // webhook, XSIAM HTTP Collector, Splunk HEC). Replaces the
-      // ad-hoc `destination` string xlog used to accept directly;
-      // CreateDataWorker now references destinations by id.
-      { href: "/log-destinations", label: "Log Destinations", icon: "cloud_upload" },
     ],
   },
   {

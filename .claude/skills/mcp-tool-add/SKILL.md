@@ -26,7 +26,7 @@ A tool can only be on the catalog side if #1 is NO AND #2 is YES. If both are YE
 
 ## 2. Implement under `src/usecase/builtin_components/<module>.py`
 
-Each module groups related tools. Examples: `data_faker`, `workers`, `scenarios`, `xsiam_tools`, `caldera_tools`, `simulation_skills`, `skills_crud`, `observables_catalog`, `field_info`, `job_scheduler`, `marketplace`, `secrets_store`, `self_mod_tools`.
+Each module groups related tools. Examples: `cognitive_tools`, `skills_crud`, `self_mod_tools`. (Connector tools — XSIAM, Cortex XDR, web — live in their connector's `src/` under `bundles/spark/connectors/<id>/`, NOT here; see `bundles/spark/connectors/CLAUDE.md`.)
 
 ```python
 async def my_tool(arg1: str, arg2: int = 10) -> dict[str, Any]:

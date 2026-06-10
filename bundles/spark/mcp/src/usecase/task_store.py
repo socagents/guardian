@@ -1,22 +1,17 @@
 """SqliteTaskStore — durable task registry for long-running work.
 
 Round-15 / Phase T. Adapted from SnowAgent's task system
-(`snow-agent-complete/snow-agent/09-agents-tasks/`) — Phantom needs
-the same shape (status / progress / output / abort) for our
-long-running scenario workers.
+(`snow-agent-complete/snow-agent/09-agents-tasks/`) — we need the
+same shape (status / progress / output / abort) for long-running
+background work.
 
 Why this exists:
 
-  - Phantom's xlog scenario workers live in `xlog/app/schema.py:48`
-    as `workers = {}` — a module-level dict. Restart the container,
-    lose every active worker. Per-replica state. No abort
-    controllers exposed in the chat (operator has to GraphQL
-    deleteWorker manually). No progress visibility.
   - Phase 5 auto-compaction summarizers, Phase 6 Vertex cache
     creators, Phase H hook subprocess invocations are all
     candidates for "background work the operator should be able
     to see and cancel."
-  - Spark connector tools (XSIAM XQL queries, CALDERA operations)
+  - Spark connector tools (XSIAM XQL queries, XDR incident pulls)
     can run for minutes. Today they block a chat turn. With a
     task surface, the agent can spawn one as a task, return
     immediately with a task id, and the operator polls /tasks for
@@ -26,9 +21,8 @@ Why this exists:
 
     tasks (
       id              TEXT PRIMARY KEY,    -- uuid
-      kind            TEXT NOT NULL,       -- 'scenario_worker' |
-                                           -- 'compaction' |
-                                           -- 'caldera_op' | etc.
+      kind            TEXT NOT NULL,       -- 'compaction' |
+                                           -- 'xql_query' | etc.
       status          TEXT NOT NULL,       -- 'pending' | 'running' |
                                            -- 'succeeded' | 'failed' |
                                            -- 'aborted'
@@ -444,7 +438,7 @@ _global_store: SqliteTaskStore | None = None
 
 
 def set_task_store(store: SqliteTaskStore) -> None:
-    """Stash the singleton so other modules (xlog adapter, hook
+    """Stash the singleton so other modules (connector adapters, hook
     runner) can read/write tasks without dependency injection."""
     global _global_store
     _global_store = store

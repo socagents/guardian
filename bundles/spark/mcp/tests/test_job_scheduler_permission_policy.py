@@ -79,7 +79,7 @@ def test_pre_migration_db_gets_column(tmp_path: Path) -> None:
 
 def test_add_job_persists_policy(scheduler: CroniterJobScheduler) -> None:
     policy = {
-        "allowed_tools": ["xlog_*"],
+        "allowed_tools": ["xsiam_*"],
         "denied_tools": ["*_delete"],
         "require_approval": ["xsiam_write_*"],
     }
@@ -103,7 +103,7 @@ def test_add_job_default_no_policy(scheduler: CroniterJobScheduler) -> None:
 
 
 def test_to_dict_includes_policy(scheduler: CroniterJobScheduler) -> None:
-    policy = {"allowed_tools": ["xlog_*"]}
+    policy = {"allowed_tools": ["xsiam_*"]}
     row = scheduler.add_job(
         name="dict-job", cron="*/5 * * * *",
         action={"type": "prompt", "message": "hi"},
@@ -123,11 +123,11 @@ def test_update_preserves_policy_when_none(
     scheduler.add_job(
         name="job-a", cron="*/5 * * * *",
         action={"type": "prompt", "message": "hi"},
-        permission_policy={"allowed_tools": ["xlog_*"]},
+        permission_policy={"allowed_tools": ["xsiam_*"]},
     )
     updated = scheduler.update_job("job-a", cron="*/10 * * * *")
     assert updated is not None
-    assert updated.permission_policy == {"allowed_tools": ["xlog_*"]}
+    assert updated.permission_policy == {"allowed_tools": ["xsiam_*"]}
 
 
 def test_update_clears_policy_with_empty_dict(
@@ -151,7 +151,7 @@ def test_update_sets_policy(scheduler: CroniterJobScheduler) -> None:
         name="job-c", cron="*/5 * * * *",
         action={"type": "prompt", "message": "hi"},
     )
-    new_policy = {"allowed_tools": ["scenarios_*", "skills_*"]}
+    new_policy = {"allowed_tools": ["audit_*", "skills_*"]}
     updated = scheduler.update_job("job-c", permission_policy=new_policy)
     assert updated is not None
     assert updated.permission_policy == new_policy

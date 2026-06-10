@@ -1,7 +1,7 @@
 /**
  * FormEngine — renders a ConfigParam-style fields[] schema into a
- * dynamic form. Extracted from /connectors page in v0.17.1 so the
- * /log-destinations page can reuse the same widget vocabulary.
+ * dynamic form. Extracted from /connectors page in v0.17.1 as a
+ * reusable widget vocabulary for schema-driven forms.
  *
  * Supports the standard widget set (text/url/string/number/secret/
  * password/textarea/select/radio/multi_select/boolean/array/json)
@@ -59,7 +59,7 @@ export interface FormEngineProps {
   secretRedactSentinel?: boolean;
   // Optional: per-field validation errors map.
   errors?: Record<string, string>;
-  // Read-only mode (e.g. preview tab on /log-destinations row expansion).
+  // Read-only mode (e.g. a preview tab on a row expansion).
   readOnly?: boolean;
 }
 

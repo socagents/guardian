@@ -7,9 +7,7 @@ Each connector ships as its own image at customer release time. The agent dispat
 ## Layout
 
 Each connector is a subdirectory named after itself:
-- `xlog/` — Phantom's log-generation tools (wraps the xlog service GraphQL)
 - `xsiam/` — XSIAM PAPI integration
-- `caldera/` — Caldera red-team operations
 - `cortex-content/` — Cortex content catalog (data sources / packs / modeling rules) — local catalog at `cortex-content/baked/`
 - `cortex-docs/` — Cortex documentation search
 - `cortex-xdr/` — Cortex XDR API

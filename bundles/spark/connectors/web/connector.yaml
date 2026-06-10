@@ -1,4 +1,4 @@
-# Web (headless browser) tool connector for the Phantom SOC simulation agent.
+# Web (headless browser) tool connector for the Guardian incident-response agent.
 #
 # Per Spark agent bundle spec v1.2 §7.4. Tool names are auto-namespaced
 # as `web/<tool_name>` by the embedded MCP. Manifest tools.allow lists
@@ -74,7 +74,7 @@ runtimeMapping:
   style: "container"
   functionPrefix: "phantom_web_"
 
-# `executionMode: persistent` matches xlog/caldera/xsiam — the connector
+# `executionMode: persistent` matches xsiam/cortex-xdr — the connector
 # functions are imported once at process start and called many times.
 # Page state itself is held in an in-process registry inside browser.py
 # (see _PageRegistry) keyed by the agent-supplied session_id, with idle

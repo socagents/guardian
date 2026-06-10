@@ -3,7 +3,7 @@
 Boot sequence (read top-to-bottom, executed in order):
 
     1. Read env vars:
-         CONNECTOR_ID  — which connector to load (e.g. "xlog")
+         CONNECTOR_ID  — which connector to load (e.g. "xsiam")
          INSTANCE_ID   — which instance row to look up
          DATA_ROOT     — host path of the agent's data dir
                          (default /app/data, mounted ro)
@@ -192,7 +192,7 @@ def _register_tools(
     if not names:
         # Fall back: register every public FUNCTION defined directly
         # on the module. Filter to functions/coroutines specifically —
-        # Pydantic Request classes (which xsiam/caldera define for
+        # Pydantic Request classes (which xsiam defines for
         # tool argument schemas) are also callable + defined in the
         # same module, but they're NOT tools. Including them would
         # advertise garbage like `RunXqlQueryRequest` as a tool name.
@@ -290,21 +290,20 @@ def _register_tools(
         # container provides by construction now.
         #
         # Four prefix forms checked (v0.5.76+):
-        #   - `phantom_<id>_*`  → xlog uses `phantom_create_data_worker`
-        #                          and `phantom_web_navigate` (web has
-        #                          its own `phantom_web_` prefix). Most
+        #   - `phantom_<id>_*`  → web uses `phantom_web_navigate`
+        #                          (its own `phantom_web_` prefix). Most
         #                          specific; check first.
-        #   - `<id>_*`          → xsiam uses `xsiam_run_xql_query`,
-        #                          caldera uses `caldera_health_check`.
+        #   - `<id>_*`          → xsiam uses `xsiam_run_xql_query`.
         #   - `phantom_*`       → bare phantom_ prefix (legacy).
         #   - `<common_prefix>` → v0.5.76+ — auto-detected longest
         #                          common prefix ending in `_`. Catches
-        #                          cortex-docs (`cortex_*`) and any
+        #                          cortex-docs (`cortex_*`), cortex-xdr
+        #                          (`xdr_*`), and any
         #                          future connector whose functionPrefix
         #                          doesn't match the connector_id stem.
         # Order matters: more-specific prefixes tested first so we
-        # don't strip too little (e.g. `phantom_xlog_navigate` should
-        # become `navigate`, not `xlog_navigate`).
+        # don't strip too little (e.g. `phantom_web_navigate` should
+        # become `navigate`, not `web_navigate`).
         tool_name = name
         for prefix in (
             f"phantom_{connector_id}_",

@@ -7,7 +7,7 @@ import { PhantomLogo } from "@/components/sidebar";
 /**
  * Phantom personality page — ported from spark/services/ui's
  * /command/agent. Adaptations:
- *   - Spark's auto-save was a UI simulation (a setTimeout that flipped
+ *   - Spark's auto-save was cosmetic-only (a setTimeout that flipped
  *     the indicator without persisting). This wires it to phantom's
  *     real /api/agent/settings PUT, debounced 600ms after the last
  *     change so a slider drag doesn't flood the MCP. Initial load on
@@ -117,7 +117,7 @@ const DEFAULT_CONFIG: AgentConfig = {
       "memory",
       "knowledge",
     ],
-    externalCategories: ["xlog", "caldera", "xsiam", "simulations"],
+    externalCategories: ["xsiam", "xdr", "web", "cortex"],
     askWhenUnsure: true,
     confirmLocalActions: "approve-card",
     confirmExternalActions: "soft",
@@ -137,28 +137,28 @@ const DEFAULT_CONFIG: AgentConfig = {
   memoryTemporalDecayLambda: 0.01,
   personalityMd: `# Phantom Personality
 
-You are Phantom, a continuous SOC simulation agent. You orchestrate
-synthetic security log generation, MITRE ATT&CK scenario emulation,
-and detection-validation workflows across xlog, Caldera, and XSIAM.
+You are Phantom, an AI incident-response agent for Cortex XSIAM and
+Cortex XDR. You triage cases and issues, hunt with XQL, and ground
+your answers in the operator's tenant data and the official Cortex
+documentation.
 
 ## Tone
-- Operationally precise: name tools, scenarios, IOCs, XQL queries explicitly
+- Operationally precise: name tools, cases, IOCs, XQL queries explicitly
 - Concise by default; expand when asked or when stakes are high
 - Confident on what you've actually executed; honest about what's
   inferred or unverified
 
 ## Principles
-- Always cite the connector + tool you used (xlog.create_scenario_worker,
-  caldera.start_operation, xsiam.execute_xql_query, …) so operators can
+- Always cite the connector + tool you used (xsiam.run_xql_query,
+  xdr.get_cases_and_issues, web.navigate, …) so operators can
   reproduce
-- Generate IOCs through the foundation skills first (shared IOC pool,
-  device topology) before scenarios consume them — keeps cross-scenario
-  telemetry coherent
-- Verify detection coverage with XQL after every scenario; surface gaps
-  before the operator asks
-- Refuse to take destructive actions (real-tenant log injection, real
-  Caldera operations against unscoped agents) without explicit user
-  confirmation
+- Author XQL through the build_xql_query workflow skill — KB examples
+  first, then cortex-docs syntax lookups — before running ad-hoc
+  queries against the tenant
+- Verify claims against tenant data (cases, issues, assets) before
+  reporting them; surface gaps before the operator asks
+- Refuse to take destructive or write actions against the operator's
+  tenant without explicit user confirmation
 `,
 };
 
@@ -1111,7 +1111,7 @@ function PersonalityEditor({
  * Editable list of category strings rendered as removable chips with
  * an Add input. Used by the Action Policy section to let the operator
  * tweak which tool categories the agent considers "local" vs
- * "external". Categories are bare strings (e.g. "jobs", "xlog") that
+ * "external". Categories are bare strings (e.g. "jobs", "xsiam") that
  * the chat-route system instruction prefix-matches against tool names
  * — so "jobs" covers jobs_create, jobs_update, jobs_delete, etc.
  *

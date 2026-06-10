@@ -39,9 +39,9 @@ let _cache:
 // (yellow/amber). Mirrors the manifest's humanRequired list, since
 // the same gate is what makes a tool "soft" in operator perception.
 //
-// v0.1.22: dropped create_operation + send_webhook_log to match the
-// manifest change — approval is now self-mod-only, so caldera ops
-// and xsiam log pushes shouldn't render as "this needs approval".
+// v0.1.22: dropped send_webhook_log to match the manifest change —
+// approval is now self-mod-only, so xsiam log pushes shouldn't
+// render as "this needs approval".
 const SOFT_TOOLS = new Set([
   'jobs_create',
   'jobs_update',

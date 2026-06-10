@@ -5,8 +5,7 @@
  * NOT to be confused with /api/agent/audit, which is the Phase-6
  * audit log of state-changing operations. The runtime events feed is
  * the high-signal stream declared in manifest.observability.events
- * (rt.simulation.*, rt.caldera.*, rt.coverage.*, rt.validation.*,
- * rt.tool.failed). They overlap on tool failures but are intended for
+ * (currently rt.tool.failed). They overlap on tool failures but are intended for
  * different consumers — audit for forensics, runtime events for
  * operator-facing alerts and dashboards.
  *

@@ -53,7 +53,7 @@ const BACKEND_HOST = process.env.PHANTOM_TLS_BACKEND_HOST || '127.0.0.1';
 
 // ─── PEM resolution ──────────────────────────────────────────────────
 // Order: file path first, then inline PEM. Inline PEM gets \n-escapes
-// expanded just like xlog and the MCP do.
+// expanded just like the MCP does.
 function normalizePem(s) {
   if (!s) return s;
   s = s.replace(/\\n/g, '\n').replace(/\\r/g, '');

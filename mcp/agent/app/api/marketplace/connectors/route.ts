@@ -1,9 +1,10 @@
 /**
- * Phantom marketplace endpoint — returns the three connectors that ship in
- * this bundle: xlog, caldera, xsiam. The connectors page (lifted from
- * Spark's workspace UI) calls /api/marketplace/connectors expecting a
- * GitHub-catalog-shaped JSON; in phantom standalone, the catalog IS the
- * bundle, so we serve hand-curated specs derived from the bundle's
+ * Phantom marketplace endpoint — returns the connectors that ship in
+ * this bundle: xsiam, cortex-xdr, cortex-docs, cortex-content, web.
+ * The connectors page (lifted from Spark's workspace UI) calls
+ * /api/marketplace/connectors expecting a GitHub-catalog-shaped JSON;
+ * in phantom standalone, the catalog IS the bundle, so we serve
+ * hand-curated specs derived from the bundle's
  * `connectors/<id>/connector.yaml` files.
  *
  * If a connector ships in the bundle, it's marked `installed`. The
@@ -71,170 +72,6 @@ interface MarketplaceConnector {
 }
 
 const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
-  // ── xlog ────────────────────────────────────────────────────────────────
-  {
-    id: "xlog",
-    name: "xlog",
-    type: "tool",
-    version: "1.2.0",
-    publisher: "kite-production",
-    description:
-      "Synthetic security log generation engine. Produces SYSLOG/CEF/JSON streams to webhooks, XSIAM, or files.",
-    longDescription:
-      "xlog is the log-generation backend for Phantom SOC simulation. It exposes a GraphQL API that the agent calls to spin up workers (port-scan, brute-force, malware-c2, exfil scenarios) which emit RFC-compliant logs into your downstream sink — XSIAM PAPI, webhook, or local file. Built on the rosetta-ce library.",
-    category: "Security",
-    tags: ["soc", "logs", "simulation", "xsiam"],
-    icon: "data_object",
-    iconColor: "#00f5ff",
-    iconBg: "rgba(0, 245, 255, 0.12)",
-    toolCount: 12,
-    installs: "bundle-internal",
-    installCount: 1,
-    status: "installed",
-    reliability: "stable",
-    authType: "Bearer token",
-    tools: [
-      {
-        name: "create_format_worker",
-        method: "POST",
-        description: "Spin up a worker that emits N logs/min in the given format (SYSLOG/CEF/JSON) to a sink.",
-        args: [
-          { name: "format", type: "enum", description: "SYSLOG | CEF | JSON", required: true },
-          { name: "rate", type: "int", description: "logs per minute", required: true, defaultValue: "60" },
-          { name: "sink", type: "url", description: "destination (webhook URL, XSIAM PAPI, or file://)", required: true },
-        ],
-      },
-      {
-        name: "create_scenario_worker",
-        method: "POST",
-        description: "Run a named scenario from scenarios/ready/*.json (port-scan, brute-force, etc.).",
-        args: [
-          { name: "scenario", type: "string", description: "scenario filename without .json", required: true },
-        ],
-      },
-      {
-        name: "list_workers",
-        method: "GET",
-        description: "List active log-generation workers with status/uptime.",
-        args: [],
-      },
-      {
-        name: "stop_worker",
-        method: "POST",
-        description: "Halt an active worker.",
-        args: [{ name: "id", type: "string", description: "worker id", required: true }],
-      },
-      {
-        name: "generate_coverage_report",
-        method: "POST",
-        description: "Run XQL queries against the configured XSIAM tenant and emit a coverage table.",
-        args: [],
-      },
-    ],
-    config: [
-      // v0.6.15 — renamed `xlogUrl` → `baseUrl` to match the canonical
-      // field name in bundles/spark/connectors/xlog/connector.yaml
-      // (configSchema.properties.baseUrl). Same drift pattern as
-      // caldera; same fix. Display name "xlog URL" stays.
-      // v0.6.22 — default changed from http://xlog:8000 → https://...
-      // xlog has served HTTPS on port 8000 unconditionally since
-      // the v0.4.0 TLS rollout (mounts /tls/cert.pem from the shared
-      // phantom_tls volume; uses TLS via priority-1 in its
-      // _resolve_ssl_args). Pre-v0.6.22 operators who accepted the
-      // http default got "Empty reply from server" at probe time +
-      // reports proxy 502 indefinitely.
-      { display: "xlog URL", name: "baseUrl", type: "url", required: true, defaultValue: "https://xlog:8000" },
-      { display: "API Token", name: "apiToken", type: "secret", required: true },
-    ],
-    versions: [
-      { version: "1.2.0", date: "2026-04-29", changes: ["Bearer auth on every request", "XQL coverage report tool"] },
-      { version: "1.1.0", date: "2026-03-15", changes: ["Scenario worker CRUD", "Webhook sink support"] },
-    ],
-    setupGuide:
-      "Set XLOG_URL to your xlog service (default https://xlog:8000) and XLOG_API_KEY to the matching bearer token.",
-    dockerImage: "ghcr.io/kite-production/xlog:1.2.0",
-    runtime: "python",
-    sdkLanguage: "Python",
-    sdkPackage: "phantom-spark-xlog-connector",
-    ingestion: { enabled: true, mode: "push", description: "Worker logs are pushed to the configured sink" },
-    topAgents: [{ name: "phantom-soc-simulation", color: "#00f5ff" }],
-  },
-  // ── caldera ─────────────────────────────────────────────────────────────
-  {
-    id: "caldera",
-    name: "Caldera",
-    type: "tool",
-    version: "5.3.0",
-    publisher: "MITRE / kite-production",
-    description:
-      "MITRE Caldera — adversary emulation platform. Run operations, list abilities, drive red-team scenarios.",
-    longDescription:
-      "Caldera connector wraps Caldera 5.3's v2 REST API. The agent can list abilities, start/stop operations, and stream operation results. Used in Phantom for end-to-end attack-chain simulation alongside xlog for realistic telemetry.",
-    category: "Security",
-    tags: ["red-team", "mitre", "attack-emulation"],
-    icon: "shield",
-    iconColor: "#ff5f8a",
-    iconBg: "rgba(255, 95, 138, 0.12)",
-    toolCount: 9,
-    installs: "bundle-internal",
-    installCount: 1,
-    status: "installed",
-    reliability: "stable",
-    authType: "API key (KEY: header)",
-    tools: [
-      {
-        name: "list_abilities",
-        method: "GET",
-        description: "List all Caldera abilities with their MITRE ATT&CK technique mappings.",
-        args: [],
-      },
-      {
-        name: "list_adversaries",
-        method: "GET",
-        description: "List all adversary profiles available in this Caldera tenant.",
-        args: [],
-      },
-      {
-        name: "start_operation",
-        method: "POST",
-        description: "Kick off a Caldera operation against a group with a chosen adversary.",
-        args: [
-          { name: "name", type: "string", description: "operation name", required: true },
-          { name: "adversary_id", type: "string", description: "adversary id", required: true },
-          { name: "group", type: "string", description: "agent group", required: true, defaultValue: "red" },
-        ],
-      },
-      {
-        name: "list_operations",
-        method: "GET",
-        description: "List active and completed operations.",
-        args: [],
-      },
-    ],
-    config: [
-      // v0.6.15 — renamed `calderaUrl` → `baseUrl` to match the
-      // canonical field name in bundles/spark/connectors/caldera/
-      // connector.yaml (configSchema.properties.baseUrl). Pre-v0.6.15
-      // the catalog drifted from the connector's actual schema, so
-      // operator-created instances stored `calderaUrl` while the
-      // connector code at runtime tried `baseUrl` / `caldera_url` /
-      // `url` and never found a match → "caldera instance has no
-      // baseUrl configured." Display name "Caldera URL" stays.
-      { display: "Caldera URL", name: "baseUrl", type: "url", required: true, defaultValue: "http://caldera:8888" },
-      { display: "API Key", name: "apiKey", type: "secret", required: true },
-      { display: "Red user", name: "redUser", type: "string", required: false, defaultValue: "red" },
-      { display: "Red password", name: "redPassword", type: "secret", required: false },
-    ],
-    versions: [{ version: "5.3.0", date: "2026-04-23", changes: ["v2 REST API", "Bearer KEY auth"] }],
-    setupGuide:
-      "Provision a Caldera 5.3 instance, create an API key under Settings, and supply CALDERA_URL + CALDERA_API_KEY.",
-    dockerImage: "aymanam/caldera:5.3.0",
-    runtime: "python",
-    sdkLanguage: "Python",
-    sdkPackage: "phantom-spark-caldera-connector",
-    ingestion: { enabled: false, mode: "pull", description: "Tools pull operation results on demand" },
-    topAgents: [{ name: "phantom-soc-simulation", color: "#ff5f8a" }],
-  },
   // ── xsiam ───────────────────────────────────────────────────────────────
   {
     id: "xsiam",
@@ -243,15 +80,15 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     version: "1.0.0",
     publisher: "Palo Alto Networks / kite-production",
     description:
-      "Palo Alto Cortex XSIAM connector — execute XQL queries via PAPI, run remote scripts in the issue war room.",
+      "Palo Alto Cortex XSIAM connector — run XQL queries via PAPI, list cases and issues, look up assets, manage datasets and lookups.",
     longDescription:
-      "Bridges Phantom to your Cortex XSIAM tenant. The agent can run XQL queries, fetch detection results, list incidents, and execute remote scripts inside the war-room runtime. Used by validation skills to confirm that ingested logs actually triggered the expected XQL detections.",
+      "Bridges Phantom to your Cortex XSIAM tenant. The agent can run XQL queries, search the bundled xql-examples knowledge base, list cases and issues, look up assets, create datasets, and read/write lookup data — the core read-and-investigate paths for incident response and threat hunting.",
     category: "Security",
-    tags: ["siem", "xql", "cortex", "detection"],
+    tags: ["siem", "xql", "cortex", "incident-response"],
     icon: "query_stats",
     iconColor: "#1f7bff",
     iconBg: "rgba(31, 123, 255, 0.12)",
-    toolCount: 7,
+    toolCount: 13,
     installs: "bundle-internal",
     installCount: 1,
     status: "installed",
@@ -259,7 +96,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     authType: "PAPI bearer + auth-id",
     tools: [
       {
-        name: "execute_xql_query",
+        name: "run_xql_query",
         method: "POST",
         description: "Run an XQL query against the XSIAM tenant and return rows.",
         args: [
@@ -268,18 +105,22 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
         ],
       },
       {
-        name: "list_incidents",
-        method: "GET",
-        description: "List recent XSIAM incidents.",
+        name: "get_cases",
+        method: "POST",
+        description: "List recent XSIAM cases with filters.",
         args: [],
       },
       {
-        name: "execute_remote_script",
+        name: "get_issues",
         method: "POST",
-        description: "Run a script in the issue war room.",
-        args: [
-          { name: "script", type: "string", description: "script content", required: true },
-        ],
+        description: "List recent XSIAM issues (alerts) with filters.",
+        args: [],
+      },
+      {
+        name: "get_assets",
+        method: "POST",
+        description: "List assets known to the XSIAM tenant.",
+        args: [],
       },
     ],
     config: [
@@ -300,7 +141,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     sdkLanguage: "Python",
     sdkPackage: "phantom-spark-xsiam-connector",
     ingestion: { enabled: false, mode: "pull", description: "Queries run on demand" },
-    topAgents: [{ name: "phantom-soc-simulation", color: "#1f7bff" }],
+    topAgents: [{ name: "phantom-agent", color: "#1f7bff" }],
   },
   // ── web (v0.1.27) ────────────────────────────────────────────────────────
   {
@@ -443,7 +284,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
       mode: "pull",
       description: "Pages are fetched on demand by the agent — no continuous ingestion.",
     },
-    topAgents: [{ name: "phantom-soc-simulation", color: "#a855f7" }],
+    topAgents: [{ name: "phantom-agent", color: "#a855f7" }],
   },
   // ── cortex-docs (v0.3.1) ─────────────────────────────────────────────────
   {
@@ -579,7 +420,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
       mode: "pull",
       description: "Cortex docs are fetched on demand per tool call — no continuous ingestion.",
     },
-    topAgents: [{ name: "phantom-soc-simulation", color: "#fa582d" }],
+    topAgents: [{ name: "phantom-agent", color: "#fa582d" }],
   },
   // ── cortex-content (v0.3.9) ──────────────────────────────────────────────
   {
@@ -709,7 +550,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
       mode: "pull",
       description: "Pack content fetched on demand per tool call; cached locally for 24h by default.",
     },
-    topAgents: [{ name: "phantom-soc-simulation", color: "#1963b3" }],
+    topAgents: [{ name: "phantom-agent", color: "#1963b3" }],
   },
 
   // ── cortex-xdr (v0.5.61 base, v0.5.68 description rewrite) ───────────────
@@ -722,7 +563,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     description:
       "Cortex XDR API wrapper — list incidents and alerts, drill into specific cases, and run XQL queries against the XDR data lake. General-purpose interface for incident response, threat hunting, investigation reporting, and detection coverage validation.",
     longDescription:
-      "Phantom's interface to your Cortex XDR tenant's Public API. The chat agent can answer operator questions like 'show me unresolved high-severity incidents in the last 24 hours', 'pull the alerts from incident <id>', or 'run XQL: dataset=xdr_data | filter agent_hostname=\"xdragent\" and event_type=ENUM.PROCESS | dedup actor_process_image_name | limit 50'. Four tools cover the core read paths: get_cases_and_issues (incident listing with filters by time, endpoint, severity, status), get_incident_extra_data (full alerts + network/file artifacts for a specific incident), run_xql_query (synchronous XQL with bounded polling — returns rows when complete or execution_id for long queries), and get_xql_results (poll an in-flight async execution). Same Cortex Public API family + Authorization + x-xdr-auth-id auth pattern as XSIAM; unified api_url / api_id / api_key field names per v0.5.59 / #35. Use cases: incident response (triage + drill-down), threat hunting (XQL ad-hoc queries), investigation reporting (incident details + related artifacts), and detection coverage validation (combine with Phantom's caldera connector — fire attacks, then query XDR for what fired). Read-only: no write/action endpoints in v0.1.x (isolate endpoint, run remote script, etc. deferred behind an explicit approval gate in a future release).",
+      "Phantom's interface to your Cortex XDR tenant's Public API. The chat agent can answer operator questions like 'show me unresolved high-severity incidents in the last 24 hours', 'pull the alerts from incident <id>', or 'run XQL: dataset=xdr_data | filter agent_hostname=\"xdragent\" and event_type=ENUM.PROCESS | dedup actor_process_image_name | limit 50'. Four tools cover the core read paths: get_cases_and_issues (incident listing with filters by time, endpoint, severity, status), get_incident_extra_data (full alerts + network/file artifacts for a specific incident), run_xql_query (synchronous XQL with bounded polling — returns rows when complete or execution_id for long queries), and get_xql_results (poll an in-flight async execution). Same Cortex Public API family + Authorization + x-xdr-auth-id auth pattern as XSIAM; unified api_url / api_id / api_key field names per v0.5.59 / #35. Use cases: incident response (triage + drill-down), threat hunting (XQL ad-hoc queries), and investigation reporting (incident details + related artifacts). Read-only: no write/action endpoints in v0.1.x (isolate endpoint, run remote script, etc. deferred behind an explicit approval gate in a future release).",
     category: "Security",
     tags: ["cortex", "xdr", "edr", "siem", "incidents", "alerts", "xql", "threat-hunting", "investigation", "incident-response"],
     icon: "shield_lock",
@@ -788,7 +629,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     ],
     versions: [
       { version: "0.1.0", date: "2026-05-17", changes: ["Initial connector — 4 tools: get_cases_and_issues, get_incident_extra_data, run_xql_query, get_xql_results. Closes #36."] },
-      { version: "0.1.1", date: "2026-05-17", changes: ["Description + metadata rewritten to focus on general-purpose Cortex XDR API use (incident response, threat hunting, investigation reporting) rather than just Caldera-detection validation. Tags broadened (added siem/threat-hunting/investigation/incident-response; removed v0.5.61 + the narrow detection/validation focus)."] },
+      { version: "0.1.1", date: "2026-05-17", changes: ["Description + metadata rewritten to focus on general-purpose Cortex XDR API use (incident response, threat hunting, investigation reporting). Tags broadened (added siem/threat-hunting/investigation/incident-response; removed v0.5.61 + the narrow detection/validation focus)."] },
     ],
     setupGuide:
       "1) In the Cortex XDR console, navigate to Settings → Configurations → API Keys. 2) Generate a key with 'Advanced' security level (required for x-xdr-auth-id header path). 3) Copy the api_id (integer next to the key), api_key (long alphanumeric — paste raw, no 'Bearer' prefix), and api_url (format: https://api-yourtenant.xdr.us.paloaltonetworks.com). 4) Click 'Add instance' on the Cortex XDR card. 5) Paste, save. 6) Click 'Test Connection' on the new instance card — green check means creds valid. 7) Try natural-language queries via chat: 'show me unresolved high-severity incidents in the last 24h', 'pull the alerts from incident <id>', 'run XQL to count process events on hostname X yesterday'. The agent picks the right tool (get_cases_and_issues / get_incident_extra_data / run_xql_query) automatically based on your question.",
@@ -801,7 +642,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
       mode: "pull",
       description: "Incidents + XQL results fetched on demand per tool call. No background polling.",
     },
-    topAgents: [{ name: "phantom-soc-simulation", color: "#ef4444" }],
+    topAgents: [{ name: "phantom-agent", color: "#ef4444" }],
   },
 ];
 

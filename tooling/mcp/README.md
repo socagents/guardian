@@ -10,7 +10,7 @@ AST-based structured search over Phantom's Python source. Exposes 3 tools via Fa
 - `find_references(name)` — every Python use of `name`
 - `outline(module)` — the structured API of a Python module
 
-Coverage: `bundles/spark/mcp/`, `bundles/spark/connectors/*/src/`, `xlog/`, `updater/`, `scripts/`, `tooling/`, `phantom-connector-runtime/`. NOT covered: TypeScript (Next.js, `mcp/agent/**`) — use VS Code's "go to definition" or `Grep --type=ts` for TS symbols. Tree-sitter-typescript integration is tracked as a follow-up.
+Coverage: `bundles/spark/mcp/`, `bundles/spark/connectors/*/src/`, `updater/`, `scripts/`, `tooling/`, `phantom-connector-runtime/`. NOT covered: TypeScript (Next.js, `mcp/agent/**`) — use VS Code's "go to definition" or `Grep --type=ts` for TS symbols. Tree-sitter-typescript integration is tracked as a follow-up.
 
 ### Dependencies
 

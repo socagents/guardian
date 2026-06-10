@@ -9,7 +9,7 @@
 #
 # Why this exists: during the v0.1.34 TLS smoke test, the VM's
 # docker-compose.yml had drifted from the canonical local file by
-# weeks — xlog and caldera lacked the /tls volume mount despite the
+# weeks — service containers lacked the /tls volume mount despite the
 # local file having it. force-recreate didn't help because the VM
 # spec was stale. The drift was invisible until the smoke test caught
 # it accidentally. This script makes the check explicit + automatic.
@@ -17,7 +17,7 @@
 # v0.3.0+ NOTE — this script checks the REPO-ROOT docker-compose.yml
 # (the dev compose, used by build.yml deploy-compose on phantom-vm)
 # against the file at $VM_REMOTE_REPO. The repo-root compose still
-# uses tag-based image references (`image: xlog:local`). The CUSTOMER
+# uses tag-based image references (`image: phantom-agent:local`). The CUSTOMER
 # compose at installer/docker-compose.yml uses digest pinning and is
 # NOT what runs on phantom-vm — it ships in the customer install kit.
 # So this drift check is the right shape for the dev/CI flow but

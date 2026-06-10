@@ -567,7 +567,7 @@ cd /opt/phantom && sudo ./reset-ui-password.sh`}
             <strong className="text-on-surface">Restore is order-aware</strong>
             : personality → instances+secrets → skills → memory → knowledge
             (no-op) → jobs. Job restores after connectors so a runtime
-            job referencing <code className="font-mono">phantom_create_data_worker</code>
+            job referencing <code className="font-mono">xsiam_run_xql_query</code>
             doesn&rsquo;t fail-closed at first cron tick.
           </li>
           <li>

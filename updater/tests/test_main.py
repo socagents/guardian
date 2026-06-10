@@ -99,8 +99,8 @@ def test_post_update_rejects_no_auth():
         ),
         # Docker Hub-style
         (
-            "aymanam/caldera:5.3.0",
-            ("", "aymanam/caldera", "5.3.0"),
+            "aymanam/phantom-browser:5.3.0",
+            ("", "aymanam/phantom-browser", "5.3.0"),
         ),
         # Bare image name
         (
@@ -109,8 +109,8 @@ def test_post_update_rejects_no_auth():
         ),
         # Image name with tag, no registry
         (
-            "phantom-xlog:latest",
-            ("", "phantom-xlog", "latest"),
+            "phantom-browser:latest",
+            ("", "phantom-browser", "latest"),
         ),
         # Image with digest-style tag (uncommon but valid)
         (
@@ -165,8 +165,8 @@ def test_e2e_version_current():
     )
     assert r.status_code == 200
     body = r.json()
-    # All three managed services should be present.
-    assert set(body.keys()) == {"xlog", "caldera", "phantom-agent"}
+    # All managed services should be present.
+    assert set(body.keys()) == {"phantom-agent"}
 
 
 @_e2e_skip
@@ -216,13 +216,13 @@ def test_compose_up_services_passes_project_name(monkeypatch):
     Without --project-name, compose derives the project from the
     compose-file's directory ("/host" inside the updater container)
     and tries to CREATE new containers under that project, hitting
-    a 409 on the container_name pin (e.g. "/caldera"). The fix
+    a 409 on the container_name pin (e.g. "/phantom_agent"). The fix
     reads the updater's own com.docker.compose.project label and
     passes it explicitly.
     """
     main, captured = _stub_subprocess_and_project(monkeypatch)
 
-    rc, _ = main._compose_up_services(["caldera"])
+    rc, _ = main._compose_up_services(["phantom-agent"])
     assert rc == 0
     cmd = captured["cmd"]
     assert "--project-name" in cmd, f"--project-name missing from {cmd!r}"
@@ -230,7 +230,7 @@ def test_compose_up_services_passes_project_name(monkeypatch):
     assert cmd[pn_idx + 1] == "phantom", f"unexpected project: {cmd[pn_idx + 1]!r}"
     # up flow uses `up -d`
     assert "up" in cmd and "-d" in cmd
-    assert "caldera" in cmd
+    assert "phantom-agent" in cmd
 
 
 def test_compose_restart_service_uses_restart_verb(monkeypatch):
@@ -239,18 +239,18 @@ def test_compose_restart_service_uses_restart_verb(monkeypatch):
     the `restart` subcommand, NOT `up -d`. `up -d` is a no-op for
     a healthy container with unchanged config — compose sees no
     diff and exits 0 without bouncing anything. We need the entrypoint
-    to actually re-run (so caldera re-reads /operator-creds/caldera.yaml),
-    which requires a real restart (SIGTERM the main process,
-    relaunch).
+    to actually re-run (so the service re-reads mounted files, e.g.
+    phantom-agent picking up regenerated TLS material), which
+    requires a real restart (SIGTERM the main process, relaunch).
 
     Pre-v0.1.19 the restart endpoint reused _compose_up_services,
-    which silently no-op'd against an already-running caldera. The
-    HTTP response was 200 but caldera StartedAt didn't change and
-    the new operator password wasn't applied.
+    which silently no-op'd against an already-running container. The
+    HTTP response was 200 but the container's StartedAt didn't change
+    and the freshly written mounted files were never re-read.
     """
     main, captured = _stub_subprocess_and_project(monkeypatch)
 
-    rc, _ = main._compose_restart_service("caldera")
+    rc, _ = main._compose_restart_service("phantom-agent")
     assert rc == 0
     cmd = captured["cmd"]
     # Must use the restart subcommand, NOT up
@@ -261,4 +261,4 @@ def test_compose_restart_service_uses_restart_verb(monkeypatch):
     pn_idx = cmd.index("--project-name")
     assert cmd[pn_idx + 1] == "phantom"
     # The targeted service is the last positional arg
-    assert cmd[-1] == "caldera"
+    assert cmd[-1] == "phantom-agent"

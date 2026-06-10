@@ -72,11 +72,6 @@ const KEYS: { key: string; hint: string }[] = [
 // custom action names, e.g. from a fork).
 const KNOWN_ACTIONS: string[] = [
   "tool_call",
-  "simulation_created",
-  "scenario_started",
-  "caldera_operation_created",
-  "detection_validation_recorded",
-  "coverage_report_generated",
   "setup_completed",
   "settings_changed",
   "instance_created",

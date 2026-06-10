@@ -1,27 +1,41 @@
-# Phantom Spark Agent Bundle (v1.2)
+# Guardian Spark Agent Bundle (v1.2)
 
-This directory is the Spark-compatible bundle for Phantom, conforming
+This directory is the Spark-compatible bundle for Guardian, conforming
 to **agent-bundle schema v1.2** as defined in
 [`kite-production/spark-agents`](https://github.com/kite-production/spark-agents/blob/main/docs/spec.md).
+
+Guardian is an AI incident-response agent: it investigates security
+incidents in integration with Cortex XSOAR / XSIAM — evidence
+gathering, XQL queries, incident enrichment, and response
+orchestration.
 
 ```
 bundles/spark/
 ├── manifest.yaml                      schema 1.2 — declares connectors,
 │                                      embedded MCP, setup-bound instances
-├── prompts/system.md
-├── skills/                            5 markdown skill cards
-├── kbs/phantom-soc/                   bundled SOC knowledge base
-├── ui/a2ui/                           A2UI v0.8 setup/chat/settings/activity surfaces
-├── mcp/                               embedded MCP server (v1.2)
-│   ├── server.yaml
-│   └── README.md                      (impl source — phase 2 follow-up)
-└── connectors/                        tool-providing connectors (v1.2)
-    ├── caldera/connector.yaml         60+ tools — abilities, adversaries,
-    │                                  operations, agents, facts, ...
-    ├── xsiam/connector.yaml           15+ tools — XQL queries, cases,
-    │                                  datasets, lookups, assets, issues
-    └── xlog/connector.yaml            10+ tools — workers, scenarios,
-                                       observables, validation, coverage
+├── prompts/system.md                  the agent's system prompt
+├── kbs/xql-examples/                  bundled XQL knowledge base —
+│                                      curated Cortex XQL queries served
+│                                      via the runtime's knowledge_search
+├── providers/vertex/                  model-provider plugin (Vertex AI)
+├── plugins/                           operator-installed runtime plugins
+├── mcp/                               embedded MCP server (Python FastMCP)
+│   ├── src/                           server source — see mcp/CLAUDE.md
+│   ├── skills/                        default skill cards baked into the
+│   │                                  agent image, volume-seeded at boot
+│   └── tests/                         pytest suite (~349 tests)
+└── connectors/                        tool-providing connectors
+    ├── connector.schema.json          JSON-Schema validator for every
+    │                                  connector.yaml (boot + upload time)
+    ├── _runtime/                      shared connector-runtime base
+    ├── xsiam/                         Cortex XSIAM PAPI — XQL queries,
+    │                                  cases, issues, datasets, lookups
+    ├── cortex-xdr/                    Cortex XDR API — cases + issues
+    ├── cortex-docs/                   Cortex documentation search
+    ├── cortex-content/                Cortex content catalog (baked,
+    │                                  zero outbound network at runtime)
+    └── web/                           web browsing via Playwright +
+                                       headless Chromium (browser sidecar)
 ```
 
 ## Connector model (v1.2)
@@ -30,24 +44,32 @@ The bundle follows the spec's split between two connector kinds:
 
 - **Messaging connectors** (`manifest.yaml:messagingConnectors`) —
   Slack/Discord/Gmail-style services that route inbound chat to the
-  agent. **Phantom uses none.** The agent is driven via its own A2UI
+  agent. **Guardian uses none.** The agent is driven via its own A2UI
   surface, not inbound chat.
 
 - **Tool-providing connectors** (`manifest.yaml:toolConnectors[]` +
   `connectors/<id>/connector.yaml`) — services the agent CALLS to do
-  its work. Phantom ships three: `caldera`, `xsiam`, `xlog`. Each
-  connector lives entirely in this bundle (source under
-  `connectors/<id>/src/` — phase 2 follow-up); the embedded MCP at
-  `mcp/` aggregates their tool catalogs into one MCP endpoint the
-  agent talks to.
+  its work. Each connector lives entirely in this bundle (source under
+  `connectors/<id>/src/`); the embedded MCP at `mcp/` aggregates their
+  tool catalogs into one MCP endpoint the agent talks to. Tools
+  dispatch to per-instance connector containers over HTTP — see
+  [`connectors/CLAUDE.md`](connectors/CLAUDE.md) for the authoring
+  pattern and runtime style.
 
 ## Per-connector summary
 
-| Connector | Tools | Required at setup | Backing service |
-|---|---|---|---|
-| `caldera` | 60+ | No (agent degrades — no adversary emulation) | MITRE Caldera v5.x server (existing `caldera` compose service, `aymanam/caldera:5.3.0`) |
-| `xsiam` | 15+ | No (agent degrades — no detection validation) | Cortex XSIAM tenant via PAPI (operator's own — no in-cluster service) |
-| `xlog` | 10+ | **Yes** (log generation is the agent's core capability) | New `xlog` service — phase 2 will extract this from the existing GraphQL `phantom` service ([main.py](../../main.py) + [app/](../../app/)) into a standalone HTTP service |
+| Connector | Tool prefix | Backing service |
+|---|---|---|
+| `xsiam` | `xsiam_` | Cortex XSIAM tenant via PAPI (operator's own — no in-cluster service) |
+| `cortex-xdr` | `xdr_` | Cortex XDR Public API (operator's own tenant) |
+| `cortex-docs` | `cortex_` | Cortex documentation search |
+| `cortex-content` | `cortex_` | Baked content catalog shipped inside the agent image — no backing service |
+| `web` | `phantom_web_` | Headless-Chromium sidecar (CDP), profile-gated in compose |
+
+No connector is required at setup time — tool advertisement is
+instance-gated, so a connector's tools only appear in the agent's
+catalog once the operator creates an instance via the `/connectors`
+UI.
 
 ## Setup-bound instances
 
@@ -56,8 +78,7 @@ the manifest**. Instead, `setup.bindsInstances[]` declares one
 template per connector, and the runtime materializes one
 `connector_instances` row per template when the operator submits the
 setup form. The form fields each template references (e.g.
-`${setup.calderaBaseUrl}`, `${setup.xsiamPapiUrl}`,
-`${setup.xlogApiToken}`) are auto-rendered by the standalone runtime
+`${setup.xsiamPapiUrl}`) are auto-rendered by the standalone runtime
 from each connector.yaml's `configSchema` + `secretSlots` — see spec
 v1.2 §7.5 mode resolution for the standalone vs Spark-platform fork.
 
@@ -68,35 +89,11 @@ Per spec §7.5, the same bundle behaves identically in both modes
 
 | | **Standalone** | **Spark-platform** |
 |---|---|---|
-| Embedded MCP | Spawned from `bundles/spark/mcp/` | NOT spawned — `connector-manager` MCP supersedes it |
+| Embedded MCP | Spawned from `bundles/spark/mcp/` inside the agent container | NOT spawned — `connector-manager` MCP supersedes it |
 | Tool connectors | Loaded into embedded MCP from `bundles/spark/connectors/<id>/` | For each entry: `gateway.PublishConnector` → admin approval → registered with `connector-manager` |
 | Tool-connector instances | `data_root/instances.db` (from setup form) | Postgres `connector_instances` (from same form, server-side) |
 | Setup UI | Bundle's standalone CLI hosts the A2UI surfaces | Spark workspace UI renders the same A2UI manifest |
-| Tool namespace seen by the agent | `caldera/*`, `xsiam/*`, `xlog/*` | Same |
-
-## Phase status
-
-| | Stage | Status |
-|---|---|---|
-| 3A | Foundation: instance store + per-tool config injection via contextvar | ✅ |
-| 3B | Instance-gated tool advertisement (objective 5) | ✅ |
-| 3C-1 | MCP HTTP admin API (instance CRUD + setup-submit, bearer-auth) | ✅ |
-| 3C-2 | Next.js setup form wired to MCP `/api/v1/setup` (objective 3) | ✅ |
-| **3D** | **MCP runtime moves INTO the bundle** (objective 1) | ✅ |
-| 3E | Spark-platform supersession (objective 6) | ⏳ |
-| 3F | xlog service extraction (replaces legacy GraphQL phantom service) | ⏳ |
-
-The bundle now genuinely owns its MCP runtime. `phantom-mcp` Docker
-service builds from `./bundles/spark/mcp/`. The old
-`mcp/server/` directory has been deleted. Connector-specific
-shared infra (`pkg/caldera_factory` etc.) moved INTO each connector's
-`src/` (as `_factory.py`, `_papi_client.py`, `_xql_enrichment.py`,
-`_graphql_client.py`). The bundle is the deployment unit.
-
-The legacy compose-native bundle at
-[`bundles/phantom-agent.bundle.yaml`](../phantom-agent.bundle.yaml)
-references the new paths; it predates the v1.2 spec but stays in
-place as documentation of the compose-native deployment model.
+| Tool namespace seen by the agent | `xsiam/*`, `cortex-xdr/*`, `web/*`, … | Same |
 
 ## References
 

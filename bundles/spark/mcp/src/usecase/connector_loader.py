@@ -15,9 +15,9 @@ returns the instance-specific values instead of env-var defaults.
 Connectors with **zero** configured instances have **none** of their
 tools advertised — this is objective 5 from the bundle architecture.
 
-Built-in legacy tools (skills_*, simulation_skills.load_simulation_skills)
-are NOT instance-gated; they're agent-runtime built-ins that today
-live in phantom-mcp for legacy reasons. Phase 2C/3D will move them.
+Built-in legacy tools (skills_*, cognitive + self-mod tools) are NOT
+instance-gated; they're agent-runtime built-ins that today live in
+the embedded MCP for legacy reasons. Phase 2C/3D will move them.
 
 Auto-migration: at startup, for each toolConnectors[] entry with no
 instance, if the matching env vars are set, this module materializes
@@ -46,9 +46,7 @@ from config.config import (
 )
 from usecase.builtin_components import (
     cognitive_tools,
-    coverage_tools,
     self_mod_tools,
-    simulation_skills,
     skills_crud,
 )
 from usecase.event_log import event_log
@@ -132,7 +130,6 @@ def _legacy_alias(function_prefix: str, tool_name: str) -> str | None:
 # ─────────────────────────────────────────────────────────────────
 
 _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
-    ("load_simulation_skills", simulation_skills.load_simulation_skills),
     ("skills_list_all", skills_crud.skills_list_all),
     ("skills_read", skills_crud.skills_read),
     ("skills_create", skills_crud.skills_create),
@@ -172,16 +169,6 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("personality_get", self_mod_tools.personality_get),
     ("instances_list", self_mod_tools.instances_list),
     ("instances_get", self_mod_tools.instances_get),
-    # v0.17.0 R6 — log destinations read-only surface. Agent can list +
-    # get redacted destination rows; UPDATE/DELETE/PROBE + any secret-bearing
-    # CREATE stay REST-only (operator UI) per the credential guardrail.
-    ("log_destinations_list", self_mod_tools.log_destinations_list),
-    ("log_destinations_get", self_mod_tools.log_destinations_get),
-    # v0.17.x — secretless-syslog CREATE only (catalog-side; writes NO
-    # SecretStore value). Lets the agent cold-start a plain syslog
-    # destination during store-driven resolution. Secret types (TLS-syslog,
-    # xsiam_http, splunk_hec) are structurally rejected by the tool → UI-only.
-    ("log_destinations_create", self_mod_tools.log_destinations_create),
     ("providers_list", self_mod_tools.providers_list),
     ("providers_get", self_mod_tools.providers_get),
     ("approvals_list_pending", self_mod_tools.approvals_list_pending),
@@ -252,10 +239,10 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     # inside executes under the v0.1.27 bypass contextvar so the
     # nested gate is a no-op (audit-only). See self_mod_tools.
     ("agent_batch_propose", self_mod_tools.agent_batch_propose),
-    # v0.5.33 / Issue #24 — benchmark runner. Agent invokes from chat
-    # with "run the phantom-soc-v1 benchmark"; the runner dispatches
-    # each case in the manifest, scores, and records to
-    # benchmark_runs.db. See usecase/benchmark_runner.py.
+    # Benchmark runner. Agent invokes from chat with "run the <name>
+    # benchmark"; the runner dispatches each case in the named bench
+    # manifest, scores, and records to benchmark_runs.db. See
+    # usecase/benchmark_runner.py.
     ("bench_run", self_mod_tools.bench_run),
     # ─────────────────────────────────────────────────────────────
     # v0.5.0 marketplace tools — CATALOG operations (not credentials)
@@ -267,34 +254,12 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     # operator phrases "install the web connector", "upload this
     # connector.yaml", "remove cortex-content from the marketplace"
     # are all in-bounds for the agent. The phrase "create an instance
-    # of caldera with these credentials" is NOT (instance creation
+    # of xsiam with these credentials" is NOT (instance creation
     # carries secrets — still operator-only).
     ("marketplace_list", self_mod_tools.marketplace_list),
     ("marketplace_install", self_mod_tools.marketplace_install),
     ("marketplace_uninstall", self_mod_tools.marketplace_uninstall),
     ("connector_upload", self_mod_tools.connector_upload),
-    # Phase 12 — closed-loop coverage engine. Read + ingest surface
-    # for the detection inventory. Snapshots, diffs, and the
-    # `coverage_cycle_run` orchestration tool ship in subsequent
-    # commits; these four are the foundation.
-    ("detections_sync", coverage_tools.detections_sync),
-    ("detections_list", coverage_tools.detections_list),
-    ("detections_get", coverage_tools.detections_get),
-    ("detections_recent_fires", coverage_tools.detections_recent_fires),
-    ("technique_coverage", coverage_tools.technique_coverage),
-    # Phase 12 Commit 2 — snapshots + drift.
-    ("coverage_snapshot_take", coverage_tools.coverage_snapshot_take),
-    ("coverage_snapshot_list", coverage_tools.coverage_snapshot_list),
-    ("coverage_snapshot_get", coverage_tools.coverage_snapshot_get),
-    ("coverage_diff", coverage_tools.coverage_diff),
-    # Phase 12 Commit 3 — gap detection.
-    ("coverage_gaps", coverage_tools.coverage_gaps),
-    # Phase 12 Commit 4 — closed-loop orchestrator. Used by the
-    # manifest job `continuous-coverage-cycle` and callable from
-    # chat for ad-hoc cycles. Bypasses the connector tool wrapper
-    # and POSTs directly to XSIAM PAPI using InstanceStore +
-    # SecretStore for auth resolution.
-    ("coverage_cycle_run", coverage_tools.coverage_cycle_run),
 ]
 
 
@@ -328,9 +293,9 @@ def _load_yaml(path: Path) -> dict:
 # [v0.5.0] Auto-migration deleted.
 #
 # Pre-v0.5.0 connector_loader had an _AUTO_MIGRATION block that read
-# environment variables (CALDERA_URL, PAPI_AUTH_HEADER, etc.) and
-# auto-materialized primary-caldera / primary-xsiam / primary-xlog
-# instances at every boot if those env vars resolved. That predated
+# environment variables (PAPI_AUTH_HEADER, etc.) and auto-materialized
+# primary-<connector> instances at every boot if those env vars
+# resolved. That predated
 # the v1.2 InstanceStore + setup form path and survived as a "dev
 # convenience" fallback. It's been the source of:
 #
@@ -413,8 +378,8 @@ def _build_container_proxy(
     # syntax rejects "parameter without a default follows parameter with
     # a default" otherwise. v0.5.0 hot-fix: pre-v0.5.0 the loop appended
     # in YAML order, which produced invalid Python the moment a connector
-    # had required-after-optional in its args (caldera/create_adversary
-    # has name, description=None, ability_ids in that order — the
+    # had required-after-optional in its args (a tool with name,
+    # description=None, ability_ids in that order — the
     # synthesized signature wouldn't compile). Now we split + concatenate
     # so YAML order is irrelevant to the generated source's validity;
     # the param_names list (used to pack the args dict at call time)
@@ -587,10 +552,10 @@ def _resolve_callable(
 # `manifest.yaml:setup.bindsInstances[].template.config` uses clean
 # abstract keys (baseUrl, apiKey, etc.) — those are what bundle
 # authors write and what the connector.yaml configSchema documents.
-# But the connector function code reads `get_config().caldera_url`
-# i.e. Settings attribute names. The contextvar proxy looks up keys
-# by Settings name, so we translate manifest keys → Settings names
-# before stuffing the dict into the contextvar.
+# But the connector function code reads Settings attribute names
+# (e.g. `get_config().papi_url_env_key`). The contextvar proxy looks
+# up keys by Settings name, so we translate manifest keys → Settings
+# names before stuffing the dict into the contextvar.
 #
 # Auto-migration uses Settings names directly (see _AUTO_MIGRATION
 # above) and therefore needs no translation; only setup-form-created
@@ -600,14 +565,6 @@ def _resolve_callable(
 # ─────────────────────────────────────────────────────────────────
 
 _MANIFEST_TO_SETTINGS_KEYS: dict[str, dict[str, str]] = {
-    "caldera": {
-        "baseUrl": "caldera_url",
-        "apiKey": "caldera_api_key",
-        # redUser/redPassword aren't in Settings today — they're caldera
-        # admin browser-flow creds. They go into the instance dict
-        # untranslated and any consumer that needs them reads by the
-        # original key.
-    },
     "xsiam": {
         # v0.5.59 (issue #35): primary keys are the new uniform names.
         # Legacy papi* keys map to the SAME settings attributes so old
@@ -619,12 +576,6 @@ _MANIFEST_TO_SETTINGS_KEYS: dict[str, dict[str, str]] = {
         "papiAuthHeader": "papi_auth_header_key",
         "papiAuthId": "papi_auth_id_key",
         "playgroundId": "playground_id",
-        "webhookEndpoint": "webhook_endpoint",
-        "webhookKey": "webhook_key",
-    },
-    "xlog": {
-        "baseUrl": "xlog_url",
-        "apiToken": "xlog_api_token",
         "webhookEndpoint": "webhook_endpoint",
         "webhookKey": "webhook_key",
     },

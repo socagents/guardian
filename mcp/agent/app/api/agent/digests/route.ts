@@ -56,7 +56,7 @@ interface ConnectorInstanceDigest {
    * in /observability/connectors). */
   pinning_mode: 'digest' | 'tag';
   /** The image ref actually used for `docker run`, e.g.
-   * "ghcr.io/.../phantom-connector-xlog@sha256:..." */
+   * "ghcr.io/.../phantom-connector-xsiam@sha256:..." */
   image_ref: string;
 }
 
@@ -64,8 +64,8 @@ interface DigestsResponse {
   version: string;
   /** ISO timestamp of when the response was generated. */
   generated_at: string;
-  /** Per-stack-service digests (5 entries: phantom-agent, xlog,
-   * caldera, phantom-updater, phantom-browser). */
+  /** Per-stack-service digests (3 entries: phantom-agent,
+   * phantom-updater, phantom-browser). */
   stack: StackImageDigest[];
   /** Per-instance connector container digests. Empty array if the
    * operator hasn't created any connector instances OR if the
@@ -79,8 +79,6 @@ interface DigestsResponse {
 
 const STACK_SERVICE_TO_ENV: Array<[string, string]> = [
   ['phantom-agent', 'DIGEST_PHANTOM_AGENT'],
-  ['phantom-xlog', 'DIGEST_PHANTOM_XLOG'],
-  ['phantom-caldera', 'DIGEST_PHANTOM_CALDERA'],
   ['phantom-updater', 'DIGEST_PHANTOM_UPDATER'],
   ['phantom-browser', 'DIGEST_PHANTOM_BROWSER'],
 ];

@@ -23,32 +23,15 @@ fi
 SSH_LOCAL_PORT="${PHANTOM_SSH_LOCAL_PORT:-${VM_LOCAL_SSH_PORT}}"
 AGENT_LOCAL_PORT="${PHANTOM_AGENT_LOCAL_PORT:-3000}"
 MCP_LOCAL_PORT="${PHANTOM_MCP_LOCAL_PORT:-8080}"
-GRAPHQL_LOCAL_PORT="${PHANTOM_GRAPHQL_LOCAL_PORT:-8999}"
-CALDERA_LOCAL_PORT="${PHANTOM_CALDERA_LOCAL_PORT:-8888}"
-CALDERA_HTTPS_LOCAL_PORT="${PHANTOM_CALDERA_HTTPS_LOCAL_PORT:-8443}"
-CALDERA_TCP_LOCAL_PORT="${PHANTOM_CALDERA_TCP_LOCAL_PORT:-7010}"
-CALDERA_WEBSOCKET_LOCAL_PORT="${PHANTOM_CALDERA_WEBSOCKET_LOCAL_PORT:-7012}"
-CALDERA_DNS_TCP_LOCAL_PORT="${PHANTOM_CALDERA_DNS_TCP_LOCAL_PORT:-8853}"
-CALDERA_SSH_CONTACT_LOCAL_PORT="${PHANTOM_CALDERA_SSH_CONTACT_LOCAL_PORT:-8022}"
-CALDERA_FTP_LOCAL_PORT="${PHANTOM_CALDERA_FTP_LOCAL_PORT:-2223}"
 DISABLE_CONNECTION_CHECK="${PHANTOM_TUNNEL_DISABLE_CONNECTION_CHECK:-true}"
 
 mkdir -p "${STATE_DIR}"
 
 # name remote_port local_port
-# IAP TCP forwarding does not support UDP, so Caldera UDP/7011 is firewall-only.
 TUNNELS=(
   "ssh 22 ${SSH_LOCAL_PORT}"
   "agent 3000 ${AGENT_LOCAL_PORT}"
   "mcp 8080 ${MCP_LOCAL_PORT}"
-  "phantom 8999 ${GRAPHQL_LOCAL_PORT}"
-  "caldera 8888 ${CALDERA_LOCAL_PORT}"
-  "caldera-https 8443 ${CALDERA_HTTPS_LOCAL_PORT}"
-  "caldera-tcp 7010 ${CALDERA_TCP_LOCAL_PORT}"
-  "caldera-websocket 7012 ${CALDERA_WEBSOCKET_LOCAL_PORT}"
-  "caldera-dns-tcp 8853 ${CALDERA_DNS_TCP_LOCAL_PORT}"
-  "caldera-ssh-contact 8022 ${CALDERA_SSH_CONTACT_LOCAL_PORT}"
-  "caldera-ftp 2222 ${CALDERA_FTP_LOCAL_PORT}"
 )
 
 pid_file() {
@@ -219,33 +202,14 @@ http_smoke() {
   echo "${name}: HTTP ${code}"
 }
 
-tcp_smoke() {
-  local name="$1"
-  local port="$2"
-
-  if nc -z -w 5 localhost "${port}" >/dev/null 2>&1; then
-    echo "${name}: TCP open on localhost:${port}"
-  else
-    echo "${name}: TCP closed on localhost:${port}"
-    return 1
-  fi
-}
-
 smoke() {
   local failed=0
 
   start || failed=1
 
-  http_smoke "phantom-graphql" "${GRAPHQL_LOCAL_PORT}" "/" || failed=1
   http_smoke "phantom-mcp" "${MCP_LOCAL_PORT}" "/api/v1/stream/mcp" || failed=1
   http_smoke "phantom-agent" "${AGENT_LOCAL_PORT}" "/" || failed=1
-  http_smoke "caldera" "${CALDERA_LOCAL_PORT}" "/" || failed=1
-  tcp_smoke "caldera-tcp-contact" "${CALDERA_TCP_LOCAL_PORT}" || failed=1
-  tcp_smoke "caldera-websocket-contact" "${CALDERA_WEBSOCKET_LOCAL_PORT}" || failed=1
-  tcp_smoke "caldera-ssh-contact" "${CALDERA_SSH_CONTACT_LOCAL_PORT}" || failed=1
-  tcp_smoke "caldera-ftp-contact" "${CALDERA_FTP_LOCAL_PORT}" || failed=1
 
-  echo "caldera-udp-contact: UDP/7011 cannot be tunneled with IAP; firewall allows it internally."
   return "${failed}"
 }
 

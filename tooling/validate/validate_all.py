@@ -33,7 +33,6 @@ EXPECTED_SUBDIR_CLAUDE_MDS = {
     "mcp/agent",
     "bundles/spark/mcp",
     "bundles/spark/connectors",
-    "xlog",
     "installer",
     "updater",
 }
@@ -126,236 +125,6 @@ def check_claudeignore() -> Check:
             "576 vendor files would bloat agent context",
         )
     return Check(".claudeignore", True, "excludes baked vendor catalog + caches")
-
-
-def check_bundled_data_sources_yaml_valid() -> Check:
-    """v0.13.0 R3.C — every bundled data_source.yaml schema-validates against
-    data_source.schema.json. Catches malformed YAMLs at CI time before they
-    silently break the marketplace loader.
-    """
-    try:
-        import yaml  # type: ignore
-        import jsonschema  # type: ignore
-    except ImportError as exc:
-        return Check(
-            "bundled data_source.yaml validate",
-            False,
-            f"required dep missing: {exc} (install pyyaml + jsonschema)",
-        )
-
-    ds_dir = ROOT / "bundles/spark/data-sources"
-    schema_path = ds_dir / "data_source.schema.json"
-    if not schema_path.is_file():
-        return Check(
-            "bundled data_source.yaml validate",
-            False,
-            f"missing {schema_path.relative_to(ROOT)}",
-        )
-
-    try:
-        schema = json.loads(schema_path.read_text())
-    except Exception as exc:
-        return Check(
-            "bundled data_source.yaml validate",
-            False,
-            f"schema.json unparseable: {exc}",
-        )
-
-    # Walk each <id>/data_source.yaml
-    yamls = sorted(p for p in ds_dir.glob("*/data_source.yaml") if p.is_file())
-    if not yamls:
-        return Check(
-            "bundled data_source.yaml validate",
-            False,
-            f"no data_source.yaml files under {ds_dir.relative_to(ROOT)} — migration didn't run?",
-        )
-
-    errors: list[str] = []
-    for ypath in yamls:
-        try:
-            doc = yaml.safe_load(ypath.read_text())
-        except Exception as exc:
-            errors.append(f"{ypath.parent.name}: yaml parse failed: {exc}")
-            continue
-        try:
-            jsonschema.validate(instance=doc, schema=schema)
-        except jsonschema.ValidationError as exc:
-            errors.append(f"{ypath.parent.name}: {exc.message} (path: {'.'.join(str(p) for p in exc.path)})")
-        if len(errors) >= 5:
-            errors.append(f"… (truncated; total {len(yamls) - yamls.index(ypath) - 1} more to check)")
-            break
-
-    if errors:
-        return Check(
-            "bundled data_source.yaml validate",
-            False,
-            f"{len(errors)} of {len(yamls)} YAMLs failed schema validation; first: {errors[0]}",
-        )
-    return Check(
-        "bundled data_source.yaml validate",
-        True,
-        f"{len(yamls)} YAMLs all pass data_source.schema.json validation",
-    )
-
-
-def check_bundled_data_sources_no_duplicate_fields() -> Check:
-    """v0.17.22 — every bundled data_source.yaml's fields[] has unique
-    name keys. The install path writes fields into a SQLite table with
-    a UNIQUE constraint on (data_source_id, field_name); duplicates
-    crash the install with a 500.
-
-    Caught a v0.16.x F5ASM curation error where `date_time` was
-    listed twice. The runtime now dedups defensively in
-    _compose_from_user_yaml, but this gate keeps bundled YAMLs clean
-    so we never lose any field metadata to a silent first-wins drop.
-    """
-    try:
-        import yaml  # type: ignore
-    except ImportError as exc:
-        return Check(
-            "bundled data_source.yaml no duplicate field names",
-            False,
-            f"required dep missing: {exc} (install pyyaml)",
-        )
-
-    from collections import Counter
-
-    ds_dir = ROOT / "bundles/spark/data-sources"
-    yamls = sorted(p for p in ds_dir.glob("*/data_source.yaml") if p.is_file())
-    if not yamls:
-        return Check(
-            "bundled data_source.yaml no duplicate field names",
-            False,
-            f"no data_source.yaml files under {ds_dir.relative_to(ROOT)}",
-        )
-
-    errors: list[str] = []
-    for ypath in yamls:
-        try:
-            doc = yaml.safe_load(ypath.read_text()) or {}
-        except Exception:
-            # Schema-validate check covers parse failures; skip here.
-            continue
-        names = [
-            f.get("name") for f in (doc.get("fields") or [])
-            if isinstance(f, dict) and f.get("name")
-        ]
-        dupes = {n: c for n, c in Counter(names).items() if c > 1}
-        if dupes:
-            errors.append(f"{ypath.parent.name}: {dupes}")
-        if len(errors) >= 5:
-            errors.append("… (truncated)")
-            break
-
-    if errors:
-        return Check(
-            "bundled data_source.yaml no duplicate field names",
-            False,
-            f"{len(errors)} YAMLs have duplicate field names; first: {errors[0]}",
-        )
-    return Check(
-        "bundled data_source.yaml no duplicate field names",
-        True,
-        f"{len(yamls)} YAMLs all have unique field names",
-    )
-
-
-def check_bundled_data_sources_no_duplicate_3tuple() -> Check:
-    """SP-1 (#98) — the bundled tree carries exactly ONE data source per
-    (vendor, product, dataset_name), and no vendor string is a prefix of
-    another vendor string.
-
-    Two guards in one check, both regression traps for the dedup migration:
-
-    1. **3-tuple uniqueness.** Modeling-rule extraction re-runs at different
-       upstream content versions used to leave duplicate dirs differing only
-       by an MR-version suffix in rule_name (`_1_3` / `_2_0`). They collided on
-       (vendor, product, dataset) and showed as duplicate Browse rows.
-       `scripts/maintainer/dedup_data_sources.py` collapsed them; this gate
-       fails CI if a future extraction re-introduces one.
-
-    2. **No vendor-string prefix split.** `AWS_ELB` declared `vendor: Amazon`
-       while every other AWS source declared `Amazon Web Services`, so the
-       Browse grouping (vendor_key = slugify(vendor)) rendered a stray "Amazon"
-       card. Any vendor string that is a prefix of another (case-insensitive)
-       is almost always the same vendor spelled two ways — fail so it gets
-       normalized at content-audit time.
-    """
-    try:
-        import yaml  # type: ignore
-    except ImportError as exc:
-        return Check(
-            "bundled data_source.yaml no duplicate (vendor,product,dataset)",
-            False,
-            f"required dep missing: {exc} (install pyyaml)",
-        )
-
-    from collections import defaultdict
-
-    ds_dir = ROOT / "bundles/spark/data-sources"
-    yamls = sorted(p for p in ds_dir.glob("*/data_source.yaml") if p.is_file())
-    if not yamls:
-        return Check(
-            "bundled data_source.yaml no duplicate (vendor,product,dataset)",
-            False,
-            f"no data_source.yaml files under {ds_dir.relative_to(ROOT)}",
-        )
-
-    tuples: dict[tuple, list[str]] = defaultdict(list)
-    vendors: set[str] = set()
-    for ypath in yamls:
-        try:
-            doc = yaml.safe_load(ypath.read_text()) or {}
-        except Exception:
-            # Schema-validate check covers parse failures; skip here.
-            continue
-        vendor = (doc.get("vendor") or "").strip()
-        product = (doc.get("product") or "").strip()
-        dataset = (doc.get("dataset_name") or "").strip()
-        # CASE-INSENSITIVE key — catches near-dups where only casing differs
-        # (e.g. VMware_ESXi_raw vs vmware_esxi_raw, collapsed in SP-1).
-        tuples[(vendor.lower(), product.lower(), dataset.lower())].append(
-            ypath.parent.name
-        )
-        if vendor:
-            vendors.add(vendor)
-
-    dup_families = {k: v for k, v in tuples.items() if len(v) > 1}
-
-    # Vendor-prefix split: A is a prefix of B (case-insensitive), A != B.
-    # e.g. "Amazon" vs "Amazon Web Services".
-    prefix_pairs: list[tuple[str, str]] = []
-    sorted_vendors = sorted(vendors, key=str.lower)
-    for i, a in enumerate(sorted_vendors):
-        for b in sorted_vendors:
-            if a != b and b.lower().startswith(a.lower() + " "):
-                prefix_pairs.append((a, b))
-
-    problems: list[str] = []
-    if dup_families:
-        first_key = next(iter(dup_families))
-        problems.append(
-            f"{len(dup_families)} (vendor,product,dataset) collisions; "
-            f"e.g. {first_key} -> {dup_families[first_key]}"
-        )
-    if prefix_pairs:
-        problems.append(
-            f"{len(prefix_pairs)} vendor-prefix split(s): "
-            + "; ".join(f"{a!r} ⊂ {b!r}" for a, b in prefix_pairs[:3])
-        )
-
-    if problems:
-        return Check(
-            "bundled data_source.yaml no duplicate (vendor,product,dataset)",
-            False,
-            " | ".join(problems),
-        )
-    return Check(
-        "bundled data_source.yaml no duplicate (vendor,product,dataset)",
-        True,
-        f"{len(yamls)} sources unique per (vendor,product,dataset); "
-        f"{len(vendors)} vendor strings, no prefix splits",
-    )
 
 
 def check_pack_theme_variants_complete() -> Check:
@@ -505,7 +274,7 @@ def check_codebase_map() -> Check:
     if not cmap.is_file():
         return Check("CODEBASE_MAP.md", False, "missing")
     text = cmap.read_text(encoding="utf-8")
-    required = ["mcp/agent/", "bundles/spark/", "xlog/", "installer/", "updater/"]
+    required = ["mcp/agent/", "bundles/spark/", "installer/", "updater/"]
     missing = [token for token in required if token not in text]
     if missing:
         return Check(
@@ -646,7 +415,6 @@ def check_skills_have_paths() -> Check:
         "release-tag-flow",
         "help-page-update",
         "agent-page-add",
-        "data-source-xdm-validation",
     }
     failures = []
     for skill_name in expected_phantom_skills:
@@ -984,194 +752,6 @@ def check_connector_tool_args_flat() -> Check:
     return Check("connector tools flat-args", False, f"{len(violations)} violation(s): {shown}{more}")
 
 
-def check_validated_data_sources_manifest() -> Check:
-    """v0.17.114 (#111 factory-default contract) — the set of bundled data sources
-    flagged `validated: true` MUST equal the canonical tested-list manifest
-    (validated_data_sources.txt). A data source is 'validated' only after an
-    end-to-end agent smoke (simulate → XSIAM → XQL verify). Drift — a flag added
-    or removed without updating the manifest — fails the build, so the customer
-    release never ships an unverified 'Validated' pill nor drops a tested one.
-    """
-    manifest_path = CHECK_DIR / "validated_data_sources.txt"
-    if not manifest_path.is_file():
-        return Check("validated data-sources manifest", False, "manifest file missing")
-    manifest = {
-        ln.strip() for ln in manifest_path.read_text().splitlines()
-        if ln.strip() and not ln.lstrip().startswith("#")
-    }
-    ds_root = ROOT / "bundles" / "spark" / "data-sources"
-    flagged: set[str] = set()
-    if ds_root.is_dir():
-        for ds in sorted(ds_root.iterdir()):
-            yf = ds / "data_source.yaml"
-            if yf.is_file() and re.search(r"^validated:\s*true\b", yf.read_text(), re.M):
-                flagged.add(ds.name)
-    extra = flagged - manifest      # flagged in tree but not canonical
-    missing = manifest - flagged    # canonical but not flagged in tree
-    if not extra and not missing:
-        return Check(
-            "validated data-sources manifest",
-            True,
-            f"{len(flagged)} validated data sources match the canonical tested-list",
-        )
-    parts = []
-    if extra:
-        parts.append(f"flagged validated but NOT in manifest: {sorted(extra)}")
-    if missing:
-        parts.append(f"in manifest but NOT flagged validated: {sorted(missing)}")
-    return Check("validated data-sources manifest", False, "; ".join(parts))
-
-
-def check_raw_validated_data_sources_manifest() -> Check:
-    """v0.17.146 (two-tier validation label) — the set of bundled data sources
-    flagged `raw_validated: true` MUST equal the raw-validated manifest
-    (raw_validated_data_sources.txt), AND no source may carry BOTH `validated`
-    and `raw_validated` (the two tiers are mutually exclusive).
-
-    A source is RAW-validated when its content pack is NOT installed on the
-    tenant — so the parsing/modeling rule cannot be exercised — but a raw-dataset
-    query (`dataset = X | fields <rule columns> | limit 10`) confirmed the
-    synthetic data lands the exact field names the rule WOULD read: proven shape,
-    ready-to-map on install. The MAPPING tier (`validated`) is the stronger claim
-    (xdm.* actually populates live). Keeping the manifests in lockstep with the
-    flags means neither the amber 'Raw Validated' pill nor the green 'Mapping
-    Validated' pill ever ships drifted, and a source can never claim both tiers.
-    """
-    manifest_path = CHECK_DIR / "raw_validated_data_sources.txt"
-    if not manifest_path.is_file():
-        return Check("raw-validated data-sources manifest", False, "manifest file missing")
-    manifest = {
-        ln.strip() for ln in manifest_path.read_text().splitlines()
-        if ln.strip() and not ln.lstrip().startswith("#")
-    }
-    ds_root = ROOT / "bundles" / "spark" / "data-sources"
-    flagged: set[str] = set()
-    both: set[str] = set()
-    if ds_root.is_dir():
-        for ds in sorted(ds_root.iterdir()):
-            yf = ds / "data_source.yaml"
-            if not yf.is_file():
-                continue
-            text = yf.read_text()
-            is_raw = bool(re.search(r"^raw_validated:\s*true\b", text, re.M))
-            is_map = bool(re.search(r"^validated:\s*true\b", text, re.M))
-            if is_raw:
-                flagged.add(ds.name)
-            if is_raw and is_map:
-                both.add(ds.name)
-    extra = flagged - manifest      # flagged in tree but not canonical
-    missing = manifest - flagged    # canonical but not flagged in tree
-    if not extra and not missing and not both:
-        return Check(
-            "raw-validated data-sources manifest",
-            True,
-            f"{len(flagged)} raw-validated data sources match the manifest; no tier overlap",
-        )
-    parts = []
-    if both:
-        parts.append(f"carry BOTH validated AND raw_validated (mutually exclusive): {sorted(both)}")
-    if extra:
-        parts.append(f"flagged raw_validated but NOT in manifest: {sorted(extra)}")
-    if missing:
-        parts.append(f"in manifest but NOT flagged raw_validated: {sorted(missing)}")
-    return Check("raw-validated data-sources manifest", False, "; ".join(parts))
-
-
-def check_gate_fields_satisfied() -> Check:
-    """#115 (XDM gate arc) — every VALIDATED data source whose XSIAM modeling
-    rule GATES on a payload field MUST carry that field in its bundled
-    data_source.yaml with an `example` that clears the gate. Otherwise the
-    simulated event lands raw but never fires the modeling rule, so XDM stays
-    empty — the exact failure that motivated the arc (`event_eventtype:
-    authentication` cleared NO branch of the Alibaba rule).
-
-    NON-STATIC: the gate is re-derived each run from the committed modeling-rule
-    .xif snapshot (scripts/maintainer/modeling_rules/) via reverse_engineer_gate
-    — there is no hand-maintained vendor->value table to drift. A YAML example
-    edited to a value the live rule no longer accepts fails the build.
-
-    Scope + classification (see reverse_engineer_gate.py):
-      * raw / function gate -> HARD CHECK: a seed field's example must be in the
-        rule's literal value set. (function = filter keys on a coalesce()-derived
-        field like get_category; resolved back to its raw inputs category/Category.)
-      * meta gate (`_log_type`) -> allow-listed: stamped by the ingestion layer
-        (Broker applet / HTTP Collector), not settable from the event body.
-      * unconditional (no leading filter, or a `not in (...)` catch-all branch)
-        -> skipped: the dataset maps regardless of payload.
-      * computed (derived non-literal gate, e.g. `is_auth = true`) -> skipped.
-      * not_found (.xif absent from the research snapshot) -> skipped with note.
-
-    Parsing-rule dataset ROUTING (e.g. okta_sso_raw vs okta_okta_raw) is out of
-    scope here; it is documented per-source in the data_source.yaml how_to_use.
-    """
-    import importlib.util
-
-    manifest_path = CHECK_DIR / "validated_data_sources.txt"
-    extractor = ROOT / "scripts" / "maintainer" / "reverse_engineer_gate.py"
-    if not manifest_path.is_file():
-        return Check("gate fields satisfied", False, "validated manifest missing")
-    if not extractor.is_file():
-        return Check("gate fields satisfied", False, "reverse_engineer_gate.py missing")
-    try:
-        import yaml  # type: ignore
-    except Exception as exc:  # pragma: no cover
-        return Check("gate fields satisfied", False, f"PyYAML unavailable: {exc}")
-
-    spec = importlib.util.spec_from_file_location("reverse_engineer_gate", extractor)
-    reng = importlib.util.module_from_spec(spec)
-    try:
-        spec.loader.exec_module(reng)  # type: ignore[union-attr]
-    except Exception as exc:  # pragma: no cover
-        return Check("gate fields satisfied", False, f"extractor import failed: {exc}")
-
-    sources = [
-        ln.strip() for ln in manifest_path.read_text().splitlines()
-        if ln.strip() and not ln.lstrip().startswith("#")
-    ]
-    ds_root = ROOT / "bundles" / "spark" / "data-sources"
-    failures: list[str] = []
-    checked = 0
-    skipped: dict[str, int] = {}
-    for ds_id in sources:
-        info = reng.analyze(ds_id)
-        kind = info.get("kind")
-        if kind not in ("raw", "function"):
-            skipped[kind] = skipped.get(kind, 0) + 1
-            continue
-        checked += 1
-        yf = ds_root / ds_id / "data_source.yaml"
-        if not yf.is_file():
-            failures.append(f"{ds_id}: data_source.yaml missing")
-            continue
-        doc = yaml.safe_load(yf.read_text()) or {}
-        fields = {f.get("name"): f for f in (doc.get("fields") or []) if isinstance(f, dict)}
-        seed_fields = info.get("seed_fields") or [info.get("gate_field")]
-        values = {str(v) for v in (info.get("values") or [])}
-        ok = any(
-            sf in fields and str(fields[sf].get("example")) in values
-            for sf in seed_fields
-        )
-        if not ok:
-            present = {sf: (fields.get(sf) or {}).get("example") for sf in seed_fields}
-            failures.append(
-                f"{ds_id}: modeling-rule gate `{info.get('gate_field')}` "
-                f"(seed {seed_fields} in {sorted(values)[:6]}{'...' if len(values) > 6 else ''}) "
-                f"not satisfied — YAML examples={present}"
-            )
-    if failures:
-        return Check(
-            "gate fields satisfied", False,
-            f"{checked} gated validated sources checked; " + " | ".join(failures),
-        )
-    skip_summary = ", ".join(f"{n}x{k}" for k, n in sorted(skipped.items()))
-    return Check(
-        "gate fields satisfied", True,
-        f"{checked} raw/function-gated validated sources seed their modeling-rule "
-        f"gate correctly (re-derived from live .xif); {sum(skipped.values())} skipped "
-        f"({skip_summary})",
-    )
-
-
 def check_factory_default_clean_slate() -> Check:
     """v0.17.114 (#111 factory-default contract) — the customer release is a CLEAN
     SLATE: it ships catalog + connectors + skills + KB as CONTENT, but NO installed
@@ -1237,9 +817,6 @@ def main() -> int:
         check_claudeignore(),
         check_no_silent_gitignore_drops(),
         check_pack_theme_variants_complete(),
-        check_bundled_data_sources_yaml_valid(),
-        check_bundled_data_sources_no_duplicate_fields(),
-        check_bundled_data_sources_no_duplicate_3tuple(),
         check_codebase_map(),
         check_ai_layer_md(),
         check_settings_json(),
@@ -1254,9 +831,6 @@ def main() -> int:
         check_pyright_declared(),
         check_mcp_handshake(),
         check_connector_tool_args_flat(),
-        check_validated_data_sources_manifest(),
-        check_raw_validated_data_sources_manifest(),
-        check_gate_fields_satisfied(),
         check_factory_default_clean_slate(),
     ]
     return 0 if _print_results(checks) else 1

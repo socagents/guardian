@@ -67,7 +67,7 @@ HOST_INSTALL_DIR = os.environ.get("HOST_INSTALL_DIR", "/host")
 
 # How long we'll wait for a service to become healthy after restart
 # before declaring the update failed. Longer than the longest
-# healthcheck.start_period in the customer compose (caldera at 60s).
+# healthcheck.start_period in the customer compose.
 HEALTHY_TIMEOUT_S = int(os.environ.get("HEALTHY_TIMEOUT_S", "240"))
 
 
@@ -183,7 +183,7 @@ def _connector_digest_env_var(connector_id: str) -> str:
 # Pre-v0.6.7, DIGEST_PHANTOM_CONNECTOR_* lived in /host/.env alongside
 # service credentials + core compose-substitution digests. That broke
 # the operator config-file separation principle (see CLAUDE.md):
-#   - .env is for service credentials + the 5 core compose-substitution
+#   - .env is for service credentials + the core compose-substitution
 #     variables that docker-compose interpolates.
 #   - Per-instance connector image refs are NOT compose substitutions;
 #     they're runtime data this updater uses to spawn dynamic instance
@@ -191,8 +191,8 @@ def _connector_digest_env_var(connector_id: str) -> str:
 #
 # v0.6.7+: read connector image digests from /host/connector-digests.env.
 # Same env-format as .env (KEY=VALUE per line), but isolated. The
-# installer writes this file when applying a release manifest, with the
-# 7 DIGEST_PHANTOM_CONNECTOR_* keys.
+# installer writes this file when applying a release manifest, with one
+# DIGEST_PHANTOM_CONNECTOR_* key per published connector.
 #
 # Backward-compat: during the transition (operators upgrading from
 # pre-v0.6.7 customer releases), the .env may still carry stale
@@ -412,8 +412,6 @@ def _connector_digest(connector_id: str) -> str | None:
 # customer compose; we look up containers by that. Order of this dict
 # is the order updates are applied.
 MANAGED_SERVICES: dict[str, tuple[str, str]] = {
-    "xlog":          ("phantom-xlog",    "xlog"),
-    "caldera":       ("phantom-caldera", "caldera"),
     "phantom-agent": ("phantom-agent",   "phantom_agent"),
 }
 
@@ -463,9 +461,9 @@ def _compose_project_name() -> str:
     updater container, compose derives the project name from the
     directory containing the compose file → "host". But the host
     started the stack from /opt/phantom → project "phantom". The
-    customer compose pins `container_name: caldera` etc., so the
-    existing project-"phantom" caldera owns the name. Compose's
-    project-"host" view tries to CREATE a fresh caldera and 409s
+    customer compose pins `container_name: phantom_agent` etc., so the
+    existing project-"phantom" phantom_agent owns the name. Compose's
+    project-"host" view tries to CREATE a fresh phantom_agent and 409s
     on the name conflict → restart fails with rc=1.
 
     Reading our own container's `com.docker.compose.project` label
@@ -732,15 +730,13 @@ async def _fetch_release_manifest(version: str) -> dict[str, str] | None:
         parsed[k.strip()] = v.strip()
 
     # Validate required keys are present. We need at minimum
-    # PHANTOM_VERSION + 5 stack digests; per-instance connectors are
+    # PHANTOM_VERSION + 3 stack digests; per-instance connectors are
     # validated by phantom-updater at runtime (look up DIGEST_PHANTOM_CONNECTOR_*
     # only when an instance is created). If the stack-tier validation
     # fails, the manifest is corrupted and we shouldn't proceed.
     required = [
         "PHANTOM_VERSION",
         "DIGEST_PHANTOM_AGENT",
-        "DIGEST_PHANTOM_XLOG",
-        "DIGEST_PHANTOM_CALDERA",
         "DIGEST_PHANTOM_UPDATER",
         "DIGEST_PHANTOM_BROWSER",
     ]
@@ -921,7 +917,7 @@ def _compose_up_services(services: list[str]) -> tuple[int, str]:
 
     NOT the right verb for the restart endpoint — that needs to
     bounce the container even when nothing about its config has
-    changed, so the entrypoint re-runs (re-reads operator-creds,
+    changed, so the entrypoint re-runs (re-reads mounted files,
     re-templates configs, etc.). Use `_compose_restart_service` for
     that path.
 
@@ -948,15 +944,15 @@ def _compose_restart_service(service: str) -> tuple[int, str]:
     `restart` (NOT `up -d`) is the right verb here: it kills the main
     process inside the existing container with SIGTERM and starts it
     back up, which means the image entrypoint runs again. That's what
-    we need for services whose entrypoint re-templates config from a
-    sidecar volume (caldera reads /operator-creds/caldera.yaml on
-    every startup).
+    we need for services whose entrypoint re-reads mounted files on
+    every startup (e.g. phantom-agent re-reading regenerated TLS
+    material under /tls/).
 
     `up -d --no-deps` would be a no-op here for an already-running
     healthy container — compose sees no config diff and exits 0 with
-    "Container caldera Running". The endpoint would return 200 but
-    nothing actually restarted (silent failure of the user's actual
-    intent).
+    "Container phantom_agent Running". The endpoint would return 200
+    but nothing actually restarted (silent failure of the user's
+    actual intent).
 
     CRITICAL: 'phantom-updater' is rejected upstream by the route
     handler — same reason as _compose_up_services.
@@ -1455,11 +1451,12 @@ async def update_apply():
                     return
 
                 # ── Phase 6: swap services via `docker compose up -d`.
-                # IMPORTANT ordering: MANAGED_SERVICES is intentionally
-                # ordered (xlog first, caldera, phantom-agent last) so
-                # phantom-agent's depends_on healthcheck sees its
-                # dependencies up before it restarts. _compose_up_services
-                # respects MANAGED_SERVICES iteration order.
+                # IMPORTANT ordering: MANAGED_SERVICES iteration order
+                # is the order services are swapped (dependencies
+                # first, phantom-agent last) so phantom-agent's
+                # depends_on healthcheck sees its dependencies up
+                # before it restarts. _compose_up_services respects
+                # MANAGED_SERVICES iteration order.
                 update_services = [s[0] for s in to_update]
                 yield _sse("phase", {
                     "phase": "swapping",
@@ -1526,18 +1523,16 @@ async def update_apply():
 async def restart_service(service: str):
     """Restart a single managed service.
 
-    Used by phantom-agent's /api/setup endpoint after writing operator
-    creds to a shared volume — the target service (e.g. caldera) needs
-    to come back up so its entrypoint re-templates its config from the
-    new file.
+    Used by phantom-agent when a managed service needs its entrypoint
+    to re-run — e.g. to re-read regenerated TLS material or other
+    mounted files written after the container last started.
 
     Calls `docker compose restart` (NOT `up -d`). The restart verb
     actually bounces the container — kills the main process with
     SIGTERM and starts it back up — so the image entrypoint runs
-    again and re-reads the operator-creds bridge file. `up -d` would
-    be a no-op for an already-running healthy container with
-    unchanged config (silent failure of the user's actual intent;
-    pre-v0.1.19 bug).
+    again and re-reads any mounted files. `up -d` would be a no-op
+    for an already-running healthy container with unchanged config
+    (silent failure of the user's actual intent; pre-v0.1.19 bug).
 
     Refuses to act on phantom-updater (would kill self mid-call) and
     on services not in MANAGED_SERVICES (no need to expose arbitrary
@@ -1615,9 +1610,7 @@ async def restart_service(service: str):
 # style: "container" override; no additional code changes needed
 # beyond this set membership.
 KNOWN_CONNECTORS = {
-    "xlog",
     "xsiam",
-    "caldera",
     "web",
     "cortex-docs",
     "cortex-content",
@@ -1989,7 +1982,7 @@ async def start_connector_instance(
     pull_status = _pull_with_retry(client, image)
 
     # Start the container. Env wiring + volume mount + network
-    # attach mirrors what phantom-agent + xlog + phantom-browser
+    # attach mirrors what phantom-agent + phantom-browser
     # already do in customer compose.
     try:
         container = client.containers.run(
@@ -2018,7 +2011,7 @@ async def start_connector_instance(
                 # at first tool call with "no apiKey configured."
                 # Surfaced when v0.6.16 finally got past the
                 # connector-image-flow gap and the operator's
-                # caldera connector container actually tried to
+                # first connector container actually tried to
                 # dispatch.
                 "PHANTOM_SECRET_KEK": _host_env_get("PHANTOM_SECRET_KEK", "") or "",
                 # v0.6.11 — TLS-aware default. Pre-v0.6.11 hard-coded
@@ -2217,8 +2210,10 @@ async def list_connector_digests():
     ):
         name = container.name or ""
         # Strip the prefix and split into <id>-<instance>. The split
-        # only handles the FIRST hyphen because connector_id is single-
-        # word ("xlog", "xsiam", etc.) per KNOWN_CONNECTORS.
+        # only handles the FIRST hyphen, so only single-word
+        # connector_ids ("xsiam", "web") round-trip here; hyphenated
+        # ids ("cortex-docs") fall into the KNOWN_CONNECTORS skip
+        # below.
         if not name.startswith("phantom-connector-"):
             continue
         rest = name[len("phantom-connector-"):]
@@ -2545,9 +2540,10 @@ async def reconcile_connector_containers():
         existing_url = inst.get("container_url")
 
         if cid not in KNOWN_CONNECTORS:
-            # Not a connector we have an image for — skip silently.
-            # xlog/caldera/xsiam in v0.1.31 are still style: module;
-            # only web is style: container.
+            # Not a connector we have a phantom-connector-<id> image
+            # for (e.g. a user-uploaded connector) — skip silently.
+            # Module-style connectors don't get per-instance
+            # containers; only container-style ones (e.g. web) do.
             skipped.append({
                 "connector_id": cid, "instance_name": name,
                 "reason": "connector_id not in KNOWN_CONNECTORS",

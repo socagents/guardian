@@ -1,6 +1,6 @@
 # phantom-connector-runtime — dependencies for the base image that
 # every per-connector container inherits from. Per-connector images
-# (xlog, xsiam, caldera, web) add their OWN deps on top via their own
+# (xsiam, cortex-xdr, web, ...) add their OWN deps on top via their own
 # requirements.txt. Keep this list lean — anything here lands in
 # every connector image.
 

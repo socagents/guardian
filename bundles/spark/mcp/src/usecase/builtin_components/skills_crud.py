@@ -1,7 +1,7 @@
 """
 Skills CRUD MCP Tools
 
-Provides tools for managing simulation skills: Create, Read, Update, Delete
+Provides tools for managing agent skills: Create, Read, Update, Delete
 """
 
 import os
@@ -53,7 +53,7 @@ def _extract_h1(body: str) -> Optional[str]:
     return None
 
 
-# Re-use skills directory logic from simulation_skills.py
+# Resolve the skills directory by walking up from this module.
 _current_file = Path(__file__).resolve()
 
 def find_skills_dir(start_path: Path) -> Path:
@@ -193,22 +193,15 @@ def get_all_skills() -> List[Dict[str, Any]]:
             "loadingMode": fm.get("loadingMode") or "on-demand",
             "locked": bool(fm.get("locked", False)),
             "attack": fm.get("attack") or [],
-            # v0.3.26 — full frontmatter passthrough for fields that
-            # `load_simulation_skills` (simulation_skills.py) and
-            # `filter_skills` need. Pre-v0.3.26 these lived in a
-            # hardcoded enrichment dict (`_HARDCODED_ENRICHMENT`) that
-            # was perpetually out-of-sync with disk reality; now each
-            # skill carries its own metadata in frontmatter, making
-            # the .md file the single source of truth for everything.
-            # Missing fields return falsy defaults — filter_skills
-            # treats absence as "no constraint" so unfilled fields
-            # don't drop the skill from filtered responses.
+            # v0.3.26 — full frontmatter passthrough. Each skill
+            # carries its own metadata in frontmatter, making the
+            # .md file the single source of truth for everything.
+            # Missing fields return falsy defaults — consumers treat
+            # absence as "no constraint" so unfilled fields don't
+            # drop the skill from filtered responses.
             "keywords": fm.get("keywords") or [],
             "complexity": fm.get("complexity") or "",
             "duration": fm.get("duration") or "",
-            "attack_type": fm.get("attack_type") or "",
-            "caldera_required": bool(fm.get("caldera_required", False)),
-            "devices_required": fm.get("devices_required") or [],
             "prerequisites": fm.get("prerequisites") or [],
             "outputs": fm.get("outputs") or [],
             "tactics": fm.get("tactics") or [],
@@ -240,13 +233,12 @@ def get_all_skills() -> List[Dict[str, Any]]:
         if plugin_vendor:
             # v0.1.34+ — surface the vendor for plugin-contributed
             # skills so the UI can attribute them. Bundle-built-in
-            # skills (foundation/scenarios/validation/workflows) omit
-            # this field entirely.
+            # skills (foundation/workflows) omit this field entirely.
             record["plugin_vendor"] = plugin_vendor
         return record
 
-    # ── Built-in categories: foundation / scenarios / validation /
-    # workflows / anything else the bundle ships at the top level.
+    # ── Built-in categories: foundation / workflows / anything else
+    # the bundle ships at the top level.
     # Each subdir's *.md files are indexed directly. The `plugins/`
     # dir gets special handling below — its layout is one extra level
     # deep (plugins/<vendor>/<skill>.md) and we walk that explicitly.
@@ -303,7 +295,7 @@ def create_skill(category: str, filename: str, content: str) -> Dict[str, Any]:
     Create a new skill file.
 
     Args:
-        category: Skill category (foundation, scenarios, validation, workflows)
+        category: Skill category (foundation, workflows)
         filename: Filename (must end with .md)
         content: Markdown content of the skill
 
@@ -313,8 +305,8 @@ def create_skill(category: str, filename: str, content: str) -> Dict[str, Any]:
     if not filename.endswith(".md"):
         return {"success": False, "error": "Filename must end with .md"}
 
-    if category not in ["foundation", "scenarios", "validation", "workflows"]:
-        return {"success": False, "error": f"Invalid category: {category}. Must be one of: foundation, scenarios, validation, workflows"}
+    if category not in ["foundation", "workflows"]:
+        return {"success": False, "error": f"Invalid category: {category}. Must be one of: foundation, workflows"}
 
     category_dir = SKILLS_DIR / category
     category_dir.mkdir(parents=True, exist_ok=True)
@@ -340,7 +332,7 @@ def read_skill(file_path: str) -> Dict[str, Any]:
     Read a skill file content.
 
     Args:
-        file_path: Relative path from skills directory (e.g., "scenarios/port_scan.md")
+        file_path: Relative path from skills directory (e.g., "workflows/build_xql_query.md")
 
     Returns:
         Result dictionary with skill content
@@ -370,7 +362,7 @@ def update_skill(file_path: str, content: str) -> Dict[str, Any]:
     Update an existing skill file.
 
     Args:
-        file_path: Relative path from skills directory (e.g., "scenarios/port_scan.md")
+        file_path: Relative path from skills directory (e.g., "workflows/build_xql_query.md")
         content: New markdown content
 
     Returns:
@@ -404,7 +396,7 @@ def delete_skill(file_path: str) -> Dict[str, Any]:
     Delete a skill file.
 
     Args:
-        file_path: Relative path from skills directory (e.g., "scenarios/port_scan.md")
+        file_path: Relative path from skills directory (e.g., "workflows/build_xql_query.md")
 
     Returns:
         Result dictionary with success status
@@ -443,7 +435,7 @@ def get_tools() -> List[mcp_types.Tool]:
     return [
         mcp_types.Tool(
             name="skills_list_all",
-            description="List all available simulation skills with metadata. Returns all skills across foundation, scenarios, validation, and workflows categories.",
+            description="List all available agent skills with metadata. Returns all skills across foundation and workflows categories.",
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -458,7 +450,7 @@ def get_tools() -> List[mcp_types.Tool]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to skill file from skills directory (e.g., 'scenarios/port_scan.md')"
+                        "description": "Relative path to skill file from skills directory (e.g., 'workflows/build_xql_query.md')"
                     }
                 },
                 "required": ["file_path"]
@@ -466,13 +458,13 @@ def get_tools() -> List[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="skills_create",
-            description="Create a new skill file. Use this to add new scenarios, foundation skills, validation skills, or workflows.",
+            description="Create a new skill file. Use this to add new foundation skills or workflows.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "category": {
                         "type": "string",
-                        "enum": ["foundation", "scenarios", "validation", "workflows"],
+                        "enum": ["foundation", "workflows"],
                         "description": "Skill category"
                     },
                     "filename": {
@@ -495,7 +487,7 @@ def get_tools() -> List[mcp_types.Tool]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to skill file (e.g., 'scenarios/port_scan.md')"
+                        "description": "Relative path to skill file (e.g., 'workflows/build_xql_query.md')"
                     },
                     "content": {
                         "type": "string",
@@ -513,7 +505,7 @@ def get_tools() -> List[mcp_types.Tool]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to skill file (e.g., 'scenarios/port_scan.md')"
+                        "description": "Relative path to skill file (e.g., 'workflows/build_xql_query.md')"
                     }
                 },
                 "required": ["file_path"]
@@ -526,9 +518,9 @@ def get_tools() -> List[mcp_types.Tool]:
 
 def skills_list_all() -> str:
     """
-    List all available simulation skills with metadata.
+    List all available agent skills with metadata.
 
-    Returns all skills across foundation, scenarios, validation, and workflows categories
+    Returns all skills across foundation and workflows categories
     with information about file path, category, name, size, and last modified time.
     """
     skills = get_all_skills()
@@ -540,7 +532,7 @@ def skills_read(file_path: str) -> str:
     Read the content of a specific skill file.
 
     Args:
-        file_path: Relative path to skill file from skills directory (e.g., 'scenarios/port_scan.md')
+        file_path: Relative path to skill file from skills directory (e.g., 'workflows/build_xql_query.md')
 
     Returns:
         JSON with skill content and metadata
@@ -554,7 +546,7 @@ def skills_create(category: str, filename: str, content: str) -> str:
     Create a new skill file.
 
     Args:
-        category: Skill category (foundation, scenarios, validation, workflows)
+        category: Skill category (foundation, workflows)
         filename: Filename for the skill (must end with .md)
         content: Markdown content of the skill
 
@@ -572,7 +564,7 @@ def skills_update(file_path: str, content: str) -> str:
     Creates a backup (.md.bak) before updating.
 
     Args:
-        file_path: Relative path to skill file (e.g., 'scenarios/port_scan.md')
+        file_path: Relative path to skill file (e.g., 'workflows/build_xql_query.md')
         content: New markdown content
 
     Returns:
@@ -589,7 +581,7 @@ def skills_delete(file_path: str) -> str:
     Creates a backup in .deleted directory before deletion.
 
     Args:
-        file_path: Relative path to skill file (e.g., 'scenarios/port_scan.md')
+        file_path: Relative path to skill file (e.g., 'workflows/build_xql_query.md')
 
     Returns:
         JSON with success status and backup file location

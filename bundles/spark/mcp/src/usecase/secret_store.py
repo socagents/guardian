@@ -754,18 +754,3 @@ def connector_prefix(instance_id: str) -> str:
 
 def provider_prefix(instance_id: str) -> str:
     return f"{AGENT_SCOPE}/providers/{instance_id}"
-
-
-# v0.17.0 — log destinations (forwarding targets configured by the
-# operator under /log-destinations). Each row gets its own scope; the
-# type manifest declares which fields are secrets (type: secret /
-# password) and the LogDestinationStore writes their values to these
-# paths at create/update time. The agent's MCP tools NEVER resolve
-# secrets (`?include_secrets=true` is rejected from non-loopback callers).
-def log_destination_secret_path(destination_id: str, slot_name: str) -> str:
-    """Path convention for a log destination's secret slot."""
-    return f"{AGENT_SCOPE}/log_destinations/{destination_id}/{slot_name}"
-
-
-def log_destination_prefix(destination_id: str) -> str:
-    return f"{AGENT_SCOPE}/log_destinations/{destination_id}"

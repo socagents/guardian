@@ -42,7 +42,7 @@ If unavailable, the MCP server fails fast with a clear error; the rest of the la
 
 Repo-specific pieces stay in the Phantom repo's own `.claude/`:
 
-- The `CLAUDE.md` hierarchy (root + `mcp/agent/`, `bundles/spark/mcp/`, `bundles/spark/connectors/`, `xlog/`, `installer/`, `updater/`)
+- The `CLAUDE.md` hierarchy (root + `mcp/agent/`, `bundles/spark/mcp/`, `bundles/spark/connectors/`, `installer/`, `updater/`)
 - The `phantom-explorer` subagent (knows Phantom's 5-service stack + catalog/credential boundary + dev-cycle gap)
 - The `connector-add` / `mcp-tool-add` / `release-tag-flow` / `help-page-update` / `agent-page-add` path-scoped skills
 - The `SessionStart` orientation hook (knows about Phantom's `status:in-progress` GitHub label convention)

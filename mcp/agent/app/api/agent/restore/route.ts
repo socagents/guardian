@@ -27,7 +27,7 @@
  *   5. Knowledge is read-only at runtime — the restore is a verify
  *      step (compare counts), not a write.
  *   6. Jobs last because runtime jobs may reference connector tools
- *      (e.g. phantom_create_data_worker) which need their instance
+ *      (e.g. xsiam_run_xql_query) which need their instance
  *      enabled before the first cron tick.
  */
 

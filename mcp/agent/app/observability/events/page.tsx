@@ -17,7 +17,7 @@ import { listJobs } from "@/lib/api/jobs";
  * the rest of the observability surfaces. The live (SSE-streamed)
  * version is at /activity.
  *
- * Each row is one phantom audit_events row (tool_call, simulation_*,
+ * Each row is one phantom audit_events row (tool_call,
  * setup_completed, settings_changed, …). Filters via a single
  * Lucene-light query bar — see lib/observability-query.ts for syntax.
  * URL-syncs `?q=...` so deep-links from /jobs/[id] (and operator
@@ -151,9 +151,8 @@ export default function EventsPage() {
             </h1>
           </div>
           <p className="text-sm text-on-surface-variant ml-9">
-            Phantom audit log — every tool call, scenario run, approval decision, settings change. Append-only.
-            For the high-signal runtime telemetry stream (<code>rt.tool.failed</code>,{" "}
-            <code>rt.simulation.*</code>, etc.), see{" "}
+            Phantom audit log — every tool call, approval decision, settings change. Append-only.
+            For the high-signal runtime telemetry stream (<code>rt.tool.failed</code>, etc.), see{" "}
             <a className="text-primary hover:underline" href="/observability/runtime-events">
               /observability/runtime-events
             </a>.

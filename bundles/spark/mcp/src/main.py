@@ -26,7 +26,6 @@ from api.audit import register_audit_routes
 from api.ui_auth import register_ui_auth_routes
 from api.cognitive import register_cognitive_routes
 from api.instances import register_instance_routes
-from api.log_destinations import register_log_destination_routes
 from api.jobs import register_job_routes
 from api.kb import register_kb_routes
 from api.providers import register_provider_routes
@@ -36,7 +35,6 @@ from api.media import register_media_routes
 from api.metrics import register_metrics_routes
 from api.notifications import register_notification_routes
 from api.observability import register_observability_routes
-from api.detections import register_detection_routes
 from api.agent_definitions import register_agent_definition_routes
 from api.connectors import register_connector_routes
 from api.hooks import register_hook_routes
@@ -149,11 +147,9 @@ async def async_main(transport: str):
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, partial(lambda s: asyncio.create_task(shutdown(s, loop)), sig))
 
-    # Create MCP server. xlog URL resolves lazily from the InstanceStore
-    # at each tool call (see service/phantom_mcp/server.py — the
-    # lifespan exposes a get_xlog_url() callable that reads
-    # instance.config.baseUrl from the active xlog instance every
-    # time it's invoked). No env-var capture at boot.
+    # Create MCP server. Connector config resolves lazily from the
+    # InstanceStore at each tool call (see connector_loader's per-
+    # instance contextvar wrapping). No env-var capture at boot.
     mcp = create_mcp_server()
 
     # Register tools via the v1.2 bundle-aware loader.
@@ -258,32 +254,6 @@ async def async_main(transport: str):
     )
     operator_state_store = OperatorStateStore()
     set_operator_state_store(operator_state_store)
-
-    # v0.8.0 Phase 2 — Marketplace Data Sources. Persists the vendor
-    # schemas the operator has installed from Cortex content packs.
-    # Decoupled from marketplace_store (different lifecycle: per-vendor
-    # schema vs per-connector install). Catalog state per CLAUDE.md §
-    # Catalog boundary — agent IS allowed to mutate via the
-    # data_sources_install / data_sources_uninstall MCP tools that
-    # ship in the Phase 2 REST + tool-registration commit. See
-    # usecase/data_sources_store.py for the full contract.
-    from usecase.data_sources_store import (
-        DataSourcesStore,
-        set_data_sources_store,
-    )
-    data_sources_store = DataSourcesStore()
-    set_data_sources_store(data_sources_store)
-
-    # SP-4 (#101) — data-source edit + versioning store. Holds every
-    # version of every edited data source as a full YAML snapshot; the
-    # YAML loader reads the current version as an overlay so bundle/user
-    # files stay pristine. Catalog-side state (no secrets) per CLAUDE.md §
-    # Catalog boundary. See usecase/data_source_versions_store.py.
-    from usecase.data_source_versions_store import (
-        DataSourceVersionsStore,
-        set_data_source_versions_store,
-    )
-    set_data_source_versions_store(DataSourceVersionsStore())
 
     # v0.5.0 upgrade migration — for v0.4.x customers carrying
     # instances in the persisted phantom_data volume: every connector
@@ -413,7 +383,7 @@ async def async_main(transport: str):
 
     # Observability — runtime structured event log. Distinct from the
     # forensic audit log: events are operational telemetry like
-    # `rt.simulation.started` declared in manifest.observability.events.
+    # `rt.tool.failed` declared in manifest.observability.events.
     # Default 7-day retention sweep; old rows reaped at boot.
     declared_events: list[str] = []
     raw_events = observability_cfg.get("events") or []
@@ -610,11 +580,10 @@ async def async_main(transport: str):
     # through their declared transport.
     hook_store = SqliteHookStore()
 
-    # Round-15 / Phase T — durable task registry. Replaces the
-    # lossy module-level workers={} dict in xlog/app/schema.py.
-    # Long-running scenario workers, compaction summarizers,
-    # CALDERA operations all flow through this store so they're
-    # visible in /tasks and abortable from the chat header drawer.
+    # Round-15 / Phase T — durable task registry. Long-running
+    # workers and compaction summarizers flow through this store so
+    # they're visible in /tasks and abortable from the chat header
+    # drawer.
     task_store = SqliteTaskStore()
     set_task_store(task_store)
 
@@ -670,26 +639,6 @@ async def async_main(transport: str):
             )
     except Exception as exc:
         logger.warning("plugin_loader: boot apply failed: %s", exc)
-
-    # v1.2 Phase 12 — closed-loop coverage engine. Detection inventory
-    # records every XSIAM issue we've seen (deduped by issue_id);
-    # downstream tools aggregate it into per-rule + per-technique
-    # views and snapshot it for drift detection. See
-    # usecase/detection_inventory.py for the schema rationale.
-    from usecase.detection_inventory import (
-        SqliteDetectionInventory,
-        set_detection_inventory,
-    )
-    detection_inv = SqliteDetectionInventory()
-    set_detection_inventory(detection_inv)
-
-    # Phase 12 Commit 2 — coverage snapshot store (drift detection).
-    from usecase.coverage_store import (
-        SqliteCoverageStore,
-        set_coverage_store,
-    )
-    coverage_store_inst = SqliteCoverageStore()
-    set_coverage_store(coverage_store_inst)
 
     logger.info(
         "Settings store ready: %d defaults, %d overridable, %d existing overrides",
@@ -789,25 +738,6 @@ async def async_main(transport: str):
     # connector + provider definitions before publishing them to the
     # workspace marketplace + provider registry.
     register_instance_routes(mcp, store)
-    # v0.17.0 R6 — log destinations CRUD + probe + set-default
-    # (operator-managed forwarding targets for synthesized records).
-    # The store + handler registry are initialized lazily on first
-    # call; we do it eagerly here so a missing handler module fails
-    # MCP boot loudly per CLAUDE.md § Canonical-state discipline.
-    from usecase.log_destinations_store import (
-        get_log_destination_store,
-        migrate_webhook_endpoint_to_destination,
-    )
-    from usecase.destination_handler_registry import (
-        initialize as init_destination_handlers,
-    )
-    init_destination_handlers()
-    log_destination_store = get_log_destination_store()
-    # v0.17.2 — auto-migrate WEBHOOK_ENDPOINT/WEBHOOK_KEY env vars into
-    # an XSIAM Default destination on first boot. Idempotent — skips if
-    # any xsiam_http destination already exists.
-    migrate_webhook_endpoint_to_destination(log_destination_store)
-    register_log_destination_routes(mcp, log_destination_store)
     register_provider_routes(mcp, provider_store)
     # v0.4.0: register_setup_routes retired (see import comment above).
     # v1.2 Phase 6 — read-only audit query endpoints. Append-only at
@@ -884,8 +814,8 @@ async def async_main(transport: str):
     # cross-language hook-handler bridge.
     register_plugin_hook_invoke_routes(mcp)
     # Round-15 / Phase T — task registry API (list / get / create /
-    # transition / abort). Workers (scenario emulation, compaction,
-    # caldera ops) write progress here; /tasks UI reads.
+    # transition / abort). Long-running workers write progress here;
+    # /tasks UI reads.
     register_task_routes(mcp, task_store, audit)
     # Round-15 / Phase M — connector state API. Surfaces per-
     # connector lifecycle for /connectors UI and the chat-route's
@@ -898,39 +828,6 @@ async def async_main(transport: str):
     # (same pattern as auth, audit, instances).
     from api.marketplace import register_marketplace_routes
     register_marketplace_routes(mcp, marketplace_store, store)
-
-    # v0.8.0 Phase 2 — Marketplace Data Sources. REST surface at
-    # /api/v1/data-sources/* + three MCP tools (data_sources_list /
-    # data_sources_get_schema / data_sources_install) registered
-    # below. See api/data_sources.py for the full contract. Next.js
-    # proxy routes under app/api/agent/data-sources/* will land in
-    # the v0.7.7 commit alongside this.
-    from api.data_sources import (
-        register_data_sources_routes,
-        data_sources_list,
-        data_sources_get_schema,
-        data_sources_install,
-        data_sources_installed_as_vendors,  # v0.12.0 R3.B
-        data_sources_edit,  # SP-4 #101
-        data_sources_list_versions,  # SP-5 #102
-        data_sources_rollback,  # SP-5 #102
-    )
-    register_data_sources_routes(mcp, data_sources_store, audit)
-    # Catalog-side MCP tools per CLAUDE.md § Catalog boundary —
-    # agent is allowed to mutate data source install state via these.
-    mcp.tool()(data_sources_list)
-    mcp.tool()(data_sources_get_schema)
-    mcp.tool()(data_sources_install)
-    # v0.12.0 R3.B — bridge between marketplace install state and the
-    # agent's tech-stack reasoning. Returns installed sources shaped as
-    # tech-stack vendor entries. Use AND with phantom_get_technology_stack.
-    mcp.tool()(data_sources_installed_as_vendors)
-    # SP-4 #101 — edit a data source's how_to_use/schema; each save is a
-    # version (overlay), original preserved as v1. Catalog-side (no secrets).
-    mcp.tool()(data_sources_edit)
-    # SP-5 #102 — version history + non-destructive rollback. Catalog-side.
-    mcp.tool()(data_sources_list_versions)
-    mcp.tool()(data_sources_rollback)
 
     # v0.5.1 — operator workflow state surface. Routes at
     # /api/v1/operator-state/* — see api/operator_state.py. Next.js
@@ -949,7 +846,6 @@ async def async_main(transport: str):
     )
     # Round-15 / Phase S — agent-definition registry API.
     register_agent_definition_routes(mcp, agent_definition_store, audit)
-    register_detection_routes(mcp, detection_inv)
     # Operator-minted API keys for external integrations. These routes
     # require MCP_TOKEN — the api-key minting surface itself is admin-
     # only, otherwise an attacker with one scoped key could mint wider
@@ -1188,7 +1084,7 @@ async def async_main(transport: str):
         # Trigger-context middleware — reads `X-Phantom-Trigger` from
         # the inbound request and sets a contextvar that audit_log's
         # record() picks up. This is what tags audit rows with the
-        # source of activity (e.g. `job:nightly-coverage`) so
+        # source of activity (e.g. `job:nightly-report`) so
         # operators can filter the audit feed by trigger. The header
         # flows from job_scheduler → /api/chat → MCP tool dispatch
         # in one continuous chain.
@@ -1197,7 +1093,7 @@ async def async_main(transport: str):
 
         # OTel tracing — opt-in via PHANTOM_OTEL=1 + OTEL_EXPORTER_OTLP_
         # ENDPOINT. No-op when either is unset. Auto-instruments the
-        # Starlette app + outbound httpx (Vertex, xlog, Caldera, XSIAM
+        # Starlette app + outbound httpx (Vertex, XSIAM
         # PAPI) so operators get a per-request waterfall in Jaeger /
         # Honeycomb / Tempo / etc. without any tool-side annotation.
         from api.tracing import install as install_tracing

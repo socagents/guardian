@@ -135,7 +135,7 @@ export function generateOpenApiSpec(opts?: {
       title: "Phantom Agent API",
       version,
       description:
-        "Operator-facing REST surface for the Phantom SOC simulation " +
+        "Operator-facing REST surface for the Phantom incident-response " +
         "agent. The agent UI proxies (`/api/agent/*`) attach the bundle's " +
         "MCP_TOKEN server-side and forward to the embedded MCP at " +
         "`/api/v1/*`. Everything documented here goes through the proxy " +

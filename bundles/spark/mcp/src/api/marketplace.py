@@ -274,7 +274,7 @@ def register_marketplace_routes(
           {
             "connectors": [
               {
-                "id": "caldera",
+                "id": "xsiam",
                 "version": "0.2.0",
                 "description": "...",
                 "tools_count": 18,

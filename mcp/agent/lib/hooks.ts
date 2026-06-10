@@ -10,12 +10,12 @@
  *
  * Enterprise SOC ops need policy that doesn't fit inside any one tool:
  *
- *   - "Block any caldera_start_operation against production hosts
+ *   - "Block any xsiam_create_dataset against production tenants
  *      until #soc-ops approves" — needs PreToolUse + external comms.
  *   - "Inject the active incident's ticket id into every chat as
  *      context" — needs UserPromptSubmit.
- *   - "Notify the on-call when XSIAM detection_validation_recorded
- *      fires" — needs PostToolUse.
+ *   - "Notify the on-call when a tool call fails (rt.tool.failed)"
+ *      — needs PostToolUse.
  *   - "Don't run /compress between 9-5 in tenant-X session" — needs
  *      PreCompact.
  *
@@ -218,10 +218,10 @@ export type HookFailurePolicy =
  *  event. */
 export interface HookMatcher {
   /** Comma-separated glob patterns over tool names. PreToolUse +
-   *  PostToolUse only. Examples: `caldera_*`, `xsiam_*`,
-   *  `phantom_get_*`. */
+   *  PostToolUse only. Examples: `xsiam_*`, `xdr_*`,
+   *  `phantom_web_*`. */
   toolGlob?: string;
-  /** Substring match on the trigger header (e.g. "job:scenario-fire"
+  /** Substring match on the trigger header (e.g. "job:scheduled-hunt"
    *  matches "job:*"). For policy that only applies to scheduled
    *  runs vs. interactive chat. */
   triggerPrefix?: string;

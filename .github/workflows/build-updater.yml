@@ -16,9 +16,9 @@ name: Build updater
 # pushes phantom-updater:dev to GHCR. build-dev-installer.yml's
 # workflow_run cascade picks the run up and resolves the dev
 # digest. Operator-mirror dev cycle covers updater the same way
-# it covers agent/xlog/caldera.
+# it covers the agent.
 #
-# Risk envelope: same as agent/xlog/caldera dev builds — a bug in
+# Risk envelope: same as agent dev builds — a bug in
 # updater could break the dev install on phantom-vm. Mitigation:
 # customer installs are unaffected because release.yml builds
 # updater independently on tag push.

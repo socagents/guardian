@@ -532,7 +532,7 @@ async def get_cases_and_issues(
               that have been TOUCHED in this window (new issues added,
               status changes, severity escalations). Use this for
               "what's happening NOW?" / "what should I investigate
-              today?" / "did my attack simulation trigger anything?"
+              today?" / "did anything new land on this case?"
               XDR clusters new alerts into existing cases by threat
               fingerprint, so a case created LAST WEEK can receive a
               new alert TODAY. Only modification_time catches that;
@@ -553,7 +553,7 @@ async def get_cases_and_issues(
     # v0.6.39 — validate the new time_field arg. Default switched to
     # modification_time after operator-caught regression: case 1872 was
     # created at 07:51 UTC but actively receiving new alerts from an
-    # ongoing Caldera kill chain through 08:18 UTC. Agent called
+    # ongoing attack through 08:18 UTC. Agent called
     # get_cases_and_issues(from_time="2026-05-19T08:06:00Z") expecting
     # to see the case's updates — got 0 incidents because the filter
     # only matched creation_time (07:51 < 08:06). Default change makes

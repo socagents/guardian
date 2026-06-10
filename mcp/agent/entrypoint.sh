@@ -165,9 +165,8 @@ fi
 #      to spec without operator intervention.
 #
 # Mechanism: 2048-bit self-signed cert written to /tls/cert.pem +
-# /tls/key.pem on the shared phantom_tls volume. xlog and caldera
-# read those same files (ro mount) at startup; the agent reads them
-# via SSL_CERT_FILE/SSL_KEY_FILE.
+# /tls/key.pem on the phantom_tls volume. The agent reads them via
+# SSL_CERT_FILE/SSL_KEY_FILE.
 #
 # When the operator picks "custom" TLS in the setup form, /api/setup
 # overwrites /tls/{cert,key}.pem with their PEM. When they pick
@@ -179,11 +178,9 @@ TLS_CERT="$TLS_DIR/cert.pem"
 TLS_KEY="$TLS_DIR/key.pem"
 SETUP_JSON="/app/runtime/setup.json"
 
-# The shared phantom_tls volume is the single source of truth for
-# certs across the stack. When the agent writes /tls/cert.pem +
-# /tls/key.pem, xlog (ro mount) reads them at startup and serves
-# HTTPS; same for caldera. The agent itself reads them via SSL_CERT_FILE
-# below.
+# The phantom_tls volume is the single source of truth for certs.
+# The agent writes /tls/cert.pem + /tls/key.pem and reads them via
+# SSL_CERT_FILE below.
 #
 # Auto-gen runs whenever /tls/ doesn't already have a valid cert + key
 # pair. setup.json's existence is intentionally NOT part of the gate:
@@ -210,18 +207,15 @@ if [ ! -f "$TLS_CERT" ] || [ ! -f "$TLS_KEY" ]; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
     -keyout "$TLS_KEY" -out "$TLS_CERT" \
     -subj "/CN=phantom-setup/O=Phantom/OU=Auto-generated" \
-    -addext "subjectAltName=DNS:localhost,DNS:phantom-agent,DNS:xlog,DNS:caldera,IP:127.0.0.1" \
+    -addext "subjectAltName=DNS:localhost,DNS:phantom-agent,IP:127.0.0.1" \
     -addext "extendedKeyUsage=serverAuth" \
     2>/dev/null
   chmod 600 "$TLS_KEY"
   chmod 644 "$TLS_CERT"
-  log "wrote $TLS_CERT + $TLS_KEY (shared volume — xlog/caldera will read on next restart)"
-  # PHANTOM_AUTO_TLS=1 means "this boot generated the cert," which
-  # implies xlog/caldera in the same compose-up cycle haven't seen
-  # the cert yet (they started in parallel). The XLOG_URL flip below
-  # honors this: on the generation boot we keep xlog on http://, then
-  # on the next compose restart xlog reads the cert and the flip kicks
-  # in.
+  log "wrote $TLS_CERT + $TLS_KEY (phantom_tls volume)"
+  # PHANTOM_AUTO_TLS=1 means "this boot generated the cert" — logged
+  # below so operators can tell bootstrap material from operator-
+  # supplied certs.
   PHANTOM_AUTO_TLS=1
 else
   log "reusing existing TLS cert at $TLS_CERT (shared volume)"
@@ -348,7 +342,7 @@ fi
 # for the auth_store seeding step that runs before TLS pre-compute.)
 #
 # Process env is frozen at exec, so every env var that MCP's Python
-# code reads (XLOG_URL, MCP_URL, PHANTOM_TLS_VERIFY,
+# code reads (MCP_URL, PHANTOM_TLS_VERIFY,
 # PHANTOM_AGENT_INTERNAL_URL, PHANTOM_TLS_ENABLED) must be in its
 # final shape before `python -u /app/mcp/src/main.py &` is invoked
 # below. The TLS-aware values used to live further down (around the
@@ -356,13 +350,9 @@ fi
 # MCP, since MCP starts BEFORE that block. Lifting the env mutations
 # here makes both processes see consistent URLs.
 #
-# Bugs caught by this:
+# Bug caught by this:
 #   * 7638a39 — JobScheduler chat dispatch fell back to localhost:3000
 #               (TLS proxy) and got disconnected.
-#   * 4e3fed9.next — phantom_create_data_worker tool calls hit xlog
-#                    via http://, xlog's TLS listener disconnects
-#                    mid-handshake → "Server disconnected without
-#                    sending a response."
 PHANTOM_TLS_ENABLED=0
 if [[ -n "${PHANTOM_TLS_CERT_FILE:-}" || -n "${SSL_CERT_FILE:-}" || -n "${SSL_CERT_PEM:-}" ]] \
    && [[ -n "${PHANTOM_TLS_KEY_FILE:-}"  || -n "${SSL_KEY_FILE:-}"  || -n "${SSL_KEY_PEM:-}"  ]]; then
@@ -377,20 +367,18 @@ if [[ "$PHANTOM_TLS_ENABLED" == "1" ]]; then
   # cert). Not a workaround — a deterministic local-only flip.
   export MCP_URL="${MCP_URL/http:/https:}"
 
-  # v0.1.34 — XLOG_URL probe-then-flip block REMOVED. Per the
+  # v0.1.34 — connector-URL probe-then-flip block REMOVED. Per the
   # canonical setup spec at /help/architecture#setup-wiring, the
   # InstanceStore is the single source of truth for connector URLs.
   # Operators edit baseUrl via /connectors and the next read sees
-  # the new value. Both the agent's runtime-config (lib/xlog-url.ts)
-  # and the MCP's lifespan resolver (service/phantom_mcp/server.py)
-  # read from the InstanceStore on every invocation. No silent env
-  # mutation, no probe-then-flip, no hidden self-healing.
+  # the new value — the MCP's lifespan resolver
+  # (service/phantom_mcp/server.py) reads from the InstanceStore on
+  # every invocation. No silent env mutation, no probe-then-flip,
+  # no hidden self-healing.
   #
-  # If xlog flips protocol after a TLS rollout, /api/agent/health
-  # surfaces the verbatim failure and the operator updates the
-  # InstanceStore via /connectors. That's the spec.
-
-  # CALDERA_URL stays http:// — caldera doesn't terminate TLS yet.
+  # If a connector endpoint flips protocol after a TLS rollout,
+  # /api/agent/health surfaces the verbatim failure and the operator
+  # updates the InstanceStore via /connectors. That's the spec.
   export PHANTOM_TLS_VERIFY="${PHANTOM_TLS_VERIFY:-0}"
 
   # MCP→Next.js loopback: Next.js binds port 3001 (plain HTTP) when
@@ -454,10 +442,8 @@ fi
 # When SSL is NOT configured, Next.js binds port 3000 directly as before.
 #
 # When TLS is on:
-#   * Internal compose-network URLs flip to https:// (XLOG_URL,
-#     CALDERA_URL, MCP_URL) so the agent's connectors talk TLS to
-#     their respective services. Each service terminates its own TLS
-#     using the same cert/key material.
+#   * The internal MCP URL flips to https:// (MCP_URL) — the embedded
+#     MCP terminates its own TLS using the same cert/key material.
 #   * PHANTOM_TLS_VERIFY defaults to "0" — agent's HTTP clients skip
 #     cert verification on internal calls. Acceptable for self-signed
 #     mode; flip to "1" when operators install certs from a real CA.
@@ -471,9 +457,7 @@ if [[ "$PHANTOM_TLS_ENABLED" == "1" ]]; then
   # MCP boot) so MCP inherits the right values. Just log the resolved
   # state here so operators can confirm via `docker compose logs`.
   log "TLS enabled — internal URLs already flipped (see env block above)"
-  log "  XLOG_URL=$XLOG_URL"
   log "  MCP_URL=$MCP_URL"
-  log "  CALDERA_URL=$CALDERA_URL  (stays http:// — caldera TLS pending)"
   log "  PHANTOM_TLS_VERIFY=$PHANTOM_TLS_VERIFY (0 = skip verify, 1 = enforce)"
   log "  PHANTOM_AUTO_TLS=$PHANTOM_AUTO_TLS"
 

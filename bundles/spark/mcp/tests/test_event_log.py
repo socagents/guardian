@@ -8,11 +8,11 @@ from src.usecase.event_log import SqliteEventLog
 
 
 DECLARED = [
-    "rt.simulation.started",
-    "rt.simulation.completed",
+    "rt.job.started",
+    "rt.job.completed",
     "rt.validation.completed",
     "rt.coverage.generated",
-    "rt.caldera.operation_created",
+    "rt.approval.requested",
 ]
 
 
@@ -22,12 +22,12 @@ def store(tmp_path) -> SqliteEventLog:
 
 
 def test_record_persists_declared_event(store: SqliteEventLog) -> None:
-    row_id = store.record("rt.simulation.started", payload={"sim_id": "abc"}, actor="ayman")
+    row_id = store.record("rt.job.started", payload={"job_id": "abc"}, actor="ayman")
     assert row_id is not None
     rows = store.query()
     assert len(rows) == 1
-    assert rows[0].event_name == "rt.simulation.started"
-    assert rows[0].payload == {"sim_id": "abc"}
+    assert rows[0].event_name == "rt.job.started"
+    assert rows[0].payload == {"job_id": "abc"}
     assert rows[0].actor == "ayman"
 
 
@@ -38,38 +38,38 @@ def test_record_rejects_undeclared_event(store: SqliteEventLog) -> None:
 
 
 def test_query_filter_by_event_name(store: SqliteEventLog) -> None:
-    store.record("rt.simulation.started", payload={"id": "a"})
-    store.record("rt.simulation.completed", payload={"id": "a"})
-    store.record("rt.simulation.started", payload={"id": "b"})
+    store.record("rt.job.started", payload={"id": "a"})
+    store.record("rt.job.completed", payload={"id": "a"})
+    store.record("rt.job.started", payload={"id": "b"})
 
-    starts = store.query(event_name="rt.simulation.started")
+    starts = store.query(event_name="rt.job.started")
     assert len(starts) == 2
-    assert all(e.event_name == "rt.simulation.started" for e in starts)
+    assert all(e.event_name == "rt.job.started" for e in starts)
 
 
 def test_query_filter_by_actor(store: SqliteEventLog) -> None:
-    store.record("rt.simulation.started", actor="ayman")
-    store.record("rt.simulation.started", actor="bob")
-    store.record("rt.simulation.completed", actor="ayman")
+    store.record("rt.job.started", actor="ayman")
+    store.record("rt.job.started", actor="bob")
+    store.record("rt.job.completed", actor="ayman")
     rows = store.query(actor="ayman")
     assert len(rows) == 2
 
 
 def test_query_orders_newest_first(store: SqliteEventLog) -> None:
-    a = store.record("rt.simulation.started", payload={"order": 1})
-    b = store.record("rt.simulation.started", payload={"order": 2})
-    c = store.record("rt.simulation.started", payload={"order": 3})
+    a = store.record("rt.job.started", payload={"order": 1})
+    b = store.record("rt.job.started", payload={"order": 2})
+    c = store.record("rt.job.started", payload={"order": 3})
     rows = store.query()
     assert [r.id for r in rows] == [c, b, a]
 
 
 def test_summary_counts_by_event(store: SqliteEventLog) -> None:
-    store.record("rt.simulation.started")
-    store.record("rt.simulation.started")
+    store.record("rt.job.started")
+    store.record("rt.job.started")
     store.record("rt.validation.completed")
     s = store.summary()
     assert s == {
-        "rt.simulation.started": 2,
+        "rt.job.started": 2,
         "rt.validation.completed": 1,
     }
 
@@ -80,7 +80,7 @@ def test_declared_events_property(store: SqliteEventLog) -> None:
 
 def test_persistence_across_reopen(tmp_path) -> None:
     s1 = SqliteEventLog(declared_events=DECLARED, data_root=tmp_path)
-    s1.record("rt.simulation.started", payload={"hello": "world"})
+    s1.record("rt.job.started", payload={"hello": "world"})
 
     s2 = SqliteEventLog(declared_events=DECLARED, data_root=tmp_path)
     rows = s2.query()
@@ -96,7 +96,7 @@ def test_retention_sweep_drops_old_rows(tmp_path) -> None:
     import uuid
 
     s = SqliteEventLog(declared_events=DECLARED, data_root=tmp_path)
-    s.record("rt.simulation.started", payload={"recent": True})
+    s.record("rt.job.started", payload={"recent": True})
 
     # Inject a fake event from 30 days ago — older than the 7d retention.
     db = tmp_path / "events.db"
@@ -106,7 +106,7 @@ def test_retention_sweep_drops_old_rows(tmp_path) -> None:
             "VALUES (?, ?, ?, ?, ?)",
             (
                 str(uuid.uuid4()),
-                "rt.simulation.completed",
+                "rt.job.completed",
                 "2020-01-01T00:00:00.000000Z",
                 None,
                 json.dumps({"old": True}),
@@ -143,8 +143,8 @@ def test_metrics_counter_bumped_on_record(tmp_path) -> None:
     set_metrics_registry(reg)
     try:
         s = SqliteEventLog(declared_events=DECLARED, data_root=tmp_path)
-        s.record("rt.simulation.started")
-        s.record("rt.simulation.started")
+        s.record("rt.job.started")
+        s.record("rt.job.started")
         s.record("rt.validation.completed")
 
         c = reg.get("phantom_mcp_runtime_events_total")
@@ -153,7 +153,7 @@ def test_metrics_counter_bumped_on_record(tmp_path) -> None:
         # format ("2.0" not "2"). Assert with the .0 suffix so future
         # readers don't mistake this for an integer count.
         rendered = "\n".join(c.lines())
-        assert 'event_name="rt.simulation.started"} 2.0' in rendered
+        assert 'event_name="rt.job.started"} 2.0' in rendered
         assert 'event_name="rt.validation.completed"} 1.0' in rendered
     finally:
         set_metrics_registry(None)

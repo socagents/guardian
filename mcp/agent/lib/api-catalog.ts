@@ -12,7 +12,7 @@
  *   - Categories mirror the operator's mental model: Cognitive
  *     (what the agent knows), Configuration (what it acts on),
  *     Operations (what it runs), Self-Modification (the Phase-11
- *     surface), Observability, Identity, Reports, Workflows.
+ *     surface), Observability, Identity, Workflows.
  *   - Each entry carries enough metadata to (a) render a detail
  *     page with sample request/response, (b) drive the try-it-out
  *     form, and (c) generate the OpenAPI 3.0 path object.
@@ -32,7 +32,6 @@ export type ApiCategory =
   | "self-modification"
   | "observability"
   | "identity"
-  | "reports"
   | "workflows";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -130,12 +129,6 @@ export const CATEGORY_META: Record<
     description: "API keys — list, mint, rotate, revoke.",
     color: "error",
   },
-  reports: {
-    label: "Reports",
-    icon: "description",
-    description: "Coverage reports, simulation exports.",
-    color: "primary",
-  },
   workflows: {
     label: "Workflows",
     icon: "account_tree",
@@ -158,7 +151,7 @@ const COGNITIVE: ApiEndpoint[] = [
     description:
       "Return the agent's stored memories, optionally filtered by scope. " +
       "Memory rows are operator-curated facts about the org (tech stack, " +
-      "past simulations, validated detections) that the agent recalls via " +
+      "past incidents, validated detections) that the agent recalls via " +
       "semantic search across sessions.",
     queryParams: [
       {
@@ -575,7 +568,7 @@ const CONFIGURATION: ApiEndpoint[] = [
         description: "Persona document.",
         example: {
           personality: {
-            personalityMd: "# Phantom Personality\n\n- Reply concisely.\n- Cite simulation IDs when referencing operations.\n",
+            personalityMd: "# Phantom Personality\n\n- Reply concisely.\n- Cite case IDs when referencing investigations.\n",
             actionPolicy: {
               askWhenUnsure: true,
               confirmLocalActions: "approve-card",
@@ -628,9 +621,9 @@ const CONFIGURATION: ApiEndpoint[] = [
     path: "/api/agent/instances",
     summary: "List connector instances",
     description:
-      "XSIAM, Caldera, Xlog config blobs. Secret values NEVER returned — only secret_refs paths.",
+      "Connector config blobs (XSIAM, Cortex XDR, web, …). Secret values NEVER returned — only secret_refs paths.",
     queryParams: [
-      { name: "connector_id", type: "string", description: "Filter to xsiam | caldera | xlog.", example: "xsiam" },
+      { name: "connector_id", type: "string", description: "Filter to one connector id, e.g. xsiam | cortex-xdr | web.", example: "xsiam" },
     ],
     responses: [{ status: "200", description: "Instance rows." }],
   },
@@ -695,7 +688,7 @@ const CONFIGURATION: ApiEndpoint[] = [
         status: "200",
         description: "Manifest excerpt + runtime info.",
         example: {
-          name: "phantom-soc-simulation",
+          name: "phantom-soc-agent",
           version: "0.2.0",
           runtime: { mode: "standalone-or-orchestrated", model: "gemini-3.1-pro-preview", setupRequired: false },
         },
@@ -982,10 +975,10 @@ const OPERATIONS: ApiEndpoint[] = [
         },
       },
       example: {
-        name: "weekly-coverage-summary",
+        name: "weekly-case-summary",
         cron: "0 9 * * MON",
         timezone: "UTC",
-        action: { type: "tool_call", name: "xlog.generate_coverage_report", args: { request: { include_simulations: true, limit: 50 } } },
+        action: { type: "tool_call", name: "xsiam.get_cases", args: { request: { limit: 50 } } },
         enabled: true,
         run_once: false,
       },
@@ -1077,7 +1070,7 @@ const OPERATIONS: ApiEndpoint[] = [
     summary: "Search the audit log",
     description: "Filter by action, actor, target_prefix, free-text query, time range.",
     queryParams: [
-      { name: "q", type: "string", description: "Free-text against action/target/metadata.", example: "caldera" },
+      { name: "q", type: "string", description: "Free-text against action/target/metadata.", example: "xsiam" },
       { name: "action", type: "string", description: "Exact action filter.", example: "tool_call" },
       { name: "actor", type: "string", description: "Exact actor filter.", example: "operator" },
       { name: "target_prefix", type: "string", description: "Prefix filter.", example: "memory:" },
@@ -1687,37 +1680,8 @@ const IDENTITY: ApiEndpoint[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────
-// REPORTS + WORKFLOWS
+// WORKFLOWS
 // ─────────────────────────────────────────────────────────────────
-
-const REPORTS: ApiEndpoint[] = [
-  {
-    id: "reports-coverage",
-    category: "reports",
-    method: "GET",
-    path: "/api/agent/reports?report=coverage",
-    summary: "Generate the SOC coverage report",
-    description: "Proxies to xlog's /api/v1/coverage-report. Returns scenario+technique coverage breakdown.",
-    queryParams: [
-      { name: "report", type: "string", enum: ["coverage", "simulation-export"], description: "Report type.", example: "coverage" },
-    ],
-    responses: [{ status: "200", description: "JSON report." }],
-  },
-  {
-    id: "reports-export",
-    category: "reports",
-    method: "GET",
-    path: "/api/agent/reports?report=simulation-export&simulationId={id}",
-    summary: "Export a single simulation",
-    description: "Returns the simulation's events as JSON (default) or markdown.",
-    queryParams: [
-      { name: "report", type: "string", enum: ["simulation-export"], description: "Required for this endpoint.", example: "simulation-export" },
-      { name: "simulationId", type: "string", description: "Simulation UUID." },
-      { name: "format", type: "string", enum: ["json", "markdown"], example: "json", description: "Output format." },
-    ],
-    responses: [{ status: "200", description: "Exported simulation." }],
-  },
-];
 
 const WORKFLOWS: ApiEndpoint[] = [
   {
@@ -1738,7 +1702,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   ...SELF_MOD,
   ...OBSERVABILITY,
   ...IDENTITY,
-  ...REPORTS,
   ...WORKFLOWS,
 ];
 

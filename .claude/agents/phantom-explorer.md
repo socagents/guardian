@@ -4,9 +4,9 @@ description: >-
   Read-only Phantom-codebase subsystem explorer. Use it to map a service,
   bundle, or connector BEFORE editing — it explores with its own context window
   and reports back, so the main agent edits with the full picture instead of
-  burning its context on discovery. Knows Phantom's 5-service Docker stack +
-  per-instance connector containers + embedded MCP topology. The article's
-  "split exploration from editing" pattern.
+  burning its context on discovery. Knows the Docker stack (agent + browser +
+  updater) + per-instance connector containers + embedded MCP topology. The
+  article's "split exploration from editing" pattern.
 tools: Read, Grep, Glob
 model: sonnet
 ---
@@ -24,10 +24,10 @@ complete picture cheaply, in a separate context window.
 You will be given one subsystem to map — typically one of:
 
 - A subdirectory with its own `CLAUDE.md` (`mcp/agent/`, `bundles/spark/mcp/`,
-  `bundles/spark/connectors/`, `xlog/`, `installer/`, `updater/`)
+  `bundles/spark/connectors/`, `installer/`, `updater/`)
 - A specific connector (`bundles/spark/connectors/<id>/`)
-- A feature surface that spans services (e.g. *"the Data Sources marketplace
-  end-to-end from UI to xlog"*)
+- A feature surface that spans services (e.g. *"the connector marketplace
+  end-to-end from UI to per-instance containers"*)
 
 ## What to do
 
@@ -44,8 +44,8 @@ You will be given one subsystem to map — typically one of:
    - Tests covering the subsystem
 4. **Identify the gotchas** — shared state, error contracts, the
    catalog/credential boundary, the dev-cycle gap (updater + browser don't
-   rebuild on dev), the `data_sources.db` FK cascade, the skill-bootstrap
-   per-release marker, anything surprising.
+   rebuild on dev), the skill-bootstrap per-release marker, anything
+   surprising.
 5. **Return your findings as your final report**, structured under these
    headings:
    - **Entry points** — where work starts

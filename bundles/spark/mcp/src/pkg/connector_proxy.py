@@ -153,26 +153,6 @@ async def proxy_call_tool(
     """
     args = args or {}
 
-    # v0.17.x — store-driven log-destination resolution. The chat agent
-    # passes a destination REFERENCE (logdest:<id>) for the log-generation
-    # tool; resolve it MCP-side HERE — the only layer that can read both the
-    # log_destinations store and the SecretStore — before forwarding the
-    # concrete address (and, for xsiam_http, the injected webhook url/key)
-    # to the connector container. The xsiam_http secret therefore travels
-    # only MCP→connector over the internal network; it never crosses the
-    # agent's tool surface, so the credential guardrail holds. Gated on the
-    # `logdest:` prefix so it's tool-name-agnostic (robust against the
-    # runtime's prefix-stripping) and a no-op for every other tool call.
-    _dest = args.get("destination")
-    if isinstance(_dest, str) and _dest.startswith("logdest:"):
-        from usecase.log_destination_resolver import resolve_worker_args
-        try:
-            args = resolve_worker_args(dict(args))
-        except Exception as exc:  # noqa: BLE001
-            raise ConnectorProxyError(
-                f"log-destination resolution failed: {exc}"
-            ) from exc
-
     url = _mcp_url(container_url)
 
     try:

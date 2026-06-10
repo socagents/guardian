@@ -30,8 +30,6 @@ export interface SelfSignedCert {
 const DEFAULT_SAN_LIST = [
   "DNS:localhost",
   "DNS:phantom-agent",
-  "DNS:xlog",
-  "DNS:caldera",
   "DNS:phantom-updater",
   "IP:127.0.0.1",
 ];
@@ -159,10 +157,10 @@ export function pemToEnvEscape(pem: string): string {
 }
 
 /**
- * Write cert + key PEM to the shared /tls/ volume. xlog, caldera, and
- * the agent's own tls-proxy all read from these paths — this is the
- * single source of truth for TLS material across the stack (replaced
- * the old SSL_CERT_PEM compose-env passthrough).
+ * Write cert + key PEM to the shared /tls/ volume. The agent's own
+ * tls-proxy reads from these paths — this is the single source of
+ * truth for TLS material across the stack (replaced the old
+ * SSL_CERT_PEM compose-env passthrough).
  *
  * Path is configurable via PHANTOM_TLS_DIR env (defaults to /tls) so
  * dev/test environments can point at an alternate location without
@@ -192,9 +190,9 @@ export function writeTlsToSharedVolume(certPem: string, keyPem: string): {
 
 /**
  * Remove the cert + key from /tls/. Used when the operator picks the
- * "disabled" TLS mode in setup — clears the shared volume so xlog,
- * caldera, and the agent's TLS detection all see "no cert" on next
- * boot and revert to plain HTTP.
+ * "disabled" TLS mode in setup — clears the shared volume so the
+ * agent's TLS detection sees "no cert" on next boot and reverts to
+ * plain HTTP.
  */
 export function clearTlsFromSharedVolume(): void {
   const dir = process.env.PHANTOM_TLS_DIR ?? "/tls";

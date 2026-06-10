@@ -14,7 +14,7 @@ from src.usecase.notifications import (
 
 SAMPLE_TOPICS = [
     TopicSpec(name="setup-required", severity="warning", target="user:operator"),
-    TopicSpec(name="simulation-complete", severity="info", target="user:operator"),
+    TopicSpec(name="job-run-completed", severity="info", target="user:operator"),
     TopicSpec(name="detection-miss", severity="warning", target="channel:soc"),
 ]
 
@@ -25,11 +25,11 @@ def store(tmp_path) -> SqliteNotificationStore:
 
 
 def test_publish_persists_with_topic_metadata(store: SqliteNotificationStore) -> None:
-    n = store.publish("simulation-complete", payload={"sim_id": "abc"})
-    assert n.topic == "simulation-complete"
+    n = store.publish("job-run-completed", payload={"job_id": "abc"})
+    assert n.topic == "job-run-completed"
     assert n.severity == "info"
     assert n.target == "user:operator"
-    assert n.payload == {"sim_id": "abc"}
+    assert n.payload == {"job_id": "abc"}
     assert n.dispatch_status == "stored"  # no dispatch_hook
     assert n.read_at is None
 
@@ -50,18 +50,18 @@ def test_topic_severity_normalized(tmp_path) -> None:
 
 def test_list_filters_by_target(store: SqliteNotificationStore) -> None:
     store.publish("setup-required")
-    store.publish("simulation-complete")
+    store.publish("job-run-completed")
     store.publish("detection-miss", payload={"miss_count": 3})
 
     user_only = store.list(target="user:operator")
-    assert {n.topic for n in user_only} == {"setup-required", "simulation-complete"}
+    assert {n.topic for n in user_only} == {"setup-required", "job-run-completed"}
 
     channel_only = store.list(target="channel:soc")
     assert {n.topic for n in channel_only} == {"detection-miss"}
 
 
 def test_list_unread_only(store: SqliteNotificationStore) -> None:
-    a = store.publish("simulation-complete")
+    a = store.publish("job-run-completed")
     store.publish("setup-required")
     assert store.ack(a.id) is True
     pending = store.list(unread_only=True)
@@ -82,7 +82,7 @@ def test_ack_returns_false_on_unknown_id(store: SqliteNotificationStore) -> None
 
 
 def test_ack_idempotent(store: SqliteNotificationStore) -> None:
-    n = store.publish("simulation-complete")
+    n = store.publish("job-run-completed")
     assert store.ack(n.id) is True
     assert store.ack(n.id) is False  # already read
 
@@ -96,7 +96,7 @@ def test_dispatch_hook_called_for_channel_targets(tmp_path) -> None:
     s = SqliteNotificationStore(
         topics=SAMPLE_TOPICS, data_root=tmp_path, dispatch_hook=hook
     )
-    user_n = s.publish("simulation-complete")
+    user_n = s.publish("job-run-completed")
     channel_n = s.publish("detection-miss")
 
     # Hook fires only for channel:* targets.

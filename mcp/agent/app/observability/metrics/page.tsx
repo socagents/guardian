@@ -124,7 +124,7 @@ export default function MetricsPage() {
       <div className="rounded-xl p-3 flex items-center gap-3" style={glassStyle}>
         <span className="material-symbols-outlined text-on-surface-variant/60">search</span>
         <input value={filter} onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter by metric name or label (e.g. tool_call, scenario_started, status=success)"
+          placeholder="Filter by metric name or label (e.g. tool_call, approval_requested, status=success)"
           className="flex-1 bg-transparent border-0 outline-0 text-sm text-on-surface placeholder:text-on-surface-variant/40" />
         <span className="text-xs text-on-surface-variant/60 font-mono">
           {grouped.size} {grouped.size === 1 ? "family" : "families"} · {rows.length} series

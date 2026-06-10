@@ -19,8 +19,6 @@
     "_comment3": "Mirrors the per-service path-filter contract in docs/CICD.md."
   },
   { "name": "component:agent",       "color": "1F6FEB", "description": "phantom-agent (mcp/agent/** or bundles/spark/**)" },
-  { "name": "component:xlog",        "color": "1F6FEB", "description": "phantom-xlog (xlog/**)" },
-  { "name": "component:caldera",     "color": "1F6FEB", "description": "phantom-caldera (third_party/caldera/** submodule)" },
   { "name": "component:connectors",  "color": "1F6FEB", "description": "per-instance connectors (bundles/spark/connectors/** or phantom-connector-runtime/**)" },
   { "name": "component:installer",   "color": "1F6FEB", "description": "phantom-installer template / build script (installer/**)" },
   { "name": "component:workflows",   "color": "1F6FEB", "description": "GitHub Actions workflows + composite actions (.github/workflows/, .github/actions/)" },

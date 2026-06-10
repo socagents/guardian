@@ -9,7 +9,7 @@ The phantom-installer build template. Produces a single binary the customer down
 | Path | What it is |
 |------|------------|
 | `build.sh` | Builds the `phantom-installer` binary. Bakes the manifest's digests + the customer compose into a self-extracting script. |
-| `docker-compose.yml` | Customer compose — 5 fixed services, image refs use `@${DIGEST_*}` substitution from the install-time `.env`. |
+| `docker-compose.yml` | Customer compose — 3 fixed services (phantom-agent, phantom-updater, phantom-browser), image refs use `@${DIGEST_*}` substitution from the install-time `.env`. |
 | `template/` | Files copied into the customer install kit at `/opt/phantom/`. |
 | `template/.env.example` | Reference env file. The installer writes the real `.env` at install time, populated with the release manifest's digests + operator-supplied credentials. |
 
@@ -30,8 +30,8 @@ The customer installer has zero knowledge of dev — no flags, no branches, no t
 
 | File | Owned by | Content |
 |---|---|---|
-| `/opt/phantom/.env` | installer at install time | Service credentials + 5 core stack-service digests (`DIGEST_PHANTOM_AGENT`, `DIGEST_PHANTOM_XLOG`, `DIGEST_PHANTOM_CALDERA`, `DIGEST_PHANTOM_UPDATER`, `DIGEST_PHANTOM_BROWSER`) + `PHANTOM_VERSION` marker |
-| `/opt/phantom/connector-digests.env` | installer at install time, **phantom-updater reads** | 7 per-connector image pins (`DIGEST_PHANTOM_CONNECTOR_*`) |
+| `/opt/phantom/.env` | installer at install time | Service credentials + 3 core stack-service digests (`DIGEST_PHANTOM_AGENT`, `DIGEST_PHANTOM_UPDATER`, `DIGEST_PHANTOM_BROWSER`) + `PHANTOM_VERSION` marker |
+| `/opt/phantom/connector-digests.env` | installer at install time, **phantom-updater reads** | 6 per-connector image pins (`DIGEST_PHANTOM_CONNECTOR_*`) |
 
 **The split is load-bearing (v0.6.7+):** per-connector containers aren't declared in `docker-compose.yml`, so their digests are NOT compose-substitution variables — they're consumed at runtime by phantom-updater when an operator creates a connector instance.
 

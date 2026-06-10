@@ -4,9 +4,8 @@
  * DebugPanel — right-side collapsible telemetry view for the chat.
  *
  * Renders the tool-call timeline + raw SSE event stream + run/session
- * metadata for the active chat. Mirrors the "Live telemetry" affordance
- * from the old xlog UI, restyled to phantom's Ocean Navy + glassmorphism
- * aesthetic to match /jobs and /providers.
+ * metadata for the active chat. Styled with phantom's Ocean Navy +
+ * glassmorphism aesthetic to match /jobs and /providers.
  *
  * Layout: ~360px wide column, sibling to the message list. The parent
  * controls visibility (open prop) so the toggle state can be persisted
@@ -283,7 +282,7 @@ function ToolCallList({ toolCalls }: { toolCalls: TelemetryToolCall[] }) {
       <EmptyState
         icon="build_circle"
         title="No tool calls yet"
-        body="Send a prompt that exercises an MCP tool — phantom_get_technology_stack, memory_store, caldera_get_all_abilities, etc. They'll appear here in real time."
+        body="Send a prompt that exercises an MCP tool — xsiam_run_xql_query, memory_store, xdr_get_cases_and_issues, etc. They'll appear here in real time."
       />
     );
   }

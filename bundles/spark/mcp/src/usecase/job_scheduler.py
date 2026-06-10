@@ -12,7 +12,7 @@ Per spec §6.10, `scheduling` has two backend impls:
                     back through the agent runtime.
 
 This module is the standalone variant. It composes cleanly with
-Phases 6-8: when a cron fires `xlog.generate_coverage_report`, the
+Phases 6-8: when a cron fires `xsiam.run_xql_query`, the
 dispatch goes through the SAME wrapped tool callable the agent uses,
 so audit, approvals, and instance contextvar all apply uniformly.
 
@@ -103,7 +103,7 @@ MAX_SLEEP_SECONDS = 30.0
 # How long a single job's action is allowed to run before the
 # scheduler logs a warning (it doesn't kill the job — that's a future
 # refinement; the runqueue.max_concurrent in the manifest is the real
-# guard). 600s is conservative for "long-running coverage report".
+# guard). 600s is conservative for "long-running report job".
 WARN_AFTER_SECONDS = 600
 
 # v0.17.126 — after this many consecutive failures the scheduler auto-
@@ -464,13 +464,8 @@ class CroniterJobScheduler:
                 )
 
             # v0.1.32: collapse job action types to {prompt, tool_call}.
-            # The two pre-existing extras get migrated in place:
+            # The legacy `chat` type gets migrated in place:
             #   - chat → prompt   (rename — same dispatch behavior)
-            #   - log  → tool_call(phantom_create_data_worker, request=…)
-            #     (the log shortcut was already syntactic sugar over a
-            #     phantom_create_data_worker tool_call; rewriting the
-            #     action_json gives operators a single mental model and
-            #     lets us delete the dispatch branch.)
             # Idempotent: rows that already have type=prompt or
             # type=tool_call are left alone. Runs every boot so re-imports
             # of an old manifest also get normalized.
@@ -498,21 +493,10 @@ class CroniterJobScheduler:
     def _migrate_action_types(self, c: sqlite3.Connection) -> None:
         """v0.1.32: idempotent in-place migration of action.type values.
 
-        Two transforms:
+        One transform:
           - {type: "chat", message} → {type: "prompt", message}
-          - {type: "log", <log_args>} → {type: "tool_call",
-                                         name: "phantom_create_data_worker",
-                                         args: {request: <log_args>}}
-                                         where log_args is the action
-                                         object minus the "type" key,
-                                         and "format" is renamed to
-                                         "type" because the underlying
-                                         tool's request model uses
-                                         `type` for the log format
-                                         (JSON / CEF / LEEF / SYSLOG /
-                                         WINEVENT).
 
-        Why migrate vs. keep dispatching the legacy types: the operator
+        Why migrate vs. keep dispatching the legacy type: the operator
         wants only two job types — prompt + tool_call — to keep the
         mental model simple. Mid-flight legacy rows are converted on
         boot so they keep firing under the new dispatch path without
@@ -522,7 +506,7 @@ class CroniterJobScheduler:
         prompt + tool_call rows and changes nothing.
         """
         rows = c.execute("SELECT name, action_json FROM jobs").fetchall()
-        migrated = {"chat": 0, "log": 0}
+        migrated = {"chat": 0}
         for row in rows:
             try:
                 action = json.loads(row["action_json"])
@@ -541,31 +525,11 @@ class CroniterJobScheduler:
                     (json.dumps(action), row["name"]),
                 )
                 migrated["chat"] += 1
-            elif t == "log":
-                # Lift the log-shortcut keys into a tool_call request.
-                # Field-name reverse mapping mirrors what the legacy
-                # `log` dispatch branch did at fire time.
-                log_args = {
-                    k: v for k, v in action.items()
-                    if k not in ("type", "name", "args")
-                }
-                if "format" in log_args and "type" not in log_args:
-                    log_args["type"] = log_args.pop("format")
-                new_action = {
-                    "type": "tool_call",
-                    "name": "phantom_create_data_worker",
-                    "args": {"request": log_args},
-                }
-                c.execute(
-                    "UPDATE jobs SET action_json = ? WHERE name = ?",
-                    (json.dumps(new_action), row["name"]),
-                )
-                migrated["log"] += 1
-        if migrated["chat"] or migrated["log"]:
+        if migrated["chat"]:
             logger.info(
                 "JobScheduler: migrated job action types — "
-                "chat→prompt: %d, log→tool_call: %d",
-                migrated["chat"], migrated["log"],
+                "chat→prompt: %d",
+                migrated["chat"],
             )
 
     @staticmethod
@@ -927,14 +891,11 @@ class CroniterJobScheduler:
                     permission_policy=effective_policy,
                 )
             else:
-                # v0.1.32: `log` was removed — operator policy is
-                # exactly two action types, prompt + tool_call. The
-                # boot migration converts existing log rows to
-                # tool_call(phantom_create_data_worker, …) shape, so
-                # this branch should be unreachable in practice. Any
-                # post-migration row with a foreign action_type was
-                # either externally injected (bad client) or somehow
-                # escaped the migration. Surface the failure clearly.
+                # v0.1.32: operator policy is exactly two action
+                # types, prompt + tool_call. Any row with a foreign
+                # action_type was either externally injected (bad
+                # client) or escaped the boot migration. Surface the
+                # failure clearly.
                 status = "skipped"
                 error = (
                     f"unsupported action type {action_type!r} — "
@@ -986,10 +947,9 @@ class CroniterJobScheduler:
         # unknown tool ..." — these failures will never recover without
         # operator intervention (the tool genuinely doesn't exist on
         # this MCP), so re-firing every cron tick is pure noise that
-        # bloats audit log + customer's session feed.
-        # Customer hit this on `continuous-coverage-cycle` →
-        # `coverage_cycle_run` (Phase 12 work that hasn't shipped),
-        # which fired daily for two days adding 2× failed-job rows.
+        # bloats audit log + customer's session feed. A customer hit
+        # this on a job referencing an unshipped tool, which fired
+        # daily for two days adding 2× failed-job rows.
         if (
             status == "failure"
             and error
@@ -1579,11 +1539,11 @@ class CroniterJobScheduler:
 
             ---
             displayName: My Skill
-            category: scenarios
+            category: workflows
             model: gemini-2.5-flash
             thinking: true
             permissions:
-              allowed_tools: ["xlog_*"]
+              allowed_tools: ["xsiam_*"]
               denied_tools: ["*_delete"]
             ---
             (markdown body...)
@@ -2178,8 +2138,8 @@ class CroniterJobScheduler:
 #   1. Pydantic schema marshalling — `kwargs` get validated and
 #      assembled into the tool's request model
 #   2. Context injection — fastmcp constructs a `Context` carrying
-#      the lifespan context (xlog_url, instance config from the
-#      Phase-5 contextvar, etc.) and passes it as `ctx`
+#      the lifespan context (instance config from the Phase-5
+#      contextvar, etc.) and passes it as `ctx`
 #   3. Result normalization — the `CallToolResult` we get back
 #      already has structured_content, content, and isError fields
 #

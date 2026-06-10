@@ -33,9 +33,9 @@ import { useEffect, useMemo, useState } from "react";
  * / -checking) defined for both themes in globals.css. Dark uses the
  * original luminous accents; light flips to deeper, AA-contrast tones.
  *
- * Health probes still go through /api/agent/health — that one fix
- * (round-7) is what makes xlog and caldera read correctly. No browser
- * → container-internal-hostname fetches anywhere.
+ * Health probes still go through /api/agent/health (round-7) — the
+ * server does the container-internal probes. No browser →
+ * container-internal-hostname fetches anywhere.
  */
 
 type Status = "ok" | "degraded" | "failed" | "checking";
@@ -117,9 +117,9 @@ const NODES_DEF: Array<Omit<Node<NodeData>, "data"> & { data: NodeData }> = [
   { id: "jobs", type: "phantomStore", position: { x: 980, y: 220 }, data: { label: "jobs", sub: "sqlite cron", status: "checking" }, draggable: true },
 
   // Lane 3 — connectors (y=380) — 3 connectors centered under MCP
-  { id: "xlog", type: "phantomNode", position: { x: 320, y: 380 }, data: { label: "xlog", sub: "synthetic logs / :8000", status: "checking", probeId: "xlog-api" }, draggable: true },
-  { id: "caldera", type: "phantomNode", position: { x: 580, y: 380 }, data: { label: "caldera", sub: "MITRE adversary / :8888", status: "checking", probeId: "caldera" }, draggable: true },
-  { id: "xsiam", type: "phantomNode", position: { x: 840, y: 380 }, data: { label: "xsiam", sub: "Cortex PAPI", status: "checking" }, draggable: true },
+  { id: "xsiam", type: "phantomNode", position: { x: 320, y: 380 }, data: { label: "xsiam", sub: "Cortex PAPI", status: "checking" }, draggable: true },
+  { id: "xdr", type: "phantomNode", position: { x: 580, y: 380 }, data: { label: "cortex-xdr", sub: "XDR Public API", status: "checking" }, draggable: true },
+  { id: "web", type: "phantomNode", position: { x: 840, y: 380 }, data: { label: "web", sub: "phantom-browser / CDP", status: "checking" }, draggable: true },
 ];
 
 const EDGES_DEF: Edge[] = [
@@ -132,9 +132,9 @@ const EDGES_DEF: Edge[] = [
   { id: "mcp->settings", source: "mcp", target: "settings" },
   { id: "mcp->sessions", source: "mcp", target: "sessions" },
   { id: "mcp->jobs", source: "mcp", target: "jobs" },
-  { id: "mcp->xlog", source: "mcp", target: "xlog", label: "GraphQL" },
-  { id: "mcp->caldera", source: "mcp", target: "caldera", label: "v2 REST" },
   { id: "mcp->xsiam", source: "mcp", target: "xsiam", label: "PAPI" },
+  { id: "mcp->xdr", source: "mcp", target: "xdr", label: "Public API" },
+  { id: "mcp->web", source: "mcp", target: "web", label: "CDP" },
 ];
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -299,9 +299,9 @@ export default function PipelinePage() {
             const t = Date.parse(e.ts);
             if (!Number.isFinite(t) || t <= cutoff) continue;
             const target = String(e.target ?? "");
-            if (target.startsWith("tool:xlog.")) active.add("mcp->xlog");
-            if (target.startsWith("tool:caldera.")) active.add("mcp->caldera");
             if (target.startsWith("tool:xsiam.")) active.add("mcp->xsiam");
+            if (target.startsWith("tool:xdr.")) active.add("mcp->xdr");
+            if (target.startsWith("tool:web.")) active.add("mcp->web");
             if (e.action === "tool_call") active.add("agent->mcp");
             if (e.action === "chat_append") active.add("agent->vertex");
             if (e.action === "memory_store" || e.action === "memory_search") active.add("mcp->memory");

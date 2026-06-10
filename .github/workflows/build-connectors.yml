@@ -2,8 +2,8 @@ name: Build connectors
 
 # v0.5.0+ — per-connector image build workflow.
 #
-# CI/CD step 1 of 3 for the 6 per-connector images
-# (xlog/xsiam/caldera/web/cortex-docs/cortex-content + the runtime
+# CI/CD step 1 of 3 for the 5 per-connector images
+# (xsiam/cortex-xdr/web/cortex-docs/cortex-content + the runtime
 # base). Each connector has its own path-filter; only the ones
 # whose paths matched the push actually rebuild. See docs/CICD.md
 # § Per-service path-filter contract for the broader invariant.
@@ -11,7 +11,7 @@ name: Build connectors
 # pushes that don't touch their source, just like the 5 stack
 # services.
 #
-# Mirrors the build-xlog.yml / build-agent.yml / build-caldera.yml
+# Mirrors the build-agent.yml / build-updater.yml
 # pattern: per-image jobs gated by path filters so only changed
 # connector images rebuild. Each job uses the shared composite
 # action `.github/actions/build-and-push-dev-image/` so the build +
@@ -32,15 +32,15 @@ name: Build connectors
 # them. Same dependency model release.yml uses for its v*.*.* path.
 #
 # Why this workflow exists in v0.5.0:
-#   Pre-v0.5.0 only 1 of 6 connectors ran in container mode (web),
+#   Pre-v0.5.0 only the web connector ran in container mode,
 #   so per-connector images were a release-only concern. v0.5.0
-#   flips all 6 to container — every dev iteration needs :dev tags
-#   for every connector image, or instance-creation against the
-#   newly-flipped connectors breaks on the dev installer.
+#   flips every connector to container — every dev iteration needs
+#   :dev tags for every connector image, or instance-creation
+#   against the newly-flipped connectors breaks on the dev installer.
 #
 # Security note: this workflow only consumes built-in GitHub
 # contexts that are NOT operator-controllable (repository_owner,
-# github.actor, secrets.GITHUB_TOKEN). Same shape as build-xlog.yml.
+# github.actor, secrets.GITHUB_TOKEN). Same shape as build-agent.yml.
 
 on:
   push:
@@ -110,30 +110,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-actor: ${{ github.actor }}
 
-  build-xlog-connector:
-    name: Build phantom-connector-xlog
-    runs-on: [self-hosted, Linux, X64, phantom]
-    needs: build-runtime
-    steps:
-      - name: Reset workspace ownership (pre-checkout)
-        run: |
-          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
-      - uses: actions/checkout@v4
-      - name: Fix bind-mount perms
-        run: |
-          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
-      - uses: ./.github/actions/build-and-push-dev-image
-        with:
-          service-name: phantom-connector-xlog
-          build-context: '.'
-          dockerfile-path: bundles/spark/connectors/xlog/Dockerfile
-          build-args: |
-            PHANTOM_RUNTIME_VERSION=dev
-          pull-policy: never
-          owner: ${{ github.repository_owner }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-actor: ${{ github.actor }}
-
   build-xsiam-connector:
     name: Build phantom-connector-xsiam
     runs-on: [self-hosted, Linux, X64, phantom]
@@ -151,30 +127,6 @@ jobs:
           service-name: phantom-connector-xsiam
           build-context: '.'
           dockerfile-path: bundles/spark/connectors/xsiam/Dockerfile
-          build-args: |
-            PHANTOM_RUNTIME_VERSION=dev
-          pull-policy: never
-          owner: ${{ github.repository_owner }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-actor: ${{ github.actor }}
-
-  build-caldera-connector:
-    name: Build phantom-connector-caldera
-    runs-on: [self-hosted, Linux, X64, phantom]
-    needs: build-runtime
-    steps:
-      - name: Reset workspace ownership (pre-checkout)
-        run: |
-          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
-      - uses: actions/checkout@v4
-      - name: Fix bind-mount perms
-        run: |
-          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
-      - uses: ./.github/actions/build-and-push-dev-image
-        with:
-          service-name: phantom-connector-caldera
-          build-context: '.'
-          dockerfile-path: bundles/spark/connectors/caldera/Dockerfile
           build-args: |
             PHANTOM_RUNTIME_VERSION=dev
           pull-policy: never

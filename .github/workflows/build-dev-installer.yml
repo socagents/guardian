@@ -8,7 +8,7 @@ name: Build dev installer
 # runs the staged installer manually.
 #
 # Triggered when any per-service build workflow completes
-# (build-xlog / build-agent / build-caldera / build-connectors), OR
+# (build-agent / build-connectors / build-updater), OR
 # when installer source itself changes (so installer-only changes
 # get a fresh binary without needing a no-op image rebuild).
 #
@@ -45,15 +45,15 @@ name: Build dev installer
 # prerelease. See docs/CICD.md § Build & release workflow.
 #
 # Security note: this workflow only consumes built-in GitHub
-# contexts that are NOT operator-controllable. See build-xlog.yml
-# header.
+# contexts that are NOT operator-controllable (repository_owner,
+# github.actor, secrets.GITHUB_TOKEN).
 
 on:
   workflow_run:
     # v0.6.12 — Build updater added so phantom-updater source changes
     # also cascade through to dev installer rebuild. Pre-v0.6.12 the
     # updater was customer-release-only.
-    workflows: [Build xlog, Build agent, Build caldera, Build connectors, Build updater]
+    workflows: [Build agent, Build connectors, Build updater]
     types: [completed]
     branches: [main]
   push:
@@ -117,7 +117,7 @@ jobs:
       - name: Resolve dev digests from GHCR
         id: digests
         run: |
-          # For each of the three services we build on the dev track,
+          # For each service we build on the dev track,
           # pull `:dev` and capture the digest. Pull is what populates
           # the local docker daemon's RepoDigests for the inspect step.
           set -e
@@ -127,13 +127,13 @@ jobs:
           echo "PHANTOM_VERSION=dev-$SHORT_SHA" > "$MANIFEST"
 
           # v0.6.12 — phantom-updater moved into the dev cycle. Its
-          # :dev tag is now resolved here alongside agent/xlog/caldera
+          # :dev tag is now resolved here alongside the agent
           # rather than fetched from the latest customer release.
           # This lets updater source changes propagate to phantom-vm
           # via the dev installer auto-deploy, so operator-mirror
           # testing covers updater changes the same way it covers
           # everything else.
-          for SVC in phantom-xlog phantom-agent phantom-caldera phantom-updater; do
+          for SVC in phantom-agent phantom-updater; do
             IMG="$REGISTRY/$OWNER/$SVC"
             echo "::group::resolve $SVC:dev"
             docker pull "$IMG:dev"
@@ -154,8 +154,8 @@ jobs:
 
           # Stack services NOT built on dev: browser only (post-v0.6.12).
           # phantom-updater moved into the dev cycle in v0.6.12; see the
-          # :dev resolution loop above. Pull browser digest + the 7
-          # per-connector digests from the latest stable release's
+          # :dev resolution loop above. Pull browser digest + the
+          # per-connector fallback digests from the latest stable release's
           # manifest via the GitHub REST API + curl. We DON'T use
           # `gh release download` — the gh CLI isn't installed on the
           # self-hosted runner, and curl + python3 are always available.
@@ -222,11 +222,9 @@ jobs:
           # the LAST CUSTOMER RELEASE's connector digests; this meant
           # build-connectors.yml could push fresh :dev tags but
           # phantom-updater on phantom-vm would still pull the stable
-          # digest. Surfaced when v0.6.15 added calderaUrl fallback to
-          # the Caldera connector source — the :dev image had the fix,
-          # but the operator-side container kept pulling the v0.6.4
-          # digest (no fallback) and dispatching failed with "no
-          # baseUrl configured" indefinitely.
+          # digest — a connector fix landed in the :dev image while
+          # the operator-side container kept running the prior
+          # release's code indefinitely.
           #
           # Resolution: docker-pull :dev for each connector; if the
           # pull fails (e.g., :dev tag doesn't exist on a fresh repo),
@@ -254,9 +252,7 @@ jobs:
           # commit. Same fix shape as cortex-content.
           declare -A CONN_IMGS=(
             ["DIGEST_PHANTOM_CONNECTOR_RUNTIME"]="phantom-connector-runtime"
-            ["DIGEST_PHANTOM_CONNECTOR_XLOG"]="phantom-connector-xlog"
             ["DIGEST_PHANTOM_CONNECTOR_XSIAM"]="phantom-connector-xsiam"
-            ["DIGEST_PHANTOM_CONNECTOR_CALDERA"]="phantom-connector-caldera"
             ["DIGEST_PHANTOM_CONNECTOR_WEB"]="phantom-connector-web"
             ["DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS"]="phantom-connector-cortex-docs"
             ["DIGEST_PHANTOM_CONNECTOR_CORTEX_CONTENT"]="phantom-connector-cortex-content"
@@ -264,9 +260,7 @@ jobs:
           )
           for KEY in \
             DIGEST_PHANTOM_CONNECTOR_RUNTIME \
-            DIGEST_PHANTOM_CONNECTOR_XLOG \
             DIGEST_PHANTOM_CONNECTOR_XSIAM \
-            DIGEST_PHANTOM_CONNECTOR_CALDERA \
             DIGEST_PHANTOM_CONNECTOR_WEB \
             DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS \
             DIGEST_PHANTOM_CONNECTOR_CORTEX_CONTENT \
@@ -550,7 +544,7 @@ jobs:
           sleep 3
 
           # ── 2.5. Compute REBUILT / UNCHANGED rebuild-decision table ──
-          # For each of the 5 stack-level services, compare the digest
+          # For each of the 3 stack-level services, compare the digest
           # we resolved in this run against the digest that was in the
           # PRIOR dev-latest's manifest. Result is one of:
           #   🆕 FIRST-BUILD       — no prior dev-latest (cold start)
@@ -559,8 +553,8 @@ jobs:
           #   ✓  UNCHANGED         — digest matches prior dev-latest →
           #                          per-service workflow did NOT fire
           #                          this run → container won't recreate
-          #   🔨 REBUILT           — digest differs; for xlog/agent/
-          #                          caldera/connectors this means
+          #   🔨 REBUILT           — digest differs; for agent/
+          #                          connectors this means
           #                          source under that service's
           #                          path-filter changed and
           #                          build-<svc>.yml fired
@@ -620,10 +614,8 @@ jobs:
             printf "  %-22s %-22s %s…\n" "$svc" "$status" "$short" >> "$SUMMARY_LOG"
           }
 
-          # Services rebuilt by the dev cycle (xlog, agent, caldera).
-          for entry in "DIGEST_PHANTOM_XLOG:phantom-xlog" \
-                       "DIGEST_PHANTOM_AGENT:phantom-agent" \
-                       "DIGEST_PHANTOM_CALDERA:phantom-caldera"; do
+          # Services rebuilt by the dev cycle (agent).
+          for entry in "DIGEST_PHANTOM_AGENT:phantom-agent"; do
             KEY="${entry%%:*}"
             SVC="${entry##*:}"
             NEW=$(grep "^${KEY}=" "$MANIFEST_PATH" 2>/dev/null | cut -d= -f2- || true)

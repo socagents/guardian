@@ -5,8 +5,8 @@ name: Build agent
 # CI/CD step 1 of 3 for agent (path-filter scope: mcp/agent/** OR
 # bundles/spark/**). See docs/CICD.md § Per-service path-filter
 # contract for the full invariant ("no source change = no rebuild
-# = no container recreate"). The 5 stack services + 6 per-connector
-# images each have their own build-<svc>.yml; only the ones whose
+# = no container recreate"). The 3 stack services + 5 per-connector
+# images each have their own build workflow; only the ones whose
 # paths matched on this push actually run.
 #
 # Fires when phantom-agent source changes — either the Next.js
@@ -20,7 +20,8 @@ name: Build agent
 # digest-pinning invariant that lets unchanged services survive.
 #
 # Security note: this workflow only consumes built-in GitHub contexts
-# that are NOT operator-controllable. See build-xlog.yml header.
+# that are NOT operator-controllable (repository_owner, github.actor,
+# secrets.GITHUB_TOKEN).
 
 on:
   push:

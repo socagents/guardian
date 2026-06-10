@@ -12,9 +12,8 @@ Demonstrates the runtime contract:
 Naming: function is `phantom__runtime_demo_echo`. The runtime
 entrypoint strips the `phantom__runtime_` prefix at registration
 time, so the agent's MCP proxy sees the tool as `demo_echo`. This
-matches how xlog uses `phantom_<id>_<tool>` and how web uses
-`phantom_web_<tool>`. Either prefix style works; the runtime
-handles them all.
+matches how web uses `phantom_web_<tool>`. Either prefix style
+works; the runtime handles them all.
 """
 
 from __future__ import annotations

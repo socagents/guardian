@@ -15,8 +15,8 @@ states (`connected | failed | needs-auth | pending | disabled`).
     health probe / tool call. Operator: green dot, no action needed.
   - `pending` — never been probed, or being initialized after a
     config change. Operator: amber dot, give it a moment.
-  - `failed` — last call returned a non-auth error (e.g. CALDERA
-    server unreachable, XSIAM 5xx). Operator: red dot, check the
+  - `failed` — last call returned a non-auth error (e.g. XSIAM
+    5xx, upstream unreachable). Operator: red dot, check the
     upstream service.
   - `needs-auth` — last call returned 401/403. Operator: orange
     dot, click "Reauth" to re-run the OAuth / token-refresh flow.

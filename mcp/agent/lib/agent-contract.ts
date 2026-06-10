@@ -10,24 +10,23 @@ export const agentContract = {
   apiVersion: 'phantom.agentic/v1alpha1',
   kind: 'AgentRuntimeContract',
   metadata: {
-    id: 'phantom-soc-simulation-agent',
+    id: 'phantom-soc-agent',
     name: 'Phantom Agent',
     version: '0.1.0',
     description:
-      'Continuous SOC simulation agent with synthetic telemetry, MCP tools, Caldera orchestration, XSIAM validation, and reporting.',
+      'AI incident-response agent for Cortex XSIAM/XDR: case investigation, XQL query authoring, asset context, and web research over MCP tools.',
   },
   capabilities: [
-    'synthetic-log-generation',
-    'scenario-simulation',
-    'caldera-adversary-emulation',
-    'xsiam-detection-validation',
-    'attack-coverage-reporting',
+    'xsiam-case-investigation',
+    'xql-query-authoring',
+    'asset-context-lookup',
+    'web-research',
     'standalone-bundle-import',
   ],
   interfaces: {
     ui: {
       route: '/',
-      mountPath: '/agents/phantom-soc-simulation-agent',
+      mountPath: '/agents/phantom-soc-agent',
     },
     manifest: {
       method: 'GET',
@@ -44,33 +43,16 @@ export const agentContract = {
     mcp: {
       env: 'MCP_URL',
       auth: 'MCP_TOKEN',
-      // v1.2: ONE embedded MCP. Tool-providing connectors (caldera,
-      // xsiam, xlog) live in the bundle and are loaded by this MCP;
-      // their per-instance configs come from setup form input via
-      // POST /api/v1/setup, not from per-connector MCP URLs.
+      // v1.2: ONE embedded MCP. Tool-providing connectors (xsiam,
+      // cortex-xdr, web, cortex-docs, cortex-content) live in the
+      // bundle and are loaded by this MCP; their per-instance configs
+      // come from the connector-instances surface, not from
+      // per-connector MCP URLs.
       connectorInstances: [
         { id: 'embedded-mcp', urlEnv: 'MCP_URL', tokenEnv: 'MCP_TOKEN', required: true },
       ],
     },
-    rest: {
-      env: 'XLOG_URL',
-      basePath: '/api/v1',
-    },
   },
-  reports: [
-    {
-      id: 'coverage-report',
-      source: 'phantom-rest',
-      path: '/api/v1/coverage-report',
-      formats: ['json'],
-    },
-    {
-      id: 'simulation-export',
-      source: 'phantom-rest',
-      path: '/api/v1/simulations/{simulation_id}/export',
-      formats: ['json', 'csv', 'markdown'],
-    },
-  ],
   lifecycle: {
     standalone: {
       start: 'scripts/agent_lifecycle.sh start',
@@ -91,43 +73,35 @@ export const agentContract = {
 
 export const agentWorkflows: AgentWorkflow[] = [
   {
-    id: 'generate-logs',
-    title: 'Generate logs',
+    id: 'investigate-cases',
+    title: 'Investigate cases',
     prompt:
-      'Generate JSON firewall logs for the configured technology stack. First load matching simulation skills, then call phantom_get_technology_stack and phantom_get_field_info before creating the worker.',
-    requiredTools: ['phantom_get_technology_stack', 'phantom_get_field_info', 'phantom_create_data_worker'],
-    outputs: ['worker_ids', 'simulation_id', 'log_destination'],
+      'List the most recent XSIAM cases with their issues, pick the highest-severity open case, and summarize what happened with the key evidence.',
+    requiredTools: ['xsiam_get_cases', 'xsiam_get_issues'],
+    outputs: ['case_summary', 'key_issues', 'recommended_next_steps'],
   },
   {
-    id: 'run-scenario',
-    title: 'Run scenario',
+    id: 'author-xql-query',
+    title: 'Author an XQL query',
     prompt:
-      'Run a scenario for internal reconnaissance against 10.10.20.5, create the workers, then return the simulation ID and worker IDs.',
-    requiredTools: ['load_simulation_skills', 'phantom_create_scenario_worker', 'phantom_get_simulation_result'],
-    outputs: ['simulation_id', 'worker_ids', 'scenario_summary'],
+      'Author an XQL query that answers the investigation question. Pull similar examples from the xql-examples knowledge base as a pattern prior, then run the query against the tenant and report the results.',
+    requiredTools: ['xsiam_find_xql_examples_rag', 'xsiam_get_xql_examples', 'xsiam_run_xql_query'],
+    outputs: ['xql_query', 'query_results', 'citations'],
   },
   {
-    id: 'validate-detection',
-    title: 'Validate detection',
+    id: 'asset-context',
+    title: 'Pull asset context',
     prompt:
-      'Validate detection coverage for simulation ID <paste simulation ID>. Run the relevant XSIAM query, then call phantom_run_detection_validation with the observed result.',
-    requiredTools: ['xsiam_run_xql_query', 'phantom_run_detection_validation', 'phantom_get_simulation_result'],
-    outputs: ['validation_result', 'missed_detections', 'recommended_rules'],
+      'Fetch the inventory entry for the asset involved in the current case and report its owner, exposure, and related findings.',
+    requiredTools: ['xsiam_get_assets', 'xsiam_get_asset_by_id'],
+    outputs: ['asset_profile', 'exposure_summary'],
   },
   {
-    id: 'create-caldera-operation',
-    title: 'Create Caldera operation',
+    id: 'web-research',
+    title: 'Research a CVE or IOC on the web',
     prompt:
-      'Create a Caldera adversary and operation, map ability IDs to ATT&CK techniques, then plan matching Phantom defensive telemetry for the operation timeline.',
-    requiredTools: ['caldera_create_adversary', 'caldera_create_operation', 'caldera_get_operation_event_logs'],
-    outputs: ['caldera_operation_id', 'attack_timeline', 'defensive_telemetry_plan'],
-  },
-  {
-    id: 'review-soc-coverage',
-    title: 'Review SOC coverage',
-    prompt:
-      'Generate a SOC coverage report with phantom_generate_coverage_report and summarize ATT&CK coverage, missed detections, noisy fields, log source gaps, and recommended rules.',
-    requiredTools: ['phantom_generate_coverage_report'],
-    outputs: ['attack_coverage', 'missed_detections', 'log_source_gaps', 'recommended_rules'],
+      'Open the vendor advisory for the given CVE, extract the readable text, and summarize impact and remediation guidance with source links.',
+    requiredTools: ['phantom_web_navigate', 'phantom_web_get_text', 'phantom_web_extract_links'],
+    outputs: ['advisory_summary', 'remediation_steps', 'source_links'],
   },
 ];

@@ -90,7 +90,7 @@ def _instance_to_dict(
         # _agent_set_container_url callback for style:container
         # connectors) but this serializer was silently dropping it.
         # Caught during a bug-scan pass: SQLite row had a valid
-        # container_url for cortex-xdr, cortex-docs, and caldera but
+        # container_url for cortex-xdr and cortex-docs but
         # API consumers got None. Same gap is fixed in the
         # instances_list + instances_get MCP tools in self_mod_tools.py
         # (bug-family). None is the expected value for in-process

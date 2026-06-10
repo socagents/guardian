@@ -24,9 +24,7 @@ export const TASK_TERMINAL_STATUS: ReadonlySet<TaskStatus> = new Set([
 export interface Task {
   id: string;
   /** What kind of work this task does. Common kinds:
-   *    'scenario_worker'   — xlog scenario emulation worker
-   *    'caldera_operation' — caldera red-team op
-   *    'xsiam_xql'         — long-running XQL detection query
+   *    'xsiam_xql'         — long-running XQL query
    *    'compaction'        — Phase 5 budget-edge compaction
    *    'hook_command'      — Phase H subprocess hook
    *  Free-form; the UI groups by kind for visual scanning. */
@@ -45,8 +43,7 @@ export interface Task {
    *  NULL while running. */
   output: string | null;
   /** Free-form per-kind metadata. Examples:
-   *    scenario_worker → { worker_id, format, destination }
-   *    caldera_operation → { operation_id, agent_count }
+   *    xsiam_xql → { execution_id, row_count }
    *    compaction → { messages_summarized, summary_chars } */
   meta: Record<string, unknown>;
   created_at: string;

@@ -2,8 +2,7 @@
 
 /**
  * Runtime events page — UI surface for the manifest-declared
- * observability event feed (rt.simulation.*, rt.caldera.*,
- * rt.coverage.*, rt.validation.*, rt.tool.failed).
+ * observability event feed (currently rt.tool.failed).
  *
  * NOT to be confused with /observability/events, which queries the
  * Phase-6 audit log. They overlap on tool failures but exist for

@@ -34,9 +34,9 @@ Operator asks variants of:
 
 - "what's the parent of this powershell instance?"
 - "show me the causality chain on `<host>` for living-off-the-land binaries"
-- "trace the process tree after the Caldera operation"
+- "trace the process tree behind this alert"
 
-XDR's causality model: every PROCESS event carries `causality_actor_*` (the original parent triggering the chain) and `action_*` (the child process this event acted on). Filtering on `actor_*` shows what's running NOW; including `causality_*` shows where the chain originated. Pairs naturally with the Caldera detection-validation loop — fire an operation, then run this query to see the parent → child tree the operation produced.
+XDR's causality model: every PROCESS event carries `causality_actor_*` (the original parent triggering the chain) and `action_*` (the child process this event acted on). Filtering on `actor_*` shows what's running NOW; including `causality_*` shows where the chain originated. Pairs naturally with incident investigation — start from the alerted process, then run this query to reconstruct the parent → child tree that led to it.
 
 ## Variations
 

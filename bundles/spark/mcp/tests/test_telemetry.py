@@ -10,7 +10,7 @@ from src.usecase.telemetry import SqliteTelemetryStore
 
 
 DECLARED = ["install", "uninstall", "version_pin",
-            "simulation_run_count_per_day", "validation_count_per_day"]
+            "chat_turns_per_day", "tool_calls_per_day"]
 
 
 @pytest.fixture
@@ -52,10 +52,10 @@ def test_set_enabled_persists_across_reopen(tmp_path) -> None:
 
 def test_record_works_when_enabled(store_on: SqliteTelemetryStore) -> None:
     assert store_on.record("install") is True
-    assert store_on.record("simulation_run_count_per_day", count=3) is True
+    assert store_on.record("chat_turns_per_day", count=3) is True
     s = store_on.status()
     assert s.counts_by_event["install"] == 1
-    assert s.counts_by_event["simulation_run_count_per_day"] == 3
+    assert s.counts_by_event["chat_turns_per_day"] == 3
     assert s.total_recorded == 4
 
 
@@ -100,12 +100,12 @@ def test_set_enabled_audits_only_on_change(tmp_path) -> None:
 def test_status_aggregates_correctly(store_on: SqliteTelemetryStore) -> None:
     store_on.record("install")
     store_on.record("install")
-    store_on.record("validation_count_per_day", count=5)
+    store_on.record("tool_calls_per_day", count=5)
     s = store_on.status()
     assert s.total_recorded == 7
     assert s.counts_by_event == {
         "install": 2,
-        "validation_count_per_day": 5,
+        "tool_calls_per_day": 5,
     }
     assert sorted(s.declared_events) == sorted(DECLARED)
 
@@ -113,16 +113,16 @@ def test_status_aggregates_correctly(store_on: SqliteTelemetryStore) -> None:
 def test_daily_counts_buckets_by_date(store_on: SqliteTelemetryStore) -> None:
     store_on.record("install")
     store_on.record("install")
-    store_on.record("simulation_run_count_per_day", count=2)
+    store_on.record("chat_turns_per_day", count=2)
     buckets = store_on.daily_counts(days=7)
     # Same day, two distinct events:
     by_event = {b["event_name"]: b["total"] for b in buckets}
     assert by_event["install"] == 2
-    assert by_event["simulation_run_count_per_day"] == 2
+    assert by_event["chat_turns_per_day"] == 2
 
 
 def test_daily_counts_event_filter(store_on: SqliteTelemetryStore) -> None:
     store_on.record("install")
-    store_on.record("validation_count_per_day", count=4)
+    store_on.record("tool_calls_per_day", count=4)
     buckets = store_on.daily_counts(event_name="install")
     assert all(b["event_name"] == "install" for b in buckets)

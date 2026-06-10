@@ -87,9 +87,6 @@ export const AUDIT_EVENT_NAME_ALIASES: Record<string, string> = {
   tool_call: "agent.tool.call",
   approval_requested: "agent.approval.requested",
   approval_resolved: "agent.approval.resolved",
-  scenario_started: "rt.scenario.started",
-  caldera_operation_created: "rt.caldera.operation.created",
-  detection_validation_recorded: "rt.detection.validation.recorded",
 };
 
 /** Inverse mapping: standard name → phantom action. Used by

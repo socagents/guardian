@@ -7,12 +7,12 @@ to the usecase layer so both API modules can import without tripping
 a circular import (api/instances.py → api/connectors.py).
 
 `PROBE_IMPLEMENTED` lists connector_ids with a real probe wired here.
-Other connectors (notably xsiam, which would need a PAPI roundtrip)
-fall back to the legacy reset-to-pending behavior in the caller.
+Other connectors fall back to the legacy reset-to-pending behavior
+in the caller.
 
 Pre-v0.1.15 the probe read connection details from environment vars
 only. That meant any operator-edited instance config (e.g. a custom
-Caldera port) was silently ignored — the test always reported the
+upstream port) was silently ignored — the test always reported the
 env-default endpoint's status. v0.1.15 lets callers pass `config`
 and `secrets` dicts explicitly; absent kwargs still fall through to
 the env defaults so the legacy /connectors/{id}/probe endpoint keeps
@@ -20,9 +20,8 @@ working without instance context.
 
 Naming convention: instance config keys vary depending on creation
 path. The bindsInstances templates in bundles/spark/manifest.yaml
-use `baseUrl`/`apiToken`/`apiKey`. Older auto-migrated instances use
-connector-prefixed names (`xlog_url`, `caldera_api_key`). The probe
-checks both.
+use `api_url`/`api_id`/`api_key`. Older instances may use legacy
+names (`papiUrl`, `baseUrl`). The probe checks both.
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ import httpx
 
 
 PROBE_IMPLEMENTED: frozenset[str] = frozenset(
-    {"xlog", "caldera", "xsiam", "cortex-docs", "cortex-content", "cortex-xdr"}
+    {"xsiam", "cortex-docs", "cortex-content", "cortex-xdr"}
 )
 
 
@@ -72,95 +71,6 @@ async def real_probe(
     verify = os.environ.get("PHANTOM_TLS_VERIFY", "0") == "1"
 
     try:
-        if connector_id == "xlog":
-            url = _first(
-                cfg.get("baseUrl"),
-                cfg.get("xlog_url"),
-                cfg.get("url"),
-                os.environ.get("XLOG_URL"),
-                # v0.6.45 — final fallback flipped from http to https.
-                # xlog serves HTTPS unconditionally since v0.4.0 (TLS via
-                # shared phantom_tls volume); pre-v0.6.45 the http
-                # fallback only hit if ALL upstream sources were unset
-                # (rare in production where compose always sets XLOG_URL),
-                # but when it did hit, the probe got "Empty reply from
-                # server" against the HTTPS-only listener and surfaced a
-                # misleading connector-down signal.
-                "https://xlog:8000",
-            ).rstrip("/")
-            token = _first(
-                sec.get("apiToken"),
-                sec.get("xlog_api_key"),
-                sec.get("api_token"),
-                os.environ.get("XLOG_API_KEY"),
-                os.environ.get("XLOG_API_TOKEN"),
-            )
-            headers = {"Authorization": token} if token else {}
-
-            # Probe sends ONE request against the configured URL and
-            # reports the verbatim outcome. No silent scheme flipping,
-            # no retries with the opposite protocol — if the operator's
-            # stored baseUrl is wrong (e.g. http:// against an
-            # HTTPS-only listener after a TLS rollout), the probe's job
-            # is to surface the failure so the operator updates the
-            # config explicitly via /connectors. The probe is a test,
-            # not a self-healer.
-            async with httpx.AsyncClient(timeout=timeout, verify=verify) as c:
-                r = await c.get(f"{url}/health", headers=headers)
-            if r.status_code == 200:
-                return (True, None, False)
-            if r.status_code in (401, 403):
-                return (False, f"HTTP {r.status_code} from {url}", True)
-            return (False, f"HTTP {r.status_code} from {url}", False)
-
-        if connector_id == "caldera":
-            url = _first(
-                cfg.get("baseUrl"),
-                cfg.get("caldera_url"),
-                cfg.get("url"),
-                os.environ.get("CALDERA_URL"),
-                "http://caldera:8888",
-            ).rstrip("/")
-            # v0.1.34 — switched from GET / (root login page, no auth)
-            # to GET /api/v2/health with the operator's API key in the
-            # KEY header. Caldera's API protects /api/v2/* endpoints
-            # with the same KEY-header convention the connector itself
-            # uses for tool calls (see bundles/spark/connectors/caldera/
-            # src/connector.py::_caldera_request). This way Test
-            # Connection actually validates the key the operator typed
-            # — wrong key returns 401, which we surface with
-            # is_auth_error=true so the UI can flip the badge to amber.
-            #
-            # Pre-fix the root-page probe rubber-stamped any caldera
-            # whose service was up, even with a bad API key, and the
-            # operator only learned the key was wrong on the first
-            # caldera tool call (which then 401'd).
-            api_key = _first(
-                sec.get("apiKey"),
-                sec.get("api_key"),
-                sec.get("caldera_api_key"),
-                os.environ.get("CALDERA_API_KEY"),
-            )
-            if not api_key:
-                return (False, "apiKey is not configured", True)
-            headers = {"KEY": api_key, "Content-Type": "application/json"}
-            async with httpx.AsyncClient(timeout=timeout, verify=verify) as c:
-                r = await c.get(f"{url}/api/v2/health", headers=headers)
-            if r.status_code == 200:
-                return (True, None, False)
-            if r.status_code in (401, 403):
-                return (
-                    False,
-                    f"HTTP {r.status_code} from {url}/api/v2/health "
-                    "(API key rejected)",
-                    True,
-                )
-            return (
-                False,
-                f"HTTP {r.status_code} from {url}/api/v2/health",
-                False,
-            )
-
         if connector_id == "xsiam":
             # XSIAM PAPI auth: Authorization=<api_key> + x-xdr-auth-id=<id>.
             # Probe endpoint: POST /public_api/v1/xql/get_datasets with

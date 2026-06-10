@@ -114,7 +114,7 @@
           "required": {
             "type": "boolean",
             "default": false,
-            "description": "When true, instance creation refuses if this slot is empty. When false, the connector handles the missing-secret case (e.g. xlog's optional webhookKey)."
+            "description": "When true, instance creation refuses if this slot is empty. When false, the connector handles the missing-secret case (e.g. xsiam's optional webhookKey)."
           }
         }
       }
@@ -136,7 +136,7 @@
               "name": {
                 "type": "string",
                 "pattern": "^[a-z][a-z0-9_]*$",
-                "description": "Tool name. The MCP exposes it as <connector_id>/<tool_name> (e.g. 'caldera/list_abilities')."
+                "description": "Tool name. The MCP exposes it as <connector_id>/<tool_name> (e.g. 'xsiam/run_xql_query')."
               },
               "method": {
                 "type": "string",

@@ -1,7 +1,0 @@
-*.pyc
-*.DS_Store
-*__pycache__*
-.idea/*
-*.history/*
-.idea
-node_modules

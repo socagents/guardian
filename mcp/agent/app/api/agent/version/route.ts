@@ -53,8 +53,6 @@ export async function GET() {
   // from the release manifest.
   const digestSources: Record<string, string | undefined> = {
     'phantom-agent': process.env.DIGEST_PHANTOM_AGENT,
-    'phantom-xlog': process.env.DIGEST_PHANTOM_XLOG,
-    'phantom-caldera': process.env.DIGEST_PHANTOM_CALDERA,
     'phantom-updater': process.env.DIGEST_PHANTOM_UPDATER,
     'phantom-browser': process.env.DIGEST_PHANTOM_BROWSER,
   };

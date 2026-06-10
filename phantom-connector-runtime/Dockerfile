@@ -2,9 +2,10 @@
 # containers (v0.2 architecture, Phase 1 foundation work; see
 # docs/spec-per-instance-connector-containers.md).
 #
-# Every per-connector image (phantom-connector-xlog, -xsiam, -caldera,
-# -web) inherits from this base, adds its own connector source +
-# connector-specific deps, and inherits the entrypoint defined here.
+# Every per-connector image (phantom-connector-xsiam, -cortex-xdr,
+# -cortex-docs, -cortex-content, -web) inherits from this base, adds
+# its own connector source + connector-specific deps, and inherits
+# the entrypoint defined here.
 #
 # # What lives here:
 #   - FastMCP (the MCP server the agent's proxy talks to)
@@ -71,7 +72,7 @@ EXPOSE 9000
 # python:3.12-slim's Debian trixie base image (the slim variant
 # strips wget AND curl AND nc). Pre-v0.6.38 every connector container
 # reported "(unhealthy)" with thousands-deep failing-streak counters
-# (e.g. cortex-xdr at 982, cortex-docs at 1645, caldera at 507)
+# (e.g. cortex-xdr at 982, cortex-docs at 1645)
 # because the HEALTHCHECK CMD itself errored with `sh: 1: wget: not
 # found` (exit 127). The actual /health endpoint was always
 # responsive — operators just couldn't tell because the docker label

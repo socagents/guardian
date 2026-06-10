@@ -32,11 +32,11 @@ import { SparkLogo } from "@/components/sidebar";
 // ─── Quick Action Chips (phantom-flavored) ──────────────────────────────────
 
 const QUICK_ACTIONS = [
-  { label: "Health Check", icon: "monitor_heart", prompt: "Run a system health check across xlog, MCP, and CALDERA" },
-  { label: "List Skills", icon: "auto_awesome", prompt: "Show me available simulation skills" },
-  { label: "Generate Logs", icon: "data_object", prompt: "Generate 20 firewall logs with src IP 10.0.0.12" },
-  { label: "Port Scan", icon: "scanner", prompt: "Create a port scan scenario against 10.10.20.5" },
-  { label: "XQL Coverage", icon: "query_stats", prompt: "Run a coverage report for the last simulation batch" },
+  { label: "Health Check", icon: "monitor_heart", prompt: "Run a system health check across the MCP and connector instances" },
+  { label: "List Skills", icon: "auto_awesome", prompt: "Show me available skills" },
+  { label: "Open Cases", icon: "folder_open", prompt: "Show me the open cases and issues from the tenant" },
+  { label: "Run XQL", icon: "query_stats", prompt: "Author and run an XQL query to count agent events by host over the last 24 hours" },
+  { label: "Asset Lookup", icon: "devices", prompt: "List the assets known to the tenant and summarize what's inventoried" },
   { label: "List Connectors", icon: "cable", prompt: "Show me the active connector instances and their status" },
 ] as const;
 
@@ -853,7 +853,7 @@ function EmptyState({ onQuickAction }: { onQuickAction: (prompt: string) => void
             Talk to Phantom
           </h2>
           <p className="text-sm text-on-surface-variant/70 mt-1 font-body max-w-sm">
-            Continuous SOC simulation — log generation, scenario orchestration,
+            AI incident response — case triage, XQL investigation,
             and live tool telemetry over MCP.
           </p>
         </div>

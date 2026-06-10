@@ -461,7 +461,7 @@ function AgentEditor({
               value={allowedText}
               onChange={(e) => setAllowedText(e.target.value)}
               className="input-base font-mono min-h-[120px]"
-              placeholder={"caldera_*\nxsiam_get_*"}
+              placeholder={"xdr_*\nxsiam_get_*"}
             />
           </Field>
           <Field label="Tools denied (one glob per line)">
@@ -469,7 +469,7 @@ function AgentEditor({
               value={deniedText}
               onChange={(e) => setDeniedText(e.target.value)}
               className="input-base font-mono min-h-[120px]"
-              placeholder={"*_delete\ncaldera_delete_*"}
+              placeholder={"*_delete\nxsiam_create_*"}
             />
           </Field>
         </div>

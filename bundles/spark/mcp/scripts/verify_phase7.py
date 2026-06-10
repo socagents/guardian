@@ -35,7 +35,7 @@ async def main() -> int:
     # ─── Happy path: request → wait → resolve(approve) ─────
     aid = bus.request(
         tool="create_operation",
-        namespaced="caldera.create_operation",
+        namespaced="xsiam.run_xql_query",
         actor="agent",
         args={"adversary_id": "abc-123", "name": "phase7-verify"},
     )
@@ -84,7 +84,7 @@ async def main() -> int:
     # ─── Unknown decision ──────────────────────────────────
     aid3 = bus.request(
         tool="create_operation",
-        namespaced="caldera.create_operation",
+        namespaced="xsiam.run_xql_query",
         actor="agent",
         args={},
     )

@@ -115,8 +115,8 @@ if [[ -f release-manifest.env ]]; then
   echo "→ Applying digest manifest to .env"
 
   # Sanity: every required key must be present.
-  for key in PHANTOM_VERSION DIGEST_PHANTOM_AGENT DIGEST_PHANTOM_XLOG \
-             DIGEST_PHANTOM_CALDERA DIGEST_PHANTOM_UPDATER DIGEST_PHANTOM_BROWSER; do
+  for key in PHANTOM_VERSION DIGEST_PHANTOM_AGENT \
+             DIGEST_PHANTOM_UPDATER DIGEST_PHANTOM_BROWSER; do
     if ! grep -q "^${key}=" release-manifest.env; then
       echo "ERROR: release-manifest.env missing required key: $key" >&2
       echo "       The install kit tarball is corrupted; re-download from" >&2
@@ -213,8 +213,7 @@ if [[ "$status" != "healthy" ]]; then
   echo "       Diagnostic commands:" >&2
   echo "         docker compose ps" >&2
   echo "         docker compose logs phantom-agent" >&2
-  echo "         docker compose logs xlog" >&2
-  echo "         docker compose logs caldera" >&2
+  echo "         docker compose logs phantom-updater" >&2
   exit 1
 fi
 

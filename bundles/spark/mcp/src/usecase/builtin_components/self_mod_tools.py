@@ -129,8 +129,7 @@ def jobs_runs(name: str, limit: int = 20) -> dict[str, Any]:
 
 # ─────────────────────────────────────────────────────────────────
 # Settings — runtime overrides over manifest.settings.defaults.
-# Trigger phrases: "what's my default scenario?", "show my settings",
-# "what model am I using?"
+# Trigger phrases: "show my settings", "what model am I using?"
 # ─────────────────────────────────────────────────────────────────
 
 
@@ -180,9 +179,9 @@ def personality_get() -> dict[str, Any]:
 
 
 # ─────────────────────────────────────────────────────────────────
-# Connector instances — XSIAM, Caldera, Xlog config blobs.
+# Connector instances — XSIAM, Cortex XDR, web config blobs.
 # Trigger phrases: "what's my XSIAM URL?", "show me the connector
-# instances", "is Caldera configured?"
+# instances", "is XSIAM configured?"
 # ─────────────────────────────────────────────────────────────────
 
 
@@ -191,7 +190,7 @@ def instances_list(connector_id: str | None = None) -> dict[str, Any]:
     returned — only secret-slot path references.
 
     Args:
-        connector_id: optional filter — "xsiam", "caldera", "xlog".
+        connector_id: optional filter — "xsiam", "cortex-xdr", "web".
             Null = all.
 
     Returns {instances: [{id, name, connector_id, config, secret_refs:
@@ -416,7 +415,7 @@ def notifications_unread_count() -> dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────
 # Audit log — forensic queries on the agent's own behavior.
 # Trigger phrases: "show me the last 20 tool calls", "what did the
-# agent do at 3pm?", "audit search 'caldera'"
+# agent do at 3pm?", "audit search 'xsiam'"
 # ─────────────────────────────────────────────────────────────────
 
 
@@ -436,7 +435,7 @@ def audit_search(
             params; use action/actor/target_prefix when you can.
         action: exact action filter (e.g. "tool_call", "job_fired").
         actor: exact actor filter (e.g. "operator", "scheduler").
-        target_prefix: target prefix filter (e.g. "memory:", "kb:phantom-soc:").
+        target_prefix: target prefix filter (e.g. "memory:", "kb:xql-examples:").
         limit: max rows (1-500). Default 50.
 
     Returns {events: [...], count}.
@@ -735,10 +734,10 @@ def health_status() -> dict[str, Any]:
 #
 # Trigger phrases the agent recognizes (Commit 7 wires guidance):
 #   "schedule a daily SOC report at 8am"     → jobs_create
-#   "pause the daily-soc-coverage job"        → jobs_update(enabled=False)
-#   "run the coverage report now"             → jobs_run_now
+#   "pause the nightly-report job"            → jobs_update(enabled=False)
+#   "run the incident summary now"            → jobs_run_now
 #   "always reply in three bullet points"     → personality_update
-#   "change my default scenario to ransomware"→ settings_update
+#   "change my default model to flash"        → settings_update
 #   "dismiss notification N"                  → notifications_dismiss
 #   "approve approval ABC"                    → approvals_resolve
 # ═════════════════════════════════════════════════════════════════
@@ -778,39 +777,14 @@ async def jobs_create(
               <skill name="..."> ... </skill>, so the agent enters the
               conversation with that skill already in context. Set
               this when the operator's request names a specific
-              skill — e.g. "run the bruteforce_vpn_to_lateral skill
-              every morning", "schedule a daily port-scan-detection
-              simulation". When omitted, the agent picks a skill at
+              skill — e.g. "run the incident-triage skill every
+              morning". When omitted, the agent picks a skill at
               runtime based on the message content (good for open-
               ended prompts like "summarize last night's alerts").
 
             type="tool_call" — invoke an MCP tool with args:
               {"type": "tool_call", "name": "<tool_name>",
                "args": { ...tool_request_body... }}
-
-            type="log" — generate logs via phantom_create_data_worker.
-              REQUIRED keys at minimum: `format` and `count`.
-              {"type": "log",
-               "format": "JSON" | "CEF" | "LEEF" | "SYSLOG"
-                         | "WINEVENT" | "XSIAM_Parsed" | "XSIAM_CEF",
-               "count": <int>,
-               "destination": "udp:host:port" | "https://..." | "<sink>",
-               "vendor"?: "...", "product"?: "...",
-               "required_fields"?: [...], "observables_dict"?: {...}}
-
-              ⚠ The action's TOP-LEVEL `type` key is the action
-              discriminator, NOT the log format. The log format goes
-              under the inner field name `format`. (Internally the
-              scheduler renames `format` → `type` when calling the
-              data-worker tool, but from the action's perspective the
-              field is always `format`.)
-
-              Common mistake to AVOID: using `log_type` instead of
-              `format` — `log_type` is what `phantom_get_field_info`
-              accepts; `jobs_create` action expects `format`. A job
-              with `log_type=SYSLOG` but no `format` will be saved
-              successfully but FAIL on first fire with
-              "log action requires a `format` field".
 
         timezone: IANA TZ name. Default UTC.
         enabled: schedule starts active. Default true.
@@ -866,19 +840,19 @@ async def jobs_create(
             Patterns are globs (same as HookMatcher.toolGlob: `*`, `?`,
             comma-separated lists). Set when the operator scopes the
             job — concrete trigger phrases: "only let this job touch
-            xlog tools", "don't let this job call any caldera tools",
-            "approve any *_delete this job tries". Omit / pass None
-            to leave the policy unrestricted (the runtime default).
-            Example: `{"allowed_tools": ["xlog_*"], "denied_tools":
-            ["*_delete"]}` restricts the job to xlog tools AND blocks
-            destructive deletes within that family. Evaluation order:
-            denied beats allowed beats require_approval beats default-
-            allow.
+            xsiam tools", "don't let this job call any cortex-xdr
+            tools", "approve any *_delete this job tries". Omit /
+            pass None to leave the policy unrestricted (the runtime
+            default). Example: `{"allowed_tools": ["xsiam_*"],
+            "denied_tools": ["*_delete"]}` restricts the job to xsiam
+            tools AND blocks destructive deletes within that family.
+            Evaluation order: denied beats allowed beats
+            require_approval beats default-allow.
 
     Returns the persisted job row on success.
 
     Trigger phrases: "schedule a daily X at Y", "create a cron job
-    that does Z every Monday morning", "send N <vendor> logs once now".
+    that does Z every Monday morning", "summarize open incidents once now".
 
     Idempotency discipline (v0.3.8+): BEFORE creating a job, call
     `jobs_list()` and check whether a job with the same intent already
@@ -1033,7 +1007,7 @@ async def jobs_run_now(name: str) -> dict[str, Any]:
     """Trigger a job immediately, outside its cron schedule.
     Approval-gated.
 
-    Useful for "run the coverage report now" or "test that the
+    Useful for "run the incident summary now" or "test that the
     nightly summary still works." The job's regular schedule is
     unaffected — the next regular fire still happens.
 
@@ -1081,7 +1055,7 @@ async def personality_update(blob: dict[str, Any]) -> dict[str, Any]:
 
     Trigger phrases: "always answer in three bullet points",
     "be more concise", "raise your proactivity", "update the
-    personality so you cite simulation IDs more aggressively".
+    personality so you cite incident IDs more aggressively".
     """
     from usecase.builtin_components._approval_gate import gate_and_execute
     from usecase.personality_store import personality_store
@@ -1138,7 +1112,7 @@ async def personality_patch(updates: dict[str, Any]) -> dict[str, Any]:
     instead of the noisier full-blob keylist.
 
     Trigger phrases: "be more concise", "update your personality.md
-    to add a guideline about citing simulation IDs", "soften your
+    to add a guideline about citing incident IDs", "soften your
     tone".
     """
     from usecase.builtin_components._approval_gate import gate_and_execute
@@ -1195,13 +1169,9 @@ async def settings_update(
     current allow-list (Spark bundle) is:
 
         - geminiModel                       (default model name)
-        - defaultLogDestination             (default webhook/sink address)
         - setupUiUser                       (operator's display name)
-        - defaultLogFormat                  (e.g. "cef", "leef", "syslog")
-        - defaultScenario                   (default scenario file stem)
         - requireHumanApprovalForOperations (bool — toggles bundle-wide
                                              approval gate)
-        - coverageReportFormat              (e.g. "markdown", "json")
 
     Anything else (random env names, secrets, MCP internals) is silently
     rejected — those go through `instances_create` (connector creds) or
@@ -1406,11 +1376,11 @@ async def approvals_resolve(
 # WHERE risk_tier='destructive'.
 #
 # Trigger phrases:
-#   "delete the daily-soc-coverage job"            → jobs_delete
+#   "delete the nightly-report job"                → jobs_delete
 #   "remove the legacy skill X"                    → skills_delete
 #   "reset my personality to defaults"             → personality_reset
 #   "clear the geminiModel override"               → settings_reset
-#   "delete the primary-caldera instance"          → instances_delete
+#   "delete the primary-xsiam instance"            → instances_delete
 #   "remove the secondary-vertex provider"         → providers_delete
 # ═════════════════════════════════════════════════════════════════
 
@@ -1457,7 +1427,7 @@ async def skills_delete(file_path: str) -> dict[str, Any]:
 
     Args:
         file_path: Relative path to skill file (e.g.,
-                   'scenarios/port_scan.md'). Parameter name MUST match
+                   'workflows/build_xql_query.md'). Parameter name MUST match
                    the underlying skills_crud.skills_delete signature
                    AND the legacy MCP Tool inputSchema in
                    skills_crud.py — both expect `file_path`. Pre-v0.3.4
@@ -1584,9 +1554,9 @@ async def settings_reset(
 async def instances_delete(instance_id: str) -> dict[str, Any]:
     """Remove a connector instance. Approval-gated (destructive).
 
-    Connector instances bind credentials (XSIAM PAPI auth, Caldera red
-    password, GitHub token, etc.). Deleting one disconnects the agent
-    from that backend until the operator runs setup again.
+    Connector instances bind credentials (XSIAM PAPI auth, Cortex XDR
+    API keys, etc.). Deleting one disconnects the agent from that
+    backend until the operator runs setup again.
 
     For container-style connectors (web, cortex-content, etc.), the
     phantom-updater daemon also stops + removes the per-instance docker
@@ -1906,7 +1876,7 @@ async def api_keys_revoke(key_id: str) -> dict[str, Any]:
 # TIER 5 — multi-action batch (v0.3.10+)
 #
 # The operator pain that motivated this: when the agent has multiple
-# mutations to make (e.g. "schedule a daily simulation job for each of
+# mutations to make (e.g. "schedule a daily report job for each of
 # my 5 skills"), pre-v0.3.10 every job_create fired its own approval
 # card. Operators saw 5 sequential cards for what was conceptually one
 # decision, and the agent often timed out on rows 2-5 because the
@@ -1981,7 +1951,7 @@ async def agent_batch_propose(actions: list[dict[str, Any]]) -> dict[str, Any]:
     """Bundle N self-modification actions into ONE approval ceremony.
 
     When the operator asks the agent to take multiple actions at once
-    ("schedule a daily simulation job for each of my 5 skills",
+    ("schedule a daily report job for each of my 5 skills",
     "delete these 3 instances", "rotate both gh-actions and ci-bot
     keys"), use this tool to present them as ONE approval card instead
     of firing N independent approvals. The operator sees the full plan
@@ -2012,8 +1982,8 @@ async def agent_batch_propose(actions: list[dict[str, Any]]) -> dict[str, Any]:
               `personality_*`, `api_keys_*`, `notifications_*`,
               `skills_delete`). Dispatched directly for speed.
             - A connector tool registered on the running MCP (e.g.
-              `xsiam/send_webhook_log`, `caldera/create_operation`,
-              `web/navigate`). Dispatched through the unified
+              `xsiam.run_xql_query`, `xdr.get_cases_and_issues`,
+              `web.navigate`). Dispatched through the unified
               tool_dispatcher (same path the scheduler uses), which
               preserves per-instance contextvar setup, Pydantic
               marshalling, and result unwrapping. v0.3.11+.
@@ -2746,9 +2716,9 @@ async def bench_run(
     Args:
         manifest: Either a path to a YAML manifest file (absolute or
             relative to CWD on the agent container) OR a bundled-corpus
-            id ("phantom-soc-v1" resolves to bench_cases/phantom-soc-v1.yaml
+            id ("guardian-soc-v1" resolves to bench_cases/guardian-soc-v1.yaml
             packaged with the agent image). Concrete trigger phrases:
-            "run the phantom-soc-v1 benchmark", "run the bench
+            "run the guardian-soc-v1 benchmark", "run the bench
             manifest at /tmp/my-bench.yaml".
         router_preset_model: Optional per-bench model override sent as
             body.model on every dispatched case. Use "gemini-2.5-flash"
@@ -2761,7 +2731,7 @@ async def bench_run(
     Returns: { "run_id": str, "summary": {...} } on success;
              { "error": str } on manifest-parse failure.
 
-    Trigger phrases: "run the phantom-soc-v1 benchmark", "bench the
+    Trigger phrases: "run the guardian-soc-v1 benchmark", "bench the
     agent on flash routing", "run the bench manifest <path>".
     """
     from usecase.builtin_components._approval_gate import gate_and_execute
@@ -2795,104 +2765,3 @@ async def bench_run(
         )
     except Exception as exc:  # noqa: BLE001
         return {"error": str(exc), "tool": "bench_run"}
-
-
-# ─── Log destinations — v0.17.0 R6 read-only surface ───────────────
-
-
-def log_destinations_list(type_id: str | None = None) -> dict[str, Any]:
-    """List configured log destinations (forwarding targets).
-
-    Secrets are NEVER returned — only redacted "***" sentinels for slots
-    that are populated. Use this to discover which destinations the
-    operator has configured before calling `phantom_create_data_worker`
-    with a `destination_id`.
-
-    Args:
-        type_id: optional filter — "syslog", "webhook", "xsiam_http",
-            "splunk_hec". Null = all types.
-
-    Returns {destinations: [{id, name, type_id, config, secrets (redacted),
-                             enabled, is_default, last_probe_at,
-                             last_probe_ok, created_at}], count}.
-
-    The agent should prefer destinations marked `is_default: true` for
-    a given type when the operator hasn't specified one explicitly.
-    """
-    from usecase.log_destinations_store import get_log_destination_store
-    s = get_log_destination_store()
-    rows = s.list_all(type_id=type_id) if type_id else s.list_all()
-    out: list[dict[str, Any]] = []
-    for d in rows:
-        out.append(d.to_dict(include_secrets=False))
-    return {"destinations": out, "count": len(out)}
-
-
-def log_destinations_get(destination_id: str) -> dict[str, Any]:
-    """Fetch one log destination by id (uuid) or name.
-
-    Returns {destination: {...}} or {error}. Secrets are NEVER returned
-    (only redacted "***" sentinels).
-
-    The agent should call this to confirm a destination exists + see its
-    config (host/port/url) before passing its id to a worker.
-    """
-    from usecase.log_destinations_store import get_log_destination_store
-    s = get_log_destination_store()
-    d = s.get(destination_id)
-    if d is None:
-        return {"error": f"log destination {destination_id!r} not found"}
-    return {"destination": d.to_dict(include_secrets=False)}
-
-
-def log_destinations_create(
-    name: str, host: str, port: int, protocol: str = "udp"
-) -> dict[str, Any]:
-    """Create a plain (secretless) syslog Log Destination from a prompt.
-
-    SECRETLESS SYSLOG ONLY. This tool deliberately CANNOT create a
-    destination that carries a secret (TLS-syslog, xsiam_http, splunk_hec) —
-    those are operator-only: tell the operator to add them in the
-    /log-destinations UI. Catalog-side per the credential guardrail: it
-    writes NO SecretStore value (plain UDP/TCP syslog has no secret slot).
-
-    Use this when the operator wants to simulate to syslog and NO syslog
-    destination exists yet (the zero-destinations cold start). The first
-    syslog destination created is marked the type default, so a later bare
-    "simulate ..." auto-routes to it.
-
-    Args:
-        name: operator-facing handle (must be unique).
-        host: syslog target host or IP (e.g. the XSIAM broker IP).
-        port: syslog target port (e.g. 514).
-        protocol: 'udp' or 'tcp'. NOT 'tls' — TLS syslog carries a
-            client-key secret, so direct the operator to the
-            /log-destinations UI for that.
-
-    Returns the created destination dict (secrets redacted), or {error}.
-    """
-    proto = (protocol or "udp").lower()
-    if proto not in ("udp", "tcp"):
-        return {
-            "error": (
-                f"protocol must be 'udp' or 'tcp' (got {protocol!r}). "
-                "TLS syslog carries a client-key secret — add it in the "
-                "/log-destinations UI; the agent only creates secretless "
-                "syslog destinations."
-            )
-        }
-    from usecase.log_destinations_store import get_log_destination_store
-    s = get_log_destination_store()
-    first_of_type = not s.list_all(type_id="syslog")
-    try:
-        dest = s.create(
-            name=name,
-            type_id="syslog",
-            config={"host": str(host), "port": str(port), "protocol": proto},
-            secrets={},
-            is_default=first_of_type,
-            description="Created via agent (secretless syslog).",
-        )
-    except ValueError as exc:
-        return {"error": str(exc)}
-    return dest.to_dict(include_secrets=False)

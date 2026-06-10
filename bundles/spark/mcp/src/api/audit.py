@@ -25,7 +25,7 @@ Query params for GET /api/v1/audit:
                     instance/secret/provider events recorded by the
                     SqliteAuditLog itself)
     actor           "agent" | "user:operator" | "system"
-    target          exact match, e.g. "tool:xsiam.execute_xql_query"
+    target          exact match, e.g. "tool:xsiam.run_xql_query"
     target_prefix   LIKE prefix, e.g. "tool:" or "instance:"
     since, until    ISO8601 timestamps
     limit           default 100, max 1000

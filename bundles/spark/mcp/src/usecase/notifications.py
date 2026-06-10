@@ -4,9 +4,9 @@ implementation of the spec's `notifications` capability.
 The bundle declares topics in manifest.notifications.topics[]:
 
     - { name: "setup-required",       severity: "warning",  target: "user:operator" }
-    - { name: "simulation-complete",  severity: "info",     target: "user:operator" }
-    - { name: "detection-miss",       severity: "warning",  target: "channel:soc" }
-    - { name: "caldera-operation",    severity: "critical", target: "channel:purple-team" }
+    - { name: "job-run-completed",    severity: "info",     target: "user:operator" }
+    - { name: "job-run-failed",       severity: "warning",  target: "user:operator" }
+    - { name: "approval-requested",   severity: "warning",  target: "user:operator" }
 
 This module wires those declarations to runtime behavior:
 

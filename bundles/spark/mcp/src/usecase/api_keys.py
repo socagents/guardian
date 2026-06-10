@@ -5,8 +5,8 @@ which the agent UI uses on every internal call. That works for the
 phantom-agent ↔ embedded MCP path but is wrong for external callers:
 
   * external SOC tools polling the audit log for SIEM ingestion
-  * cross-host integrations (xlog/caldera on Machine B exposing
-    automation hooks back at the agent's webhook surface)
+  * cross-host integrations (external tooling on another machine
+    calling back at the agent's webhook surface)
   * scripts an operator wants to run from a workstation
 
 For those, an operator needs to mint a stable, revocable, scoped

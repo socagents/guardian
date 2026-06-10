@@ -21,14 +21,14 @@
 #      http://localhost:3000 — NOT via .env. The handful of vars that
 #      .env carries are the ones needed at container boot before the
 #      setup page is reachable (registry creds, MCP token, encryption
-#      KEK, caldera red creds, xlog bearer).
+#      KEK).
 #   5. v0.3.0+ — image refs use DIGEST PINNING (`@sha256:...`), not
 #      version-tag pinning (`:1.2.0`). See "Image pinning" below.
 #
 # Image pinning (v0.3.0+):
 #   Each service references its image by content digest, not by tag:
 #
-#     image: ghcr.io/.../phantom-caldera@${DIGEST_PHANTOM_CALDERA:-sha256:invalid_digest_run_installer_first}
+#     image: ghcr.io/.../phantom-agent@${DIGEST_PHANTOM_AGENT:-sha256:invalid_digest_run_installer_first}
 #
 #   The DIGEST_* values are written into .env by the phantom-installer
 #   from a release manifest (release-manifest-vX.Y.Z.env) bundled with
@@ -38,8 +38,7 @@
 #       actually changed between releases (digest changes ⇒ spec hash
 #       changes ⇒ recreate). Containers whose image bytes are
 #       identical across releases keep running, preserving in-memory
-#       state (caldera red-team operations, xlog streaming workers,
-#       etc.).
+#       state (in-flight agent jobs, active sessions, etc.).
 #     - The fallback `:-sha256:invalid_digest_run_installer_first`
 #       is INTENTIONALLY invalid — if the customer's .env is missing
 #       a DIGEST_* value, docker compose fails loudly with a clear
@@ -50,180 +49,9 @@
 #       but requires fetching the matching release-manifest-vX.Y.Z.env
 #       from the GitHub Release first.
 #
-#   See installer/MIGRATION-FROM-V02X.md for the v0.2.x → v0.3.0
-#   upgrade path; see app/help/architecture (#image-pinning) for the
-#   canonical spec.
+#   See app/help/architecture (#image-pinning) for the canonical spec.
 
 services:
-
-  # ─────────────────────────────────────────────────────────────────
-  # xlog — synthetic log generator + GraphQL API.
-  # The agent's xlog connector POSTs queries here. Customers don't
-  # interact with this directly — it's a backend service for the
-  # agent.
-  # ─────────────────────────────────────────────────────────────────
-  xlog:
-    image: ghcr.io/kite-production/phantom-xlog@${DIGEST_PHANTOM_XLOG:-sha256:invalid_digest_run_installer_first}
-    container_name: xlog
-    restart: unless-stopped
-    environment:
-      # Bearer token enforced by xlog/app/auth.py. The phantom-agent
-      # service below sets XLOG_API_TOKEN to the same value (alias)
-      # so MCP calls authenticate. When unset, xlog runs in permissive
-      # mode and logs a startup warning.
-      - XLOG_API_KEY
-      - WEBHOOK_KEY
-      - WEBHOOK_ENDPOINT
-      - WORKERS_NUMBER
-      - LOGGING_DIR
-      - LOGGING_STORAGE_SIZE
-      - LOGGING_TRUNCATE_LIMIT
-      - XSIAM_MANDATORY_PARSED_FIELDS
-      - XSIAM_OPTIONAL_PARSED_FIELDS
-      - XLOG_DB_PATH=/data/xlog.db
-    volumes:
-      - xlog_scenarios:/scenarios
-      - xlog_data:/data
-      # TLS — read-only mount of the shared phantom_tls volume. The
-      # agent (rw mount of the same volume) writes cert.pem + key.pem
-      # here when the operator picks a TLS mode in setup. xlog reads
-      # at startup and falls back to plain HTTP if files don't exist.
-      - phantom_tls:/tls:ro
-    healthcheck:
-      # TLS-aware healthcheck — try HTTPS first, fall back to plain
-      # HTTP. Self-signed certs get _create_unverified_context.
-      # Each python invocation is one-liner; `||` chains them at the
-      # shell level so we don't need multi-line python in YAML.
-      test: ["CMD-SHELL", "python -c \"import urllib.request,ssl;urllib.request.urlopen('https://localhost:8000/health',timeout=5,context=ssl._create_unverified_context())\" 2>/dev/null || python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health',timeout=5)\""]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
-
-  # ─────────────────────────────────────────────────────────────────
-  # caldera — MITRE Caldera red-team operations backend.
-  # Customized variant; not interchangeable with public aymanam/caldera
-  # because of the entrypoint config-rewrite logic below.
-  # ─────────────────────────────────────────────────────────────────
-  caldera:
-    image: ghcr.io/kite-production/phantom-caldera@${DIGEST_PHANTOM_CALDERA:-sha256:invalid_digest_run_installer_first}
-    container_name: caldera
-    restart: unless-stopped
-    # Host-side port mappings are env-var configurable so operators
-    # can sidestep conflicts with other services on the same host.
-    # Defaults are chosen to avoid the most common collisions (8443
-    # in particular is a frequent customer collision — common for
-    # other HTTPS-management UIs). To override, set the matching
-    # PHANTOM_CALDERA_*_PORT in .env and re-run the installer.
-    ports:
-      - "${PHANTOM_CALDERA_HTTP_PORT:-8888}:8888"
-      - "${PHANTOM_CALDERA_HTTPS_PORT:-8444}:8443"
-      - "${PHANTOM_CALDERA_CONTACT1_PORT:-7010}:7010"
-      - "${PHANTOM_CALDERA_CONTACT2_PORT:-7011}:7011/udp"
-      - "${PHANTOM_CALDERA_CONTACT3_PORT:-7012}:7012"
-      - "${PHANTOM_CALDERA_DNS_PORT:-8853}:8853"
-      - "${PHANTOM_CALDERA_SSH1_PORT:-8022}:8022"
-      - "${PHANTOM_CALDERA_SSH2_PORT:-2222}:2222"
-    environment:
-      CALDERA_RED_USER:     ${CALDERA_RED_USER:-red}
-      CALDERA_RED_PASSWORD: ${CALDERA_RED_PASSWORD:-phantom-setup-required}
-      CALDERA_API_KEY:      ${CALDERA_API_KEY:-}
-    volumes:
-      - caldera_data:/usr/src/app/data
-      - caldera_conf:/usr/src/app/conf
-      # Read-only mount of the shared phantom_tls volume. Caldera
-      # entrypoint reads /tls/cert.pem + /tls/key.pem at startup if
-      # present and configures TLS; falls back to HTTP otherwise.
-      - phantom_tls:/tls:ro
-      # v0.1.16: phantom_operator_creds carries operator-supplied
-      # caldera creds written by phantom-agent's /api/setup endpoint.
-      # Bridges the gap between setup.json (operator-typed values)
-      # and local.yml (caldera's auth source of truth). Read-only on
-      # caldera; written by the agent.
-      - phantom_operator_creds:/operator-creds:ro
-    healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8888/', timeout=5)\""]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
-    # Templates the operator-supplied red-team creds + API key into
-    # /usr/src/app/conf/local.yml at every container start. Caldera
-    # has no runtime API for setting these, so it must happen before
-    # `python3 server.py` starts.
-    #
-    # v0.1.16: prefer values from /operator-creds/caldera.yaml (written
-    # by phantom-agent's /api/setup endpoint) over env defaults. Pre-fix,
-    # the env was the only source — operator-typed setup-form passwords
-    # never reached local.yml, so caldera's UI rejected them with 401.
-    entrypoint: ["/bin/sh", "-ec"]
-    command:
-      - |
-        python3 - <<'PY'
-        import os
-        import pathlib
-        import yaml
-
-        default_path = pathlib.Path("/usr/src/app/conf/default.yml")
-        local_path = pathlib.Path("/usr/src/app/conf/local.yml")
-        source_path = local_path if local_path.exists() else default_path
-        cfg = yaml.safe_load(source_path.read_text()) or {}
-
-        # Resolution order: operator-creds file (operator typed in
-        # setup form) > env vars (installer-generated defaults).
-        red_user = os.environ["CALDERA_RED_USER"]
-        red_password = os.environ["CALDERA_RED_PASSWORD"]
-        api_key = os.environ.get("CALDERA_API_KEY") or ""
-
-        operator_creds_path = pathlib.Path("/operator-creds/caldera.yaml")
-        if operator_creds_path.exists():
-            try:
-                oc = yaml.safe_load(operator_creds_path.read_text()) or {}
-                if isinstance(oc, dict):
-                    if oc.get("red_user"):
-                        red_user = oc["red_user"]
-                    if oc.get("red_password"):
-                        red_password = oc["red_password"]
-                    if oc.get("api_key"):
-                        api_key = oc["api_key"]
-                    print("[caldera-init] applied operator creds from /operator-creds/caldera.yaml")
-            except Exception as exc:
-                print(f"[caldera-init] WARNING: could not parse operator-creds file: {exc}")
-
-        cfg.setdefault("users", {})
-        cfg["users"]["red"] = {red_user: red_password}
-
-        if api_key:
-            cfg["api_key_red"] = api_key
-            cfg.setdefault("encryption_key", api_key)
-
-        # v0.5.66 (issue #44 follow-up) — Ensure Phantom-shipped plugins
-        # are in the plugins list on EVERY container startup. caldera_conf
-        # is a named volume that was first populated when the operator
-        # first installed Phantom; subsequent image rebuilds put new
-        # default.yml content in the image but the volume already has
-        # the old default.yml — Docker does not re-copy named-volume
-        # content on rebuild. So image-side default.yml modifications
-        # (v0.5.63 emu enable, v0.5.65 phantom enable) get shadowed by
-        # the frozen volume content.
-        #
-        # The entrypoint reconciles by appending phantom + emu to the
-        # plugins list if missing. Idempotent — re-runs are no-ops once
-        # the entries exist. Operators who explicitly removed these
-        # from local.yml will have them re-added on next restart; the
-        # right way to disable a plugin is to set its enabled=false in
-        # the plugin's hook.py or via the Caldera UI, not by removing
-        # the entry from the plugins list.
-        plugins = cfg.setdefault("plugins", [])
-        for required in ("phantom", "emu"):
-            if required not in plugins:
-                plugins.append(required)
-                print(f"[caldera-init] enabled plugin: {required}")
-
-        local_path.parent.mkdir(parents=True, exist_ok=True)
-        local_path.write_text(yaml.safe_dump(cfg, default_flow_style=False, sort_keys=False))
-        PY
-        exec python3 server.py --log DEBUG
 
   # ─────────────────────────────────────────────────────────────────
   # phantom-browser — headless-browser sidecar (v0.1.27+).
@@ -299,8 +127,7 @@ services:
       # digest was unchanged but its resolved env block was different.
       # The image-digest-pinning invariant ("containers retain in-memory
       # state across upgrades that don't change image content") is now
-      # honored for phantom-updater the same way it was already honored
-      # for xlog/caldera.
+      # honored for phantom-updater as well.
       #
       # If you're maintaining a custom compose AND haven't upgraded to
       # the v0.5.51+ phantom-updater image, you need to keep these env
@@ -346,36 +173,14 @@ services:
     container_name: phantom_agent
     restart: unless-stopped
     depends_on:
-      xlog:
-        condition: service_healthy
-      caldera:
-        condition: service_started
       phantom-updater:
         # service_started is enough — the updater isn't on the
         # critical path for first boot; only the /api/updates/*
         # routes care that it's up. The agent comes up regardless.
         condition: service_started
     environment:
-      # Compose-internal hostnames — customer never overrides these.
-      # v0.6.24 — XLOG_URL is now https:// in compose. Pre-v0.6.24
-      # the value was http://xlog:8000 with a stale comment claiming
-      # entrypoint.sh would rewrite it to https when SSL_CERT_PEM
-      # was set; in fact v0.1.34 deleted that rewrite block. xlog
-      # serves HTTPS unconditionally since v0.4.0 (its _resolve_ssl_args
-      # priority 1 is the shared phantom_tls volume mounted from
-      # phantom-agent's auto-generated /tls/cert.pem). The agent's
-      # entrypoint sets NODE_EXTRA_CA_CERTS=/tls/cert.pem so Next.js
-      # trusts the self-signed cert; SAN covers DNS:xlog. Operators
-      # who want a different baseUrl override via /connectors →
-      # InstanceStore (single source of truth for operator overrides,
-      # per /help/architecture#setup-wiring).
-      #
-      # MCP_URL stays http:// here because entrypoint.sh DOES flip it
+      # MCP_URL stays http:// here because entrypoint.sh flips it
       # to https when TLS is enabled (intra-process, same cert).
-      # CALDERA_URL stays http:// because caldera doesn't terminate
-      # TLS yet.
-      - XLOG_URL=https://xlog:8000
-      - CALDERA_URL=http://caldera:8888
       - MCP_URL=http://localhost:8080/api/v1/stream/mcp
 
       # Pinned image version, sourced from .env. Surfaced to the UI
@@ -394,8 +199,6 @@ services:
       # These names match the .env keys the phantom-installer writes
       # from release-manifest-vX.Y.Z.env.
       - DIGEST_PHANTOM_AGENT
-      - DIGEST_PHANTOM_XLOG
-      - DIGEST_PHANTOM_CALDERA
       - DIGEST_PHANTOM_UPDATER
       - DIGEST_PHANTOM_BROWSER
 
@@ -427,10 +230,6 @@ services:
       # it). Forced first-login change at /profile is unchanged.
       - PHANTOM_DEFAULT_ADMIN_PASSWORD
 
-      # Notification channel webhooks (optional; one var per channel).
-      - PHANTOM_NOTIFICATION_CHANNEL_SOC
-      - PHANTOM_NOTIFICATION_CHANNEL_PURPLE_TEAM
-
       # v0.6.36 — operator-tunable chat-route turn cap. v0.6.32 added
       # the read site in mcp/agent/app/api/chat/route.ts ("Operators
       # can tune via PHANTOM_CHAT_MAX_TURNS") but forgot the compose
@@ -439,14 +238,6 @@ services:
       # Default of 30 (clamped to [5,200]) lives in route.ts; this
       # line just makes the override actually work.
       - PHANTOM_CHAT_MAX_TURNS
-
-      # Caldera connector seed values — needed at boot for the
-      # auto-migration loop in connector_loader.py. Without these the
-      # caldera connector materializes with empty creds and 401s on
-      # first call.
-      - CALDERA_API_KEY
-      - CALDERA_RED_USER
-      - CALDERA_RED_PASSWORD
 
       # The remaining operator config flows in via the SETUP PAGE
       # at http://localhost:3000 on first run. These vars are accepted
@@ -458,13 +249,6 @@ services:
       - PLAYGROUND_ID
       - WEBHOOK_ENDPOINT
       - WEBHOOK_KEY
-      # XLOG_API_TOKEN aliases XLOG_API_KEY — same secret, two names
-      # because xlog reads one (server-side validation) and the agent
-      # reads the other (client-side Authorization header attach).
-      # Keeping both pointed at the same .env value is the supported
-      # pattern.
-      - XLOG_API_TOKEN=${XLOG_API_KEY}
-      - TECHNOLOGY_STACK
 
       # Runtime mount paths — must match the volume mounts below.
       # v0.4.0: PHANTOM_AGENT_SETUP_PATH + PHANTOM_AGENT_ENV_EXPORT_PATH
@@ -514,16 +298,11 @@ services:
       - phantom_mcp_data:/app/data
       # Skills volume (seeded from /app/mcp/skills-default at first run).
       - phantom_mcp_skills:/app/skills
-      # Shared TLS volume — agent has WRITE access; xlog and caldera
-      # mount the same volume read-only and read cert.pem + key.pem at
-      # startup. Single source of truth for TLS material across the
-      # stack; replaces the old SSL_CERT_PEM compose-env passthrough.
+      # Shared TLS volume — the agent writes cert.pem + key.pem here
+      # when the operator picks a TLS mode. Single source of truth for
+      # TLS material across the stack; replaces the old SSL_CERT_PEM
+      # compose-env passthrough.
       - phantom_tls:/tls
-      # v0.1.16: phantom_operator_creds carries operator-typed
-      # credentials from /api/setup to services that need them outside
-      # the connector instance store (e.g. caldera's local.yml). Agent
-      # writes; caldera reads (ro on caldera's side).
-      - phantom_operator_creds:/operator-creds
       # NOTE: the upstream dev compose bind-mounts ./bundles/spark over
       # /app/bundle for hot-reload during dev. Customers don't have
       # ./bundles/spark on their host — the image's baked-in copy is
@@ -543,18 +322,9 @@ services:
       start_period: 60s
 
 volumes:
-  xlog_scenarios:
-  xlog_data:
-  caldera_data:
-  caldera_conf:
   phantom_agent_runtime:
   phantom_mcp_data:
   phantom_mcp_skills:
-  # Shared TLS volume — read by xlog + caldera, written by agent.
-  # See per-service volumes: blocks above for mount points.
+  # Shared TLS volume — written by the agent. See the per-service
+  # volumes: blocks above for mount points.
   phantom_tls:
-  # v0.1.16: operator-credentials hand-off — agent writes, caldera
-  # reads. Currently only carries caldera/red creds; future
-  # services that need operator-supplied env from setup form add
-  # mounts here too.
-  phantom_operator_creds:

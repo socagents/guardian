@@ -4,9 +4,9 @@ Per `manifest.yaml:knowledge.bundled[]`, each entry declares:
 
     knowledge:
       bundled:
-        - name: "phantom-soc"
-          path: "./kbs/phantom-soc/"
-          schema: "./kbs/phantom-soc/schema.json"
+        - name: "xql-examples"
+          path: "./kbs/xql-examples/"
+          schema: "./kbs/xql-examples/schema.json"
 
 The loader walks each bundled KB's directory, parses every supported
 file into a (doc_id, metadata, content) triple, and upserts it into
@@ -209,7 +209,7 @@ def load_bundled_knowledge(
 
     Counts shape:
         {
-          "phantom-soc": {
+          "xql-examples": {
             "inserted": 3,
             "updated":  0,
             "unchanged": 0,

@@ -5,9 +5,9 @@
   POST /api/v1/telemetry/enable      → toggle on/off
         body: {"enabled": true|false, "actor": "ayman"}
   POST /api/v1/telemetry/record      → record one event (admin/internal)
-        body: {"event": "simulation_run_count_per_day", "count": 1, "payload": {...}}
+        body: {"event": "install", "count": 1, "payload": {...}}
   GET  /api/v1/telemetry/daily       → per-day counts for charting
-        ?event=simulation_run_count_per_day
+        ?event=install
         ?days=30
 
 Privacy posture: telemetry starts OFF (manifest.telemetry.default ==

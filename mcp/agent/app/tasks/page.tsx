@@ -10,10 +10,6 @@
  * Auto-refreshes active tasks every 3s so progress stays live
  * without forcing the operator to hit refresh. Terminal tasks
  * stick around so the operator can review what happened.
- *
- * Replaces — for the agent's chat-spawned work — the legacy
- * /listWorkers GraphQL query that only saw worker state in the
- * lossy module-level dict in xlog/app/schema.py.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -200,8 +196,8 @@ export default function TasksPage() {
             </p>
             <p className="text-xs text-on-surface-variant/60 max-w-md mx-auto">
               Tasks appear here when the agent or operator spawns
-              long-running work — scenario emulation, CALDERA
-              operations, etc.
+              long-running work — long XQL queries, compactions,
+              hook commands, etc.
             </p>
           </div>
         ) : (

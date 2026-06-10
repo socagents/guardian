@@ -1,4 +1,4 @@
-# Cortex XSIAM tool connector for the Phantom SOC simulation agent.
+# Cortex XSIAM tool connector for the Guardian incident-response agent.
 #
 # Per Spark agent bundle spec v1.2 §7.4. Tool names are auto-namespaced
 # as `xsiam/<tool_name>` by the embedded MCP. Manifest tools.allow
@@ -196,8 +196,8 @@ spec:
       method: "POST {webhookEndpoint}"
       description: |
         Send a raw log event to the configured XSIAM webhook endpoint.
-        Use this for ad-hoc one-off log injection — bulk simulation
-        should go through the xlog connector instead.
+        Use this for ad-hoc one-off log injection (e.g. test events
+        while validating a collector).
         Header convention: `Authorization: <webhookKey>` (raw, NOT
         'Bearer' — see app/schema.py _get_webhook_headers in repo
         root).

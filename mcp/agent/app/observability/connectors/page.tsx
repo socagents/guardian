@@ -279,10 +279,10 @@ export default function ConnectorsHealthPage() {
  * StackImagesSection — v0.3.0+ image-digest panel.
  *
  * Renders two sub-tables:
- *   1. Stack-tier services (5 rows: phantom-agent, xlog, caldera,
- *      phantom-updater, phantom-browser) with their pinned digest
+ *   1. Stack-tier services (3 rows: phantom-agent, phantom-updater,
+ *      phantom-browser) with their pinned digest
  *      and a "digest" or "tag (legacy)" badge. The badge serves as
- *      a tripwire — on a clean v0.3.0+ install all 5 should show
+ *      a tripwire — on a clean v0.3.0+ install all 3 should show
  *      "digest"; any "tag (legacy)" badge means the operator's .env
  *      is missing manifest-managed lines (common after a manual edit
  *      that deleted DIGEST_* values).

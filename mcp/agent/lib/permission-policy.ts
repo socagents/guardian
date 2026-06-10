@@ -58,7 +58,7 @@ export interface PolicyEvaluation {
   decision: PolicyDecision;
   /** Operator-visible reason. Empty for `allow`; populated for `deny`
    *  + `ask` with a one-line "denied by `denied_tools` match
-   *  `caldera_*`" style string the chat thread surfaces. */
+   *  `xsiam_create_*`" style string the chat thread surfaces. */
   reason?: string;
   /** Which list matched. Useful for audit row metadata. */
   matchedList?: "allowed_tools" | "denied_tools" | "require_approval";

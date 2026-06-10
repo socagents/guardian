@@ -10,8 +10,8 @@ scaled down for v0.5.29's scope:
     endpoint (same wire the scheduler uses for job-driven runs)
   - MCP tool `bench_run` so operators can fire a benchmark from chat
     (and store the result in benchmark_runs.db)
-  - Sample corpus at `bench_cases/phantom-soc-v1/` (3 cases) to seed
-    the format
+  - Sample corpus at `bench_cases/guardian-soc-v1.yaml` (3 cases) to
+    seed the format
 
 What's deferred to a follow-up release:
   - `/observability/bench` page + compare view + drill-down
@@ -22,28 +22,28 @@ What's deferred to a follow-up release:
 
 v0.5.29 ships the storage + scoring + MCP-tool surface. The
 operator runs benchmarks today by asking the agent ("run the
-phantom-soc-v1 bench manifest, default routing preset") and reads
+guardian-soc-v1 bench manifest, default routing preset") and reads
 the result JSON from the audit log. The UI lands when the operator
 validates the scoring shape is sensible.
 
 # Manifest YAML format
 
     manifest:
-      id: phantom-soc-v1
+      id: guardian-soc-v1
       version: "1.0"
       description: "Sample SOC-scenario benchmark"
       cases:
-        - id: generate-iocs
-          prompt: "Generate 5 IOCs for a phishing scenario"
-          expected_output_match: "iocs"          # substring / regex
+        - id: summarize-incident
+          prompt: "Summarize incident INC-1042 with its key alerts"
+          expected_output_match: "INC-1042"      # substring / regex
           expected_tool_calls:                    # ordered tool names
-            - phantom_create_data_worker
+            - xdr_get_cases_and_issues
           max_wall_seconds: 60.0
-        - id: detect-bruteforce
-          prompt: "Detect a brute-force attack pattern in the xlog stream"
+        - id: hunt-bruteforce
+          prompt: "Hunt for brute-force auth patterns in the last 24h"
           expected_output_match: "brute-force"
           expected_tool_calls:
-            - xlog_query
+            - xsiam_run_xql_query
           max_wall_seconds: 120.0
 """
 

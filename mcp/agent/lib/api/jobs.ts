@@ -22,8 +22,7 @@ export type JobState = "JOB_STATE_UNSPECIFIED" | "JOB_STATE_ACTIVE" | "JOB_STATE
  * Legacy `chat` is accepted as an alias for `prompt` on dispatch
  * (for in-flight rows during the migration window or older API
  * clients). Legacy `log` is removed; the boot migration in the
- * scheduler converts existing log-type rows to tool_call(
- * phantom_create_data_worker, …) shape. */
+ * scheduler converts existing log-type rows to tool_call shape. */
 export type JobActionType = "prompt" | "tool_call";
 
 export interface JobAction {

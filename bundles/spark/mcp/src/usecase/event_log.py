@@ -8,14 +8,14 @@ Distinct from the audit log:
     that happened on this resource between dates X and Y".
 
   * Events (this module) are RUNTIME TELEMETRY. Granular operational
-    signals like `rt.simulation.started` or `rt.validation.completed`.
+    signals like `rt.tool.failed` or `rt.job.completed`.
     Optimized for live dashboards + per-event-name aggregation. Can
     be retained shorter than audit (default 7d).
 
 Both can be enabled side by side; they answer different questions
-and a single state change typically produces both. A simulation
-start writes `simulation_created` to audit (forensic) AND
-`rt.simulation.started` to events (runtime telemetry).
+and a single state change typically produces both. A failed tool
+call writes `tool_call` (status=failure) to audit (forensic) AND
+`rt.tool.failed` to events (runtime telemetry).
 
 # Schema
 

@@ -28,24 +28,6 @@ class Settings(BaseSettings):
     Loads settings from environment variables.
     """
 
-    # --- Xlog (log-generation service) Settings ---
-    # v1.2 stage 3F: renamed from phantom_url/PHANTOM_URL. xlog is the
-    # standalone GraphQL log-gen service (originally
-    # https://github.com/ayman-m/xlog before a rebrand to "phantom"
-    # bled into the service name). The agent product is "phantom-agent";
-    # this is the underlying service its xlog connector talks to.
-    # v0.6.45 — default flipped to https://localhost:8000 to match v0.4.0+
-    # production reality (xlog serves HTTPS unconditionally). The default
-    # applies in unit tests / dev shells where XLOG_URL env var is unset;
-    # production always sets XLOG_URL=https://xlog:8000 via compose env.
-    xlog_url: str = Field("https://localhost:8000", validation_alias="XLOG_URL")
-    xlog_port: int = Field(8000, validation_alias="XLOG_PORT")
-    # Bearer token presented to xlog on every connector call. Per-
-    # instance value comes from the SecretStore (resolved through the
-    # contextvar at tool-call time); the env-var fallback is mostly
-    # for legacy / pre-instance dev setups.
-    xlog_api_token: str | None = Field(None, validation_alias="XLOG_API_TOKEN")
-
     # --- MCP Server Settings ---
     mcp_transport: str = Field("stdio", validation_alias="MCP_TRANSPORT")
     mcp_host: str = Field("0.0.0.0", validation_alias="MCP_HOST")
@@ -85,17 +67,6 @@ class Settings(BaseSettings):
     playground_id: str = Field("", validation_alias="PLAYGROUND_ID")
     webhook_endpoint: str | None = Field(None, validation_alias="WEBHOOK_ENDPOINT")
     webhook_key: str | None = Field(None, validation_alias="WEBHOOK_KEY")
-
-    # --- Caldera Settings ---
-    caldera_url: str = Field("http://localhost:8888/api/v2/", validation_alias="CALDERA_URL")
-    caldera_api_key: str = Field("ADMIN123", validation_alias="CALDERA_API_KEY")
-
-    # --- Technology Stack Settings ---
-    technology_stack: str | None = Field(
-        None,
-        validation_alias="TECHNOLOGY_STACK",
-        description="JSON string containing organization's technology stack for log generation"
-    )
 
     # --- v1.2 stage 3C — admin/setup HTTP API auth ---
     mcp_token: str | None = Field(

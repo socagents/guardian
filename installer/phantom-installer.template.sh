@@ -68,9 +68,9 @@ HEALTH_TIMEOUT_SECS=300
 # `image: ...@${DIGEST_<SVC>}` reference to the matching content blob.
 #
 # Customer impact: containers are recreated by docker compose iff the
-# image content actually changed between versions. Caldera + xlog +
-# phantom-browser typically retain in-memory state across upgrades
-# that don't touch their source.
+# image content actually changed between versions. Services whose
+# image bytes are unchanged typically retain in-memory state across
+# upgrades that don't touch their source.
 #
 # If this heredoc is empty or contains DIGEST_MANIFEST_MISSING=1,
 # the installer was built without MANIFEST_PATH (a dev-build
@@ -140,8 +140,7 @@ Examples:
   sudo ./phantom-installer                          # → installs v$PHANTOM_VERSION
   sudo PHANTOM_REGISTRY_TOKEN=ghp_... ./phantom-installer
 
-Upgrading from v0.2.x: see MIGRATION-FROM-V02X.md in the install kit
-tarball, or visit:
+Release notes + assets:
   https://github.com/kite-production/phantom/releases/tag/v$PHANTOM_VERSION
 USAGE
       exit 0
@@ -573,8 +572,7 @@ if [[ "$EXISTING_INSTALL" == "1" ]]; then
   # need to load their values into bash variables (we won't rewrite
   # .env), just confirm they exist and are non-empty.
   missing_secrets=()
-  for var in MCP_TOKEN PHANTOM_SECRET_KEK CALDERA_API_KEY \
-             XLOG_API_KEY CALDERA_RED_PASSWORD; do
+  for var in MCP_TOKEN PHANTOM_SECRET_KEK; do
     if ! read_env_value "$var" >/dev/null; then
       missing_secrets+=("$var")
     fi
@@ -624,14 +622,11 @@ else
   # internal coordination or first-boot seeds.
   MCP_TOKEN="$(openssl rand -hex 32)"
   PHANTOM_SECRET_KEK="$(openssl rand -base64 32)"
-  CALDERA_API_KEY="$(openssl rand -hex 16)"
-  XLOG_API_KEY="$(openssl rand -hex 32)"
-  CALDERA_RED_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
   # v0.5.5+ — admin bootstrap password. Random per install (pre-v0.5.5
   # this was a hardcoded literal in the phantom-agent image; v0.5.5
   # moves it out so no credential is baked anywhere in any image).
   PHANTOM_DEFAULT_ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
-  ok "6 runtime secrets generated"
+  ok "3 runtime secrets generated"
 fi
 
 # ─── Step 6: Refresh files ────────────────────────────────────────────
@@ -736,17 +731,12 @@ if [[ "$EXISTING_INSTALL" == "1" ]]; then
     warn "  recreate only the services whose image content actually changed."
     warn ""
     warn "  Preserved across this upgrade:"
-    warn "    - All named volumes (operator data, secrets store, caldera"
-    warn "      operations on disk, xlog scenarios + db, skills volume)"
+    warn "    - All named volumes (operator data, secrets store, skills"
+    warn "      volume)"
     warn "    - Your PHANTOM_SECRET_KEK + GHCR token + UI password"
     warn ""
     warn "  Lost across this upgrade (one-time):"
-    warn "    - Caldera in-memory red-team operations + active sessions"
-    warn "    - xlog active streaming workers"
     warn "    - phantom-agent in-flight jobs / chat sessions"
-    warn ""
-    warn "  See MIGRATION-FROM-V02X.md (in the install kit tarball, or on"
-    warn "  the GitHub release page) for the full migration contract."
     say ""
   else
     info "Upgrading $CURRENT_VERSION → $PHANTOM_VERSION (digest manifest will replace)"
@@ -791,14 +781,6 @@ PHANTOM_SECRET_KEK=$PHANTOM_SECRET_KEK
 # baked anywhere in any image.
 PHANTOM_DEFAULT_ADMIN_PASSWORD=$PHANTOM_DEFAULT_ADMIN_PASSWORD
 
-# ─── Caldera ──────────────────────────────────────────────────────────
-CALDERA_RED_USER=red
-CALDERA_RED_PASSWORD=$CALDERA_RED_PASSWORD
-CALDERA_API_KEY=$CALDERA_API_KEY
-
-# ─── xlog ─────────────────────────────────────────────────────────────
-XLOG_API_KEY=$XLOG_API_KEY
-
 # ─── Operator config (filled in via /providers + /instances after login) ─
 # Leaving these blank is fine. v0.4.0+ — the agent boots with default
 # admin credentials (admin / value of PHANTOM_DEFAULT_ADMIN_PASSWORD
@@ -840,7 +822,7 @@ if printf '%s' "$DIGEST_MANIFEST" | grep -q '^DIGEST_MANIFEST_MISSING=1'; then
 fi
 
 # Validate the manifest has the expected keys before we touch .env.
-# Minimum bar: PHANTOM_VERSION matches this binary, plus all 5
+# Minimum bar: PHANTOM_VERSION matches this binary, plus all 3
 # stack-service digests are present. Per-instance connector digests
 # are validated by phantom-updater at runtime (less load-bearing here
 # because they're only needed when the operator creates a connector
@@ -848,8 +830,6 @@ fi
 _required_keys=(
   "PHANTOM_VERSION=$PHANTOM_VERSION"
   "DIGEST_PHANTOM_AGENT="
-  "DIGEST_PHANTOM_XLOG="
-  "DIGEST_PHANTOM_CALDERA="
   "DIGEST_PHANTOM_UPDATER="
   "DIGEST_PHANTOM_BROWSER="
 )
@@ -895,7 +875,7 @@ rm -f "$INSTALL_DIR/.env.bak"
 
 # v0.6.7 — operator config-file separation principle. Per-instance
 # connector image digests (DIGEST_PHANTOM_CONNECTOR_*) DO NOT belong
-# in .env. .env is for service credentials + the 5 core compose-
+# in .env. .env is for service credentials + the 3 core compose-
 # substitution digests that docker-compose interpolates. Connector
 # image refs are runtime data phantom-updater uses to spawn dynamic
 # instance containers — they live in a dedicated file at
@@ -914,7 +894,7 @@ awk 'NF || prev_nf { print } { prev_nf = NF }' \
   && mv "$INSTALL_DIR/.env.tmp" "$INSTALL_DIR/.env"
 
 # v0.6.7 — split the embedded manifest into two destinations:
-#   * Core (PHANTOM_VERSION + 5 stack-service digests + anything that
+#   * Core (PHANTOM_VERSION + 3 stack-service digests + anything that
 #     isn't a per-connector digest) → /opt/phantom/.env. Required by
 #     docker-compose's image-ref substitution at stack-up time.
 #   * Per-connector digests (DIGEST_PHANTOM_CONNECTOR_*) → /opt/phantom/
@@ -937,7 +917,7 @@ CONNECTOR_MANIFEST=$(printf '%s\n' "$DIGEST_MANIFEST" | grep '^DIGEST_PHANTOM_CO
   echo "# version, download that version's phantom-installer binary."
   echo "# Note (v0.6.7+): per-connector image pins moved to"
   echo "# $INSTALL_DIR/connector-digests.env. .env is now for credentials"
-  echo "# + the 5 core compose-substitution digests only."
+  echo "# + the 3 core compose-substitution digests only."
   printf '%s\n' "$CORE_MANIFEST"
 } >> "$INSTALL_DIR/.env"
 
@@ -989,8 +969,8 @@ ok "Digest manifest applied: PHANTOM_VERSION=$PHANTOM_VERSION + $_core_count cor
 # still running with tag-based image refs. The new compose has
 # digest-based image refs. `docker compose up -d --remove-orphans`
 # WILL recreate them — but we want a clean stop first to:
-#   (a) avoid the racy "old caldera + new caldera both trying to bind
-#       :8888" window during the swap
+#   (a) avoid the racy window where the old and new copies of a
+#       service both try to bind the same host ports during the swap
 #   (b) give the operator a clear "stack stopped → starting fresh"
 #       narrative in the install log instead of a confusing mix of
 #       old-container exit messages and new-container start messages
@@ -1012,7 +992,7 @@ echo "$GHCR_TOKEN" \
 ok "Logged into $GHCR_REGISTRY"
 
 # Pull all images. First pull on a fresh box can take several minutes
-# (~1 GB total across the four images on amd64).
+# (~1 GB total across the stack images on amd64).
 info "Pulling images (this may take a few minutes on first install)…"
 docker compose pull
 ok "Images pulled"

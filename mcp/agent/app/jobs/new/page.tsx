@@ -543,8 +543,8 @@ function CreateJobPage() {
       // backend's boot migration normalizes existing rows on the
       // server side; this client-side aliasing is for in-flight rows
       // that haven't been re-fetched after migration). Legacy `log`
-      // gets converted at boot to a tool_call(phantom_create_data_worker,
-      // ...) shape, so by the time the operator hits Edit, the row's
+      // rows were converted at boot to tool_call shapes by the same
+      // migration, so by the time the operator hits Edit, the row's
       // type is already `tool_call`. Anything unfamiliar falls
       // through to `prompt` with the message body so the operator
       // sees something sensible to edit rather than a blank form.
@@ -1023,7 +1023,7 @@ function CreateJobPage() {
                     value={allowedTools}
                     onChange={(e) => setAllowedTools(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl text-sm bg-surface-container-low border border-white/10 text-on-surface font-mono"
-                    placeholder="e.g. xlog_*, scenarios_*"
+                    placeholder="e.g. xsiam_*, xdr_*"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1033,7 +1033,7 @@ function CreateJobPage() {
                     value={deniedTools}
                     onChange={(e) => setDeniedTools(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl text-sm bg-surface-container-low border border-white/10 text-on-surface font-mono"
-                    placeholder="e.g. *_delete, caldera_start_operation"
+                    placeholder="e.g. *_delete, xsiam_create_dataset"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1094,7 +1094,7 @@ function CreateJobPage() {
                       type="text"
                       value={toolName}
                       onChange={(e) => setToolName(e.target.value)}
-                      placeholder="phantom_create_data_worker"
+                      placeholder="xsiam_run_xql_query"
                       className="w-full bg-surface-container-highest border-none rounded-xl py-2.5 px-4 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:ring-1 focus:ring-primary font-mono"
                     />
                   </div>
@@ -1105,7 +1105,7 @@ function CreateJobPage() {
                     <textarea
                       value={toolArgsJson}
                       onChange={(e) => setToolArgsJson(e.target.value)}
-                      placeholder='{"vendor": "Cisco", "count": 10}'
+                      placeholder='{"query": "dataset = xdr_data | limit 10"}'
                       rows={5}
                       className="w-full bg-surface-container-highest border-none rounded-xl py-2.5 px-4 text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:ring-1 focus:ring-primary font-mono resize-none"
                     />

@@ -1,7 +1,7 @@
 name: Release (push to GHCR)
 
 # Triggered when a `vMAJOR.MINOR.PATCH` tag is pushed (e.g.
-# `git tag v1.2.0 && git push --tags`). Builds the three customer-
+# `git tag v1.2.0 && git push --tags`). Builds the 9 customer-
 # facing images, pushes them to ghcr.io/kite-production/* with three
 # tags each (:VERSION pinned, :MAJOR.MINOR floating, :latest), and
 # packages the customer install kit (compose + .env.example + install.sh)
@@ -73,10 +73,10 @@ jobs:
     # port allocations and individual probes time out. We confirmed
     # this empirically: the v0.1.0 first attempt failed at the
     # phantom-agent push, and after setting max-concurrent-uploads=1
-    # on the self-hosted dockerd, the agent push succeeded but xlog
-    # then failed at the HEAD-probe stage (HEAD probes aren't covered
-    # by max-concurrent-uploads — they're separate from the
-    # actual upload throttle).
+    # on the self-hosted dockerd, the agent push succeeded but the
+    # next image's push then failed at the HEAD-probe stage (HEAD
+    # probes aren't covered by max-concurrent-uploads — they're
+    # separate from the actual upload throttle).
     #
     # GitHub-hosted runners → ghcr.io is a datacenter-internal path
     # (both are GitHub infrastructure) with no NAT throttling. Cost is
@@ -91,9 +91,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Caldera is a git submodule (third_party/caldera). Need
-          # `recursive` so its Dockerfile + sources are present.
-          submodules: recursive
           clean: false
           # v0.1.29 — `fetch-depth: 0` brings the full git history so
           # the "Detect changed services" step below can `git diff`
@@ -139,11 +136,11 @@ jobs:
 
       - name: Detect changed services since previous release
         # v0.1.29 — Per-service conditional rebuild. The release fan-out
-        # used to rebuild ALL 5 images on every tag, even when only
+        # used to rebuild ALL images on every tag, even when only
         # one service's source changed. New content → new image digest
         # → customer's `docker compose up -d` recreates every container,
-        # which is destructive for stateful services like caldera
-        # (loses live implants, in-progress operations).
+        # which needlessly destroys the running state of services
+        # whose bytes didn't change.
         #
         # Now: diff source paths between previous tag and this one,
         # mark each service as `changed=1` (rebuild) or `changed=0`
@@ -153,20 +150,15 @@ jobs:
         #
         # Source path mapping (must stay in sync with the build steps):
         #   phantom-agent              → mcp/agent/, bundles/spark/
-        #   phantom-xlog               → xlog/
-        #   phantom-caldera            → third_party/caldera/ (submodule) +
-        #                                bundles/spark/caldera-content/ (overlay)
         #   phantom-updater            → updater/
         #   phantom-browser            → phantom-browser/
         #   phantom-connector-runtime  → phantom-connector-runtime/
         #     (added v0.1.30 — base image every per-connector container
         #      inherits from; see docs/spec-per-instance-connector-containers.md)
-        #   phantom-connector-xlog     → bundles/spark/connectors/xlog/
+        #   phantom-connector-xsiam      → bundles/spark/connectors/xsiam/
         #     PLUS rebuilds whenever phantom-connector-runtime rebuilds,
         #     because the FROM in its Dockerfile points at the base image's
-        #     digest. Same OR-logic for the other 3 connectors below.
-        #   phantom-connector-xsiam      → bundles/spark/connectors/xsiam/
-        #   phantom-connector-caldera    → bundles/spark/connectors/caldera/
+        #     digest. Same OR-logic for the other connectors below.
         #   phantom-connector-web        → bundles/spark/connectors/web/
         #   phantom-connector-cortex-docs → bundles/spark/connectors/cortex-docs/  (v0.3.1+)
         #     Module-style today; image exists for v0.2 container-mode
@@ -217,10 +209,9 @@ jobs:
 
           if [ -z "$PREV" ]; then
             echo "::notice::No previous semver tag found — first release. Building everything."
-            AGENT=1; XLOG=1; CALDERA=1; UPDATER=1; BROWSER=1
+            AGENT=1; UPDATER=1; BROWSER=1
             CONNECTOR_RUNTIME=1
-            CONNECTOR_XLOG=1; CONNECTOR_XSIAM=1
-            CONNECTOR_CALDERA=1; CONNECTOR_WEB=1
+            CONNECTOR_XSIAM=1; CONNECTOR_WEB=1
             CONNECTOR_CORTEX_DOCS=1; CONNECTOR_CORTEX_CONTENT=1
             CONNECTOR_CORTEX_XDR=1  # v0.6.20+ — added retroactively; was missed when cortex-xdr landed in v0.5.61
             PREV_VERSION=""
@@ -241,23 +232,12 @@ jobs:
             }
 
             AGENT=$(changed mcp/agent/ bundles/spark/)
-            XLOG=$(changed xlog/)
-            # v0.6.2 fix: caldera image is built from BOTH the third_party/caldera/
-            # submodule AND the Phantom content overlay at bundles/spark/caldera-content/
-            # (see build-caldera.yml's "Overlay Phantom kill-chain content" step).
-            # v0.6.0 -> v0.6.1 shipped phishing-v3.3 + #52 fixes to caldera-content/
-            # but this detection only watched third_party/caldera/, so the v0.6.1 release
-            # silently RETAGGED the v0.6.0 caldera digest instead of using the fresh
-            # :dev image — customers got v0.6.0 caldera content under a v0.6.1 tag.
-            CALDERA=$(changed third_party/caldera/ bundles/spark/caldera-content/)
             UPDATER=$(changed updater/)
             BROWSER=$(changed phantom-browser/)
             CONNECTOR_RUNTIME=$(changed phantom-connector-runtime/)
             # Per-connector images: rebuild when their source changed
             # OR when the runtime base rebuilt (FROM dependency).
-            CONNECTOR_XLOG=$(changed bundles/spark/connectors/xlog/)
             CONNECTOR_XSIAM=$(changed bundles/spark/connectors/xsiam/)
-            CONNECTOR_CALDERA=$(changed bundles/spark/connectors/caldera/)
             CONNECTOR_WEB=$(changed bundles/spark/connectors/web/)
             # v0.3.1+ — Cortex docs connector
             CONNECTOR_CORTEX_DOCS=$(changed bundles/spark/connectors/cortex-docs/)
@@ -278,24 +258,19 @@ jobs:
             # image's FROM resolves to a new digest, so they all need
             # a fresh build to inherit the new layer.
             if [ "$CONNECTOR_RUNTIME" = "1" ]; then
-              CONNECTOR_XLOG=1; CONNECTOR_XSIAM=1
-              CONNECTOR_CALDERA=1; CONNECTOR_WEB=1
+              CONNECTOR_XSIAM=1; CONNECTOR_WEB=1
               CONNECTOR_CORTEX_DOCS=1; CONNECTOR_CORTEX_CONTENT=1
               CONNECTOR_CORTEX_XDR=1  # v0.6.20+
-              echo "::notice::phantom-connector-runtime rebuilt — forcing rebuild of all 7 per-connector images (FROM dependency)"
+              echo "::notice::phantom-connector-runtime rebuilt — forcing rebuild of all 5 per-connector images (FROM dependency)"
             fi
           fi
 
           {
             echo "agent=$AGENT"
-            echo "xlog=$XLOG"
-            echo "caldera=$CALDERA"
             echo "updater=$UPDATER"
             echo "browser=$BROWSER"
             echo "connector_runtime=$CONNECTOR_RUNTIME"
-            echo "connector_xlog=$CONNECTOR_XLOG"
             echo "connector_xsiam=$CONNECTOR_XSIAM"
-            echo "connector_caldera=$CONNECTOR_CALDERA"
             echo "connector_web=$CONNECTOR_WEB"
             echo "connector_cortex_docs=$CONNECTOR_CORTEX_DOCS"
             echo "connector_cortex_content=$CONNECTOR_CORTEX_CONTENT"
@@ -313,7 +288,7 @@ jobs:
             echo ""
             echo "| Service | Source changed | Action |"
             echo "|---|---|---|"
-            for svc in agent xlog caldera updater browser; do
+            for svc in agent updater browser; do
               ch=$(eval "echo \$$(echo $svc | tr a-z A-Z)")
               if [ "$ch" = "1" ]; then
                 action="🔨 rebuild"
@@ -335,7 +310,7 @@ jobs:
             # The hyphenated cortex-docs name needs a separate iteration
             # because the env-var conversion (csvc → uppercase) only
             # works cleanly for single-word connector names.
-            for csvc in xlog xsiam caldera web; do
+            for csvc in xsiam web; do
               var="CONNECTOR_$(echo $csvc | tr a-z A-Z)"
               ch=$(eval "echo \$$var")
               if [ "$ch" = "1" ]; then
@@ -394,8 +369,8 @@ jobs:
       # as the previous version, so customer `docker compose pull`
       # sees no change for that service and `docker compose up -d`
       # leaves the running container alone. This is what preserves
-      # caldera state (live implants, ongoing operations) across
-      # routine phantom-only updates — the explicit goal of v0.1.29.
+      # an unchanged service's container (and its runtime state)
+      # across routine updates — the explicit goal of v0.1.29.
       # ──────────────────────────────────────────────────────────────
 
       - name: Build or retag phantom-agent
@@ -432,31 +407,6 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
-      - name: Build or retag phantom-xlog
-        env:
-          V: ${{ steps.ver.outputs.version }}
-          MM: ${{ steps.ver.outputs.minor }}
-          CHANGED: ${{ steps.changed.outputs.xlog }}
-          PREV_V: ${{ steps.changed.outputs.prev_version }}
-        run: |
-          IMG="$REGISTRY/$OWNER/phantom-xlog"
-          if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-xlog source changed — rebuilding"
-            docker build --pull \
-              -t "$IMG:$V" \
-              -t "$IMG:$MM" \
-              -t "$IMG:latest" \
-              xlog/
-          else
-            echo "::notice::phantom-xlog source unchanged — retagging $PREV_V → $V/$MM/latest"
-            docker pull "$IMG:$PREV_V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$MM"
-            docker tag  "$IMG:$PREV_V" "$IMG:latest"
-          fi
-          .github/scripts/push-with-retry.sh \
-            "$IMG:$V" "$IMG:$MM" "$IMG:latest"
-
       - name: Build or retag phantom-updater
         # On-prem update sidecar. Lives in its own image so it can
         # keep running while phantom-agent (and others) are being
@@ -478,73 +428,6 @@ jobs:
               updater/
           else
             echo "::notice::phantom-updater source unchanged — retagging $PREV_V → $V/$MM/latest"
-            docker pull "$IMG:$PREV_V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$MM"
-            docker tag  "$IMG:$PREV_V" "$IMG:latest"
-          fi
-          .github/scripts/push-with-retry.sh \
-            "$IMG:$V" "$IMG:$MM" "$IMG:latest"
-
-      - name: Build or retag phantom-caldera
-        # We ship a customized caldera (third_party/caldera submodule
-        # built with VARIANT arg) rather than aymanam/caldera:5.3.0 so
-        # the version pinning is consistent across the stack. If you
-        # later decide to drop the customization, swap this for a
-        # `docker tag aymanam/caldera:5.3.0` + push.
-        #
-        # This is the highest-stakes service for the v0.1.29 retag
-        # logic: caldera holds in-memory state about deployed implants
-        # and ongoing operations that's lost on container recreate.
-        # With the conditional rebuild, customers updating from
-        # vN → vN+1 (where caldera source didn't change) get NO
-        # caldera digest change and `docker compose up -d` leaves the
-        # caldera container running untouched.
-        env:
-          V: ${{ steps.ver.outputs.version }}
-          MM: ${{ steps.ver.outputs.minor }}
-          CHANGED: ${{ steps.changed.outputs.caldera }}
-          PREV_V: ${{ steps.changed.outputs.prev_version }}
-          CALDERA_VARIANT: ${{ secrets.CALDERA_VARIANT || 'full' }}
-        run: |
-          IMG="$REGISTRY/$OWNER/phantom-caldera"
-          if [ "$CHANGED" = "1" ]; then
-            # v0.6.3 fix: release.yml previously ran `docker build third_party/caldera/`
-            # here, which produced a VANILLA Caldera image without any Phantom plugin
-            # content or CTID emu plans — because the overlay steps (copying
-            # bundles/spark/caldera-content/ + CTID library into the build context)
-            # live in build-caldera.yml, not here. Result: every customer release from
-            # the introduction of caldera-content overlay (v0.5.57+) through v0.6.2
-            # shipped vanilla aymanam-style Caldera with no Phantom adversaries.
-            #
-            # Fix: instead of rebuilding from source (which would require duplicating
-            # 60+ lines of overlay logic between two workflows + risk drift), pull the
-            # :dev image that build-caldera.yml already built correctly and retag it
-            # as the customer release version. The :dev image is guaranteed current
-            # because build-caldera.yml fires on the same push-to-main that this
-            # release.yml run depends on — :dev is at HEAD by the time the tag is
-            # pushed and this workflow runs.
-            #
-            # If :dev pull fails (build-caldera.yml didn't complete or :dev is stale),
-            # we fall through to the rebuild-from-source path as a safety net — but
-            # log a warning that the resulting image will lack Phantom content.
-            echo "::notice::phantom-caldera source changed — pulling :dev (which build-caldera.yml built with the full Phantom + CTID overlay) and retagging as :$V"
-            if docker pull "$IMG:dev" 2>&1; then
-              docker tag "$IMG:dev" "$IMG:$V"
-              docker tag "$IMG:dev" "$IMG:$MM"
-              docker tag "$IMG:dev" "$IMG:latest"
-              echo "::notice::Retagged :dev → :$V (Phantom + CTID content included)"
-            else
-              echo "::warning:::dev pull failed — falling back to vanilla-source rebuild (WILL LACK Phantom + CTID content)"
-              docker build --pull \
-                --build-arg VARIANT="$CALDERA_VARIANT" \
-                -t "$IMG:$V" \
-                -t "$IMG:$MM" \
-                -t "$IMG:latest" \
-                third_party/caldera/
-            fi
-          else
-            echo "::notice::phantom-caldera source unchanged — retagging $PREV_V → $V/$MM/latest (caldera state preserved on customer compose up)"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -590,13 +473,13 @@ jobs:
         # inherits from. See docs/spec-per-instance-connector-containers.md
         # for the full design. Phase 1 ships this image but no
         # connector instance is migrated yet — the in-process loader
-        # in connector_loader.py is still the default for all 4
+        # in connector_loader.py is still the default for all
         # first-party connectors. v0.1.31 (Phase 2) flips the web
         # connector to runtime: container, which is the first real
         # consumer of this image.
         #
         # Why this step is positioned here: the per-connector images
-        # in subsequent build steps (added in P1.4 — phantom-connector-{xlog,xsiam,caldera,web})
+        # in subsequent build steps (added in P1.4)
         # all `FROM ghcr.io/$OWNER/phantom-connector-runtime:<version>`,
         # so this base must be PUSHED before they build. GitHub Actions
         # runs steps sequentially within a job, so positioning matters.
@@ -636,33 +519,6 @@ jobs:
       # and need that path visible in the build context.
       # ──────────────────────────────────────────────────────────────
 
-      - name: Build or retag phantom-connector-xlog
-        env:
-          V: ${{ steps.ver.outputs.version }}
-          MM: ${{ steps.ver.outputs.minor }}
-          CHANGED: ${{ steps.changed.outputs.connector_xlog }}
-          PREV_V: ${{ steps.changed.outputs.prev_version }}
-        run: |
-          IMG="$REGISTRY/$OWNER/phantom-connector-xlog"
-          if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-connector-xlog rebuilding (source or runtime base changed)"
-            docker build \
-              --build-arg PHANTOM_RUNTIME_VERSION="$V" \
-              -f bundles/spark/connectors/xlog/Dockerfile \
-              -t "$IMG:$V" \
-              -t "$IMG:$MM" \
-              -t "$IMG:latest" \
-              .
-          else
-            echo "::notice::phantom-connector-xlog source unchanged — retagging $PREV_V → $V/$MM/latest"
-            docker pull "$IMG:$PREV_V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$MM"
-            docker tag  "$IMG:$PREV_V" "$IMG:latest"
-          fi
-          .github/scripts/push-with-retry.sh \
-            "$IMG:$V" "$IMG:$MM" "$IMG:latest"
-
       - name: Build or retag phantom-connector-xsiam
         env:
           V: ${{ steps.ver.outputs.version }}
@@ -682,33 +538,6 @@ jobs:
               .
           else
             echo "::notice::phantom-connector-xsiam source unchanged — retagging $PREV_V → $V/$MM/latest"
-            docker pull "$IMG:$PREV_V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$MM"
-            docker tag  "$IMG:$PREV_V" "$IMG:latest"
-          fi
-          .github/scripts/push-with-retry.sh \
-            "$IMG:$V" "$IMG:$MM" "$IMG:latest"
-
-      - name: Build or retag phantom-connector-caldera
-        env:
-          V: ${{ steps.ver.outputs.version }}
-          MM: ${{ steps.ver.outputs.minor }}
-          CHANGED: ${{ steps.changed.outputs.connector_caldera }}
-          PREV_V: ${{ steps.changed.outputs.prev_version }}
-        run: |
-          IMG="$REGISTRY/$OWNER/phantom-connector-caldera"
-          if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-connector-caldera rebuilding (source or runtime base changed)"
-            docker build \
-              --build-arg PHANTOM_RUNTIME_VERSION="$V" \
-              -f bundles/spark/connectors/caldera/Dockerfile \
-              -t "$IMG:$V" \
-              -t "$IMG:$MM" \
-              -t "$IMG:latest" \
-              .
-          else
-            echo "::notice::phantom-connector-caldera source unchanged — retagging $PREV_V → $V/$MM/latest"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -747,7 +576,7 @@ jobs:
       - name: Build or retag phantom-connector-cortex-docs
         # v0.3.1+ — Cortex public-documentation search/lookup connector.
         # v0.5.0: flipped to container-style alongside the rest of the
-        # universal container-mode migration (caldera/xlog/xsiam/web/
+        # universal container-mode migration (xsiam/web/
         # cortex-content/cortex-docs all run as per-instance containers).
         env:
           V: ${{ steps.ver.outputs.version }}
@@ -881,7 +710,7 @@ jobs:
       # compose iff the SERVICE SPEC changes. With tag refs, every release
       # changes the image-string spec even when image bytes are identical
       # (retag from the previous version's digest). With digest refs, the
-      # spec hash tracks image content — so caldera and xlog retain
+      # spec hash tracks image content — so unchanged services retain
       # in-memory state across upgrades that don't touch their source.
       # ──────────────────────────────────────────────────────────────
       - name: Capture image digests + write release manifest
@@ -897,14 +726,10 @@ jobs:
           # compose service order, both for diff-readability.
           IMAGES=(
             phantom-agent
-            phantom-xlog
-            phantom-caldera
             phantom-updater
             phantom-browser
             phantom-connector-runtime
-            phantom-connector-xlog
             phantom-connector-xsiam
-            phantom-connector-caldera
             phantom-connector-web
             phantom-connector-cortex-docs
             phantom-connector-cortex-content
@@ -1014,13 +839,10 @@ jobs:
           cp installer/install.sh         "$KIT/install.sh"
           chmod +x "$KIT/install.sh"
 
-          # v0.3.0+: ship the manifest + migration guide alongside the
-          # compose. install.sh sources the manifest into .env on first
-          # run and on every upgrade-to-this-version invocation.
+          # v0.3.0+: ship the manifest alongside the compose. install.sh
+          # sources the manifest into .env on first run and on every
+          # upgrade-to-this-version invocation.
           cp "dist/installer/release-manifest-v${V}.env" "$KIT/release-manifest.env"
-          if [ -f installer/MIGRATION-FROM-V02X.md ]; then
-            cp installer/MIGRATION-FROM-V02X.md "$KIT/MIGRATION-FROM-V02X.md"
-          fi
 
           # v0.5.3+ — host-side recovery utilities. Two scripts ship in
           # the kit alongside the installer:
@@ -1125,14 +947,10 @@ jobs:
             echo ""
             echo "Tag form (also published, for ad-hoc inspection):"
             echo "- ghcr.io/$OWNER/phantom-agent:$V"
-            echo "- ghcr.io/$OWNER/phantom-xlog:$V"
-            echo "- ghcr.io/$OWNER/phantom-caldera:$V"
             echo "- ghcr.io/$OWNER/phantom-updater:$V"
             echo "- ghcr.io/$OWNER/phantom-browser:$V (v0.1.27+, profile-gated)"
             echo "- ghcr.io/$OWNER/phantom-connector-runtime:$V (v0.1.30+, base for per-connector containers; not directly run)"
-            echo "- ghcr.io/$OWNER/phantom-connector-xlog:$V (v0.1.30+, dormant unless an instance has runtime: container)"
-            echo "- ghcr.io/$OWNER/phantom-connector-xsiam:$V (v0.1.30+, dormant)"
-            echo "- ghcr.io/$OWNER/phantom-connector-caldera:$V (v0.1.30+, dormant)"
+            echo "- ghcr.io/$OWNER/phantom-connector-xsiam:$V (v0.1.30+, dormant unless an instance has runtime: container)"
             echo "- ghcr.io/$OWNER/phantom-connector-web:$V (v0.1.30+, dormant)"
             echo "- ghcr.io/$OWNER/phantom-connector-cortex-docs:$V (v0.3.1+, module-style today; image exists for v0.2 container-mode future)"
           } > "$NOTES"
@@ -1211,10 +1029,9 @@ jobs:
           V: ${{ steps.ver.outputs.version }}
           MM: ${{ steps.ver.outputs.minor }}
         run: |
-          for img in phantom-agent phantom-xlog phantom-caldera phantom-updater phantom-browser \
+          for img in phantom-agent phantom-updater phantom-browser \
                      phantom-connector-runtime \
-                     phantom-connector-xlog phantom-connector-xsiam \
-                     phantom-connector-caldera phantom-connector-web \
+                     phantom-connector-xsiam phantom-connector-web \
                      phantom-connector-cortex-docs; do
             docker image rm -f \
               "$REGISTRY/$OWNER/$img:$V" \

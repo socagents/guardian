@@ -1,6 +1,6 @@
 # `bundles/spark/mcp/` — embedded Python MCP server
 
-The Python FastMCP server that runs as a subprocess inside `phantom-agent`. Registers ~80 tools, exposes REST routes that the Next.js side proxies, talks to `xlog` + `caldera` + XSIAM PAPI.
+The Python FastMCP server that runs as a subprocess inside the agent container. Registers the built-in tools, exposes REST routes that the Next.js side proxies, and dispatches connector tools (XSIAM, Cortex XDR, web, …) to per-instance containers.
 
 **Repo-wide rules live in the [root CLAUDE.md](../../../CLAUDE.md)** — pre-deploy gate (incl. pytest), credential guardrail, contained-release discipline. This file holds only conventions LOCAL to the Python MCP server.
 
@@ -8,14 +8,15 @@ The Python FastMCP server that runs as a subprocess inside `phantom-agent`. Regi
 
 | Path | What it is |
 |------|------------|
-| `src/main.py` | Entry point. Registers ~80 tools in one block inside `async_main` — `mcp.tool()(module.fn)` per tool. |
+| `src/main.py` | Entry point. Registers the built-in tools in one block inside `async_main` — `mcp.tool()(module.fn)` per tool. |
 | `src/config/config.py` | `pydantic-settings`, reads env vars via `validation_alias`. **Never** read `os.environ` directly. |
-| `src/service/phantom_bundles/spark/mcp.py` | FastMCP instance factory. |
+| `src/service/phantom_mcp/server.py` | FastMCP instance factory. |
 | `src/usecase/builtin_components/` | Tool implementations. Each module groups related tools. |
 | `src/usecase/connector_loader.py` | Dynamic registration of connector tools at boot. Holds `_BUILTIN_LEGACY_TOOLS` — the list of tools that are agent-callable. |
 | `src/api/<resource>.py` | REST routes (the Next.js side proxies to these at `/api/v1/<resource>`). |
-| `src/pkg/` | Shared clients — `graphql_client` (xlog), `papi_client` (XSIAM), `caldera_factory`, `xql_rag_service` (ChromaDB + sentence-transformers). |
-| `tests/` | pytest suite (~421 tests). |
+| `src/pkg/` | Shared infra — `connector_proxy` (HTTP dispatch to per-instance connector containers), `setup_logging`. Per-connector clients live inside each connector's `src/_*.py`. |
+| `src/usecase/bench_cases/` | Bundled benchmark corpora (`guardian-soc-v1.yaml`). |
+| `tests/` | pytest suite (~349 tests). |
 | `skills/` | Default skills baked into the agent image at `/app/mcp/skills-default/`; volume-seeded to `/app/skills/` at boot (see [`../../../mcp/agent/CLAUDE.md`](../../../mcp/agent/CLAUDE.md) § Skills bootstrap). |
 
 ## Transports
@@ -38,7 +39,7 @@ When adding an MCP tool:
 
 ```bash
 cd bundles/spark/mcp
-PYTHONPATH=$PWD/src python3 -m pytest tests/ -x   # ~7-8s, ~421 tests
+PYTHONPATH=$PWD/src python3 -m pytest tests/ -x   # ~7-8s, ~349 tests
 ```
 
 **`PYTHONPATH=$PWD/src` is REQUIRED.** Half the test files use `from usecase.X import Y`; they fail to import without `src/` on the path. CI sets it via `PYTHONPATH=/work/bundles/spark/mcp/src`.
@@ -52,8 +53,6 @@ When fixing a bug here, audit sibling files for the same bug pattern in the same
 
 See root § Agent-side headless smoke rule 7 for the full discipline.
 
-## Worker enums + GraphQL source-of-truth (xlog interaction)
+## Upstream tenant interaction (XSIAM / XDR)
 
-The GraphQL endpoint at `xlog` (port 8000) is the **single source of truth** for log generation. The MCP calls it via `pkg/graphql_client.py`. Do NOT duplicate faker logic into the MCP layer — call xlog instead. Worker type / faker format / observable enums are defined in `xlog/app/types/` (Strawberry); the MCP receives them in responses.
-
-See [`../../../xlog/CLAUDE.md`](../../../xlog/CLAUDE.md) for the GraphQL side.
+The Cortex tenant (XSIAM PAPI, XDR Public API) is the **single source of truth** for incidents, alerts, and telemetry. The MCP reaches it only through connector tools — do NOT duplicate tenant-API logic into the MCP layer; route through the connector (`bundles/spark/connectors/xsiam/`, `bundles/spark/connectors/cortex-xdr/`) instead.
