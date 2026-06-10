@@ -1,132 +1,69 @@
 <table>
   <tr>
     <td width="180" valign="top">
-      <img src="logos/guardian-white.gif" alt="GUARDIAN logo" width="160">
+      <img src="logos/guardian.svg" alt="GUARDIAN logo" width="160">
     </td>
     <td valign="top">
       <h1>GUARDIAN</h1>
-      <p>Continuous SOC simulation. Test your detection coverage with synthetic logs, scenario-based MITRE ATT&amp;CK telemetry, and AI-orchestrated red/blue workflows.</p>
-      <p><strong>Category:</strong> SOC SIMULATION</p>
+      <p>AI incident-response agent for Cortex XSIAM/XSOAR. Investigates security incidents over MCP — evidence gathering, XQL queries, case enrichment, and response orchestration.</p>
+      <p><strong>Category:</strong> AI INCIDENT RESPONSE</p>
     </td>
   </tr>
 </table>
 
-Guardian ships as a **spark-agents v1.2** bundle. It generates synthetic security logs, runs MITRE ATT&CK scenarios end-to-end against your detection stack, and exposes everything as MCP tools the agent can chain through skills + an A2UI-rendered chat surface.
+Guardian ships as a **spark-agents v1.2** bundle. It connects to your Cortex XSIAM/XSOAR tenant, runs XQL investigations, enriches cases and issues, and exposes everything as MCP tools the agent chains through skills, knowledge bases, and an A2UI-rendered chat surface.
 
 ## At a glance
 
 | Service | Purpose | Port |
 |---|---|---|
-| `guardian-agent` | Next.js operator UI **+** embedded MCP (single trust boundary, single container, two processes) | 3000 (UI), 8080 (MCP) |
-| `xlog` | Synthetic-log generator (FastAPI + Strawberry GraphQL) | 8000 |
-| `caldera` | Red-team operations backend (MITRE Caldera 5.3.0) | 8888, 8443 |
+| `guardian-agent` | Next.js 15 operator UI **+** embedded Python FastMCP subprocess (single trust boundary, single container, two processes, TLS proxy in front) | 3000 (UI), 8080 (MCP) |
+| `guardian-browser` | Headless-Chromium sidecar for the `web` connector (CDP-accessed, profile-gated) | internal |
+| `guardian-updater` | Container-lifecycle daemon — per-instance connector containers + stack upgrades | 8090 |
+| connector containers | One per materialized connector instance, created at runtime by the updater | internal |
 
-The agent's behavior is entirely encoded in the bundle (`bundles/spark/`) — manifest, connectors, providers, prompts, skills, knowledge bases, and A2UI surfaces. The image is content-addressed; everything operator-supplied (URLs, credentials, settings) flows in through the **first-run setup form** at `http://<host>:3000`.
+The agent's behavior is entirely encoded in the bundle (`bundles/spark/`) — manifest, connectors, providers, prompts, skills, knowledge bases, and A2UI surfaces. The image is content-addressed; everything operator-supplied (URLs, credentials, settings) flows in through the **first-run setup form**.
 
-## Two deployment shapes
+## Connectors
 
-| Shape | When to use | Guide |
-|---|---|---|
-| **All-in-one** | Single operator, demo/POC, or you want xlog/caldera installed alongside the agent | [`docs/quickstart-all-in-one.md`](docs/quickstart-all-in-one.md) |
-| **Split-deploy** | Agent on a small low-privilege host; xlog/caldera operated by another team on a beefier red-team box | [`docs/split-deploy.md`](docs/split-deploy.md) |
+| Connector | What it does |
+|---|---|
+| `xsiam` | Cortex XSIAM PAPI — XQL queries (with RAG-backed example retrieval), datasets, cases, issues, incidents, alerts, assets, lookups, webhook log delivery. 59 tools, `xsiam_` prefix. |
+| `cortex-xdr` | Cortex XDR incidents, alerts, cases + issues. 50 tools, `xdr_` prefix. |
+| `cortex-docs` | Cortex documentation search (`cortex_` prefix). |
+| `cortex-content` | Cortex content catalog — fully baked local data, no network egress. |
+| `web` | Web browsing via Playwright through the `guardian-browser` CDP sidecar (`guardian_web_` prefix). |
 
-Switching between them is non-destructive: the `guardian_mcp_data` volume holding your audit log, KB, sessions, and instance configs is portable. See **Backup & restore** below.
+Connector source lives under [`bundles/spark/connectors/`](bundles/spark/connectors/); each ships as its own image on the shared [`guardian-connector-runtime`](guardian-connector-runtime/) base.
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md) for diagrams covering deployment topology, runtime data flow, and the CI/CD pipeline.
+The canonical, always-current spec lives **in the product** at `/help/architecture`. The short version:
 
-The short version:
+- **One image, two processes**: `guardian-agent` runs Next.js (UI) and the embedded MCP (Python) in the same container. The MCP is part of the agent's trust boundary, not a sibling service — per the spark-agents v1.2 bundle spec.
+- **No env vars for behavior**: the operator fills out a setup form at first run. Form values write into the SecretStore (mode-0700 file vault for secret values; sqlite metadata stores for the rest). Container restarts preserve everything.
+- **Tools are gated**: a connector's tools are advertised ONLY when at least one connector instance has been materialized via the setup form.
+- **Credential guardrail**: the chat agent never holds credential-management tools (provider/instance/API-key create, update, delete, rotate). Those operations are REST-only, gated behind `MCP_TOKEN`.
 
-- **One image, two processes**: `guardian-agent` runs Next.js (UI) and the embedded MCP (Python) in the same container. The MCP is part of the agent's trust boundary, not a sibling service. This is per the spark-agents v1.2 bundle spec and what makes the slim split-deploy bundle viable (one image to ship).
-- **No env vars for behavior**: the operator fills out a setup form at first run. Form values write into the Phase-5 SecretStore (mode-0700 file vault for secret values; sqlite paths in the metadata stores). Container restarts preserve everything.
-- **Tools are gated**: a connector's tools are advertised ONLY when at least one connector instance has been materialized via the setup form. Slim deploys before setup show only built-in cognitive tools.
+## Quickstart
 
-## API surface
+Guardian installs from a single self-contained installer binary that pins every image by digest — see [`installer/`](installer/) (built by [`installer/build-guardian-installer.sh`](installer/build-guardian-installer.sh)). Each release ships all images at one `vX.Y.Z` tag; the pipeline mechanics are in [`docs/CICD.md`](docs/CICD.md).
 
-All operator + integration endpoints live at `/api/v1/*` on port 8080. See [`docs/api-reference.md`](docs/api-reference.md) for the full enumeration.
+## Repo layout
 
-Highlights:
-
-- `/setup`, `/instances`, `/providers` — first-run materialization + post-setup CRUD
-- `/audit` — append-only forensic event log (per-event row with actor + duration + status)
-- `/sessions`, `/memories`, `/context` — cognitive layer (Phase 8)
-- `/kbs` — knowledge bases ingested from `bundles/spark/kbs/`
-- `/jobs` — cron schedule introspection (manifest.jobs[])
-- `/settings` — runtime overrides for manifest.settings.overridable
-- `/api_keys` — operator-minted long-lived keys for external integrations (scoped, revocable, audit-logged)
-- `/notifications` — manifest.notifications.topics[] dispatch + ack
-- `/telemetry` — opt-in usage counters (privacy-by-default OFF)
-- `/media` — file upload with content extraction
-- `/metrics` — Prometheus 0.0.4 text exposition (UNAUTHENTICATED for scrape compatibility)
-- `/ui/*` — A2UI v0.8 surface streaming for the renderer
-
-## Bundle exports
-
-```bash
-# Full all-in-one bundle (~3 GB tarball: every image + compose + scenarios)
-BUNDLE_MODE=full scripts/export_agent_bundle.sh
-
-# Slim agent-only bundle (~3 GB tarball: just guardian-agent + agent-only compose)
-BUNDLE_MODE=agent-only scripts/export_agent_bundle.sh
-```
-
-CI exports BOTH on every push to `main`; both are uploaded as artifacts with 1-day retention.
-
-## Backup & restore
-
-```bash
-scripts/backup_guardian.sh --label pre-upgrade
-# → ./guardian-backup-pre-upgrade-<UTC stamp>.tar.gz
-# (sha256 + manifest of all volume + bind-mount state)
-
-scripts/restore_guardian.sh guardian-backup-pre-upgrade-<UTC stamp>.tar.gz
-# Refuses to clobber non-empty targets unless --force.
-```
-
-What's captured: `guardian_mcp_data` volume (audit log, instance store, secret paths, KB, sessions, memory, jobs, settings, api_keys, notifications, telemetry, media metadata), `guardian_mcp_skills` volume (skills library), and `./.guardian-agent/` (setup form values + generated env snapshot).
-
-## Project layout
-
-```
-guardian/
-├── bundles/spark/             # spark-agents v1.2 bundle source
-│   ├── manifest.yaml          # capability declarations
-│   ├── connectors/            # Caldera + XSIAM + xlog tool definitions
-│   ├── providers/             # Vertex (Gemini chat + embeddings)
-│   ├── prompts/               # System prompt + standing orders
-│   ├── kbs/                   # Knowledge bases
-│   ├── ui/a2ui/               # A2UI v0.8 surfaces (manifest, catalogs, JSONL)
-│   └── mcp/                   # Embedded MCP server source
-│       ├── src/
-│       │   ├── api/           # /api/v1/* HTTP routes
-│       │   ├── usecase/       # Stores (audit, instance, settings, …)
-│       │   ├── pkg/           # Shared clients (graphql, papi, caldera, embeddings)
-│       │   └── service/guardian_mcp/
-│       └── tests/
-├── mcp/agent/                 # Next.js UI (combined image with embedded MCP)
-├── xlog/                      # Synthetic-log generator (FastAPI + Strawberry)
-├── third_party/caldera/       # MITRE Caldera 5.3.0 source submodule
-├── scripts/                   # Operator + CI helpers (export, backup, restore)
-├── docs/                      # Operator-facing docs
-└── docker-compose*.yml        # Two compose recipes (full + agent-only)
-```
+See [`CODEBASE_MAP.md`](CODEBASE_MAP.md) for the structural map — top-level groups first, then the modules inside each.
 
 ## Working on the codebase
 
-The local repo is for editing + version control. Builds, deploys, tests, and container runs all happen on the remote `guardian` VM in GCP — see [`CLAUDE.md`](CLAUDE.md) for the IAP-tunnel + sshpass workflow.
+- [`CLAUDE.md`](CLAUDE.md) — repo-wide agent-behavior contracts + critical gotchas (Claude Code).
+- [`AGENTS.md`](AGENTS.md) — the same briefing for other coding agents, including the remote-VM workflow.
+- [`AI-LAYER.md`](AI-LAYER.md) — the coding-agent harness (hooks, skills, MCP servers, subagents, plugin marketplace).
 
-Quick remote runs once your shell has `.env.vm` loaded:
+Quick local pre-deploy gate:
 
 ```bash
-# MCP server tests inside the freshly built image
-… "cd $VM_REMOTE_REPO/bundles/spark/mcp && pytest"
-
-# Agent lint + build
-… "cd $VM_REMOTE_REPO/mcp/agent && npm run lint"
-
-# Full Phase 5–11a smoke test (HTTP-driven, 31 assertions)
-… "cd $VM_REMOTE_REPO && MCP_TOKEN=\$(docker compose exec -T guardian-agent printenv MCP_TOKEN) ./bundles/spark/mcp/scripts/smoke_test.sh"
+cd mcp/agent && npx tsc --noEmit && npm run lint && npm run build
+cd ../../bundles/spark/mcp && PYTHONPATH=$PWD/src python3 -m pytest tests/ -x
 ```
 
 ## License

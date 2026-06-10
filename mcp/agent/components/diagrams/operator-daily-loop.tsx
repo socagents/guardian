@@ -4,7 +4,7 @@
  * Guardian Operator Daily Loop.
  *
  * Cyclical flow showing the operator's typical day-driver loop:
- * Chat → Run scenario → Observe → Refine → Chat again. Three primary
+ * Chat → Investigate → Observe → Refine → Chat again. Three primary
  * surfaces in the cycle, with Jobs (scheduled work) and Hooks (policy)
  * shown as side-branches that automate parts of the loop.
  */
@@ -104,7 +104,7 @@ const STYLES =
 `;
 
 interface Surface {
-  id: "chat" | "scenario" | "observe";
+  id: "chat" | "investigate" | "observe";
   name: string;
   route: string;
   detail: string;
@@ -123,7 +123,7 @@ const SURFACES: Surface[] = [
     detail: "describe what you want · agent dispatches tools",
     angleDeg: -90, // top
     variant: "default",
-    actions: ["/plan multi-step", "/spawn red-team", "/cost"],
+    actions: ["/plan multi-step", "/model switch", "/cost"],
     iconPath: (
       <g>
         <path d="M -9 -4 a 2 2 0 0 1 2 -2 h 14 a 2 2 0 0 1 2 2 v 8 a 2 2 0 0 1 -2 2 h -10 l -4 4 v -4 h -2 a 2 2 0 0 1 -2 -2 z" />
@@ -131,16 +131,16 @@ const SURFACES: Surface[] = [
     ),
   },
   {
-    id: "scenario",
-    name: "Run scenario",
+    id: "investigate",
+    name: "Investigate",
     route: "via tool dispatch",
-    detail: "xlog ships logs · CALDERA runs adversary · XSIAM XQL",
+    detail: "case triage · XQL hunts · asset + endpoint lookups",
     angleDeg: 30, // bottom-right
     variant: "default",
     actions: [
-      "scenario worker spawn",
-      "log webhook → SIEM",
-      "operation results",
+      "xsiam_get_cases",
+      "build_xql_query skill",
+      "xsiam_run_xql_query",
     ],
     iconPath: (
       <g>
@@ -171,7 +171,7 @@ interface Branch {
   name: string;
   detail: string;
   /** which surface this branches off from */
-  fromSurface: "chat" | "observe" | "scenario";
+  fromSurface: "chat" | "observe" | "investigate";
   /** which side: 'left' or 'right' */
   side: "left" | "right";
 }
@@ -190,7 +190,7 @@ const BRANCHES: Branch[] = [
     tag: "POLICY",
     name: "/settings/hooks",
     detail: "intercept tool calls · slack on tier-3 · deny in prod",
-    fromSurface: "scenario",
+    fromSurface: "investigate",
     side: "right",
   },
   {
@@ -234,7 +234,7 @@ export function OperatorDailyLoop() {
       >
         <title id="odl-title">Operator Daily Loop</title>
         <desc id="odl-desc">
-          Three-surface daily loop: chat → run scenario → observability → chat.
+          Three-surface daily loop: chat → investigate → observability → chat.
         </desc>
 
         <defs>
@@ -432,7 +432,7 @@ export function OperatorDailyLoop() {
             How a typical day flows
           </text>
           <text className="legend-text" x="220" y="4">
-            describe a goal in chat → tools dispatch a scenario → check
+            describe a goal in chat → tools dispatch an investigation → check
             observability → refine the prompt or promote it to a job.
             Hooks govern policy; memory makes follow-ups context-aware.
           </text>

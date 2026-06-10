@@ -16,7 +16,7 @@
  * slash commands, hook installation, plan mode, cost reading, plugin
  * install, agents page, connector reauth, troubleshooting decision tree.
  *
- * What lives in /help/architecture: 5-service stack topology, MCP
+ * What lives in /help/architecture: service-stack topology, MCP
  * tool-registration internals, bundle layout, audit-row schema, REST
  * endpoint reference, the chat-route lifecycle, every subsystem&apos;s
  * implementation pattern, design decisions.
@@ -67,8 +67,8 @@ const SECTIONS: SectionDef[] = [
   { id: "connectors", label: "Connectors & Instances", group: "Integration", icon: "cable" },
   { id: "connector-health-ux", label: "Connector Health", group: "Integration", icon: "monitor_heart" },
   { id: "marketplace", label: "Marketplace", group: "Integration", icon: "storefront" },
-  { id: "data-sources", label: "Data Sources", group: "Integration", icon: "dataset" },
-  { id: "log-destinations-ux", label: "Log Destinations", group: "Integration", icon: "cloud_upload" },
+  // [guardian v0.1.0] Retired: data-sources — simulation subsystem removed
+  // [guardian v0.1.0] Retired: log-destinations-ux — simulation subsystem removed
   { id: "plugins-ux", label: "Plugins", group: "Integration", icon: "extension" },
   { id: "hooks-ux", label: "Hooks", group: "Integration", icon: "webhook" },
   { id: "approvals", label: "Approvals", group: "Integration", icon: "fact_check" },
@@ -298,12 +298,12 @@ export default function HelpPage() {
               </h1>
             </div>
             <p className="text-base text-on-surface-variant leading-relaxed">
-              Guardian is a continuous SOC simulation platform: it generates
-              synthetic security telemetry, runs MITRE ATT&amp;CK scenarios,
-              validates detections, and orchestrates red/blue workflows
-              through an AI agent surface. This guide walks every operator
-              surface end-to-end — what it does, where it lives in the UI,
-              and how to drive it day-to-day.
+              Guardian is an AI incident-response agent for Cortex XSIAM
+              and XSOAR: it investigates security incidents — evidence
+              gathering, XQL queries, case enrichment, and response
+              orchestration — through an AI agent surface. This guide
+              walks every operator surface end-to-end — what it does,
+              where it lives in the UI, and how to drive it day-to-day.
             </p>
             <div
               className="mt-4 rounded-xl p-4 flex items-start gap-3"
@@ -315,12 +315,12 @@ export default function HelpPage() {
               <div className="text-sm text-on-surface leading-relaxed flex-1">
                 <span className="font-semibold">Looking for technical
                 depth?</span>{" "}
-                The 5-service stack, boot lifecycle, chat-route
+                The service stack, boot lifecycle, chat-route
                 pipeline, every subsystem&apos;s implementation
                 (memory, knowledge, skills, hooks, tasks, plan mode,
                 subagents, plugins, jobs, notifications, approvals,
                 models, providers, secret store, audit log), and the
-                seven external connectors (xlog / CALDERA / XSIAM / Cortex XDR / Cortex Docs / Cortex Content / Web Browser)
+                five external connectors (XSIAM / Cortex XDR / Cortex Docs / Cortex Content / Web Browser)
                 live in the dedicated{" "}
                 <Link
                   href="/help/architecture"
@@ -339,43 +339,48 @@ export default function HelpPage() {
 
           <Section id="overview" icon="explore" title="What Guardian is">
             <p>
-              Guardian packages a SOC adversary lab into a four-container
-              Docker stack. The agent is the human-facing surface — a
-              Next.js UI where you chat, run jobs, configure connectors,
+              Guardian packages an AI incident-response agent into a
+              Docker Compose stack: the agent container (Next.js UI +
+              embedded MCP server), a headless-browser sidecar, the
+              guardian-updater lifecycle daemon, and one container per
+              connector instance. The agent is the human-facing surface
+              — a UI where you chat, run jobs, configure connectors,
               and watch telemetry. Behind it sits an MCP server that
-              aggregates roughly 80 tools from three connectors:{" "}
-              <Term>xlog</Term> for synthetic log generation,{" "}
-              <Term>caldera</Term> for MITRE ATT&amp;CK adversary
-              emulation, and <Term>xsiam</Term> for Cortex XSIAM
-              detection validation. A red-team backend (Caldera 5.3) runs
-              alongside, dispatched to via the caldera connector.
+              aggregates roughly 140 tools from five connectors:{" "}
+              <Term>xsiam</Term> for Cortex XSIAM cases, issues, and XQL
+              queries, <Term>cortex-xdr</Term> for Cortex XDR incidents
+              and XQL, <Term>cortex-docs</Term> for official Palo Alto
+              Networks documentation search, <Term>cortex-content</Term>{" "}
+              for the baked Cortex content catalog, and <Term>web</Term>{" "}
+              for evidence-gathering browsing via the browser sidecar.
             </p>
             <p>
-              The intended workflow is: synthesize realistic-looking
-              telemetry → run an adversary scenario against it → check
-              whether your detection content fired correctly → iterate.
+              The intended workflow is: a case or issue lands in your
+              Cortex tenant → ask the agent to investigate → it gathers
+              evidence with XQL queries and documentation lookups →
+              enriches and updates the incident → you review and respond.
               The agent orchestrates all of that through natural-language
-              chat plus optional scheduled jobs. You don&apos;t need to
-              wait for real attacks to pressure-test detection content;
-              Guardian gives you a repeatable lab on demand.
+              chat plus optional scheduled jobs. You don&apos;t need XQL
+              fluency or API scripting to drive an investigation end-to-end.
             </p>
             <p>
               Who&apos;s it for? <Term>SOC tier-1 / tier-2 analysts</Term>{" "}
-              who want practice at running playbooks end-to-end without
-              waiting for a real incident. <Term>Red-team operators</Term>{" "}
-              iterating on ATT&amp;CK chains and looking for a fast way to
-              materialize them in telemetry.{" "}
-              <Term>Detection engineers</Term> who need to validate that a
-              new SIEM rule actually fires when its pre-conditions are met
-              — and continue firing as the platform evolves underneath.
+              who want investigation legwork — evidence pulls, query
+              authoring, enrichment — handled conversationally.{" "}
+              <Term>Incident responders</Term> who need fast, repeatable
+              access to case context across XSIAM and XDR tenants.{" "}
+              <Term>Detection engineers</Term> who want a low-friction
+              path from natural-language question to validated XQL query
+              result.
             </p>
             <p>
-              What it&apos;s not: a SIEM (it produces telemetry, doesn&apos;t
-              consume real telemetry); a real attack platform (every
-              connector is sandboxed); or a turnkey MSSP (it requires an
-              operator to design what to test). Think of it as the
-              <em> repeatable rehearsal space</em> between your detection
-              authoring tools and your production SOC.
+              What it&apos;s not: a SIEM (it queries your Cortex tenant,
+              it doesn&apos;t ingest telemetry itself); an autonomous
+              responder (destructive actions gate behind operator
+              approval); or a turnkey MSSP (it requires an operator to
+              direct the investigation). Think of it as the
+              <em> tireless analyst</em> between your Cortex tenant and
+              your response decisions.
             </p>
             <Callout tone="info">
               Guardian ships zero native tools — every capability comes from
@@ -397,9 +402,10 @@ export default function HelpPage() {
 
             <SubSection icon="chat_bubble" title="Chat — for ad-hoc work">
               <p>
-                Type a request — &ldquo;send 5 firewall logs to
-                udp:10.0.0.8:514&rdquo; or &ldquo;run a port scan against
-                10.10.20.5&rdquo; — and the agent dispatches the right tool.
+                Type a request — &ldquo;pull the high-severity cases from
+                the last 24 hours&rdquo; or &ldquo;run an XQL query for
+                failed logins on host web-01&rdquo; — and the agent
+                dispatches the right tool.
                 For sensitive operations (creating jobs, rotating keys,
                 deleting instances), an approval card appears inline; click
                 Approve to unblock the call. Every chat session is
@@ -437,13 +443,13 @@ export default function HelpPage() {
             </SubSection>
 
             <p className="pt-2">
-              The loop in practice: you author a detection in your SIEM →
-              switch to chat and ask the agent to run the matching attack
-              scenario → watch the pipeline graph turn briefly amber as
-              the connectors fire → check Events for the audit trail →
-              confirm in your SIEM that the rule matched → if not, iterate.
-              When you have a workflow that&apos;s working, promote it to a
-              job for nightly regression.
+              The loop in practice: a case lands in your Cortex tenant →
+              switch to chat and ask the agent to investigate → watch the
+              pipeline graph turn briefly amber as the connectors fire →
+              check Events for the audit trail → review the evidence and
+              decide the response → update the incident from the same
+              thread. When you have a workflow that&apos;s working,
+              promote it to a job for a recurring sweep.
             </p>
           </Section>
 
@@ -488,7 +494,7 @@ password:  <value of GUARDIAN_DEFAULT_ADMIN_PASSWORD from .env>`}</Pre>
               <AuthLoginFlow />
             </SubSection>
 
-            <SubSection icon="key" title="Authenticate with an API key (v0.17.108)">
+            <SubSection icon="key" title="Authenticate with an API key">
               <p>
                 For scripts, schedulers, CI, or any tool that drives the
                 agent without a browser session, mint an{" "}
@@ -556,17 +562,13 @@ sudo /opt/guardian/guardian-reset-admin-password`}</Pre>
                 muscle memory.
               </p>
               <p className="text-sm text-on-surface-variant">
-                <strong>v0.6.29+ — non-interactive mode (scripted /
+                <strong>Non-interactive mode (scripted /
                 remote SSH / no-TTY contexts):</strong> the CLI accepts
                 a <Code>--password-stdin --skip-confirm</Code> flag pair
                 that reads the password from stdin and bypasses the
-                <Code>RESET</Code> typo-prevention prompt. Pre-v0.6.29
-                the documented <Code>docker exec -i</Code> flow silently
-                broke under piped stdin (readline consumed the full
-                buffer on the first prompt, leaving subsequent prompts
-                empty), forcing operators to fall back to a direct
-                curl against the MCP-side admin_reset endpoint. The
-                non-interactive flag fixes that:
+                <Code>RESET</Code> typo-prevention prompt — use it
+                whenever stdin is piped (interactive readline prompts
+                don&apos;t survive piped stdin):
               </p>
               <Pre>{`echo -n 'NewPassword' | docker exec -i guardian_agent \\
   node /app/cli/reset-admin.mjs --password-stdin --skip-confirm`}</Pre>
@@ -765,17 +767,9 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
               GHCR. Customer-side upgrades go through the installer.
             </p>
 
-            <Callout tone="warn">
-              <Term>v0.3.0 is a major version bump (breaking change).</Term>{" "}
-              Pre-v0.3.0 guardian-installer binaries cannot install or
-              upgrade to v0.3.0+. Customers running v0.2.x must download
-              the v0.3.x installer binary and run a one-time migration —
-              see{" "}
-              <a href="#upgrade-from-v02x" className="link">
-                Upgrading from v0.2.x → v0.3.0
-              </a>{" "}
-              below.
-            </Callout>
+            {/* [guardian v0.1.0] Retired: v0.3.0 breaking-change Callout —
+                pre-Guardian version history; v0.1.0 is the first
+                Guardian release. */}
 
             <SubSection icon="auto_awesome" title="Recommended upgrade flow">
               <ol className="list-decimal pl-5 space-y-1.5 text-sm">
@@ -802,90 +796,9 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
               </p>
             </SubSection>
 
-            <SubSection
-              id="upgrade-from-v02x"
-              icon="route"
-              title="Upgrading from v0.2.x → v0.3.0 (one-time migration)"
-            >
-              <p>
-                v0.3.0 introduces image digest pinning, which changes
-                the customer compose file&apos;s image-ref shape from
-                tag-based to digest-based. Because docker compose
-                computes a service-spec hash including the image
-                reference string, the shape change forces a one-time
-                recreation of every container.
-              </p>
-              <p className="text-sm">
-                <Term>Preserved across the migration:</Term> all named
-                volumes (operator data, secrets store, KEK, on-disk
-                caldera + xlog state, skills volume), your{" "}
-                <Code>GUARDIAN_SECRET_KEK</Code>, GHCR token, UI password,
-                setup-form values.
-              </p>
-              <p className="text-sm">
-                <Term>Lost in the one-time hop</Term> (recoverable, but
-                worth knowing about):
-              </p>
-              <ul className="list-disc pl-5 space-y-1 text-sm">
-                <li>
-                  Caldera in-memory red-team operations (on-disk state
-                  preserved; restart any active operations after the
-                  upgrade)
-                </li>
-                <li>xlog active streaming workers (re-create as needed)</li>
-                <li>
-                  guardian-agent in-flight chat sessions with active
-                  streams (earlier persisted turns are kept)
-                </li>
-              </ul>
-              <p className="text-sm">
-                After the v0.3.0 baseline, subsequent v0.3.x → v0.3.x+1
-                upgrades are <Term>selective</Term>: only services
-                whose image content actually changed are recreated.
-                Caldera, xlog, browser, and updater retain in-memory
-                state when their source didn&apos;t move.
-              </p>
-              <p className="text-sm">
-                Steps:
-              </p>
-              <ol className="list-decimal pl-5 space-y-1 text-sm">
-                <li>
-                  Download the v0.3.x guardian-installer binary from{" "}
-                  <a
-                    href="https://github.com/kite-production/guardian/releases/tag/v0.3.0"
-                    className="link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    the v0.3.0 GitHub Release
-                  </a>
-                  .
-                </li>
-                <li>
-                  (Optional) Quiesce any active state you want to
-                  re-run after the upgrade.
-                </li>
-                <li>
-                  <Code>sudo ./guardian-installer</Code> — the installer
-                  detects the v0.2.x state, prints a one-time migration
-                  banner, stops the old stack, applies the new
-                  manifest, and starts v0.3.0 with digest-pinned
-                  images.
-                </li>
-              </ol>
-              <p className="text-sm">
-                Full step-by-step + troubleshooting in{" "}
-                <a
-                  href="https://github.com/kite-production/guardian/blob/main/installer/MIGRATION-FROM-V02X.md"
-                  className="link"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  installer/MIGRATION-FROM-V02X.md
-                </a>{" "}
-                (also bundled into every v0.3.x install kit tarball).
-              </p>
-            </SubSection>
+            {/* [guardian v0.1.0] Retired: upgrade-from-v02x — pre-Guardian
+                (Phantom) migration walkthrough removed; v0.1.0 is the first
+                Guardian release. */}
 
             <SubSection icon="visibility" title="Auditing image versions">
               <p>
@@ -926,7 +839,7 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
               </p>
               <pre className="text-xs bg-surface-container-low p-3 rounded">
 {`# Download the binary for the version you want:
-gh release download v0.3.1 --repo kite-production/guardian \\
+gh release download v0.1.0 --repo kite-production/guardian \\
   --pattern guardian-installer
 chmod +x guardian-installer
 sudo ./guardian-installer`}
@@ -964,7 +877,7 @@ sudo ./guardian-installer`}
                     /observability/connectors
                   </Term>{" "}
                   → an env var (e.g.{" "}
-                  <Code>DIGEST_GUARDIAN_CONNECTOR_XLOG</Code>) is
+                  <Code>DIGEST_GUARDIAN_CONNECTOR_XSIAM</Code>) is
                   missing from{" "}
                   <Code>/opt/guardian/.env</Code> or wasn&apos;t
                   forwarded into the affected service&apos;s container.
@@ -1057,8 +970,8 @@ sudo ./guardian-installer`}
                 <Link href="/approvals" className="link">approval</Link> —
                 the call blocks server-side, an approval card renders
                 inline, and the agent resumes once you click Approve.
-                Tier-1 tools (read-only queries, log generation,
-                non-destructive runs) execute immediately without prompt.
+                Tier-1 tools (read-only queries, non-destructive runs)
+                execute immediately without prompt.
               </p>
             </SubSection>
 
@@ -1066,13 +979,13 @@ sudo ./guardian-installer`}
               <p>Useful prompts to try:</p>
               <ul className="list-disc pl-5 space-y-1 text-sm">
                 <li>
-                  <em>&quot;Run the FortiGate auth-spray scenario for 5
-                  minutes against the playground&quot;</em> — picks the
-                  right scenario by name + the right connector tools.
+                  <em>&quot;Show me the open critical cases and pull the
+                  extra data for the newest one&quot;</em> — picks the
+                  right connector instance + the right case tools.
                 </li>
                 <li>
                   <em>&quot;What does the
-                  <Code>generate_shared_iocs</Code> skill do?&quot;</em>{" "}
+                  <Code>build_xql_query</Code> skill do?&quot;</em>{" "}
                   — pulls from the skill catalog and explains.
                 </li>
                 <li>
@@ -1364,8 +1277,8 @@ sudo ./guardian-installer`}
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Code>/plan run the FortiGate scenario, then validate
-                  the matching XSIAM rule</Code> — explicit slash command.
+                  <Code>/plan investigate incident 4112, then update
+                  its severity from the findings</Code> — explicit slash command.
                 </li>
                 <li>
                   Type your request normally and click the{" "}
@@ -1433,8 +1346,8 @@ sudo ./guardian-installer`}
           {/* Tasks page + /tasks command. */}
           <Section id="tasks-ux" icon="task_alt" title="Tasks">
             <p>
-              Long-running operations the agent kicks off (a scenario
-              worker, a multi-step subagent, a deferred job dispatch) land
+              Long-running operations the agent kicks off (a multi-step
+              subagent, a deferred job dispatch) land
               in the <Term>tasks registry</Term> rather than blocking the
               chat. View them at{" "}
               <Link href="/tasks" className="link">/tasks</Link> or list
@@ -1466,7 +1379,7 @@ aborted      ── operator clicked Cancel before completion`}</Pre>
                 Three tabs: <Term>Active</Term> (pending + running),{" "}
                 <Term>Recent</Term> (last 24h, all states), and{" "}
                 <Term>All</Term> (full history with date filter). Each
-                row shows: task ID, kind (scenario / subagent / job /
+                row shows: task ID, kind (subagent / job /
                 tool), target (the thing being acted on), elapsed time,
                 originating session, and a status pill.
               </p>
@@ -1513,34 +1426,29 @@ aborted      ── operator clicked Cancel before completion`}</Pre>
             <SubSection icon="category" title="Four categories">
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Term>Foundation</Term> — reusable building blocks
-                  (generate IOCs, populate observable catalogs, baseline a
-                  workspace). The agent draws on these to compose larger
+                  <Term>Foundation</Term> — reusable building blocks.
+                  Guardian ships four: the Cortex KB search discipline
+                  (<Code>cortex_kb_search</Code>), its query-patterns
+                  and raw-API companions, and the XQL query-authoring
+                  reference. The agent draws on these to compose larger
                   flows.
                 </li>
                 <li>
-                  <Term>Scenarios</Term> — full attack chains
-                  (initial-access → discovery → privilege-escalation →
-                  exfil sequences). Each scenario references specific
-                  ATT&amp;CK techniques. Ships{" "}
-                  <Term>12 heavy-volume kill chains</Term> alongside the
-                  original 7: ransomware double-extortion, APT
-                  long-dwell espionage, insider threat, supply-chain
-                  npm compromise, M365 OAuth takeover, mass phishing
-                  campaign, web-app SQLi → RCE, living-off-the-land
-                  LOLBin, cryptojacking botnet, business-email
-                  compromise, Kubernetes container escape, and DDoS
-                  multi-vector. Each generates 1k-13k synthetic events
-                  designed to stress-test correlation rules end-to-end.
+                  <Term>Scenarios</Term> — operator-authored multi-step
+                  runbooks for recurring incident types (phishing
+                  triage, ransomware response, account-compromise
+                  sweeps). Empty by default — author your own.
                 </li>
                 <li>
-                  <Term>Validation</Term> — detection-validation flows
-                  (run-and-check, coverage analysis, regression sweeps).
+                  <Term>Validation</Term> — verification flows
+                  (confirm a query returns the expected evidence,
+                  post-incident checks). Empty by default.
                 </li>
                 <li>
-                  <Term>Workflows</Term> — multi-step orchestration
-                  (scheduled simulations, weekly reports, dashboard
-                  updates).
+                  <Term>Workflows</Term> — multi-step orchestration.
+                  Guardian ships <Code>build_xql_query</Code>, the
+                  mandatory chain that turns a natural-language
+                  question into a working Cortex XQL query.
                 </li>
               </ul>
             </SubSection>
@@ -1551,23 +1459,23 @@ aborted      ── operator clicked Cancel before completion`}</Pre>
                 front-matter:
               </p>
               <Pre>{`---
-name: generate_shared_iocs
-displayName: Generate Shared IOCs
+name: cortex_kb_search
+displayName: Cortex KB Search
 category: foundation
-locked: true               # platform-enforced; can't be disabled
-loadingMode: always        # vs "on_demand"
+locked: false              # platform-enforced when true; can't be disabled
+loadingMode: on-demand     # vs "always"
 ---
 
-# Generate Shared IOCs
+# Cortex KB Search
 
-Pre-generates the indicators (IPs, domains, hashes, users) that
-downstream scenarios reuse — keeps cross-scenario telemetry coherent.
+Answers Cortex product questions by searching the official Palo Alto
+Networks documentation and returning evidence-backed, cited answers.
 
 ## When to use
 ...
 
 ## Steps
-1. Call \`xlog.populate_observable_catalog\` with seed=42
+1. Call \`cortex_suggest\` to find the exact doc title
 2. ...`}</Pre>
             </SubSection>
 
@@ -1596,16 +1504,15 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 an unwanted change. <Term>Delete</Term> soft-deletes:
                 the MD moves to <Code>/app/skills/.deleted/</Code> on
                 the volume, recoverable via <Code>docker exec</Code>{" "}
-                + <Code>mv</Code>. Locked skills (e.g.{" "}
-                <Code>generate_shared_iocs</Code>) render Delete as
+                + <Code>mv</Code>. Locked skills render Delete as
                 disabled — they&apos;re foundational and breaking
                 them breaks the agent.
               </p>
               <p>
                 <Term>Create</Term>: button in the page header opens
                 the editor. Display name auto-derives the on-disk
-                filename via slugify (e.g. &ldquo;SQL Injection
-                Scenario&rdquo; → <Code>sql_injection_scenario.md</Code>);
+                filename via slugify (e.g. &ldquo;Phishing Triage
+                Runbook&rdquo; → <Code>phishing_triage_runbook.md</Code>);
                 you can override the filename if needed. Pick a
                 category (foundation / scenarios / validation /
                 workflows), write a description (this is what the chat
@@ -1640,18 +1547,18 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 <Code>## AVAILABLE SKILLS</Code> block listing every
                 installed skill&apos;s name, display name, category,
                 description, and ATT&amp;CK tactics. The{" "}
-                <em>bodies</em> stay out of the prompt — that&apos;d
-                be 50-150KB for our 23 skills, breaking the prompt
+                <em>bodies</em> stay out of the prompt — they&apos;d
+                add tens of kilobytes per turn, breaking the prompt
                 cache every time anyone edits a skill. Instead, the
                 model decides which skill (if any) to apply based on
                 metadata, then calls <Code>skills_read</Code> to pull
                 the full body when it&apos;s actually going to use it.
               </p>
               <p>
-                Practical effect: ask the agent to &ldquo;run a
-                ransomware double-extortion exercise against the test
-                fleet&rdquo; and it picks{" "}
-                <Code>scenarios/ransomware_double_extortion.md</Code>{" "}
+                Practical effect: ask the agent to &ldquo;build a
+                query for failed logins on the domain
+                controllers&rdquo; and it picks{" "}
+                <Code>workflows/build_xql_query.md</Code>{" "}
                 from the registry on its own. You don&apos;t have to
                 tell it where to look. The metadata is also fresh per
                 turn — adding a new skill via the UI makes it
@@ -1694,9 +1601,9 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Term>built-in</Term> — ships with the bundle (red-team,
-                  blue-team, purple-team triage). Cannot be deleted, but
-                  can be disabled via the agent toggle on the card.
+                  <Term>built-in</Term> — ships with the bundle. Cannot
+                  be deleted, but can be disabled via the agent toggle
+                  on the card.
                 </li>
                 <li>
                   <Term>plugin</Term> — contributed by an installed plugin
@@ -1734,7 +1641,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                   <Term>Allowed tools / skills</Term> — scoped catalogs.
                   An agent only sees the intersection of its allow-list
                   and the runtime&apos;s active set. Wildcards supported
-                  (<Code>caldera.*</Code>, <Code>xsiam.run_xql</Code>).
+                  (<Code>xsiam_*</Code>, <Code>xsiam_run_xql_query</Code>).
                 </li>
                 <li>
                   <Term>Model preference</Term> — overrides the runtime
@@ -1748,7 +1655,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
 
             <SubSection icon="rocket_launch" title="Spawning from chat">
               <p>
-                Type <Code>/spawn red-team-recon target=10.0.0.0/24</Code>{" "}
+                Type <Code>/spawn case-triage incident=INC-4112</Code>{" "}
                 to dispatch a subagent. The chat shows an inline{" "}
                 <Term>subagent panel</Term> with the agent&apos;s
                 streaming output, tool calls, and final summary. Multiple
@@ -1800,8 +1707,9 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 <li>
                   <Term>Different persona / tighter tool scope</Term>
                   {" "}— the parent is a general-purpose assistant;
-                  the red-team subagent needs CALDERA-specific
-                  framing and a tool list that excludes XSIAM. The
+                  a triage subagent needs investigation-only
+                  framing and a tool list that excludes
+                  incident-mutating tools. The
                   scoped tool catalogue is the security argument: a
                   tool not in the catalogue can&apos;t be called
                   through a hook injection or a prompt-injection
@@ -1811,14 +1719,15 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                   <Term>Long sub-task you don&apos;t want polluting
                   parent context</Term> — the parent already has 80%
                   of its context window full; you don&apos;t want a
-                  150-tool-call adversary chain to consume the rest.
+                  150-tool-call evidence sweep to consume the rest.
                   The subagent runs in its own session; only the
                   final summary returns to the parent.
                 </li>
                 <li>
                   <Term>Parallel exploration</Term> — dispatch two
-                  subagents at once (e.g. red-team-recon +
-                  blue-team-detection) to look at the same scenario
+                  subagents at once (e.g. one sweeping endpoint
+                  telemetry + one reviewing identity logs) to look at
+                  the same incident
                   from two angles. Each gets its own panel; their
                   summaries arrive independently.
                 </li>
@@ -2009,14 +1918,9 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
             </p>
 
             <SubSection icon="library_books" title="Bundled KBs">
+              {/* [guardian v0.1.0] Retired: guardian-soc KB — simulation
+                  subsystem removed; xql-examples is the only bundled KB. */}
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
-                <li>
-                  <Term>guardian-soc</Term> — main reference content:
-                  architecture notes, scenario design rationale, run-book
-                  entries, post-mortem templates. The agent retrieves from
-                  this KB whenever you ask conceptual questions about
-                  Guardian.
-                </li>
                 <li>
                   <Term>xql-examples</Term> — 787 curated Cortex XQL / XSIAM
                   queries indexed for natural-language retrieval
@@ -2026,7 +1930,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                   retrieves via the universal <Code>knowledge_search</Code>
                   tool (one call covers all loaded KBs); both the XSIAM
                   connector&apos;s <Code>find_xql_examples_rag</Code> and
-                  the v0.7.0 XQL skill chain consume this corpus.
+                  the <Code>build_xql_query</Code> skill chain consume this corpus.
                   Validated against the live tenant before each entry
                   ships — every query in the KB is guaranteed to return{" "}
                   <Code>status: SUCCESS</Code> when executed.
@@ -2043,8 +1947,8 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 question; (2)&nbsp;adapt the template&apos;s SQL block to
                 your specific parameters (hostnames, time windows, etc.);
                 (3)&nbsp;run via <Code>xdr_run_xql_query</Code> or{" "}
-                <Code>xsiam_run_xql</Code>; (4)&nbsp;return the table.
-                Combined with v0.7.0&apos;s new{" "}
+                <Code>xsiam_run_xql_query</Code>; (4)&nbsp;return the table.
+                Combined with the{" "}
                 <Code>xdr_list_datasets</Code> tool (which empirically
                 enumerates the datasets available in your specific
                 tenant), this gives operators a low-friction path from
@@ -2126,10 +2030,10 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
               <p>
                 Each job carries a declarative <Term>permission policy</Term>{" "}
                 — a tool allowlist enforced by the chat route&apos;s
-                tool-dispatch loop. Pre-v0.5.23 every job dispatched
+                tool-dispatch loop. Without a policy, every job-dispatched
                 chat turn could call ANY tool the agent has access to;
-                a scheduled &quot;fire-bulk-logs&quot; job could
-                technically also call <Code>caldera_start_operation</Code>{" "}
+                a scheduled &quot;morning case sweep&quot; job could
+                technically also call <Code>xdr_incidents_update</Code>{" "}
                 if the model decided to. Permission policies let you
                 scope what each job can touch.
               </p>
@@ -2141,21 +2045,21 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 <li>
                   <Term>Allowed tools</Term> — whitelist when non-empty.
                   Tools not matching any pattern are denied. Example:{" "}
-                  <Code>xlog_*, scenarios_*</Code> restricts the job to
-                  the xlog and scenarios tool families.
+                  <Code>xsiam_*, cortex_*</Code> restricts the job to
+                  the xsiam and cortex-docs tool families.
                 </li>
                 <li>
                   <Term>Denied tools</Term> — blacklist. Denies even
                   tools that matched the allowed list (denied wins).
-                  Example: <Code>*_delete, caldera_start_operation</Code>{" "}
+                  Example: <Code>*_delete, xdr_incidents_update</Code>{" "}
                   forbids destructive tools.
                 </li>
                 <li>
                   <Term>Require approval</Term> — forces the standard
                   approval card for matching tools, regardless of the
                   job&apos;s <Code>bypass_approvals</Code> setting.
-                  Example: <Code>xsiam_write_*, api_keys_*</Code>{" "}
-                  routes credential-touching tools through operator
+                  Example: <Code>xdr_*_update, api_keys_*</Code>{" "}
+                  routes state-mutating tools through operator
                   confirmation.
                 </li>
               </ul>
@@ -2197,7 +2101,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                   <strong>You want cheaper dispatches</strong> on a
                   routine / high-volume job (e.g.{" "}
                   <Code>gemini-2.5-flash</Code> for a job that fires
-                  every 5 minutes generating bulk log volume — Flash is
+                  every 5 minutes sweeping for new cases — Flash is
                   ~10× cheaper and the work doesn&apos;t need Pro
                   reasoning).
                 </li>
@@ -2222,7 +2126,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 reasoning path (Gemini&apos;s thinkingConfig). The UI
                 disables the toggle when the picked model doesn&apos;t
                 support thinking — Flash variants silently ignore it.
-                <em>v0.5.22 caveat:</em> the toggle is stored,
+                <em>Caveat:</em> the toggle is stored,
                 dispatched, and visible in the form, but the
                 chat-route&apos;s Gemini call payload doesn&apos;t yet
                 wire <Code>body.thinking</Code> through to{" "}
@@ -2235,7 +2139,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 The override is per-job, not per-skill. If you invoke a
                 skill from a job&apos;s prompt, the skill runs under
                 the job&apos;s model override. Per-skill overrides are
-                a v0.5.23+ feature (skills affect chat-turn dispatches
+                a planned feature (skills affect chat-turn dispatches
                 rather than scheduled-job dispatches — separate code
                 path with its own integration window).
               </Callout>
@@ -2275,8 +2179,8 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
               <ul className="list-disc pl-5 space-y-2 text-sm">
                 <li>
                   <Term>Prompt</Term> — a natural-language message
-                  (&quot;send a port-scan simulation against 10.10.0.8
-                  and tell me what got logged&quot;). Runs through the
+                  (&quot;check XSIAM for new high-severity cases and
+                  summarize what changed overnight&quot;). Runs through the
                   same chat pipeline as your interactive sessions:
                   personality from{" "}
                   <Link href="/settings/personality" className="link">
@@ -2297,7 +2201,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                   <Term>Tool call</Term> — direct MCP tool invocation
                   with explicit args (<Code>name</Code> +{" "}
                   <Code>args</Code>). No LLM, no chat handler.
-                  Deterministic. Best for log generation, recurring
+                  Deterministic. Best for recurring
                   queries, anything where the args are known and the
                   same exact call needs to fire on schedule.
                 </li>
@@ -2320,9 +2224,9 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 the agent treats it as authoritative runbook context.
               </p>
               <p>
-                Useful for reproducible scheduled exercises — &ldquo;run
-                the ransomware double-extortion scenario every Sunday
-                at 06:00&rdquo; should always run the same scenario,
+                Useful for reproducible scheduled runs — &ldquo;run
+                the weekly incident summary every Sunday
+                at 06:00&rdquo; should always run the same runbook,
                 not whatever the model thinks fits the prompt that
                 week. The dropdown is grouped by category and
                 populated live from the skills registry, so newly
@@ -2492,9 +2396,9 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 config schema, secret slots, tool list, and the OCI
                 container image that runs when an instance is created.
                 Two flavors:{" "}
-                <Code>origin: bundle</Code> (the 6 connectors shipped in
-                the agent image: caldera, cortex-content, cortex-docs,
-                web, xlog, xsiam) and{" "}
+                <Code>origin: bundle</Code> (the 5 connectors shipped in
+                the agent image: cortex-content, cortex-docs,
+                cortex-xdr, web, xsiam) and{" "}
                 <Code>origin: user</Code> (connectors you upload via
                 the marketplace).
               </li>
@@ -2539,17 +2443,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 </li>
               </ul>
               <p className="text-sm leading-relaxed mt-2">
-                <strong>v0.5.70 (issue #45)</strong> rewrote this form
-                to support multiple widget types from the connector
-                schema. Pre-v0.5.70 fields with
-                <Code> type: &quot;url&quot;</Code> or{" "}
-                <Code>type: &quot;string&quot;</Code> rendered as
-                label-only ghosts (no input element) — cortex-xdr and
-                xsiam were both unusable because the API URL and API ID
-                fields had no input. The same release also removed a{" "}
-                <em>collapsible Advanced Settings</em> disclosure that
-                arbitrarily hid the last field on every form regardless
-                of meaning. Every field now renders in one unified
+                Every field renders in one unified
                 Configuration section in the order the connector
                 declares them. Sensitive fields (API keys, passwords)
                 render masked with an eye-toggle to reveal; non-sensitive
@@ -2557,26 +2451,37 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
               </p>
             </SubSection>
 
-            <SubSection icon="cable" title="The three connectors">
+            <SubSection icon="cable" title="The five connectors">
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Term>caldera</Term> — MITRE ATT&amp;CK adversary
-                  emulation. Tools include <Code>start_operation</Code>,{" "}
-                  <Code>list_abilities</Code>, <Code>get_results</Code>,{" "}
-                  <Code>list_agents</Code>.
-                </li>
-                <li>
-                  <Term>xlog</Term> — synthetic telemetry generator. Tools
-                  include <Code>create_worker</Code>,{" "}
-                  <Code>create_scenario_worker</Code>,{" "}
-                  <Code>send_observable</Code>,{" "}
-                  <Code>list_workers</Code>.
-                </li>
-                <li>
                   <Term>xsiam</Term> — Cortex XSIAM PAPI gateway. Tools
-                  include <Code>run_xql</Code>,{" "}
-                  <Code>find_xql_examples_rag</Code>, detection content
-                  CRUD, and issue stream readers.
+                  include <Code>run_xql_query</Code>,{" "}
+                  <Code>get_cases</Code>, <Code>get_issues</Code>,{" "}
+                  <Code>find_xql_examples_rag</Code>, dataset and
+                  lookup management.
+                </li>
+                <li>
+                  <Term>cortex-xdr</Term> — Cortex XDR API gateway.
+                  Tools include <Code>get_cases_and_issues</Code>,{" "}
+                  <Code>run_xql_query</Code>, incident/alert readers
+                  and updaters, IoC management.
+                </li>
+                <li>
+                  <Term>cortex-docs</Term> — official Palo Alto Networks
+                  documentation search. Tools include{" "}
+                  <Code>search</Code>, <Code>suggest</Code>,{" "}
+                  <Code>xql_lookup</Code>, <Code>fetch_topic</Code>.
+                </li>
+                <li>
+                  <Term>cortex-content</Term> — baked Cortex content
+                  catalog (packs, modeling/parsing/correlation rules).
+                  No network access required.
+                </li>
+                <li>
+                  <Term>web</Term> — evidence-gathering browsing via the
+                  headless-browser sidecar. Tools include{" "}
+                  <Code>navigate</Code>, <Code>get_text</Code>,{" "}
+                  <Code>screenshot</Code>, <Code>extract_links</Code>.
                 </li>
               </ul>
             </SubSection>
@@ -2592,33 +2497,8 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
               </p>
             </SubSection>
 
-            <SubSection icon="settings_backup_restore" title="Caldera password — setup form to caldera handoff">
-              <p>
-                The caldera password from your setup form flows
-                directly into the running caldera container, no manual
-                <Code> docker compose restart caldera</Code> needed:
-              </p>
-              <ol className="list-decimal pl-5 space-y-1.5 text-sm">
-                <li>
-                  You type a new <Code>calderaRedPassword</Code> in
-                  <Link href="/setup" className="link"> /setup</Link> and
-                  click Save.
-                </li>
-                <li>
-                  Agent writes the password to a shared docker volume
-                  (<Code>guardian_operator_creds:/operator-creds/caldera.yaml</Code>).
-                </li>
-                <li>
-                  Agent POSTs to guardian-updater asking it to restart caldera.
-                </li>
-                <li>
-                  Caldera&apos;s entrypoint reads the bridge file on startup
-                  and regenerates its <Code>local.yml</Code> with your
-                  typed password (logs:{" "}
-                  <Code>[caldera-init] applied operator creds from /operator-creds/caldera.yaml</Code>).
-                </li>
-              </ol>
-            </SubSection>
+            {/* [guardian v0.1.0] Retired: "Caldera password — setup form to
+                caldera handoff" SubSection — simulation subsystem removed. */}
 
             <SubSection icon="verified_user" title="Per-instance trusted flag">
               <p>
@@ -2641,7 +2521,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
               <p className="text-sm text-on-surface-variant mt-2">
                 A UI checkbox affordance is on the roadmap. The
                 manifest&apos;s <Code>humanRequired</Code> list is
-                already empty for connector tools (caldera, xsiam),
+                already empty for connector tools (xsiam, cortex-xdr),
                 making the trusted flag less critical for default
                 deployments.
               </p>
@@ -2698,7 +2578,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </p>
               <p>
                 You can also reauth proactively from the connector detail
-                drawer — useful before a long-running scenario where
+                drawer — useful before a long-running investigation where
                 you&apos;d rather not have a token expire mid-run.
               </p>
             </SubSection>
@@ -2734,12 +2614,10 @@ probed          ── transient state during an in-flight probe`}</Pre>
               >
                 /observability/detections
               </Link>{" "}
-              is the operator-browsable view of your SIEM&apos;s detection
-              rules + fire history. Pre-v0.6.25 this data was only
-              reachable through the <Code>detections_list</Code> chat
-              tool; v0.6.25 added the proxy routes + this page +
-              sidebar nav so operators can browse the inventory and
-              MITRE coverage without typing a chat command.
+              is the operator-browsable view of your Cortex tenant&apos;s
+              detection rules + fire history, so operators can browse
+              the inventory and MITRE coverage without typing a chat
+              command.
             </p>
 
             <SubSection icon="table_chart" title="Two tabs">
@@ -2765,11 +2643,12 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </p>
               <ul>
                 <li>
-                  Run the <Code>detection_inventory_sync</Code> skill via
-                  chat (it queries your SIEM and bulk-upserts the rules)
+                  Ask the agent in chat to pull your detection rules
+                  from the Cortex tenant and sync them into the
+                  inventory
                 </li>
                 <li>
-                  Or POST a pre-fetched issues array to{" "}
+                  Or POST a pre-fetched rules array to{" "}
                   <Code>/api/agent/detections/sync</Code> for external
                   tooling integration
                 </li>
@@ -2781,14 +2660,14 @@ probed          ── transient state during an in-flight probe`}</Pre>
             <p>
               The Marketplace tab on{" "}
               <Link href="/connectors" className="link">/connectors</Link>{" "}
-              shows the connector catalogue: 6 bundle-shipped connectors
-              (caldera, cortex-content, cortex-docs, web, xlog, xsiam)
+              shows the connector catalogue: 5 bundle-shipped connectors
+              (cortex-content, cortex-docs, cortex-xdr, web, xsiam)
               plus any user-uploaded connectors. Every card shows
               version, tool count, install state, origin (bundle or
               user), tags, and instances count.
             </p>
             <p>
-              Fresh installs come up with all 6 bundle connectors in
+              Fresh installs come up with all 5 bundle connectors in
               the catalogue marked &quot;available, not installed.&quot;
               No instances exist yet. The marketplace is the explicit
               first-step entry point — you install, then you create
@@ -2838,7 +2717,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <p>
                 You can upload custom <Code>connector.yaml</Code> files
                 to add your own connectors to the marketplace alongside
-                the 6 bundle-shipped ones. Workflow:
+                the 5 bundle-shipped ones. Workflow:
               </p>
               <ol className="list-decimal pl-5 space-y-1.5 text-sm">
                 <li>
@@ -2921,13 +2800,14 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Term>module</Term> (legacy default, used by xlog +
-                  caldera + xsiam today) — connector code runs in-process
-                  inside the agent. Tool calls are direct Python function
-                  invocations.
+                  <Term>module</Term> (legacy) — connector code runs
+                  in-process inside the agent. Tool calls are direct
+                  Python function invocations. No bundle connector
+                  ships module-style today.
                 </li>
                 <li>
-                  <Term>container</Term> (used by web today) — each
+                  <Term>container</Term> (used by every bundle connector
+                  today) — each
                   instance gets its own Docker container that{" "}
                   guardian-updater starts when you create the instance and
                   stops when you delete it. The agent&apos;s tool-dispatch
@@ -2967,7 +2847,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 Each connector ships a defined set of tools the agent
                 can call. By default every tool the connector exposes
                 is enabled. For instances with large tool catalogs
-                (the Cortex XDR connector ships 51 tools as of v0.14.3),
+                (the Cortex XDR connector ships 50 tools),
                 you can selectively disable tools to bound the agent&apos;s
                 catalog noise OR to lock down destructive actions.
               </p>
@@ -3015,8 +2895,8 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 timestamps. Clicking an instance opens a config panel
                 where you can rotate credentials or edit the
                 wire-up. The agent automatically picks the right instance
-                when you mention a system by name in chat (&quot;run X on
-                caldera&quot; → primary-caldera).
+                when you mention a system by name in chat (&quot;query
+                the prod tenant&quot; → primary-xsiam).
               </p>
               <p className="text-sm">
                 Install state has two sources today, union&apos;d server-side:
@@ -3028,11 +2908,8 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 </li>
                 <li>
                   Instance presence — any connector with ≥1 instance
-                  counts as installed even without the explicit ack.
-                  Covers the env-var bootstrap path: a fresh install
-                  whose <Code>.env</Code> has{" "}
-                  <Code>XSIAM_API_KEY</Code> auto-creates an xsiam
-                  instance at boot, and the marketplace card shows
+                  counts as installed even without the explicit ack,
+                  so the marketplace card shows
                   &quot;Installed&quot; without the operator ever
                   clicking the button.
                 </li>
@@ -3040,645 +2917,12 @@ probed          ── transient state during an in-flight probe`}</Pre>
             </SubSection>
           </Section>
 
-          {/* Data Sources marketplace — vendor schemas. */}
-          <Section id="data-sources" icon="dataset" title="Data Sources">
-            <p>
-              The Data Sources page at{" "}
-              <Link href="/data-sources" className="link">/data-sources</Link>{" "}
-              is a separate marketplace from{" "}
-              <Link href="/connectors" className="link">/connectors</Link>.
-              Where the connector marketplace controls{" "}
-              <em>which systems Guardian can talk to</em>, Data Sources
-              controls <em>which vendor log shapes Guardian can synthesize</em>.
-              They&apos;re independent — install one without the other,
-              uninstall one without the other.
-            </p>
-            <p>
-              When you install a data source, Guardian learns the
-              vendor&apos;s actual field schema (e.g. FortiGate emits{" "}
-              <Code>srcip</Code> / <Code>dstport</Code> / <Code>sentbyte</Code>,
-              not <Code>local_ip</Code> / <Code>remote_port</Code>). The
-              chat agent can then generate synthetic logs whose
-              top-level keys match what the vendor actually sends —
-              so any downstream system that already knows the vendor
-              parses them cleanly. That includes the vendor&apos;s
-              own SIEM connector, a Splunk technology add-on, a
-              Sentinel parser, an Elastic ingest pipeline, or
-              whatever bespoke parsing you run on your destination
-              platform. Without an installed data source, the agent
-              falls back to Guardian&apos;s generic synthesis (works
-              for dashboards, doesn&apos;t parse cleanly through any
-              vendor-specific pipeline).
-            </p>
-            <p className="text-sm text-on-surface-variant">
-              Fresh installs come up with Data Sources Installed (0).
-              The catalog ships bundled with Guardian — 130+ vendors
-              cover the major SIEM/EDR/firewall/identity products. Every
-              bundled source is a real Cortex XSIAM ingest+parse path, not
-              an action-only integration. No setup, no external accounts,
-              no internet.
-            </p>
+          {/* [guardian v0.1.0] Retired: data-sources — Data Sources
+              marketplace (vendor log-shape catalog) removed with the
+              simulation subsystem. */}
 
-            <SubSection icon="library_books" title="Installed — manage what's loaded">
-              <p>
-                The default <Term>Installed</Term> tab shows what you
-                already have. Each card carries: vendor logo, pack +
-                rule + dataset name, field count, supported modules
-                chips, version tag, and the install date.
-              </p>
-              <ul className="list-disc pl-5 space-y-1.5 text-sm">
-                <li>
-                  <Term>Click a card</Term> → a detail drawer slides
-                  in from the right with 4 stat tiles (field count,
-                  meta vs vendor split, pack version, install date),
-                  the supported-modules chip row, the full XDM
-                  mapping table (if any), and a sortable field-list
-                  table grouped into meta fields (faded;{" "}
-                  <Code>_id</Code> / <Code>_time</Code> /{" "}
-                  <Code>_raw_log</Code> / etc.) and vendor-specific
-                  fields. Type into the filter box to narrow the
-                  field list without a server round-trip.
-                </li>
-                <li>
-                  <Term>Uninstall</Term> — the trash icon on each card
-                  opens a ruby-red confirmation modal. Removal drops
-                  the install row + all field rows + all XDM mapping
-                  rows (FK cascade). The bundled catalog row stays in
-                  Browse — uninstalling just removes your local install
-                  state; a future Install click re-creates it without
-                  re-downloading anything.
-                </li>
-              </ul>
-              <p className="text-sm text-on-surface-variant">
-                Uninstall is destructive in the sense that any
-                in-flight skill or chat thread referencing the
-                installed schema will fall back to Guardian&apos;s
-                generic synthesis on its next invocation. If you
-                accidentally uninstall, the simplest recovery is to
-                re-install from Browse — the catalog row is still
-                there.
-              </p>
-            </SubSection>
-
-            <SubSection icon="smart_toy" title="Ask the agent — vendor-faithful simulation">
-              <p>
-                Once a data source is installed, mention the vendor
-                name in chat and the agent matches the{" "}
-                <Code>simulate_vendor_logs</Code> skill. Examples:
-              </p>
-              <ul className="list-disc pl-5 space-y-1.5 text-sm">
-                <li>&ldquo;Simulate 50 FortiGate traffic logs&rdquo;</li>
-                <li>&ldquo;Generate Okta authentication events with these IPs: 192.168.1.100&rdquo;</li>
-                <li>&ldquo;Create some PaloAlto firewall logs to udp:10.10.0.8:514&rdquo;</li>
-                <li>&ldquo;I need 100 CrowdStrike detection events for my dashboard&rdquo;</li>
-              </ul>
-              <p>
-                The agent looks up the installed schema, asks xlog to
-                synthesize records using the vendor&apos;s actual
-                field names, then either streams the records back
-                (default) or forwards them to your configured sink
-                (syslog UDP, HTTPS webhook, etc.). If no installed
-                schema matches the vendor you mentioned, the agent
-                tells you so and points you back to{" "}
-                <Link href="/data-sources" className="link">/data-sources</Link> →
-                Browse — it never auto-installs.
-              </p>
-              <p className="text-sm">
-                The agent has 3 data-sources tools available:{" "}
-                <Code>data_sources_list(filter)</Code> (read-only
-                listing of what you have installed),{" "}
-                <Code>data_sources_get_schema(id)</Code> (full field
-                inventory for one data source), and{" "}
-                <Code>data_sources_install(pack, rule, dataset?)</Code>{" "}
-                (idempotent install, used when you say &ldquo;yes,
-                install it&rdquo; in chat). All three are on the
-                catalog side of the agent guardrail — no secrets, no
-                credentials. Uninstall stays UI-only by design.
-              </p>
-            </SubSection>
-
-            <SubSection icon="psychology" title="What 'vendor-faithful' means under the hood">
-              <p>
-                Guardian&apos;s generic synthesis emits records with
-                generic field names like <Code>local_ip</Code> /{" "}
-                <Code>remote_port</Code>. Those work for charts that
-                count records but DON&apos;T parse cleanly through
-                any vendor-specific pipeline downstream — the
-                receiving SIEM, EDR, or log platform expects the
-                vendor&apos;s native field names. Any
-                parser-by-vendor-name lookup misses fields it
-                can&apos;t find.
-              </p>
-              <p>
-                Installing a data source teaches xlog the
-                vendor&apos;s actual field names, types, and
-                observable patterns. When you ask for FortiGate logs
-                after install, generated records have{" "}
-                <Code>srcip</Code> + <Code>srcport</Code> +{" "}
-                <Code>dstip</Code> + <Code>dstport</Code> +{" "}
-                <Code>proto</Code> + <Code>action</Code> +{" "}
-                <Code>sentbyte</Code> + <Code>rcvdbyte</Code> at the
-                top level. Any downstream system that already knows
-                FortiGate — its vendor-supplied SIEM connector, a
-                Splunk technology add-on, a Sentinel parser, an
-                Elastic ingest pipeline, a Cortex XSIAM modeling
-                rule — ingests them cleanly. End result: simulated
-                FortiGate traffic looks identical to real traffic
-                from a live FortiGate, no matter which platform is
-                doing the parsing.
-              </p>
-              <p className="text-sm">
-                See the{" "}
-                <Link href="/help/architecture#data-sources" className="link">
-                  architecture page&apos;s Data Sources section
-                </Link>{" "}
-                for the storage model + REST surface + skill chain
-                details.
-              </p>
-            </SubSection>
-
-            <SubSection icon="filter_alt" title="Browse, filter, install">
-              <p>
-                The Browse tab groups the catalog by <em>vendor</em>{" "}
-                — one card per vendor across all the vendor&apos;s
-                packs. Each card carries <em>product-type</em>{" "}
-                use-case labels like <Code>WAF</Code>,{" "}
-                <Code>LoadBalancer</Code>, <Code>Identity</Code>,{" "}
-                <Code>MFA</Code>, <Code>PAM</Code>, <Code>Email</Code>,{" "}
-                <Code>Storage</Code>, <Code>Cloud</Code>. The taxonomy
-                covers 44 labels across 8 domains (Network, Endpoint,
-                Identity, Data, Cloud, Apps, SecOps, Specialty) —
-                see the{" "}
-                <Link href="/help/architecture#data-sources" className="link">
-                  architecture spec
-                </Link>{" "}
-                for the canonical list.
-              </p>
-              <p>
-                <strong>Use-case filter dropdown</strong>: above the
-                catalog grid, the <Term>Use case</Term> trigger opens
-                a multi-select dropdown panel. Tick checkboxes to
-                narrow the grid: pick <Code>WAF</Code> → the grid
-                narrows to F5, Cloudflare, Imperva, Barracuda,
-                Radware, Akamai, Fortinet. Multi-select via
-                additional checkboxes — vendors matching <em>any</em>{" "}
-                of the selected use cases survive (OR semantics). One
-                data source can have multiple use cases (Cisco
-                appears under both <Code>Firewall</Code> and{" "}
-                <Code>EDR</Code>). The panel includes a
-                search-within-panel input plus <Term>All</Term> and{" "}
-                <Term>Clear</Term> shortcuts. Selected use cases also
-                render as inline removable pills next to the trigger
-                so the active filter set is visible at a glance — click
-                any pill to remove that one filter without opening
-                the panel.
-              </p>
-              <p>
-                <strong>Install flow</strong>:
-              </p>
-              <ol className="list-decimal pl-5 space-y-1.5 text-sm">
-                <li>
-                  Click a vendor card → it expands inline to show the
-                  vendor&apos;s individual packs (each a separate
-                  pack/rule/dataset triple).
-                </li>
-                <li>
-                  Each pack row carries a pill-shaped <Term>Install</Term>{" "}
-                  button. Click it to install just that one pack.
-                </li>
-                <li>
-                  Or click anywhere on a pack&apos;s name → opens
-                  the side drawer with the full field inventory + XDM
-                  mappings + a primary <Term>Install data source</Term>{" "}
-                  CTA at the footer. This works for uninstalled packs
-                  too — the drawer renders in <Term>Preview</Term>{" "}
-                  mode with the Install button at the bottom.
-                </li>
-                <li>
-                  Installed packs show on the <Term>Installed</Term>{" "}
-                  tab with the vendor logo (consistent across siblings
-                  — F5ASM, F5LTM, F5APM all carry the F5 mark).
-                </li>
-              </ol>
-              <p className="text-sm text-on-surface-variant">
-                Install writes a row in{" "}
-                <Code>/app/data/data_sources.db</Code> with the full
-                field inventory and per-field metadata (name, type,
-                description, and — for composite fields — a concrete
-                example shape so generated records match what
-                downstream parsers expect). Reinstalling an
-                already-installed data source is idempotent.
-              </p>
-              <p className="text-sm text-on-surface-variant">
-                <strong>Validation pills (v0.17.146+).</strong> Some
-                Browse cards carry a small pill telling you how far we
-                proved the source against a live XSIAM tenant. A green{" "}
-                <Term>Mapping Validated</Term> pill means we streamed
-                synthetic logs end-to-end and confirmed the vendor&apos;s
-                modeling rule populates the unified data model
-                (<Code>xdm.*</Code>) — the source maps. An amber{" "}
-                <Term>Raw Validated</Term> pill means the vendor&apos;s
-                content pack wasn&apos;t installed on our test tenant
-                (so mapping couldn&apos;t be exercised), but a raw query
-                confirmed our synthetic data lands the exact field names
-                the rule reads — proven-correct shape that will map the
-                moment you install the pack. A card with no pill simply
-                hasn&apos;t been live-tested yet; it still generates
-                wire-faithful logs.
-              </p>
-            </SubSection>
-
-            <SubSection icon="upload_file" title="Upload a custom data source">
-              <p>
-                For vendors not in the bundled catalog, operators
-                upload their own <Code>data_source.yaml</Code>:
-              </p>
-              <ol className="list-decimal pl-5 space-y-1.5 text-sm">
-                <li>
-                  On <Link href="/data-sources" className="link">/data-sources</Link>{" "}
-                  → click <Term>Upload</Term> in the toolbar.
-                </li>
-                <li>
-                  Paste YAML text or drop a file. The dialog{" "}
-                  <em>previews</em> the parsed contents and runs a
-                  similarity check against the existing vendor list.
-                </li>
-                <li>
-                  If the uploaded vendor name resembles a known one
-                  (Levenshtein-2 or substring match — e.g. typing{" "}
-                  <em>&quot;Forinet&quot;</em> against bundled{" "}
-                  <em>&quot;Fortinet&quot;</em>), the dialog suggests{" "}
-                  <Term>Group under Fortinet</Term> or{" "}
-                  <Term>Create new vendor</Term>. Pick one. The
-                  dialog re-previews to bind a fresh accept-token to
-                  the rewritten bytes.
-                </li>
-                <li>
-                  Hit <Term>Upload</Term> to commit. The YAML lands
-                  at <Code>/app/data/user_data_sources/&lt;id&gt;/data_source.yaml</Code>
-                  {" "}and persists across container restart.
-                </li>
-                <li>
-                  The new card appears in the Browse view tagged{" "}
-                  <Term>User upload</Term>.
-                </li>
-              </ol>
-              <p className="text-sm">
-                <strong>Why two-phase upload?</strong> The preview
-                round-trip catches typos in the vendor name before
-                committing — so you don&apos;t end up with{" "}
-                <em>Forinet</em> and <em>Fortinet</em> as two separate
-                vendor cards on the page.
-              </p>
-              <p className="text-sm">
-                <strong>Bundle-vs-user precedence</strong>: bundle
-                YAMLs always win on id collision. Operators
-                can&apos;t override bundled packs; their custom
-                sources must use new ids.
-              </p>
-              <p className="text-sm">
-                <strong>Removing a user upload</strong>:{" "}
-                <Code>DELETE /api/v1/data-sources/user/&lt;id&gt;</Code>.
-                Cascades through the install store, so deleting the
-                YAML also uninstalls any installed datasets it
-                contributed. (Bundled packs cannot be deleted —
-                they&apos;re part of the image; uninstalling marks
-                them as not-installed in the store but the YAML
-                stays.)
-              </p>
-              <p className="text-sm">
-                <strong>Editing</strong> — any user-uploaded data
-                source has an <Term>Edit</Term> affordance in three
-                places: an inline button on the <Term>Browse</Term>{" "}
-                tab&apos;s expanded vendor row, a pencil icon on the{" "}
-                <Term>Installed</Term> tab card, and a pill button in
-                the Detail Drawer footer. The Edit dialog opens
-                pre-filled with the current YAML. The same{" "}
-                <Term>preview → vendor-choice → save</Term> flow as
-                upload applies; you must re-preview after any edit to
-                bind a fresh accept-token. The <Code>id</Code> field
-                is locked — to rename, delete + re-upload with the
-                new id. This flow edits your <em>own</em> uploaded
-                YAML. To edit a bundled (system) data source, use the{" "}
-                <Term>Edit guidance</Term> flow described next — system
-                sources are no longer read-only (v0.17.99).
-              </p>
-            </SubSection>
-
-            <SubSection icon="edit_note" title="Edit a system data source's guidance (v0.17.99)">
-              <p>
-                You can now edit a <strong>system (bundled)</strong>{" "}
-                data source&apos;s &ldquo;How to simulate&rdquo;
-                guidance directly from the card — useful for tailoring
-                the simulation notes to your environment (e.g. your own
-                broker address, your routing conventions, vendor quirks
-                you&apos;ve discovered).
-              </p>
-              <ul className="list-disc pl-5 space-y-1.5 text-sm">
-                <li>
-                  Open any system data source&apos;s detail drawer and
-                  click <Term>Edit guidance</Term> in the footer (it
-                  sits where user uploads show <Term>Edit</Term>). It
-                  appears for system sources in both the Browse-preview
-                  and Installed states.
-                </li>
-                <li>
-                  The editor pre-fills the current{" "}
-                  <Code>how_to_use</Code> markdown. Make your changes,
-                  optionally add a <Term>change note</Term>, and click{" "}
-                  <Term>Save new version</Term>.
-                </li>
-                <li>
-                  A banner reminds you this creates an{" "}
-                  <em>operator override</em>: the original is preserved
-                  as <strong>version 1</strong> and the shipped file is
-                  never modified, so you can roll back later (rollback
-                  UI ships in a follow-up). There is{" "}
-                  <strong>no delete</strong> — editing is always
-                  additive.
-                </li>
-              </ul>
-              <p className="text-sm text-on-surface-variant">
-                Behind the scenes, every save is a versioned snapshot
-                served as an overlay on top of the bundled file. The
-                edited guidance shows immediately in the drawer and
-                feeds the chat agent when it simulates that vendor. The
-                chat agent can make the same edits on your behalf
-                (&ldquo;update the ServiceNow how-to-use to mention our
-                broker&rdquo;). Editing the field <em>schema</em> from
-                the UI is coming soon; for schema changes today, Export
-                the YAML, edit it, and re-upload.
-              </p>
-              <p className="text-sm">
-                <strong>Version history + rollback (v0.17.100).</strong>{" "}
-                Next to <Term>Edit guidance</Term>, a <Term>History</Term>{" "}
-                button opens the version panel: every saved version with
-                its author, change note, and timestamp (the newest tagged{" "}
-                <em>Current</em>). <Term>View</Term> shows any version&apos;s
-                full snapshot read-only; <Term>Roll back</Term> on an older
-                version restores it. Rollback is{" "}
-                <strong>non-destructive</strong> — it brings the chosen
-                version&apos;s content back as a new current version while
-                keeping every version in history, so you can always roll
-                forward again. The agent can do this too (&ldquo;show me the
-                ServiceNow version history&rdquo;, &ldquo;roll ServiceNow back
-                to version 1&rdquo;).
-              </p>
-              <p className="text-sm">
-                <strong>Export any version (v0.17.101).</strong> Each row in
-                the History panel has an <Term>Export</Term> button that
-                downloads that version&apos;s YAML (filename{" "}
-                <Code>{`<dataset>.v<n>.yaml`}</Code>). The card&apos;s main{" "}
-                <Term>Export</Term> button still downloads the{" "}
-                <em>current</em> version — which, after an edit, is now the
-                edited content (matching the drawer) rather than the original
-                shipped file.
-              </p>
-            </SubSection>
-
-            <SubSection icon="palette" title="Vendor logos + visual conventions">
-              <p>
-                Every bundled vendor carries an inline logo embedded
-                in its <Code>data_source.yaml</Code>. Logo provenance
-                is recorded per-vendor in the YAML&apos;s{" "}
-                <Code>logo:</Code> block under{" "}
-                <Code>source:</Code> / <Code>license:</Code> /{" "}
-                <Code>fidelity:</Code>:
-              </p>
-              <ul className="list-disc pl-5 space-y-1 text-sm">
-                <li>
-                  <Code>branded</Code> — vendor&apos;s actual artwork,
-                  unmodified (e.g. Apache, Cisco, Microsoft via
-                  simple-icons; Arista, Avaya, Brocade via Wikipedia)
-                </li>
-                <li>
-                  <Code>branded-recolored</Code> — vendor&apos;s actual
-                  SVG with fills swapped for visibility on the{" "}
-                  <Code>#F7F8FA</Code> near-white card panel (e.g.
-                  Tanium, Thinkst, SecureAuth)
-                </li>
-                <li>
-                  <Code>monochrome-brand</Code> — simple-icons-style
-                  single-color mark
-                </li>
-                <li>
-                  <Code>approximation</Code> — hand-crafted by the
-                  maintainer (Semperis is the only one today)
-                </li>
-              </ul>
-              <p className="text-sm">
-                The Installed page uses the vendor-level logo, not
-                per-pack logos. F5ASM, F5LTM, F5APM, F5BigIPAWAF all
-                render the F5 mark — consistency across the same
-                vendor.
-              </p>
-              <p className="text-sm">
-                A standalone library of all 137 vendor SVGs lives at{" "}
-                <Code>docs/assets/vendor-logos/</Code> in the repo —
-                maintainer asset library for docs / brand-mark reuse.
-                Guardian&apos;s runtime never reads it (serves from
-                the YAML inline blocks).
-              </p>
-            </SubSection>
-          </Section>
-
-          {/* v0.17.x — Log destinations page operator workflow. */}
-          <Section id="log-destinations-ux" icon="cloud_upload" title="Log Destinations">
-            <p>
-              <strong>The <Code>/log-destinations</Code> page is where you configure
-              where Guardian forwards synthesized security records.</strong> Each
-              destination has a name, a type (syslog / HTTP webhook / XSIAM HTTP
-              Collector / Splunk HEC), and a type-specific config. Workers reference
-              destinations by a stable handle; the agent can list them — and create
-              secretless syslog ones — but cannot edit credentialed destinations or
-              read their secrets (credential boundary).
-            </p>
-
-            <SubSection icon="add_circle" title="Adding a destination">
-              <ol className="list-decimal pl-6 space-y-2 text-sm">
-                <li>Open the sidebar → Integration → <Code>Log Destinations</Code>.</li>
-                <li>Click <Code>[+ New Destination]</Code>.</li>
-                <li>Pick a type. The form re-renders with the type&apos;s fields.</li>
-                <li>Fill in identity (name + optional description) + config.
-                  Secret fields show a masked input with an eye toggle.</li>
-                <li>For Webhook destinations: pick <Code>auth_type</Code> first.
-                  The cred fields appear conditionally (bearer → token; basic
-                  → username+password; api_key_header → header_name + value).</li>
-                <li>For Syslog with TLS: set <Code>protocol=tls</Code> → the
-                  PEM cert fields appear. Drop your CA + client cert + client key
-                  in their respective textareas. The key is treated as a secret
-                  (masked + stored encrypted).</li>
-                <li>Save. The row appears in the list.</li>
-              </ol>
-            </SubSection>
-
-            <SubSection icon="play_circle" title="Testing a destination">
-              <p>
-                Click the <Code>Test</Code> button on any row. Guardian sends a
-                real test message to the destination (probe handler) and shows
-                the result inline as a green/red badge for ~6s. The row&apos;s
-                status dot updates: green = last probe OK, red = last probe
-                failed (hover for the error), grey = never probed.
-              </p>
-              <p className="text-sm text-on-surface-variant">
-                Test fires from the MCP server — the message reaches the
-                destination from inside the guardian-agent container, not from
-                the operator&apos;s browser.
-              </p>
-            </SubSection>
-
-            <SubSection icon="push_pin" title="Setting a default for a type">
-              <p>
-                Each row has a pin (📌) icon. Clicking it marks that destination
-                as the default for its type and clears the &quot;default&quot;
-                flag on any sibling of the same type. The agent uses the default
-                when the operator references a type without naming a specific
-                destination.
-              </p>
-            </SubSection>
-
-            <SubSection icon="terminal" title="Asking the agent to send logs to a destination (v0.17.113+)">
-              <p>
-                The agent reads destinations (<Code>log_destinations_list</Code>{" "}
-                + <Code>log_destinations_get</Code>) and can create{" "}
-                <strong>secretless syslog</strong> ones, but never edits,
-                deletes, or reads the secrets of credentialed destinations —
-                credential boundary. When you ask it to generate logs, it
-                resolves <em>where</em> they go from your configured
-                destinations — it never invents a hardcoded address:
-              </p>
-              <ol className="list-decimal pl-6 space-y-1 text-sm">
-                <li>Works out the transport from your request (&quot;over
-                  syslog&quot;, &quot;to my XSIAM webhook&quot;) — or infers it
-                  from the data source&apos;s &ldquo;How to simulate&rdquo; notes.</li>
-                <li>Lists your destinations and picks by match:{" "}
-                  <strong>exactly one</strong> of that transport → uses it
-                  without asking; <strong>several</strong> → asks which (unless
-                  you named one by name or IP); <strong>none</strong> → offers to
-                  create a syslog destination for you, or — for a credentialed
-                  type — points you to this page to add it.</li>
-                <li>Starts the worker with an opaque{" "}
-                  <Code>logdest:&lt;id&gt;</Code> handle. Guardian fills in the
-                  real address — and, for an XSIAM HTTP destination, the endpoint
-                  + auth key — behind the scenes, so the agent never handles your
-                  credentials.</li>
-              </ol>
-              <p className="text-sm text-on-surface-variant">
-                So &quot;send 50 FortiGate logs to syslog&quot; just works when
-                you have one syslog destination; with two, the agent asks which
-                one. Webhook + Splunk HEC destinations are configurable +
-                testable here but not yet wired into generation — use syslog or
-                XSIAM HTTP for the worker flow today.
-              </p>
-            </SubSection>
-
-            <SubSection icon="autorenew" title="Migrating from WEBHOOK_ENDPOINT">
-              <p>
-                Operators upgrading from v0.16.x → v0.17.x with{" "}
-                <Code>WEBHOOK_ENDPOINT</Code> + <Code>WEBHOOK_KEY</Code> env
-                vars set in <Code>/opt/guardian/.env</Code> get an automatic{" "}
-                <Code>XSIAM Default</Code> destination created on first boot,
-                marked as the default for the <Code>xsiam_http</Code> type.
-                The env vars stay in place as fallback for any legacy code
-                path that hasn&apos;t switched yet.
-              </p>
-            </SubSection>
-
-            <SubSection icon="vpn_key" title="Credential boundary">
-              <p>
-                Log destinations sit on the credential side of the boundary —
-                they carry secrets (bearer tokens, basic-auth passwords, API
-                keys, Splunk HEC tokens, TLS private keys). The agent has no
-                write tools; only the operator (you) can create or edit them
-                through this page. Secrets are AES-GCM-encrypted at rest under{" "}
-                <Code>GUARDIAN_SECRET_KEK</Code>; GET responses always redact
-                them as <Code>&quot;***&quot;</Code> sentinels.
-              </p>
-            </SubSection>
-
-            <SubSection icon="dataset" title="Where do my records land in XSIAM?">
-              <p>
-                When you send records through a destination targeting XSIAM,
-                the dataset they land in depends on the destination type:
-              </p>
-
-              <h4 className="text-sm font-bold text-on-surface mt-4 mb-2">
-                XSIAM HTTP Collector destinations
-              </h4>
-              <p>
-                Records ALWAYS land in <Code>guardian_logs_raw</Code>. This is
-                XSIAM-side hardcoded for the &quot;guardian&quot; brand on the
-                collector. Each batch arrives as one outer row with an{" "}
-                <Code>events</Code> JSON-array column holding the original
-                record list. A downstream modeling rule unflattens per-event
-                if your XSIAM tenant has one configured.
-              </p>
-              <p className="text-sm">
-                Verify with:{" "}
-                <Code>
-                  dataset = guardian_logs_raw | sort desc _time | limit 10
-                </Code>
-              </p>
-
-              <h4 className="text-sm font-bold text-on-surface mt-4 mb-2">
-                Syslog → XSIAM broker (CEF format)
-              </h4>
-              <p>
-                When you use{" "}
-                <Code>
-                  guardian_create_data_worker(type=&quot;CEF&quot;,
-                  vendor=&quot;guardian&quot;,
-                  product=&quot;smoke_test&quot;, destination=&quot;udp:
-                  &lt;broker&gt;:514&quot;)
-                </Code>
-                , the broker parses the CEF header and routes records into a
-                dataset named{" "}
-                <Code>&lt;vendor&gt;_&lt;product&gt;_raw</Code> (both
-                lowercased, non-alphanumeric chars → <Code>_</Code>). So{" "}
-                <Code>vendor=guardian + product=smoke_test</Code> →{" "}
-                <Code>guardian_smoke_test_raw</Code>. Each CEF extension
-                (<Code>act</Code>, <Code>src</Code>, <Code>dst</Code>,{" "}
-                <Code>spt</Code>, <Code>dpt</Code>, ...) becomes a typed
-                column automatically — no modeling rule needed.
-              </p>
-              <p className="text-sm">
-                Verify with:{" "}
-                <Code>
-                  dataset = guardian_smoke_test_raw | sort desc _time | limit
-                  20
-                </Code>
-              </p>
-
-              <h4 className="text-sm font-bold text-on-surface mt-4 mb-2">
-                Vendor-faithful simulation
-              </h4>
-              <p>
-                When you ask the agent to simulate logs for a specific vendor
-                (e.g. &quot;stream 50 FortiGate traffic logs to my broker&quot;),
-                the agent sets <Code>vendor=Fortinet + product=FortiGate</Code>{" "}
-                so the records land in a vendor-tagged dataset (e.g.{" "}
-                <Code>fortinet_fortigate_raw</Code>) the receiving platform
-                can route to its FortiGate-specific parser. Combined with a{" "}
-                <Link href="#data-sources-ux" className="link">data source schema override</Link>{" "}
-                the simulated records carry real FortiGate field names
-                (<Code>srcip</Code>, <Code>dstport</Code>, etc.) — any
-                downstream FortiGate parser on the destination platform
-                (vendor-specific modeling rule, Splunk technology
-                add-on, Sentinel parser, Elastic ingest pipeline)
-                ingests them cleanly.
-              </p>
-
-              <h4 className="text-sm font-bold text-on-surface mt-4 mb-2">
-                Non-XSIAM syslog targets
-              </h4>
-              <p>
-                For rsyslog / syslog-ng / on-prem SIEMs (anything that isn&apos;t
-                an XSIAM broker), records land wherever your collector routes
-                them. There&apos;s no convention to predict — check your
-                collector&apos;s input rule mapping.
-              </p>
-            </SubSection>
-          </Section>
+          {/* [guardian v0.1.0] Retired: log-destinations-ux — Log
+              Destinations page removed with the simulation subsystem. */}
 
           {/* Plugins page operator workflow. */}
           <Section id="plugins-ux" icon="extension" title="Plugins">
@@ -3823,13 +3067,13 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 .
               </p>
               <Callout tone="info">
-                v0.5.48 closed the cross-language bridge — plugin
+                The cross-language bridge is closed — plugin
                 handlers in the <Code>guardian.hooks</Code> group are{" "}
                 <strong>callable</strong> from{" "}
                 <Link href="/settings/hooks" className="link">
                   /settings/hooks
                 </Link>{" "}
-                via the new <Term>plugin</Term> transport (Add hook →
+                via the <Term>plugin</Term> transport (Add hook →
                 pick the plugin handler from the dropdown → fill the
                 JSON config). Install/uninstall hot-reloads the
                 plugin-hook cache; other contribution types (skills,
@@ -3876,7 +3120,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 </li>
                 <li>
                   <Code>Notification</Code> — when the agent emits a
-                  notification event (approval requested, scenario
+                  notification event (approval requested, job run
                   complete). Common hook target for Slack mirrors.
                 </li>
                 <li>
@@ -3907,7 +3151,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 <li>
                   <Term>Matcher</Term> — optional filter to scope when
                   the handler runs. Tool patterns
-                  (<Code>caldera.*</Code>), session tags
+                  (<Code>xsiam_*</Code>), session tags
                   (<Code>session.tag:prod</Code>), or actor filters
                   (<Code>actor:user:*</Code>).
                 </li>
@@ -4155,8 +3399,8 @@ probed          ── transient state during an in-flight probe`}</Pre>
             <p>
               Approvals gate the tools where the agent is changing
               <em> its own runtime state</em> — schedules, persona, settings,
-              notifications. Connector calls (caldera operations, xsiam log
-              pushes, log generation) do <em>not</em> require approval —
+              notifications. Connector calls (XQL queries, case reads,
+              documentation searches) do <em>not</em> require approval —
               those are explicit operator intent at chat level.
             </p>
             <p>
@@ -4194,16 +3438,18 @@ probed          ── transient state during an in-flight probe`}</Pre>
             <SubSection icon="block" title="What does NOT require approval">
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Term>Caldera</Term> — <Code>create_operation</Code>,{" "}
-                  <Code>get_operation_event_logs</Code>, etc. Run inline.
+                  <Term>XSIAM</Term> — <Code>run_xql_query</Code>,{" "}
+                  <Code>get_cases</Code>, <Code>get_issues</Code>, etc.
+                  Run inline.
                 </li>
                 <li>
-                  <Term>XSIAM</Term> — <Code>send_webhook_log</Code>,
-                  <Code> xql_*</Code>. Run inline.
+                  <Term>Cortex XDR</Term> — <Code>get_cases_and_issues</Code>,{" "}
+                  <Code>run_xql_query</Code>, etc. Run inline.
                 </li>
                 <li>
-                  <Term>XLog</Term> — log generation, scenario workers. Run
-                  inline.
+                  <Term>Docs &amp; web</Term> — documentation search,
+                  content-catalog lookups, evidence-gathering browsing.
+                  Run inline.
                 </li>
                 <li>
                   <Term>Reads</Term> — anything classified as a read query
@@ -4285,7 +3531,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
             <p>
               <Link href="/notifications" className="link">/notifications</Link>{" "}
               is the platform alert feed. Job completions, failed
-              scenarios, approval resolutions, configuration changes —
+              runs, approval resolutions, configuration changes —
               anything that fires a system-level event lands here. The
               filter bar lets you scope by tab (all / unread / mentions
               / approvals) and search by free-text. Mark-read is
@@ -4299,10 +3545,8 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 <Term>Jobs</Term> — runs that complete, fail, or are
                 disabled.
               </li>
-              <li>
-                <Term>Scenarios</Term> — long-running scenario workers
-                that finish or error.
-              </li>
+              {/* [guardian v0.1.0] Retired: Scenarios notification source —
+                  simulation subsystem removed. */}
               <li>
                 <Term>Approvals</Term> — pending, granted, denied.
               </li>
@@ -4357,7 +3601,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               and revokes operator-issued bearer tokens for programmatic
               access to the agent&apos;s <Code>/api/v1/*</Code> surface.
               Useful for SIEM pollers reading the audit log, CI scripts
-              triggering scenario runs, cross-host integrations exposing
+              triggering scheduled jobs, cross-host integrations exposing
               automation hooks back at the agent. Keys take the shape{" "}
               <Code>guardian_ak_&lt;id&gt;_&lt;secret&gt;</Code>; the
               backend stores only <Code>sha256(&lt;secret&gt;)</Code> so
@@ -4408,7 +3652,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               is a live React Flow graph of every Guardian subsystem: the
               browser, the agent, the MCP, the six storage subsystems
               (audit, memory, secrets, settings, sessions, jobs), and the
-              three connectors. Box borders flip green/amber/red based on
+              connector instances. Box borders flip green/amber/red based on
               live health probes; edges pulse cyan when traffic flowed in
               the last 60 seconds.
             </p>
@@ -4417,9 +3661,9 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <li>
                 <Term>Probes</Term> — the agent&apos;s{" "}
                 <Code>/api/agent/health</Code> endpoint hits each
-                service&apos;s health URL server-side (xlog
-                <Code>/health</Code>, MCP <Code>/ping/</Code>, agent
-                self-check, caldera root) and returns HTTP code +
+                service&apos;s health URL server-side (MCP{" "}
+                <Code>/ping/</Code>, agent self-check, per-connector
+                probes) and returns HTTP code +
                 latency. Refresh interval: 5s.
               </li>
               <li>
@@ -4433,7 +3677,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 <Term>Edge pulses</Term> — the audit log feed gives
                 action-by-action history. Edges pulse if matching events
                 appeared in the last 60s (e.g., a tool_call to{" "}
-                <Code>tool:caldera.*</Code> pulses the mcp→caldera edge).
+                <Code>tool:xsiam.*</Code> pulses the mcp→xsiam edge).
               </li>
             </ul>
             <p>
@@ -4516,8 +3760,8 @@ severity:error              // error / warn / info / debug
 session:s_4k21m             // chat session id
 job:weekly-coverage         // job name`}</Pre>
               <p>Common composed queries:</p>
-              <Pre>{`actor:user:operator action:tool_call target:tool:caldera.*
-   // operator-triggered caldera tool calls
+              <Pre>{`actor:user:operator action:tool_call target:tool:xsiam.*
+   // operator-triggered xsiam tool calls
 
 severity:error action:tool_call
    // failed tool calls (good first stop when chat broke)
@@ -4685,7 +3929,7 @@ session:s_4k21m
                   <Term>Name</Term> — what the agent calls itself
                   when it introduces. Examples:{" "}
                   <em>&ldquo;SOC analyst assistant&rdquo;</em>,{" "}
-                  <em>&ldquo;Red-team operator&rdquo;</em>,{" "}
+                  <em>&ldquo;Incident responder&rdquo;</em>,{" "}
                   <em>&ldquo;Detection engineer&rdquo;</em>. Appears
                   in the chat header chip.
                 </li>
@@ -4879,15 +4123,9 @@ session:s_4k21m
                   <Term>Knowledge</Term> — bundle doc references (the
                   KB itself reseeds from the destination&apos;s image)
                 </li>
-                <li>
-                  <Term>Data sources</Term> — operator-uploaded YAML
-                  files + the install set (which bundled packs were
-                  picked)
-                </li>
-                <li>
-                  <Term>Log destinations</Term> — every destination
-                  config with secrets
-                </li>
+                {/* [guardian v0.1.0] Retired: Data sources + Log
+                    destinations backup sections — simulation subsystem
+                    removed. */}
               </ul>
               <p className="text-warning text-sm">
                 <span className="material-symbols-outlined text-[14px] align-text-bottom mr-1">
@@ -4917,11 +4155,9 @@ session:s_4k21m
 
   Personality           1 row (will overwrite existing)
   Instances             4 instances + 11 secrets
-  Skills               23 files (3 collisions; default = skip)
+  Skills                5 files (3 collisions; default = skip)
   Memory              152 entries (no collisions; embeddings re-built)
   Knowledge             — (no-op; image-baked)
-  Data sources          7 user uploads + 12 install picks
-  Log destinations      2 destinations (1 collision; default = skip)
   Jobs                  6 runtime jobs (last in restore order)
 
   ☐ Overwrite existing entries (force)`}</Pre>
@@ -4950,11 +4186,8 @@ session:s_4k21m
                   <Term>Skills</Term> + <Term>Memory</Term> +{" "}
                   <Term>Knowledge</Term>
                 </li>
-                <li>
-                  <Term>Data sources</Term> (user uploads via two-
-                  phase preview/commit; install set re-runs the
-                  install endpoint)
-                </li>
+                {/* [guardian v0.1.0] Retired: Data sources restore step —
+                    simulation subsystem removed. */}
                 <li>
                   <Term>Jobs</Term> last — runtime jobs that
                   reference connectors don&apos;t fire on a missing
@@ -5056,7 +4289,7 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
                 AuthGate detects no setup-completed flag at{" "}
                 <Code>/app/runtime/.setup_complete</Code> → renders the
                 setup form. You fill everything (UI password, Vertex
-                SA JSON, connector configs — Caldera, XSIAM, XLOG) and
+                SA JSON, connector configs — XSIAM, Cortex XDR) and
                 submit.
               </p>
               <p>
@@ -5104,8 +4337,8 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
 
             <SubSection icon="cable" title="Scenario 3a — Change connector creds via /connectors">
               <p>
-                Want to rotate the Caldera password, change the XSIAM
-                PAPI URL, or update the XLOG webhook key? Use{" "}
+                Want to rotate the XSIAM PAPI key, change the XSIAM
+                API URL, or update the Cortex XDR auth header? Use{" "}
                 <Link href="/connectors" className="link">/connectors</Link>.
                 Each connector has an instance (created at first-run
                 from the bundle&apos;s <Code>bindsInstances</Code>{" "}
@@ -5113,12 +4346,12 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
                 place. Writes go through the MCP&apos;s instance API
                 directly to the InstanceStore + SecretStore — no setup
                 re-run, no agent restart. Tool calls (
-                <Code>caldera.*</Code>, <Code>xsiam.*</Code>,{" "}
-                <Code>xlog.*</Code>) read from InstanceStore on every
+                <Code>xsiam_*</Code>, <Code>xdr_*</Code>) read from
+                InstanceStore on every
                 invocation, so changes take effect at the next call.
               </p>
               <p className="text-sm text-on-surface-variant/85">
-                Every caldera + xsiam tool routes through a single
+                Every xsiam + cortex-xdr tool routes through a single
                 chokepoint helper that calls{" "}
                 <Code>store.list_for(...)</Code> and{" "}
                 <Code>instance.merged_config(secret_store)</Code> on every
@@ -5290,9 +4523,10 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
 
             <Decision title="A node on the pipeline graph shows red but the service is up">
               <p>
-                Pre-round-7 versions of the pipeline page probed
+                Early versions of the pipeline page probed
                 container-internal hostnames (e.g.,{" "}
-                <Code>https://xlog:8000</Code>) directly from the browser —
+                <Code>http://guardian-connector-xsiam-primary:9000</Code>)
+                directly from the browser —
                 which can&apos;t reach those names. The current version
                 routes all probes through{" "}
                 <Code>/api/agent/health</Code> (server-side) so this is
@@ -5330,12 +4564,13 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
             <p>
               Companion to this user guide, focused on{" "}
               <em>how Guardian is built</em> rather than how to use it.
-              Covers the 5-service stack, boot lifecycle, the
+              Covers the service stack, boot lifecycle, the
               chat-route pipeline, every subsystem (memory, knowledge,
               skills, hooks, tasks, plan mode, subagents, plugins,
               jobs, notifications, approvals, models, providers,
-              secret store), the three external connectors (xlog /
-              CALDERA / XSIAM), audit-row schemas, REST endpoint wire
+              secret store), the five external connectors (XSIAM /
+              Cortex XDR / Cortex Docs / Cortex Content / Web Browser),
+              audit-row schemas, REST endpoint wire
               formats, and the design decisions that shaped each
               substrate.
             </p>
@@ -5359,13 +4594,12 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
           <Section id="ref-journeys" icon="tour" title="User Journeys">
             <p>
               Hands-on, step-by-step walkthroughs for common operator
-              tasks — onboarding a new connector, running a full attack
-              simulation, validating detections after a content release,
+              tasks — onboarding a new connector, investigating a case
+              end-to-end, building an XQL query from natural language,
               installing a Slack policy hook, monitoring tasks,
-              spawning red/blue subagents. Each journey lists the
+              spawning scoped subagents. Each journey lists the
               prompts to paste, the tools that fire, and the expected
-              output. Filter by category (memory, simulation, redteam,
-              validation, ops, chat) or difficulty (starter,
+              output. Filter by category or difficulty (starter,
               intermediate, advanced).
             </p>
             <Link

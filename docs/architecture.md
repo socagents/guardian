@@ -14,7 +14,7 @@ flowchart LR
     Browser["Browser"]
   end
 
-  subgraph MachineA["Machine A (slim)<br/>or Single host (all-in-one)"]
+  subgraph Host["Single Docker host"]
     direction TB
     subgraph PA["guardian-agent container<br/>(one image, two processes)"]
       Next["Next.js UI<br/>:3000"]
@@ -23,37 +23,36 @@ flowchart LR
     end
     Vol1[("guardian_mcp_data<br/>sqlite stores")]
     Vol2[("guardian_mcp_skills<br/>skills library")]
-    Bind[/".guardian-agent/<br/>setup.json + .env.generated"/]
+    Vol3[("guardian_tls<br/>self-signed certs")]
     PA --- Vol1
     PA --- Vol2
-    PA --- Bind
-  end
-
-  subgraph MachineB["Machine B (slim only)<br/>or same host (all-in-one)"]
-    XLog["xlog<br/>FastAPI + Strawberry GraphQL<br/>:8000"]
-    Caldera["caldera<br/>MITRE Caldera 5.3.0<br/>:8888 :8443"]
+    PA --- Vol3
+    Updater["guardian-updater<br/>container-lifecycle daemon<br/>:8090"]
+    HBrowser["guardian-browser<br/>headless Chromium (CDP)<br/>:9222 — profile-gated"]
+    Conn["per-instance connector containers<br/>guardian-connector-&lt;id&gt;-&lt;instance&gt;<br/>:9000 (FastMCP)"]
+    MCP -- "MCP-over-HTTP" --> Conn
+    Updater -- "docker.sock" --> Conn
+    Conn -- "CDP (web connector)" --> HBrowser
   end
 
   subgraph External["External SaaS"]
-    XSIAM["XSIAM tenant<br/>PAPI + webhook"]
+    XSIAM["Cortex XSIAM tenant<br/>public API"]
     Vertex["Google Vertex AI<br/>Gemini chat + embeddings"]
   end
 
   Browser -- "https / 3000" --> Next
-  MCP -- "HTTP" --> XLog
-  MCP -- "HTTP / HTTPS" --> Caldera
-  MCP -- "HTTPS / PAPI bearer" --> XSIAM
+  Conn -- "HTTPS / API key" --> XSIAM
   MCP -- "HTTPS / SA JWT" --> Vertex
   Next -- "HTTPS / Gemini API key or SA" --> Vertex
 ```
 
 **Reading guide.**
 
-- The dashed line between Next.js and MCP is `localhost` only — they live in the **same container**, share the same trust boundary. The MCP is part of the agent's image, not a sibling service. This is per the spark-agents v1.2 bundle spec and what makes the slim split-deploy bundle viable (one image to ship).
-- The two compose recipes in the repo correspond to two arrangements of this diagram:
-  - `docker-compose.yml` — Machine A and Machine B collapse into the same Docker network on one host (all-in-one).
-  - `docker-compose.agent-only.yml` — Machine A only; Machine B is operated by another team and reached via HTTP at the URLs the operator types into the setup form.
-- Volumes (`guardian_mcp_data`, `guardian_mcp_skills`) survive container restarts AND `docker compose down`. Drop them only with `down -v` (destructive). The `./.guardian-agent/` bind-mount holds the setup form's submitted values.
+- The dashed line between Next.js and MCP is `localhost` only — they live in the **same container**, share the same trust boundary. The MCP is part of the agent's image, not a sibling service, per the spark-agents v1.2 bundle spec.
+- The two compose recipes in the repo correspond to two flavors of this diagram:
+  - `docker-compose.yml` (repo root) — local dev: `guardian-agent` + the profile-gated `guardian-browser`, images tagged `:local`.
+  - `installer/docker-compose.yml` — customer install: `guardian-agent` + `guardian-updater` + `guardian-browser`, images pinned by content digest. Per-instance connector containers are created dynamically by guardian-updater, not declared in compose.
+- Volumes (`guardian_mcp_data`, `guardian_mcp_skills`, `guardian_tls`) survive container restarts AND `docker compose down`. Drop them only with `down -v` (destructive).
 
 ---
 
@@ -68,7 +67,7 @@ sequenceDiagram
   participant UI as Next.js UI
   participant MCP as Embedded MCP
   participant Vertex as Vertex / Gemini
-  participant Conn as Connector (caldera/xsiam/xlog)
+  participant Conn as Connector (xsiam/cortex-xdr/web)
   participant Audit as Audit log
   participant Mem as Memory + KB
 
@@ -81,11 +80,11 @@ sequenceDiagram
   MCP-->>UI: assembled context (within budgetTokens)
   UI->>Vertex: chat(messages + context, tools=[...])
   Vertex-->>UI: tool_use suggestion
-  UI->>MCP: JSON-RPC: call_tool("caldera/start_operation", {...})
+  UI->>MCP: JSON-RPC: call_tool("xsiam_run_xql_query", {...})
   MCP->>MCP: approvals gate (if humanRequired)
   MCP->>Conn: HTTP request with resolved secrets
   Conn-->>MCP: response
-  MCP->>Audit: record(action="tool_call", target="tool:caldera.start_operation")
+  MCP->>Audit: record(action="tool_call", target="tool:xsiam_run_xql_query")
   MCP->>Mem: optional memory write
   MCP-->>UI: tool_result
   UI->>Vertex: continuation with tool_result
@@ -106,48 +105,34 @@ sequenceDiagram
 
 ## 3. CI/CD pipeline
 
-Everything between `git push` on main and a published artifact.
+Everything between `git push` on main and a published artifact. The full treatment (change scenarios, GHCR per-version access, failure modes) lives in [`CICD.md`](CICD.md); the diagram below is the shape.
 
 ```mermaid
 flowchart TB
-  Push(("git push main<br/>or workflow_dispatch")) --> Trigger
-  Trigger["Build (self-hosted)"] --> Concur["concurrency:<br/>cancel-in-progress per ref"]
+  Push(("git push main")) --> Filters["per-service path filters<br/>only changed services fire"]
 
-  Concur --> JBuildXlog["build-xlog<br/>docker build xlog/Dockerfile<br/>~7s"]
-  Concur --> JBuildAgent["build-agent<br/>docker build mcp/agent/Dockerfile<br/>(combined Python + Node)<br/>~7s"]
-  Concur --> JBuildCaldera["build-caldera<br/>docker build third_party/caldera/Dockerfile<br/>~6s"]
-  Concur --> JLint["lint-agent<br/>npm ci + lint in node:20<br/>~23s"]
+  Filters --> JAgent["build-agent.yml<br/>mcp/agent/** · bundles/spark/**<br/>+ pytest & lint inside the image"]
+  Filters --> JUpdater["build-updater.yml<br/>updater/**"]
+  Filters --> JConn["build-connectors.yml<br/>bundles/spark/connectors/**<br/>guardian-connector-runtime/**"]
 
-  JBuildAgent --> JTest["test-mcp-server<br/>pytest inside agent image<br/>~10s"]
-  JBuildAgent --> JDeploy["deploy-compose<br/>only on main / workflow_dispatch"]
-  JLint --> JDeploy
-  JTest --> JDeploy
-  JBuildXlog --> JDeploy
-  JBuildCaldera --> JDeploy
+  JAgent --> JDev["build-dev-installer.yml (workflow_run fan-in)<br/>resolve :dev digests → build guardian-installer-dev<br/>publish dev-latest prerelease → auto-deploy on guardian-vm"]
+  JUpdater --> JDev
+  JConn --> JDev
 
-  JDeploy --> SValSlim["Validate agent-only compose (slim mode)<br/>boots, healthcheck, /ping/, /api/auth/status<br/>tears down WITHOUT -v to preserve volume state"]
-  SValSlim --> SValFull["Validate full compose<br/>docker compose config --quiet"]
-  SValFull --> SBuild["Build local Compose images"]
-  SBuild --> SUp["docker compose up -d"]
-  SUp --> SSmoke["Smoke test 31/31<br/>Phase 5–11a HTTP-driven"]
-  SSmoke --> SExportFull["Export agent bundle (full)<br/>~7 min"]
-  SExportFull --> SExportSlim["Export agent bundle (agent-only / slim)"]
-  SExportSlim --> SUpload["Upload BOTH artifacts<br/>1-day retention"]
-
-  SUpload --> JCleanup["cleanup<br/>docker image rm ci-tags<br/>docker image prune -f"]
+  JDev --> Smoke["agent-side smoke via IAP tunnel"]
+  Smoke --> Tag(("git tag vX.Y.Z<br/>after operator approval"))
+  Tag --> JRel["release.yml<br/>conditional rebuild / retag per service<br/>publish GitHub Release + installer + manifest"]
 
   classDef job fill:#1e3a8a,color:#fff,stroke:#1e40af
-  classDef stepfill fill:#0f766e,color:#fff,stroke:#0d9488
-  class JBuildXlog,JBuildAgent,JBuildCaldera,JLint,JTest,JDeploy,JCleanup job
-  class SValSlim,SValFull,SBuild,SUp,SSmoke,SExportFull,SExportSlim,SUpload stepfill
+  class JAgent,JUpdater,JConn,JDev,JRel job
 ```
 
 **Notes.**
 
-- `concurrency: cancel-in-progress: true` means a new push to `main` cancels the previous run. Expected; you'll see "cancelled" entries in `gh run list` when a series of pushes lands within minutes.
-- `deploy-compose` only runs on `main` push or `workflow_dispatch` — PR validation stops at build/lint/test.
-- The runner is **self-hosted on the guardian VM** (per `CLAUDE.md` workflow). Image artifacts are tagged `ci-${{ github.sha }}`; the cleanup job prunes them to keep disk pressure bounded.
-- `REQUIRE_MCP_TOOL_SNAPSHOT=1` in the export steps means the snapshot generator must succeed (MCP must be reachable). `REQUIRE_FULL_TOOL_COVERAGE` is OFF by default — missing curated tools (typically because the runner's persistent state has partial connector instances) are warnings, not errors. Promote to `1` once CI programmatically bootstraps instance state.
+- **Only changed services rebuild.** Each per-service workflow has a `paths:` filter; a push touching only `mcp/agent/` leaves `build-updater.yml` and `build-connectors.yml` idle. Untouched services retag the previous digests at release time — same content digest, no container recreation on upgrade.
+- Per-service builds + the dev installer run on the **self-hosted runner on guardian-vm**; `release.yml` runs on `ubuntu-latest`.
+- `concurrency: cancel-in-progress: true` on the per-service builds means a new push to `main` cancels the previous run. Expected; you'll see "cancelled" entries in `gh run list` when a series of pushes lands within minutes.
+- The release ships 9 images in lockstep at one `vX.Y.Z`: `guardian-agent`, `guardian-updater`, `guardian-browser`, `guardian-connector-runtime`, and the 5 per-connector images (`xsiam`, `cortex-xdr`, `web`, `cortex-docs`, `cortex-content`). See [`CICD.md` § Monorepo release invariant](CICD.md#monorepo-release-invariant).
 
 ---
 

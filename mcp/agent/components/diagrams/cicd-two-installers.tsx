@@ -143,8 +143,8 @@ export function CicdTwoInstallers() {
         {/* Bottom — running stack (shared) */}
         <rect x="380" y="540" width="440" height="100" rx="12" className="cicd-shared-fill" />
         <text x="600" y="568" textAnchor="middle" className="cicd-card-title">Running stack</text>
-        <text x="600" y="592" textAnchor="middle" className="node-subtitle">5 containers + N per-instance connector containers</text>
-        <text x="600" y="612" textAnchor="middle" className="muted" fontSize="11">guardian-agent · xlog · caldera · guardian-updater · guardian-browser (profile-gated)</text>
+        <text x="600" y="592" textAnchor="middle" className="node-subtitle">3 containers + N per-instance connector containers</text>
+        <text x="600" y="612" textAnchor="middle" className="muted" fontSize="11">guardian-agent · guardian-updater · guardian-browser (profile-gated)</text>
         <text x="600" y="628" textAnchor="middle" className="muted" fontSize="11">Same image set on dev + customer; only the digest VALUES differ.</text>
 
         {/* Down arrow from ceremony to running */}

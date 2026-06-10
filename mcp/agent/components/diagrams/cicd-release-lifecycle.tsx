@@ -14,8 +14,8 @@
  *   2. Detect changed services — compares HEAD against the previous
  *      tag's source paths. For each service: changed=1 → build,
  *      changed=0 → retag-from-prev (bit-identical to last release;
- *      caldera + xlog containers retain in-memory state across this
- *      kind of upgrade per the v0.5.12 "untouched services" invariant).
+ *      untouched containers retain in-memory state across this
+ *      kind of upgrade per the "untouched services" invariant).
  *
  *   3. Per-service build OR retag — services with changes get rebuilt
  *      against the v0.5.0+ docker buildx pipeline; unchanged services
@@ -31,7 +31,7 @@
  *      vX.Y.Z" release page is what the customer downloads from.
  *
  * Critically: release.yml is the ONLY workflow that rebuilds
- * guardian-updater + guardian-browser. Dev cycle never touches them.
+ * guardian-browser. Dev cycle never touches it.
  */
 
 import { DIAGRAM_THEME_CSS, DiagramMarkers } from "./_diagram-theme";
@@ -72,7 +72,7 @@ export function CicdReleaseLifecycle() {
           release.yml lifecycle: tag → build/retag → manifest → release
         </text>
         <text x="600" y="68" textAnchor="middle" className="detail" fontSize="13">
-          The ONLY workflow that rebuilds guardian-updater + guardian-browser. Customer downloads from the GitHub release at the end.
+          The ONLY workflow that rebuilds guardian-browser. Customer downloads from the GitHub release at the end.
         </text>
 
         {/* Trigger — top */}
@@ -94,14 +94,14 @@ export function CicdReleaseLifecycle() {
         <text x="170" y="288" textAnchor="middle" className="rel-step">Diff HEAD against the</text>
         <text x="170" y="304" textAnchor="middle" className="rel-step">previous tag&apos;s source paths.</text>
         <text x="170" y="328" textAnchor="middle" className="rel-step-code">CHANGED_AGENT=&lt;0|1&gt;</text>
-        <text x="170" y="344" textAnchor="middle" className="rel-step-code">CHANGED_XLOG=&lt;0|1&gt;</text>
+        <text x="170" y="344" textAnchor="middle" className="rel-step-code">CHANGED_BROWSER=&lt;0|1&gt;</text>
         <text x="170" y="360" textAnchor="middle" className="rel-step-code">...</text>
 
         {/* Phase 2 — Build/retag per service */}
         <rect x="300" y="210" width="280" height="320" rx="12" className="rel-phase" />
         <text x="320" y="240" className="rel-phase-num">2</text>
         <text x="440" y="266" textAnchor="middle" className="cicd-card-title" style={{fontSize: 15}}>Build or retag (per service)</text>
-        <text x="440" y="288" textAnchor="middle" className="rel-step">For each of 11 service images:</text>
+        <text x="440" y="288" textAnchor="middle" className="rel-step">For each of 9 service images:</text>
         <text x="320" y="320" className="rel-step state-info-fill" fontWeight="700">changed=1</text>
         <text x="320" y="336" className="rel-step-code">docker buildx build</text>
         <text x="320" y="352" className="rel-step-code">+ docker push :vX.Y.Z</text>
@@ -113,7 +113,7 @@ export function CicdReleaseLifecycle() {
         <text x="320" y="464" className="rel-step muted">→ BIT-IDENTICAL to prior tag</text>
         <text x="320" y="488" className="rel-step muted">→ customer compose recognizes</text>
         <text x="320" y="504" className="rel-step muted">same digest = no recreate</text>
-        <text x="320" y="520" className="rel-step muted">→ caldera/xlog state survives</text>
+        <text x="320" y="520" className="rel-step muted">→ untouched containers&apos; state survives</text>
 
         {/* Phase 3 — Manifest assembly */}
         <rect x="600" y="210" width="280" height="220" rx="12" className="rel-phase" />
@@ -125,7 +125,7 @@ export function CicdReleaseLifecycle() {
         <text x="740" y="346" textAnchor="middle" className="rel-step-code">release-manifest-vX.Y.Z.env</text>
         <text x="740" y="374" textAnchor="middle" className="rel-step muted">contents:</text>
         <text x="740" y="390" textAnchor="middle" className="rel-step-code">DIGEST_GUARDIAN_AGENT=sha256:...</text>
-        <text x="740" y="406" textAnchor="middle" className="rel-step-code">DIGEST_GUARDIAN_XLOG=sha256:...</text>
+        <text x="740" y="406" textAnchor="middle" className="rel-step-code">DIGEST_GUARDIAN_BROWSER=sha256:...</text>
         <text x="740" y="422" textAnchor="middle" className="rel-step-code">DIGEST_GUARDIAN_UPDATER=...</text>
 
         {/* Phase 4 — GHCR access propagation (per-version access semantics) */}
@@ -164,9 +164,9 @@ export function CicdReleaseLifecycle() {
         <text x="170" y="458" textAnchor="middle" className="state-warn-fill" fontSize="12" fontWeight="700">
           ⚠ Critical reminder
         </text>
-        <text x="170" y="480" textAnchor="middle" className="rel-step">guardian-updater + guardian-browser</text>
-        <text x="170" y="496" textAnchor="middle" className="rel-step">rebuild ONLY here, never on dev push.</text>
-        <text x="170" y="518" textAnchor="middle" className="muted" fontSize="11">A fix in updater/src/main.py only</text>
+        <text x="170" y="480" textAnchor="middle" className="rel-step">guardian-browser</text>
+        <text x="170" y="496" textAnchor="middle" className="rel-step">rebuilds ONLY here, never on dev push.</text>
+        <text x="170" y="518" textAnchor="middle" className="muted" fontSize="11">A fix in guardian-browser/ only</text>
         <text x="170" y="534" textAnchor="middle" className="muted" fontSize="11">reaches customers when this fires.</text>
       </svg>
     </div>

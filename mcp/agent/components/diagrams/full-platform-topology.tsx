@@ -21,8 +21,8 @@ export function FullPlatformTopology() {
       <svg viewBox="0 0 1280 920" role="img" aria-labelledby="fpt-diagram-title fpt-diagram-desc">
       <title id="fpt-diagram-title">Guardian platform full-platform topology</title>
       <desc id="fpt-diagram-desc">
-        Dark-themed topology diagram showing Guardian clients, agent, MCP server, connector backends, sinks,
-        and all authenticated edges across the platform.
+        Dark-themed topology diagram showing Guardian clients, agent, MCP server, connector containers,
+        lifecycle services, and all authenticated edges across the platform.
       </desc>
 
       <defs>
@@ -74,16 +74,6 @@ export function FullPlatformTopology() {
           <path d="M13 2L5 13h6l-1 9 9-12h-6l0-8z" />
         </symbol>
 
-        <symbol id="fpt-icon-swords" viewBox="0 0 24 24">
-          <path d="M5 4l6.5 6.5" />
-          <path d="M19 4l-6.5 6.5" />
-          <path d="M10 12l-5 5" />
-          <path d="M14 12l5 5" />
-          <path d="M4 20l4-4" />
-          <path d="M20 20l-4-4" />
-          <path d="M8.5 8.5l2-2M15.5 8.5l-2-2" />
-        </symbol>
-
         <symbol id="fpt-icon-magnifier" viewBox="0 0 24 24">
           <circle cx="10.5" cy="10.5" r="5.5" />
           <path d="M15 15l5 5" />
@@ -103,7 +93,7 @@ export function FullPlatformTopology() {
 
       
       <text x="170" y="38" className="title" fontSize="24">Guardian Platform Topology</text>
-      <text x="170" y="60" className="detail" fontSize="13">Continuous SOC simulation stack · Docker Compose services · external model, PAPI, and webhook integrations</text>
+      <text x="170" y="60" className="detail" fontSize="13">AI incident-response stack · Docker Compose services · external model and Cortex tenant integrations</text>
 
       
       <line className="lane-line" x1="155" y1="205" x2="1235" y2="205" />
@@ -115,8 +105,8 @@ export function FullPlatformTopology() {
       <text className="lane-label" x="42" y="125">CLIENTS</text>
       <text className="lane-label" x="42" y="300">GUARDIAN AGENT</text>
       <text className="lane-label" x="42" y="488">MCP SERVER</text>
-      <text className="lane-label" x="42" y="670">CONNECTOR BACKENDS</text>
-      <text className="lane-label" x="42" y="823">SINKS</text>
+      <text className="lane-label" x="42" y="670">CONNECTOR CONTAINERS</text>
+      <text className="lane-label" x="42" y="823">LIFECYCLE</text>
 
       
       <path className="edge operator" d="M312 166 C312 188 465 204 465 235" />
@@ -126,11 +116,11 @@ export function FullPlatformTopology() {
       <path className="edge external" d="M855 290 L936 290" />
       <path className="edge shared" d="M625 345 L625 430" />
 
-      <path className="edge compose" d="M500 538 C500 560 370 586 370 620" />
       <path className="edge compose" d="M775 538 C775 560 720 588 720 620" />
-      <path className="edge external" d="M1010 489 C1072 512 1081 559 1081 600" />
+      <path className="edge compose" d="M570 667 L524 667" />
+      <path className="edge external" d="M870 660 L933 660" />
 
-      <path className="edge external" d="M370 715 L370 784" />
+      <path className="edge compose" d="M660 784 L660 719" />
 
       
       <g transform="translate(338 214)">
@@ -160,25 +150,25 @@ export function FullPlatformTopology() {
       </g>
 
       
-      <g transform="translate(336 599)">
-        <rect className="edge-label-box" x="0" y="-15" width="124" height="25" rx="8" />
-        <text className="edge-label-text" x="10" y="2">http://xlog:8000</text>
+      <g transform="translate(430 735)">
+        <rect className="edge-label-box" x="0" y="-15" width="212" height="25" rx="8" />
+        <text className="edge-label-text" x="10" y="2">CDP ws://guardian-browser:9222</text>
       </g>
 
       <g transform="translate(670 599)">
-        <rect className="edge-label-box" x="0" y="-15" width="148" height="25" rx="8" />
-        <text className="edge-label-text" x="10" y="2">http://caldera:8888</text>
+        <rect className="edge-label-box" x="0" y="-15" width="190" height="25" rx="8" />
+        <text className="edge-label-text" x="10" y="2">tools/call · runtime :9000</text>
       </g>
 
-      <g transform="translate(1046 584)">
+      <g transform="translate(872 630)">
         <rect className="edge-label-box" x="0" y="-15" width="86" height="25" rx="8" />
         <text className="edge-label-text" x="10" y="2">HTTPS PAPI</text>
       </g>
 
-      
-      <g transform="translate(392 771)">
-        <rect className="edge-label-box" x="0" y="-15" width="202" height="25" rx="8" />
-        <text className="edge-label-text" x="10" y="2">Authorization: $WEBHOOK_KEY</text>
+
+      <g transform="translate(690 765)">
+        <rect className="edge-label-box" x="0" y="-15" width="266" height="25" rx="8" />
+        <text className="edge-label-text" x="10" y="2">Docker API · recreate on digest change</text>
       </g>
 
       
@@ -246,37 +236,38 @@ export function FullPlatformTopology() {
       <g className="node" transform="translate(220 620)">
         <rect className="node-shape" x="0" y="0" width="300" height="95" rx="18" />
         <circle className="badge" cx="34" cy="34" r="18" />
-        <use href="#fpt-icon-bolt" className="icon" x="22" y="22" width="24" height="24" />
-        <text className="node-title-small" x="64" y="31">xlog (guardian)</text>
-        <text className="node-subtitle" x="64" y="54">FastAPI + GraphQL · :8000</text>
-        <text className="node-detail" x="64" y="75">synthetic logs · scenarios · workers</text>
+        <use href="#fpt-icon-browser" className="icon" x="22" y="22" width="24" height="24" />
+        <text className="node-title-small" x="64" y="31">guardian-browser</text>
+        <text className="node-subtitle" x="64" y="54">headless Chromium · CDP :9222</text>
+        <text className="node-detail" x="64" y="75">profile-gated sidecar · web sessions</text>
       </g>
 
       <g className="node" transform="translate(570 620)">
         <rect className="node-shape" x="0" y="0" width="300" height="95" rx="18" />
         <circle className="badge" cx="34" cy="34" r="18" />
-        <use href="#fpt-icon-swords" className="icon" x="22" y="22" width="24" height="24" />
-        <text className="node-title-small" x="64" y="31">caldera</text>
-        <text className="node-subtitle" x="64" y="54">5.3.0 · :8888 / :8443</text>
-        <text className="node-detail" x="64" y="75">MITRE ATT&amp;CK adversary emulation</text>
+        <use href="#fpt-icon-bolt" className="icon" x="22" y="22" width="24" height="24" />
+        <text className="node-title-small" x="64" y="31">connector containers</text>
+        <text className="node-subtitle" x="64" y="54">runtime :9000 · one per instance</text>
+        <text className="node-detail" x="64" y="73">xsiam · cortex-xdr · cortex-docs</text>
+        <text className="node-detail" x="64" y="88">cortex-content · web</text>
       </g>
 
       <g className="node external">
         <ellipse className="node-shape" cx="1084" cy="660" rx="148" ry="60" />
         <circle className="badge" cx="986" cy="638" r="18" />
         <use href="#fpt-icon-magnifier" className="icon" x="974" y="626" width="24" height="24" />
-        <text className="node-title-small" x="1018" y="638">XSIAM PAPI</text>
-        <text className="node-subtitle" x="1018" y="660">Cortex Cloud · external</text>
-        <text className="node-detail-small" x="1018" y="682">XQL execution · detection content</text>
+        <text className="node-title-small" x="1018" y="638">Cortex XSIAM / XDR</text>
+        <text className="node-subtitle" x="1018" y="660">operator tenant · external</text>
+        <text className="node-detail-small" x="1018" y="682">XQL · cases · issues · assets</text>
       </g>
 
-      
-      <g className="node sink" transform="translate(160 784)">
+
+      <g className="node sink" transform="translate(380 784)">
         <rect className="node-shape" x="0" y="0" width="420" height="66" rx="17" />
         <circle className="badge" cx="34" cy="33" r="17" />
         <use href="#fpt-icon-inbox" className="icon" x="22" y="21" width="24" height="24" />
-        <text className="node-title-small" x="64" y="29">XSIAM HTTP collector / arbitrary webhook</text>
-        <text className="node-subtitle" x="64" y="51">telemetry sink — receives synthesised logs</text>
+        <text className="node-title-small" x="64" y="29">guardian-updater</text>
+        <text className="node-subtitle" x="64" y="51">container lifecycle · :8090 · compose-internal only</text>
       </g>
 
       

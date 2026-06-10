@@ -135,7 +135,7 @@ const COLUMNS: KnowledgeColumn[] = [
       {
         tag: "BUNDLE",
         name: "mcp/skills/**/*.md",
-        detail: "foundation · scenarios · validation · workflows",
+        detail: "foundation · workflows",
       },
       {
         tag: "LOADER",
@@ -150,7 +150,7 @@ const COLUMNS: KnowledgeColumn[] = [
       {
         tag: "CONSUMED VIA",
         name: "system-prompt inject",
-        detail: "load_simulation_skills(keywords=…)",
+        detail: "skills_read(file_path=…) on match",
       },
     ],
   },
@@ -162,7 +162,7 @@ const COLUMNS: KnowledgeColumn[] = [
       {
         tag: "BUNDLE",
         name: "kbs/*/entries/*.md",
-        detail: "guardian-soc · xql-examples (162 entries)",
+        detail: "xql-examples · curated XQL queries",
       },
       {
         tag: "LOADER",

@@ -57,11 +57,10 @@ than a v0.1.x patch.
 │ guardian-agent container (Python 3.12, Next.js, single proc) │
 │                                                               │
 │  Embedded MCP (FastMCP, port 8080)                           │
-│   ├─ xlog connector code      ← bundles/spark/connectors/    │
-│   │                             xlog/src/*.py imported at    │
+│   ├─ xsiam connector code     ← bundles/spark/connectors/    │
+│   │                             xsiam/src/*.py imported at   │
 │   │                             boot via importlib            │
-│   ├─ xsiam connector code     ← same pattern                 │
-│   ├─ caldera connector code   ← same pattern                 │
+│   ├─ cortex-docs connector    ← same pattern                 │
 │   └─ web connector code       ← same pattern (v0.1.27+)     │
 │                                                               │
 │  Per tool call:                                              │
@@ -69,8 +68,6 @@ than a v0.1.x patch.
 │   2. _wrap_with_instance sets instance config contextvar     │
 │   3. wrapped Python function executes in-process             │
 │   4. function makes outbound HTTP/WS to backend service:     │
-│      - xlog → http://xlog:8000                               │
-│      - caldera → http://caldera:8888                         │
 │      - xsiam → https://api-tenant.../public_api/v1           │
 │      - web → http://guardian-browser:9222 (CDP)               │
 │   5. function returns; result wraps back through FastMCP     │
@@ -78,11 +75,11 @@ than a v0.1.x patch.
         │
         │ Docker network "guardian_default"
         ↓
-┌─────────────────┐  ┌──────────────┐  ┌──────────────────┐
-│ xlog            │  │ caldera      │  │ guardian-browser  │
-│ container       │  │ container    │  │ container        │
-│ (synthetic logs)│  │ (red team)   │  │ (chromedp/chrome)│
-└─────────────────┘  └──────────────┘  └──────────────────┘
+┌──────────────────┐
+│ guardian-browser  │
+│ container        │
+│ (chromedp/chrome)│
+└──────────────────┘
 ```
 
 **Key properties of today's model:**
@@ -99,19 +96,19 @@ than a v0.1.x patch.
 
 ```
 ┌──────────────────────────────────┐    ┌──────────────────────────────────┐
-│ guardian-agent container          │    │ guardian-connector-xlog-primary  │
+│ guardian-agent container          │    │ guardian-connector-xsiam-primary │
 │                                   │    │ (one container per instance)    │
 │  Embedded MCP (port 8080)        │    │                                  │
 │   ├─ Routing table:              │←──→│  FastMCP (port 9000)            │
-│   │   xlog/* → xlog-primary:9000 │MCP │   ├─ tools/list returns xlog/*  │
-│   │   web/* → web-primary:9000   │    │   └─ tools/call executes xlog   │
-│   │   ...                        │    │                                  │
-│   │                               │    │  Outbound to xlog backend:      │
-│   └─ Per call: forward to        │    │   POST http://xlog:8000/...     │
+│   │   xsiam/* →                  │MCP │   ├─ tools/list returns xsiam/* │
+│   │     xsiam-primary:9000       │    │   └─ tools/call executes xsiam  │
+│   │   web/* → web-primary:9000   │    │                                  │
+│   │   ...                        │    │  Outbound to XSIAM PAPI:        │
+│   └─ Per call: forward to        │    │   POST https://api-tenant.../   │
 │      connector instance's MCP    │    └──────────────────────────────────┘
 └──────────────────────────────────┘                ↓
-        │                                     (existing xlog backend
-        │                                      container, unchanged)
+        │                                     (customer's XSIAM tenant,
+        │                                      external SaaS, unchanged)
         │
         ↓
 ┌──────────────────────────────────┐
@@ -253,9 +250,8 @@ Image inheritance:
 
 **Why this shape**:
 
-- Per-connector deps stay isolated. xlog needs `httpx`; web needs
-  `playwright + trafilatura`; xsiam needs `google-auth`. None of
-  these touch the agent's image.
+- Per-connector deps stay isolated. xsiam needs `httpx`; web needs
+  `playwright + trafilatura`. None of these touch the agent's image.
 - Conditional rebuild from v0.1.29 means the connector images
   retag (no real rebuild) when nothing in their source changed.
 - Each connector image is independently pull-able by third
@@ -316,12 +312,13 @@ path. Operators get a clean management surface without learning
 docker commands.
 
 **Container naming**: `guardian-connector-<id>-<instance-name>` (e.g.
-`guardian-connector-xlog-primary`, `guardian-connector-web-acme-vetted`).
-Predictable, greppable, matches Guardian's existing naming for caldera/xlog.
+`guardian-connector-xsiam-primary`, `guardian-connector-web-acme-vetted`).
+Predictable, greppable, matches Guardian's existing container naming
+(`guardian_agent`, `guardian_browser`).
 
 **Network naming**: same `guardian_default` Docker network, so the
 agent reaches connectors via container hostname + port:
-`http://guardian-connector-xlog-primary:9000/mcp`.
+`http://guardian-connector-xsiam-primary:9000/mcp`.
 
 ### D7: Failure modes
 
@@ -340,20 +337,20 @@ configurable per connector via connector.yaml `runtime.memory`).
 On OOM, container restarts, agent retries.
 
 **Slow tool call (intentionally long-running)**: Long-running tools
-(e.g. `xlog/create_data_worker` with `duration_seconds: 0`) MUST be
+(e.g. a tool that drives a long-running upstream job) MUST be
 async-capable: return immediately with a job ID, agent polls. We
 already do this for some tools; the per-container model makes it
 mandatory for any tool exceeding the per-call timeout.
 
 **Connector image pull failure** (first-time start with offline
 deploy): guardian-updater retries with backoff; surfaces error to
-the operator UI with actionable text ("guardian-connector-xlog:0.2.0
+the operator UI with actionable text ("guardian-connector-xsiam:0.2.0
 not in local cache and registry unreachable; check network").
 
 ### D8: Observability
 
 Each connector container's stdout/stderr lands in Docker's normal
-log stream (greppable via `docker logs guardian-connector-xlog-primary`).
+log stream (greppable via `docker logs guardian-connector-xsiam-primary`).
 Audit events from connector code → posted to the agent's audit
 endpoint via HTTP (the connector container has an env var pointing
 at the agent's audit URL). Same audit pipeline, no new sinks.
@@ -426,11 +423,11 @@ machinery is dormant.
   SecretStore client + audit forwarder + a "connector
   entrypoint" that loads the connector source and starts the MCP
   server.
-- Empty per-connector image stubs (`guardian-connector-xlog`,
-  `guardian-connector-xsiam`, `guardian-connector-caldera`,
-  `guardian-connector-web`) that build on the runtime + bundle the
-  connector source. They're built and pushed by release.yml but
-  no instance uses them yet.
+- Empty per-connector image stubs (`guardian-connector-xsiam`,
+  `guardian-connector-web`, `guardian-connector-cortex-docs`,
+  `guardian-connector-cortex-content`) that build on the runtime +
+  bundle the connector source. They're built and pushed by
+  release.yml but no instance uses them yet.
 - Agent's MCP gains a routing layer: tools whose connector has
   `runtime: container` in its connector.yaml are routed to the
   container's MCP; tools with `runtime: module` (the default for
@@ -444,13 +441,13 @@ machinery is dormant.
 
 **Acceptance**:
 
-- `docker compose --profile dev up guardian-connector-xlog` brings
-  up the xlog connector container in standalone mode; `curl
+- `docker compose --profile dev up guardian-connector-xsiam` brings
+  up the xsiam connector container in standalone mode; `curl
   http://localhost:9000/health` returns 200; `mcp tools/list`
-  returns xlog's tools.
+  returns xsiam's tools.
 - Existing in-process tools still work unchanged.
-- release.yml builds + pushes 4 new images; conditional retag
-  logic correctly handles them.
+- release.yml builds + pushes the new per-connector images;
+  conditional retag logic correctly handles them.
 
 ### Phase 2 (v0.1.31): Pilot — migrate `web` to container runtime
 
@@ -486,19 +483,14 @@ kind of thing the per-container model handles cleanly.
 - Two web instances side-by-side: each has its own page registry,
   no cross-contamination.
 
-### Phase 3 (v0.1.32 → v0.1.34): Migrate xsiam, xlog, caldera
+### Phase 3 (v0.1.32+): Migrate the remaining first-party connectors
 
 One per release. Order: simplest first.
 
 **v0.1.32 — xsiam**: pure HTTP wrapper, no state, external
 network. Fastest to migrate.
 
-**v0.1.33 — xlog**: HTTP wrapper to xlog backend. Simple but
-higher tool-call volume (synthetic log generation can fire many
-tools per chat turn).
-
-**v0.1.34 — caldera**: Multi-step API calls + local state
-caching. Most complex; saved for last.
+<!-- [guardian v0.1.0] Retired: the v0.1.33/v0.1.34 migration entries covered simulation-era connectors removed in the Guardian fork; the remaining Cortex-family connectors follow the same single-file flip. -->
 
 Each migration is a single-file flip in the connector's
 connector.yaml + the image build. The proxy machinery from
@@ -510,8 +502,8 @@ v0.1.31 baseline (web).
 
 ### Phase 4 (v0.2.0): Drop in-process runtime
 
-After all 4 connectors are container-mode in production use for
-at least 4 weeks (v0.1.31 → v0.2.0 stretch), remove the
+After all first-party connectors are container-mode in production use
+for at least 4 weeks (v0.1.31 → v0.2.0 stretch), remove the
 `runtime: module` code path entirely. Bundle architecture v2.0.
 
 **Ships**:
@@ -527,7 +519,7 @@ at least 4 weeks (v0.1.31 → v0.2.0 stretch), remove the
   standalone connector image and reference it from a custom
   bundle.
 
-**Acceptance**: All 4 first-party connectors running in container
+**Acceptance**: All first-party connectors running in container
 mode in production for ≥ 4 weeks with no fall-back to in-process
 needed. v0.2.0 release tag.
 
@@ -607,15 +599,15 @@ legitimate concern but solving it here would balloon the program:
 
 The per-instance container architecture is "done" when:
 
-1. All 4 first-party connectors (xlog, xsiam, caldera, web) ship
-   in container mode by default.
+1. All first-party connectors (xsiam, cortex-xdr, web, cortex-docs,
+   cortex-content) ship in container mode by default.
 2. Operator UX in /connectors is unchanged from v0.1.x — install,
    create instance, configure, test, use. No new concepts the
    operator must learn.
 3. guardian-agent image size is smaller in v0.2.0 than v0.1.29
    (specifically: connector-specific deps removed).
 4. Per-call latency overhead vs. v0.1.x in-process baseline is
-   < 50 ms median for the first three connectors and < 100 ms
+   < 50 ms median for the HTTP-wrapper connectors and < 100 ms
    median for web (which has CDP roundtrip cost regardless).
 5. Crash isolation verified: killing one connector container
    does not affect the agent or other connectors.
@@ -663,8 +655,8 @@ radius), has the least production usage, and exercises the most
 "foreign" code path (CDP to a sidecar Chromium). The flip
 shipped on 2026-05-07 alongside v0.1.31. Five real bugs surfaced
 during the smoke test on guardian-vm; all are documented here so
-future connector migrations (xsiam → v0.1.32, xlog → v0.1.33,
-caldera → v0.1.34) don't re-discover them.
+future connector migrations (xsiam → v0.1.32, then the remaining
+Cortex-family connectors) don't re-discover them.
 
 ### 1. Schema drift between agent and runtime
 

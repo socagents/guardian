@@ -40,13 +40,13 @@ const difficultyClass: Record<JourneyDifficulty, string> = {
   advanced: "bg-tertiary/15 text-tertiary border-tertiary/30",
 };
 
+// [guardian v0.1.0] Retired tabs: the log-generation + red-team
+// categories were removed from JourneyCategory with their subsystems.
 const CATEGORIES: ("all" | JourneyCategory)[] = [
   "all",
   "onboarding",
   "chat",
   "memory",
-  "simulation",
-  "redteam",
   "validation",
   "ops",
 ];

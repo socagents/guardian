@@ -1,9 +1,9 @@
 {
   "agent": {
-    "id": "guardian-soc-simulation-agent",
+    "id": "guardian-incident-response-agent",
     "name": "Guardian Agent",
     "version": "0.1.0",
-    "description": "Continuous SOC simulation agent UI described as A2UI surfaces."
+    "description": "AI incident-response agent UI described as A2UI surfaces."
   },
   "ui": {
     "protocol": "a2ui",

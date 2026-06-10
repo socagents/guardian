@@ -5,7 +5,7 @@
  *   /help/user           — operator daily-driver tasks, surface walks,
  *                          slash commands, hook installs, plan mode,
  *                          cost reading, plugin installs, troubleshooting.
- *   /help/architecture   — system internals: 5-service topology,
+ *   /help/architecture   — system internals: service-stack topology,
  *                          chat-route lifecycle, MCP registration,
  *                          subsystem implementation patterns, audit-row
  *                          schemas, REST-endpoint internals, design
@@ -57,9 +57,9 @@ export default function HelpLandingPage() {
             </h1>
           </div>
           <p className="text-base text-on-surface-variant leading-relaxed max-w-3xl">
-            Guardian is a continuous SOC simulation platform: synthetic
-            security log generation, MITRE ATT&amp;CK scenario execution,
-            detection validation, and AI-orchestrated red/blue workflows.
+            Guardian is an AI incident-response agent for Cortex XSIAM
+            and XSOAR: evidence gathering, XQL queries, incident
+            enrichment, and AI-orchestrated response workflows.
             The documentation is split into two focused guides so you
             land where you need to be.
           </p>
@@ -88,12 +88,12 @@ export default function HelpLandingPage() {
             icon="schema"
             title="Architecture Guide"
             audience="Architects · plugin authors · platform extenders"
-            description="Deep technical reference for how Guardian is built. Use this when you're extending the platform: the 5-service stack, boot lifecycle, chat-route pipeline, every subsystem (memory, knowledge, skills, hooks, tasks, plan mode, subagents, plugins, jobs, notifications, approvals, models, providers, secret store), the seven external connectors (xlog / CALDERA / XSIAM / Cortex XDR / Cortex Docs / Cortex Content / Web Browser), audit-row schemas, and the design decisions that shaped each substrate."
+            description="Deep technical reference for how Guardian is built. Use this when you're extending the platform: the service stack, boot lifecycle, chat-route pipeline, every subsystem (memory, knowledge, skills, hooks, tasks, plan mode, subagents, plugins, jobs, notifications, approvals, models, providers, secret store), the five external connectors (XSIAM / Cortex XDR / Cortex Docs / Cortex Content / Web Browser), audit-row schemas, and the design decisions that shaped each substrate."
             highlights={[
-              "5-service stack + boot lifecycle + setup wiring",
+              "Service stack + boot lifecycle + setup wiring",
               "Chat pipeline: lifecycle, fire-sites, tool dispatch, SSE",
               "Context, memory, knowledge, skills",
-              "External connectors (7 total: xlog / CALDERA / XSIAM / Cortex XDR / Cortex Docs / Cortex Content / Web Browser)",
+              "External connectors (5 total: XSIAM / Cortex XDR / Cortex Docs / Cortex Content / Web Browser)",
               "Auth, secret store, approvals, API keys",
               "Models, providers, jobs, notifications",
               "Substrate composition + design decisions",
@@ -116,13 +116,13 @@ export default function HelpLandingPage() {
               href="/help/journeys"
               icon="tour"
               title="User Journeys"
-              description="Hands-on, step-by-step walkthroughs for common tasks — onboarding a connector, running a full attack simulation, validating detections, installing a Slack policy hook, spawning red/blue subagents."
+              description="Hands-on, step-by-step walkthroughs for common tasks — onboarding a connector, investigating a case end-to-end, building an XQL query, installing a Slack policy hook, spawning scoped subagents."
             />
             <SpecialtyCard
               href="/help/api"
               icon="api"
               title="REST API Reference"
-              description="Wire-format reference for every /api/agent/* endpoint (86 routes, 112 catalog entries as of v0.7.1) — request schema, response shape, auth requirements, cURL examples, downloadable OpenAPI 3.0 spec."
+              description="Wire-format reference for every /api/agent/* endpoint — request schema, response shape, auth requirements, cURL examples, downloadable OpenAPI 3.0 spec."
             />
             <SpecialtyCard
               href="/help/cicd"

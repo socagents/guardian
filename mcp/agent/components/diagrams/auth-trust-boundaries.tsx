@@ -487,8 +487,8 @@ export function AuthTrustBoundaries() {
             num: "1",
             cls: "t1",
             name: "Auto-approved",
-            detail: "read-only, log-gen, non-destructive",
-            example: "xlog.list_workers, xsiam.run_xql",
+            detail: "read-only, non-destructive",
+            example: "xsiam_run_xql_query, xsiam_get_cases",
           },
           {
             num: "2",

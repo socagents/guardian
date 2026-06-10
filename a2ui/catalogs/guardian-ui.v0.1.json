@@ -2,7 +2,7 @@
   "id": "guardian-ui.v0.1",
   "name": "Guardian Agent UI Catalog",
   "version": "0.1.0",
-  "description": "Trusted A2UI component catalog for SOC simulation, tool telemetry, skills, workflows, and bundle operations.",
+  "description": "Trusted A2UI component catalog for incident response, tool telemetry, skills, workflows, and bundle operations.",
   "components": {
     "GuardianShell": {
       "description": "Top-level Guardian agent application shell.",
@@ -68,7 +68,7 @@
       }
     },
     "WorkflowLauncher": {
-      "description": "Guided workflow launcher for repeatable SOC simulation tasks.",
+      "description": "Guided workflow launcher for repeatable investigation tasks.",
       "required": ["itemsPath", "runEvent"],
       "props": {
         "itemsPath": { "type": "dataPath" },
@@ -177,7 +177,7 @@
       "target": "scripts/export_agent_bundle.sh"
     },
     "guardian.report.export": {
-      "description": "Export a coverage or simulation report.",
+      "description": "Export an investigation report.",
       "target": "GET /api/agent/reports"
     },
     "guardian.coverage.selectTechnique": {

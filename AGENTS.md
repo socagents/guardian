@@ -1,10 +1,12 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to coding agents (Codex and others) when working with code in this repository.
 
 ## What Guardian is
 
-Continuous SOC simulation platform: synthetic security log generation, scenario-based MITRE ATT&CK telemetry, and AI-orchestrated red/blue workflows over MCP. Ships as a 4-service Docker Compose stack.
+AI incident-response agent for Cortex XSIAM/XSOAR: investigates security incidents over MCP — evidence gathering, XQL queries, case/issue enrichment, and response orchestration. Ships as a Docker Compose stack of three core services (`guardian-agent`, `guardian-browser`, `guardian-updater`) plus per-instance connector containers created at runtime.
+
+<!-- [guardian v0.1.0] Retired: SOC-simulation description (synthetic log generation, red/blue workflows) — simulation subsystem removed -->
 
 ## Remote-first workflow (MANDATORY)
 
@@ -14,9 +16,10 @@ Continuous SOC simulation platform: synthetic security log generation, scenario-
 
 - Project: `cortex-gcp-labs`
 - Zone: `us-central1-f`
-- Instance: `guardian` (internal IP `10.10.0.81`, no external IP)
-- Firewall tag: `allow-ssh`
+- Instance: `guardian` (internal IP `10.10.0.17`, no external IP)
+- Firewall tags: `allow-ssh`, `guardian-services` (IAP range → tcp 22, 3000, 8080, 8090)
 - Access path: **IAP tunnel → password SSH** as user `ayman`
+- GitHub Actions runner: registered against `kite-production/guardian`, installed at `/home/ayman/actions-runner`, runs as a systemd service
 
 ### Credentials — never commit
 
@@ -78,39 +81,16 @@ Edit locally, sync to `$VM_REMOTE_REPO` on the VM, then run there. Two options:
 
 Never upload `.env.vm` to the VM — it's local-only. The VM's own `.env` (for `docker compose`) lives at `$VM_REMOTE_REPO/.env` and is managed separately on the VM.
 
-### All common commands, rewritten for remote execution
-
-Every "command" in the sections below is meant to run **inside the VM**, either via an interactive SSH session or wrapped in the `sshpass -e ssh … "<cmd>"` form above. Do not run them on the workstation.
-
-```bash
-# Full stack
-… "cd $VM_REMOTE_REPO && docker compose up -d"
-… "cd $VM_REMOTE_REPO && docker compose ps"
-… "cd $VM_REMOTE_REPO && docker compose logs -f guardian-mcp"
-… "cd $VM_REMOTE_REPO && docker compose down"
-
-# MCP server tests
-… "cd $VM_REMOTE_REPO/bundles/spark/mcp && pytest"
-
-# Agent lint/build
-… "cd $VM_REMOTE_REPO/mcp/agent && npm run lint"
-```
-
-Local-only operations: editing files, `git` on the tracked repo, reading logs you already pulled down. Everything else → remote.
-
 ## Stack topology
 
 | Service (container) | Source | Language | Host port | Purpose |
 |---|---|---|---|---|
-| `guardian` | [main.py](main.py), [app/](app/) | Python 3.12 (FastAPI + Strawberry GraphQL) | 8999 → 8000 | Log generator + streaming worker engine |
-| `guardian-mcp` (`guardian_mcp`) | [bundles/spark/mcp/](bundles/spark/mcp/) | Python 3.12 (FastMCP) | 8080 | MCP tools for Guardian, XSIAM (PAPI), CALDERA |
-| `guardian-agent` (`guardian_agent`) | [mcp/agent/](mcp/agent/) | Next.js 15 + React 19 | 3000 | Chat UI, skills browser, Gemini/Vertex orchestration |
-| `caldera` | prebuilt image `aymanam/caldera:5.3.0` | — | 8888, 8443, etc. | Red-team operations backend |
+| `guardian-agent` | [mcp/agent/](mcp/agent/) + [bundles/spark/mcp/](bundles/spark/mcp/) | Next.js 15 + React 19, embedded Python 3.12 FastMCP subprocess | 3000 (UI), 8080 (MCP) | Chat UI + embedded MCP — one container, two processes, TLS proxy in front |
+| `guardian-browser` | [guardian-browser/](guardian-browser/) | headless Chromium | internal (CDP) | Browser sidecar for the `web` connector, profile-gated |
+| `guardian-updater` | [updater/](updater/) | Python 3.12 | 8090 | Per-instance connector container lifecycle + stack upgrades |
+| connector containers | [bundles/spark/connectors/](bundles/spark/connectors/) on the [guardian-connector-runtime/](guardian-connector-runtime/) base | Python 3.12 | internal | One per materialized connector instance (`xsiam`, `cortex-xdr`, `cortex-docs`, `cortex-content`, `web`) |
 
-Container-to-container URLs (use in `.env`, not `localhost`):
-- `XLOG_URL=http://xlog:8000`
-- `MCP_URL=http://guardian-mcp:8080/api/v1/stream/mcp`
-- `CALDERA_URL=http://caldera:8888`
+The embedded MCP is part of the agent's trust boundary, not a sibling service — the Next.js side proxies every `/api/agent/*` call to it over loopback with `MCP_TOKEN` bearer auth.
 
 ## Command reference (runs on the VM — wrap with the SSH pattern above)
 
@@ -118,22 +98,12 @@ Container-to-container URLs (use in `.env`, not `localhost`):
 # Full stack
 cd "$VM_REMOTE_REPO" && docker compose up -d
 cd "$VM_REMOTE_REPO" && docker compose ps
-cd "$VM_REMOTE_REPO" && docker compose logs -f guardian-mcp
+cd "$VM_REMOTE_REPO" && docker compose logs -f guardian-agent
 cd "$VM_REMOTE_REPO" && docker compose down
 
-# Root GraphQL app (standalone, on the VM)
-cd "$VM_REMOTE_REPO" && pip install -r requirements.txt
-cd "$VM_REMOTE_REPO" && python main.py                # uvicorn on 0.0.0.0:8000, 4 workers
-
-# MCP server (standalone — has its OWN deps)
-cd "$VM_REMOTE_REPO/bundles/spark/mcp" && ./run.sh           # creates venv, installs via poetry, runs src.main
-# OR manually:
-cd "$VM_REMOTE_REPO/bundles/spark/mcp" && python -m venv venv && source venv/bin/activate && \
-  pip install -r requirements.txt && PYTHONPATH=src python src/main.py
-
-# MCP server tests
-cd "$VM_REMOTE_REPO/bundles/spark/mcp" && pytest
-cd "$VM_REMOTE_REPO/bundles/spark/mcp" && pytest tests/test_config.py::test_settings_defaults
+# MCP server tests (PYTHONPATH=src is REQUIRED — tests import `from usecase.X`)
+cd "$VM_REMOTE_REPO/bundles/spark/mcp" && PYTHONPATH=$PWD/src python3 -m pytest tests/ -x
+cd "$VM_REMOTE_REPO/bundles/spark/mcp" && PYTHONPATH=$PWD/src python3 -m pytest tests/test_config.py -x
 
 # Next.js agent
 cd "$VM_REMOTE_REPO/mcp/agent" && npm ci
@@ -141,63 +111,47 @@ cd "$VM_REMOTE_REPO/mcp/agent" && npm run dev          # :3000
 cd "$VM_REMOTE_REPO/mcp/agent" && npm run build && npm run start
 cd "$VM_REMOTE_REPO/mcp/agent" && npm run lint
 
-# Force-reseed MCP skills (overrides volume with image defaults)
-cd "$VM_REMOTE_REPO" && docker compose run --rm -e FORCE_SKILLS_SYNC=1 guardian-mcp
+# Force-reseed default skills (overrides volume content with image defaults)
+cd "$VM_REMOTE_REPO" && docker compose run --rm -e FORCE_SKILLS_SYNC=1 guardian-agent
 ```
 
-Service endpoints, when tunneled: use `gcloud compute start-iap-tunnel guardian <remote-port> --local-host-port=localhost:<local-port>` to reach them from your browser — e.g., tunnel `3000→3000` for the agent UI, `8080→8080` for the MCP server, `8999→8999` for GraphQL, `8888→8888` for Caldera.
+Local-only operations: editing files, `git` on the tracked repo, reading logs you already pulled down. Everything else → remote.
+
+Service endpoints, when tunneled: use `gcloud compute start-iap-tunnel guardian <remote-port> --local-host-port=localhost:<local-port>` to reach them from your browser — e.g., tunnel `3000` for the agent UI, `8080` for the MCP server, `8090` for the updater.
 
 ## Architecture that isn't obvious from the tree
 
-### GraphQL + in-process workers (`guardian` service)
+### Embedded MCP server (inside `guardian-agent`)
 
-- [main.py](main.py) mounts Strawberry GraphQL at `/` on the FastAPI app.
-- [app/schema.py](app/schema.py) defines all queries/mutations. **Active workers are stored in a module-level `workers = {}` dict** — no persistence. Restarting the `guardian` container drops every streaming worker; `listWorkers` is per-replica.
-- Log synthesis comes from the external `rosetta-ce` library (`Events`, `Observables`, `Sender`) — not in this repo. Format types, scenario shapes, and worker I/O are declared in [app/types/](app/types/) (`datafaker.py`, `scenarios.py`, `sender.py`).
-- Webhook sender uses header `Authorization: <WEBHOOK_KEY>` (raw, not `Bearer`) — see `_get_webhook_headers` in `app/schema.py`. Any non-XSIAM webhook receiver must accept that form.
-- Scenario files live in `scenarios/ready/*.json`. `createScenarioWorker` takes the filename **without `.json`**. For inline scenarios use `createScenarioWorkerFromQuery` instead.
-
-### MCP server (`guardian-mcp` service)
-
-- Entry: [bundles/spark/mcp/src/main.py](bundles/spark/mcp/src/main.py). Registers ~80 tools in one block inside `async_main` — `mcp.tool()(module.fn)` per tool. Add new tools by importing from `usecase/builtin_components/` and calling `mcp.tool()` there.
-- Layout is intentional (clean-architecture flavor):
-  - `src/config/config.py` — pydantic-settings, reads env vars via `validation_alias`.
-  - `src/service/guardian_bundles/spark/mcp.py` — FastMCP instance factory.
-  - `src/usecase/builtin_components/` — tool implementations (`data_faker`, `workers`, `scenarios`, `xsiam_tools`, `caldera_tools`, `simulation_skills`, `skills_crud`, `observables_catalog`, `field_info`).
-  - `src/pkg/` — shared clients: `graphql_client` (talks to `guardian` service), `papi_client` (XSIAM), `caldera_factory`, `xql_rag_service` (chromadb + sentence-transformers for XQL examples retrieval).
-- Transports: `MCP_TRANSPORT=stdio` (default in Dockerfile) or `streamable-http`. HTTP path is configurable via `MCP_PATH` (default `/api/v1/stream/mcp`).
-- SSL: supports file paths (`SSL_CERT_FILE`/`SSL_KEY_FILE`) OR inline PEM with `\n` escapes (`SSL_CERT_PEM`/`SSL_KEY_PEM`). When PEM env is used, `main.py` writes tempfiles and cleans up via `atexit`.
+- Entry: [bundles/spark/mcp/src/main.py](bundles/spark/mcp/src/main.py) — registers the `/api/v1/*` REST routes and the tool catalogs inside `async_main`.
+- Built-in tools live in `src/usecase/builtin_components/` (`cognitive_tools`, `skills_crud`, `self_mod_tools`) and are registered from the `_BUILTIN_LEGACY_TOOLS` list in [src/usecase/connector_loader.py](bundles/spark/mcp/src/usecase/connector_loader.py). Connector tools are registered dynamically at boot per materialized connector instance — a connector's tools are advertised ONLY once an instance exists.
+- **Credential guardrail (MANDATORY)**: `providers_*`, `instances_*`, and `api_keys_*` create/update/delete/rotate are NEVER `mcp.tool()`-registered — they stay REST-only so the chat agent has no handle to credentials. See root [`CLAUDE.md`](CLAUDE.md) before adding any tool.
+- Layout is intentional (clean-architecture flavor): `src/config/config.py` (pydantic-settings, env via `validation_alias`), `src/service/` (FastMCP factory), `src/usecase/` (stores + tool logic), `src/api/` (REST routes), `src/pkg/` (shared helpers like `connector_proxy.py`).
+- Transports: `MCP_TRANSPORT=stdio` (default) or `streamable-http`. HTTP path configurable via `MCP_PATH` (default `/api/v1/stream/mcp`).
 
 ### Skills library — volume-seeded
 
-The MCP image builds skills into `/app/skills-default/` and `docker-compose.yml` mounts volume `guardian_mcp_skills` at `/app/skills`. [bundles/spark/mcp/entrypoint.sh](bundles/spark/mcp/entrypoint.sh):
-1. On first run (empty volume), copies `skills-default/*` → `/app/skills/`.
-2. On subsequent runs, leaves volume content alone — **edits to `bundles/spark/mcp/skills/*.md` in the repo do not appear in a running container unless you `docker compose down -v` (drops volume) or set `FORCE_SKILLS_SYNC=1`**.
+Default skills ship in the image and seed a volume-mounted `/app/skills` on first boot (per-release marker controls re-merge). **Edits to `bundles/spark/mcp/skills/*.md` in the repo do not appear in a running container** unless the volume is dropped or `FORCE_SKILLS_SYNC=1` is set.
 
-Skill categories under `bundles/spark/mcp/skills/`: `foundation/`, `scenarios/`, `validation/`, `workflows/`. The `skills_crud` and `simulation_skills` MCP tools operate on the mounted `/app/skills/` inside the container.
+Skill categories under `bundles/spark/mcp/skills/`: `foundation/` (`cortex_kb_search`, `cortex_kb_search_patterns`, `cortex_kb_api_reference`, `cortex_xql_query_authoring`) and `workflows/` (`build_xql_query`). The `skills_crud` MCP tools operate on the mounted `/app/skills/` inside the container.
 
-### Agent (`guardian-agent` service)
+### Agent (Next.js side of `guardian-agent`)
 
-- Next.js App Router ([mcp/agent/app/](mcp/agent/app/)). API routes under `app/api/{auth,chat,skills}`.
-- Authenticates MCP calls with `MCP_TOKEN` (shared secret). `UI_USER` + `UI_PASSWORD` gate the UI itself.
-- Gemini via `GEMINI_API_KEY`; Vertex AI via `GOOGLE_APPLICATION_CREDENTIALS` (GCP service account JSON).
-- Build arg `ANIMATED` (default `true`) toggles the animated UI variant and is exposed at runtime via `NEXT_PUBLIC_ANIMATED`.
+- Next.js App Router ([mcp/agent/app/](mcp/agent/app/)). Feature pages live directly under `app/`; API routes under `app/api/{auth,chat,skills,marketplace,agent}`.
+- Authenticates MCP calls with `MCP_TOKEN` (shared secret). The `/api/agent/*` routes are thin proxies via [mcp/agent/lib/mcp-proxy.ts](mcp/agent/lib/mcp-proxy.ts).
+- Gemini via API key; Vertex AI via a GCP service-account JSON — both materialized through the provider setup flow, not env vars.
+- TLS terminates at [mcp/agent/tls-proxy.js](mcp/agent/tls-proxy.js) in front of UI (3000) + MCP (8080).
+
+### Connectors
+
+Each connector under [bundles/spark/connectors/](bundles/spark/connectors/) is one directory: `connector.yaml` (tool specs — `spec.tools[]` MUST match the functions in `src/`), `Dockerfile`, `src/`. The agent dispatches tool calls to per-instance connector containers over HTTP; the `guardian-updater` (port 8090) creates/recreates those containers.
 
 ## Configuration
 
-Two unrelated config surfaces:
-
-1. **[config.yml](config.yml)** (root) — read by the GraphQL `guardian` service for worker count, log rotation, XSIAM mandatory/optional parsed fields. Mostly overridden by env vars (`WORKERS_NUMBER`, `LOGGING_*`, `XSIAM_*`), see [app/config.py](app/config.py).
-2. **`.env`** (root, copy from `.env.example`) — the primary knob. Loaded by `docker compose`. Critical keys:
-   - Shared auth: `MCP_TOKEN`
-   - XSIAM PAPI: `CORTEX_MCP_PAPI_URL`, `CORTEX_MCP_PAPI_AUTH_HEADER`, `CORTEX_MCP_PAPI_AUTH_ID`, `PLAYGROUND_ID` (issue-war-room ID for remote execution context)
-   - CALDERA: `CALDERA_URL`, `CALDERA_API_KEY`, `CALDERA_RED_USER`, `CALDERA_RED_PASSWORD` (required — compose uses `:?` to hard-fail without them)
-   - Webhook: `WEBHOOK_ENDPOINT`, `WEBHOOK_KEY` (see header note above)
-   - Agent defaults: `TECHNOLOGY_STACK` (JSON string; `log_destination.full_address` is used as default sink when the user doesn't specify one)
-   - SSL: `SSL_CERT_PEM` / `SSL_KEY_PEM` as one-line values with `\n` escapes (README documents the `openssl` + `awk` recipe)
+**No env vars for behavior.** The operator fills out the first-run setup form; values land in the SecretStore (secrets) and sqlite metadata stores (everything else). What remains in `.env` on an install: service credentials (e.g. `MCP_TOKEN`), the compose image digests (`DIGEST_*`), and the runtime version marker. Per-connector image pins live in `connector-digests.env`, read by the updater only — see [installer/CLAUDE.md](installer/CLAUDE.md) and [updater/CLAUDE.md](updater/CLAUDE.md) for the two-file contract.
 
 ## Conventions to preserve
 
-- When adding an MCP tool, keep the registration in [bundles/spark/mcp/src/main.py](bundles/spark/mcp/src/main.py) (one `mcp.tool()(...)` line per tool) and implement it under `src/usecase/builtin_components/`. Config goes through `src/config/config.py` (pydantic-settings with `validation_alias`), not raw `os.environ`.
-- Worker type enums, faker format enums, and observable enums are defined in [app/types/datafaker.py](app/types/datafaker.py) / [app/types/sender.py](app/types/sender.py). New log formats or destinations require touching both the Strawberry enum and the dispatch in [app/schema.py](app/schema.py).
-- The GraphQL endpoint is the single source of truth for log generation; the MCP server calls it via `graphql_client.py`. Do not duplicate faker logic into the MCP layer.
+- When adding a built-in MCP tool, implement it under `bundles/spark/mcp/src/usecase/builtin_components/` and register it in `connector_loader.py`'s `_BUILTIN_LEGACY_TOOLS`. First ask the credential/catalog boundary questions in root [`CLAUDE.md`](CLAUDE.md) — credential-touching tools are REST-only, never `mcp.tool()`-registered. Config goes through `src/config/config.py` (pydantic-settings with `validation_alias`), not raw `os.environ`.
+- When adding a connector tool, the `connector.yaml` `spec.tools[]` entry and the `src/` function ship together — otherwise the agent's catalog won't see it.
+- Every operator-visible change ships its UI surface + help docs + journeys in the same release (feature completeness contract — see root [`CLAUDE.md`](CLAUDE.md)).

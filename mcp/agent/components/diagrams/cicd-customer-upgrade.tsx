@@ -13,7 +13,7 @@
  *     - Customer re-runs the EXISTING installer at /opt/guardian
  *     - Installer self-updates the manifest pins
  *     - Compose pulls only changed digests
- *     - Unchanged containers (caldera, xlog if untouched) keep running
+ *     - Unchanged containers (browser, connectors if untouched) keep running
  *
  *   SCENARIO 2 (code + installer change, MAJOR bump, BC storage):
  *     - Customer downloads new installer from the GitHub release
@@ -131,10 +131,10 @@ export function CicdCustomerUpgrade() {
         <text x="80" y="388" className="cicd-card-title" style={{fontSize: 15}}>SCENARIO 1 — code-only</text>
         <text x="80" y="412" className="cust-outcome">Re-run existing installer → same compose template applies.</text>
         <text x="80" y="430" className="cust-outcome">Updated agent image digest = guardian-agent recreates.</text>
-        <text x="80" y="448" className="cust-outcome">Unchanged xlog/caldera digests = those containers</text>
+        <text x="80" y="448" className="cust-outcome">Unchanged browser/connector digests = those containers</text>
         <text x="80" y="466" className="cust-outcome">keep running (in-memory state preserved).</text>
         <rect x="80" y="482" width="320" height="20" className="cust-cmd" />
-        <text x="240" y="496" textAnchor="middle" className="cust-cmd-text">DIGEST_GUARDIAN_XLOG identical → no recreate</text>
+        <text x="240" y="496" textAnchor="middle" className="cust-cmd-text">DIGEST_GUARDIAN_BROWSER identical → no recreate</text>
         <text x="80" y="528" className="state-success-fill" fontSize="12" fontWeight="700">Result:</text>
         <text x="140" y="528" className="cust-outcome" fontSize="12">all named volumes preserved.</text>
         <text x="80" y="548" className="state-success-fill" fontSize="12" fontWeight="700">Customer downtime:</text>
@@ -184,7 +184,7 @@ export function CicdCustomerUpgrade() {
           For unchanged services, release.yml&apos;s retag-from-prev path produces a BIT-IDENTICAL image. compose recognizes the
         </text>
         <text x="600" y="698" textAnchor="middle" className="muted" fontSize="11">
-          same digest + leaves the container alone. caldera + xlog preserve in-memory state across releases that don&apos;t touch their code.
+          same digest + leaves the container alone. guardian-browser + connector containers preserve in-memory state across releases that don&apos;t touch their code.
         </text>
       </svg>
     </div>

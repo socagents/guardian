@@ -169,11 +169,6 @@ The append-only `audit_events` table records every state change. Per `manifest.a
 | Event | When | Target |
 |---|---|---|
 | `tool_call` | Every MCP tool dispatch | `tool:<connector>.<name>` |
-| `simulation_created` | Worker created via xlog | `simulation:<id>` |
-| `scenario_started` | Scenario worker started | `scenario:<name>` |
-| `caldera_operation_created` | Red-team op launched | `operation:<id>` |
-| `detection_validation_recorded` | Detection check completed | `validation:<id>` |
-| `coverage_report_generated` | Coverage report produced | `report:<id>` |
 | `setup_completed` | Setup form submitted successfully | `setup` |
 | `settings_changed` | `/api/v1/settings PUT` | `setting:<key>` |
 | `instance_created` | Connector instance materialized | `instance:<id>` |
@@ -183,8 +178,12 @@ The append-only `audit_events` table records every state change. Per `manifest.a
 | `notification_published` | Notification dispatched | `notification:<id>` |
 | `telemetry_toggled` | Operator enabled/disabled telemetry | `telemetry:state` |
 | `media_uploaded` / `media_deleted` | Media file lifecycle | `media:<id>` |
+| `personality_changed` | Agent personality updated | `personality:1` |
+| `agent_self_mod_requested` / `agent_self_mod_executed` | Agent self-modification bookends | operation-specific (e.g. `connector:<id>`) |
 
-Filter by event name with `?action=settings_changed`, by target prefix with `?target_prefix=tool:`, etc.
+<!-- [guardian v0.1.0] Retired: simulation_created / scenario_started / detection_validation_recorded + the red-team operation event — simulation subsystem removed; the events no longer exist in manifest.audit.events. -->
+
+Filter by event name with `?action=settings_changed`, by target prefix with `?target_prefix=tool:`, etc. The authoritative list is `manifest.audit.events` in `bundles/spark/manifest.yaml`.
 
 ---
 

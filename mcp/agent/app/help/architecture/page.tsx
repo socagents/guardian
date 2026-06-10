@@ -11,7 +11,7 @@
  * its audience without bloating either.
  *
  * Coverage:
- * - 5-service stack topology + service contracts
+ * - 3-service stack topology + service contracts
  * - Manifest & bundle layout
  * - Chat-route turn lifecycle (entry → fire-sites → tool dispatch
  * → done event → audit + cost rows)
@@ -47,8 +47,8 @@ import { AuthTopology } from "@/components/diagrams/auth-topology";
 import { AuthTrustBoundaries } from "@/components/diagrams/auth-trust-boundaries";
 import { ChatTurnLifecycle } from "@/components/diagrams/chat-turn-lifecycle";
 import { ContextMemoryPipeline } from "@/components/diagrams/context-memory-pipeline";
-import { DataSourcesFlow } from "@/components/diagrams/data-sources-flow";
-import { LogDestinationsFlow } from "@/components/diagrams/log-destinations-flow";
+// [guardian v0.1.0] Retired: DataSourcesFlow + LogDestinationsFlow diagram
+// imports — simulation subsystem removed.
 import { ExternalConnectorsAnatomy } from "@/components/diagrams/external-connectors-anatomy";
 import { FullPlatformTopology } from "@/components/diagrams/full-platform-topology";
 import { JobsLifecycle } from "@/components/diagrams/jobs-lifecycle";
@@ -121,13 +121,13 @@ const SECTIONS: SectionDef[] = [
  { id: "tool-metadata", label: "Tool Metadata", group: "Connectors & Extensions", icon: "fact_check" },
  { id: "plugins", label: "Plugin System", group: "Connectors & Extensions", icon: "extension" },
  { id: "marketplace-logic", label: "Marketplace Logic", group: "Connectors & Extensions", icon: "storefront" },
- { id: "data-sources", label: "Data Sources", group: "Connectors & Extensions", icon: "dataset" },
- { id: "log-destinations", label: "Log Destinations", group: "Connectors & Extensions", icon: "cloud_upload" },
+ // [guardian v0.1.0] Retired: data-sources — simulation subsystem removed.
+ // [guardian v0.1.0] Retired: log-destinations — simulation subsystem removed.
  { id: "operator-state", label: "Operator Workflow State", group: "Connectors & Extensions", icon: "savings" },
 
  // ── External Connectors ────────────────────────────────────────
- { id: "xlog-connector", label: "xlog Connector", group: "External Connectors", icon: "data_object" },
- { id: "caldera-connector", label: "CALDERA Connector", group: "External Connectors", icon: "swords" },
+ // [guardian v0.1.0] Retired: xlog-connector — simulation subsystem removed.
+ // [guardian v0.1.0] Retired: caldera-connector — simulation subsystem removed.
  { id: "xsiam-connector", label: "XSIAM Connector", group: "External Connectors", icon: "security" },
  { id: "cortex-xdr-connector", label: "Cortex XDR Connector", group: "External Connectors", icon: "shield_lock" },
  { id: "cortex-docs-connector", label: "Cortex Docs Connector", group: "External Connectors", icon: "menu_book" },
@@ -391,11 +391,10 @@ export default function ArchitectureGuide() {
  <ToolMetadata />
  <Plugins />
  <MarketplaceLogic />
- <DataSourcesMarketplace />
+ {/* [guardian v0.1.0] Retired: DataSourcesMarketplace — simulation subsystem removed */}
  <OperatorState />
  {/* External Connectors */}
- <XlogConnector />
- <CalderaConnector />
+ {/* [guardian v0.1.0] Retired: XlogConnector + CalderaConnector — simulation subsystem removed */}
  <XsiamConnector />
  <CortexXdrConnector />
  <CortexDocsConnector />
@@ -441,17 +440,19 @@ function Intro() {
  return (
  <Section id="intro" icon="info" title="Introduction">
  <p>
- Guardian is a continuous SOC simulation platform: it generates synthetic
- security telemetry, drives MITRE ATT&CK scenario emulation, validates
- detections against XSIAM, and orchestrates red/blue workflows over
- an MCP (Model Context Protocol) tool surface. This guide documents
- Guardian&apos;s architecture for engineers extending it.
+ Guardian is an AI incident-response agent for Cortex XSIAM/XSOAR:
+ it investigates cases and issues, runs evidence-gathering XQL
+ queries against XSIAM, consults Cortex documentation and content,
+ and orchestrates IR workflows over an MCP (Model Context Protocol)
+ tool surface. This guide documents Guardian&apos;s architecture for
+ engineers extending it.
  </p>
  <p>
  Guardian is built on{" "}
  <Term>Spark Agents&apos;</Term> bundle-spec foundation: a manifest-driven
  agent definition that ships as a self-contained directory and loads
- through a 5-service Compose stack. Layered on top of that
+ through a 3-service Compose stack (plus per-instance connector
+ containers). Layered on top of that
  foundation: token-aware budgeting, lifecycle compaction, Vertex
  prompt caching, a slash-command framework, per-action audit
  logging, plan mode, lifecycle hooks, a durable task registry,
@@ -495,7 +496,7 @@ function Stack() {
  return (
  <Section id="stack" icon="view_module" title="Service Stack">
  <p>
- The customer compose ships <Term>five fixed services</Term> and
+ The customer compose ships <Term>three fixed services</Term> and
  <Term> N per-instance connector containers</Term> (one per
  configured instance of any container-style connector). The
  topology below maps each service and every authenticated edge —
@@ -513,21 +514,9 @@ function Stack() {
  <FullPlatformTopology />
 
  <SubSection icon="dns" title="Fixed services">
+ {/* [guardian v0.1.0] Retired: xlog + caldera service entries —
+     simulation subsystem removed. */}
  <ul className="list-disc pl-5 space-y-2 text-sm">
- <li>
- <Term>xlog</Term> (container <Code>xlog</Code>) — Python 3.12,
- FastAPI + Strawberry GraphQL on :8000. Synthetic-log generator.
- Module-level <Code>workers = {}</Code> dict tracks active
- workers; restart drops every worker (no persistence by design
- — workers are simulation state, not customer data).
- </li>
- <li>
- <Term>caldera</Term> (container <Code>caldera</Code>) —
- prebuilt image, MITRE Caldera 5.3.0 red-team backend. Guardian
- drives it via the <Code>caldera.*</Code> MCP tool family. Has
- its own SQLite for adversaries / abilities / operations under
- <Code> /usr/src/app/data</Code>.
- </li>
  <li>
  <Term>guardian-browser</Term> (container <Code>guardian_browser</Code>) —
  <Code> chromedp/headless-shell</Code> sidecar exposing CDP on
@@ -575,9 +564,6 @@ function Stack() {
  <Code> .env</Code> only overrides the operator-facing fields:
  </p>
  <Pre>{`# Internal (compose DNS, not configurable):
-XLOG_URL              = https://xlog:8000   # TLS-only; xlog mounts
-                                            # /tls/cert.pem from shared volume
-CALDERA_URL           = http://caldera:8888 # caldera TLS pending
 MCP_URL               = http://localhost:8080/api/v1/stream/mcp
                         # ← localhost because MCP is a SUBPROCESS of
                         #   guardian-agent, not a separate service.
@@ -616,7 +602,7 @@ container_url         = http://guardian-connector-<connector>-<instance>:9000
  </li>
  <li>
  <Term>External connectors</Term>: per-instance credentials in
- the SecretStore (XSIAM PAPI auth header, CALDERA red user,
+ the SecretStore (XSIAM PAPI auth header, Cortex XDR API key,
  web connector cdp_url, etc). The connector state machine{" "}
  (<a href="#connector-state" className="link">below</a>)
  tracks per-instance lifecycle (connected / failed /
@@ -647,14 +633,14 @@ function ImagePinning() {
  </p>
 
  <p>
- Why this matters: caldera holds in-memory red-team operation
- state, xlog holds active streaming workers in a module-level
- dict, guardian-agent holds in-flight chat sessions and job
- history. Without digest pinning, every release would recreate
- all five containers (because the compose file&apos;s{" "}
+ Why this matters: guardian-agent holds in-flight chat sessions
+ and job history, guardian-browser holds live Chromium sessions
+ the web connector may be driving mid-investigation. Without
+ digest pinning, every release would recreate all three
+ containers (because the compose file&apos;s{" "}
  <Code>{`image: foo:${"${GUARDIAN_VERSION}"}`}</Code>{" "}
  string changed), even when release.yml&apos;s conditional-rebuild
- logic had retagged caldera/xlog/browser from the previous version&apos;s
+ logic had retagged browser/updater from the previous version&apos;s
  same-byte image. The compose file&apos;s image string only
  changes when the digest changes — so unchanged-content services
  retain their state across upgrades.
@@ -670,18 +656,16 @@ function ImagePinning() {
  <Pre>{`# Guardian image digest manifest
 # Generated by release.yml from a release commit.
 
-GUARDIAN_VERSION=0.3.0
+GUARDIAN_VERSION=0.1.0
 DIGEST_GUARDIAN_AGENT=sha256:abc...
-DIGEST_GUARDIAN_XLOG=sha256:def...
-DIGEST_GUARDIAN_CALDERA=sha256:ghi...
-DIGEST_GUARDIAN_UPDATER=sha256:jkl...
-DIGEST_GUARDIAN_BROWSER=sha256:mno...
-DIGEST_GUARDIAN_CONNECTOR_RUNTIME=sha256:pqr...
-DIGEST_GUARDIAN_CONNECTOR_XLOG=sha256:stu...
-DIGEST_GUARDIAN_CONNECTOR_XSIAM=sha256:vwx...
-DIGEST_GUARDIAN_CONNECTOR_CALDERA=sha256:yz0...
-DIGEST_GUARDIAN_CONNECTOR_WEB=sha256:123...
-DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
+DIGEST_GUARDIAN_UPDATER=sha256:def...
+DIGEST_GUARDIAN_BROWSER=sha256:ghi...
+DIGEST_GUARDIAN_CONNECTOR_RUNTIME=sha256:jkl...
+DIGEST_GUARDIAN_CONNECTOR_XSIAM=sha256:mno...
+DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR=sha256:pqr...
+DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:stu...
+DIGEST_GUARDIAN_CONNECTOR_CORTEX_CONTENT=sha256:vwx...
+DIGEST_GUARDIAN_CONNECTOR_WEB=sha256:yz0...`}</Pre>
  <p>
  Same manifest content is{" "}
  <Term>embedded into the guardian-installer binary</Term> at build
@@ -699,8 +683,8 @@ DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
  <Code>installer/docker-compose.yml</Code> uses digest-pinning
  with an explicit-invalid fallback:
  </p>
- <Pre>{`xlog:
-  image: ghcr.io/kite-production/guardian-xlog@\${DIGEST_GUARDIAN_XLOG:-sha256:invalid_digest_run_installer_first}`}</Pre>
+ <Pre>{`guardian-agent:
+  image: ghcr.io/kite-production/guardian-agent@\${DIGEST_GUARDIAN_AGENT:-sha256:invalid_digest_run_installer_first}`}</Pre>
  <p>
  The fallback is intentionally invalid — when an operator&apos;s
  .env is missing a <Code>DIGEST_*</Code> value, docker compose
@@ -718,8 +702,11 @@ DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
  <Code>sudo ./guardian-installer</Code>. Installer reads its
  embedded manifest and writes{" "}
  <Code>GUARDIAN_VERSION=X.Y.Z</Code>{" "}
- plus 10 <Code>DIGEST_GUARDIAN_*</Code> lines into{" "}
- <Code>/opt/guardian/.env</Code>. <Code>docker compose pull</Code>{" "}
+ plus the 3 core <Code>DIGEST_GUARDIAN_*</Code> lines into{" "}
+ <Code>/opt/guardian/.env</Code> (per-connector{" "}
+ <Code>DIGEST_GUARDIAN_CONNECTOR_*</Code> pins land in{" "}
+ <Code>/opt/guardian/connector-digests.env</Code>).{" "}
+ <Code>docker compose pull</Code>{" "}
  +{" "}
  <Code>up -d</Code> launches with digest-pinned images.
  </li>
@@ -778,14 +765,14 @@ DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
  <Term>About modal:</Term> the agent&apos;s <Code>/api/agent/version</Code>{" "}
  endpoint returns <Code>{`{ version, digests: {...} }`}</Code>; the About
  modal&apos;s release-history section shows the running version
- plus an &quot;Image versions&quot; expandable with the 5
+ plus an &quot;Image versions&quot; expandable with the 3
  stack-tier digests.
  </p>
  <p>
  <Term>Observability panel:</Term>{" "}
  <a href="#observability-connectors" className="link">/observability/connectors</a>{" "}
  has an Image-Digests section above the connector state-machine
- list. Two sub-tables — stack tier (5 rows) and per-instance
+ list. Two sub-tables — stack tier (3 rows) and per-instance
  connectors (variable). Pinning-mode badge on every row.
  </p>
  <p>
@@ -991,8 +978,8 @@ function ConnectorContainers() {
  <Section id="connector-containers" icon="apps" title="Per-instance Connector Containers">
  <p>
  <strong>Universal container-mode.</strong> Every connector — all
- 6 in the bundle (caldera, cortex-content, cortex-docs, web,
- xlog, xsiam) plus any user-uploaded connectors — runs as a
+ 5 in the bundle (cortex-content, cortex-docs, cortex-xdr, web,
+ xsiam) plus any user-uploaded connectors — runs as a
  per-instance container. The agent&apos;s connector_loader is a
  routing proxy that forwards tool calls over MCP-over-HTTP. The
  schema enum is tightened to <Code>[&quot;container&quot;]</Code>{" "}
@@ -1021,7 +1008,8 @@ function ConnectorContainers() {
  takes down one connector container, which docker restarts.
  </li>
  <li>
- <Term>Resource isolation</Term>: a runaway xlog scenario can&apos;t
+ <Term>Resource isolation</Term>: a runaway XQL result-set
+ parse in the xsiam connector can&apos;t
  starve the agent&apos;s chat handler of CPU because they run
  in different cgroups.
  </li>
@@ -1146,8 +1134,9 @@ function Manifest() {
 │ │ ├── api/ # REST routes (audit, hooks, tasks, etc.)
 │ │ └── usecase/ # Stores + loaders + business logic
 │ ├── skills/ # Bundle-default skills (markdown)
-│ ├── scenarios/ready/ # Bundle-default scenarios (JSON)
 │ └── tests/
+├── kbs/ # Bundle-shipped knowledge bases
+│ └── xql-examples/ # Curated XQL example corpus
 ├── plugins/ # Filesystem-discovered plugin tree
 │ └── example-vendor/
 │ ├── manifest.yaml # Plugin contract — agents, skills, seeds
@@ -1201,7 +1190,7 @@ function DataRoots() {
  Spark&apos;s invariant: <Term>bundle_root is read-only; data_root
  is mutable</Term>. Guardian honors this strictly. Every store writes
  to <Code>/app/data/</Code>; bundle files (manifest, skills,
- scenarios, plugin manifests) are read-only at runtime. The diagram
+ KBs, plugin manifests) are read-only at runtime. The diagram
  below shows every store, the audit log they all write into, and
  the observability surfaces derived from it.
  </p>
@@ -1602,7 +1591,7 @@ function ToolDispatch() {
  → <Code>recordConnectorSuccess(connectorId)</Code>; failure
  → <Code>recordConnectorFailure(connectorId, isAuthError)</Code>.
  The connector id is the first segment of the tool name
- (<Code>caldera.start_op</Code> → caldera).
+ (<Code>xsiam.run_xql_query</Code> → xsiam).
  </li>
  <li>
  <Term>PostToolUse / PostToolUseFailure hook</Term>:
@@ -1619,7 +1608,7 @@ function ToolDispatch() {
  <SubSection icon="cached" title="Turn-scoped read cache (v0.17.130)">
  <p>
  Models sometimes re-request the same idempotent read several
- times within one turn (observed: <Code>data_sources_list</Code>{" "}
+ times within one turn (observed: <Code>marketplace_list</Code>{" "}
  called 3-4× while answering a single question). A soft
  system-prompt nudge (v0.17.129) did not reliably stop this, so
  step 5 (<Term>MCP dispatch</Term>) is fronted by a{" "}
@@ -1630,14 +1619,9 @@ function ToolDispatch() {
  <ul className="list-disc pl-6 space-y-1 text-sm">
  <li>
  <Term>Allowlist</Term> (<Code>TURN_CACHEABLE_TOOLS</Code>):
- static platform metadata only — <Code>data_sources_list</Code>,{" "}
- <Code>data_sources_get_schema</Code>,{" "}
- <Code>data_sources_installed_as_vendors</Code>,{" "}
- <Code>marketplace_list</Code>,{" "}
- <Code>log_destinations_list</Code>, <Code>settings_get</Code>,{" "}
- <Code>skills_read</Code>, <Code>knowledge_search</Code>,{" "}
- <Code>guardian_get_field_info</Code>,{" "}
- <Code>guardian_get_technology_stack</Code>.
+ static platform metadata only —{" "}
+ <Code>marketplace_list</Code>, <Code>settings_get</Code>,{" "}
+ <Code>skills_read</Code>, <Code>knowledge_search</Code>.
  </li>
  <li>
  <Term>REPEATABLE-READ semantics</Term>: a catalog/config
@@ -1664,10 +1648,9 @@ function ToolDispatch() {
  <p>
  The read cache memoizes only successes. Some tools signal failure
  with an <Code>{"{ok:false}"}</Code> result payload rather than
- throwing (e.g. <Code>data_sources_install</Code> on a not-found
- pack), so a model can re-fire the identical failing call many times
- (observed: <Code>data_sources_install</Code> seven times while
- answering a read-only field question). A per-message failure ledger
+ throwing (e.g. <Code>marketplace_install</Code> on a not-found
+ connector), so a model can re-fire the identical failing call many
+ times. A per-message failure ledger
  keyed on <Code>(tool, args)</Code> counts failures; after{" "}
  <Code>MAX_IDENTICAL_FAILS</Code> (2) failures of the SAME call this
  turn, further identical dispatches are short-circuited with a
@@ -1676,9 +1659,10 @@ function ToolDispatch() {
  </p>
  <ul className="list-disc pl-6 space-y-1 text-sm">
  <li>
- Poll/wait tools (<Code>isPollTool</Code>) are exempt — they
- legitimately re-issue identical calls (e.g.{" "}
- <Code>caldera_wait_for_operation_progress</Code>).
+ Poll/wait tools (<Code>isPollTool</Code> — any tool name
+ matching <Code>_wait</Code> / <Code>wait_for</Code> /{" "}
+ <Code>_poll</Code>) are exempt — they legitimately re-issue
+ identical calls.
  </li>
  <li>
  Distinct arguments are independent keys, so a genuine retry with
@@ -2009,7 +1993,7 @@ function ObservabilityOverview() {
  </li>
  <li>
  <Term><Link href="/observability/runtime-events" className="link">/observability/runtime-events</Link></Term>
- {" "}— operational event log (e.g. <Code>rt.simulation.started</Code>, <Code>rt.worker.completed</Code>).
+ {" "}— operational event log (e.g. <Code>rt.tool.failed</Code>, the manifest-declared event family).
  Higher-level than audit; structured for &ldquo;what jobs ran today?&rdquo; rollups.
  </li>
  <li>
@@ -2027,7 +2011,7 @@ function ObservabilityOverview() {
  </li>
  <li>
  <Term><Link href="/observability/pipeline" className="link">/observability/pipeline</Link></Term>
- {" "}— live React Flow graph of every component (agent, MCP, connectors, xlog, log destinations) with
+ {" "}— live React Flow graph of every component (agent, MCP, connector containers) with
  per-edge health pulses and per-node status badges.{" "}
  <Link href="#pipeline-health" className="link">Pipeline Health</Link> covers the probe machinery.
  </li>
@@ -2057,7 +2041,7 @@ function ObservabilityOverview() {
  <Term><Link href="/observability/detections" className="link">/observability/detections</Link></Term>
  {" "}— XSIAM detection inventory: rules indexed locally, per-rule fire counts, MITRE ATT&amp;CK
  technique coverage gaps. Sync from XSIAM via{" "}
- <Code>detections_sync</Code>.
+ <Code>POST /api/agent/detections/sync</Code>.
  </li>
  <li>
  <Term><Link href="/observability/plugins" className="link">/observability/plugins</Link></Term>
@@ -2094,7 +2078,7 @@ Aggregation layer (3 stores + 1 sidecar)
 
 Emission layer (every component)
   ┌──────────────────────────────────────────────────────────────┐
-  │  chat-route, MCP tool dispatch, connectors, xlog,            │
+  │  chat-route, MCP tool dispatch, connectors,                  │
   │  job scheduler, hook runner, approval bus                    │
   │  All write via safeAudit() / metrics.record() / events.emit()│
   └──────────────────────────────────────────────────────────────┘`}</Pre>
@@ -2118,8 +2102,11 @@ Emission layer (every component)
      call's outcome, plus chat_turn_cost row at the end.
 
 Q: "Which jobs failed today?"
-   → /observability/runtime-events (filter by 'rt.job.failed')
+   → /observability/events (filter by action 'job_failed')
      OR /jobs (filter by status=failed).
+
+Q: "Which tool calls are erroring?"
+   → /observability/runtime-events (filter by 'rt.tool.failed').
 
 Q: "Is XSIAM healthy?"
    → /observability/connectors → xsiam row. State + last-50
@@ -2324,7 +2311,7 @@ function BackupRestore() {
  <li>
  <strong>Jobs</strong> — last because runtime jobs may
  reference connector tools (e.g.{" "}
- <Code>guardian_create_data_worker</Code>) that need their
+ <Code>xsiam_run_xql_query</Code>) that need their
  instance enabled before the first cron tick.
  </li>
  </ol>
@@ -2874,8 +2861,8 @@ function Tasks() {
  <Section id="tasks" icon="pending_actions" title="Task Registry">
  <p>
  The task registry is the persisted home for every long-running
- unit of work the chat-route spawns or observes: scenario
- workers, compaction summarizers, CALDERA operations, hook
+ unit of work the chat-route spawns or observes: XQL query
+ runs, compaction summarizers, hook
  subprocess invocations, subagent runs. The diagram below shows
  the task state machine alongside connector and session — three
  subsystems sharing the same persistence + transition pattern.
@@ -2894,8 +2881,7 @@ function Tasks() {
  <SubSection icon="schema" title="Task model">
  <Pre>{`Task {
  id uuid
- kind 'scenario_worker' | 'caldera_operation' |
- 'xsiam_xql' | 'compaction' | 'hook_command' |
+ kind 'xql_query' | 'compaction' | 'hook_command' |
  'subagent' | etc. (free-form)
  status 'pending' | 'running' | 'succeeded' |
  'failed' | 'aborted'
@@ -4071,7 +4057,7 @@ function Plugins() {
  The plugin system makes Guardian a platform: drop a directory
  under <Code>bundles/spark/plugins/&lt;name&gt;/</Code> with a{" "}
  <Code>manifest.yaml</Code> declaring contributions; restart or
- click Reload; the plugin&apos;s skills, scenarios, memory
+ click Reload; the plugin&apos;s skills, memory
  seeds, and agent definitions land.
  </p>
  <SubSection icon="article" title="Plugin manifest">
@@ -4083,9 +4069,6 @@ enabled: true
 skills:
  - skills/foo.md # copied to /app/skills/plugins/<name>/
 
-scenarios:
- - scenarios/bar.json # copied to /app/scenarios/ready/<name>__bar.json
-
 memory_seeds:
  - key: vendor-x.facts
  scope: agent
@@ -4095,7 +4078,7 @@ memory_seeds:
  source: plugin:vendor-x
 
 agents: # agent definitions contributed to /agents
- - agents/red-team-x.yaml`}</Pre>
+ - agents/triage-x.yaml`}</Pre>
  </SubSection>
  <SubSection icon="settings" title="Loader behavior">
  <p>
@@ -4107,11 +4090,7 @@ agents: # agent definitions contributed to /agents
  <Term>Skills</Term> — <Code>shutil.copy2</Code> to
  <Code>/app/skills/plugins/&lt;plugin&gt;/</Code>. Idempotent.
  </li>
- <li>
- <Term>Scenarios</Term> — <Code>shutil.copy2</Code> to
- <Code>/app/scenarios/ready/</Code> with{" "}
- <Code>&lt;plugin&gt;__</Code> prefix to avoid collisions.
- </li>
+ {/* [guardian v0.1.0] Retired: scenario contributions — simulation subsystem removed. */}
  <li>
  <Term>Memory seeds</Term> — Write to memory store IF the
  (scope, key) doesn&apos;t already exist. Operator edits
@@ -4205,29 +4184,32 @@ function SkillActivation() {
  return (
  <Section id="skill-activation" icon="school" title="Skill Activation">
  <p>
- The activation layer narrows which skills load into the chat
- system prompt at a given turn.{" "}
- <Code>load_simulation_skills(keywords=[...])</Code> takes a
- keyword filter; skills declare their activation triggers
- inline (in <Code>get_skill_metadata()</Code>) OR via YAML
- frontmatter (<Code>when: {"{ keywords: [...] }"}</Code>).
+ The activation layer narrows which skill bodies enter the chat
+ context at a given turn. The system prompt carries a
+ lightweight skill index (<Code>renderSkillsBlock()</Code> in{" "}
+ <Code>lib/system-prompt.ts</Code>): every on-disk skill&apos;s
+ name, description, and keywords — declared via YAML
+ frontmatter (<Code>keywords: [...]</Code>, parsed by{" "}
+ <Code>skills_crud.py</Code>). The full skill body loads on
+ demand via the <Code>skills_read</Code> MCP tool.
  </p>
- <SubSection icon="link" title="Filter logic">
+ <SubSection icon="link" title="Match logic">
  <p>
- <Code>filter_skills(keywords=[...])</Code>: a skill is included
- only if its keywords intersect the supplied list (case-
- insensitive substring match). Skills without declared keywords
- are NOT filtered out (no keywords = no opinion).
+ Matching is model-mediated: the agent reads the index and
+ picks the skill that fits the request — the system prompt
+ instructs it to check for a matching skill FIRST (e.g.{" "}
+ <Code>build_xql_query</Code> for XQL authoring requests).
+ Skills without declared keywords are still listed (no
+ keywords = no opinion).
  </p>
  </SubSection>
- <SubSection icon="psychology" title="Why substring (not exact match)">
+ <SubSection icon="psychology" title="Why an index + on-demand read">
  <p>
- Operator phrasing varies. &ldquo;fortigate&rdquo; should match
- a skill keyword &ldquo;fortigate-auth-spray&rdquo; — exact
- match would force operators to type exact skill keywords.
- The substring is bounded enough that &ldquo;auth&rdquo;
- doesn&apos;t accidentally match every authentication-themed
- skill.
+ Injecting every skill body into every turn would bloat the
+ context. The index costs ~50-100 tokens per skill and lets
+ the agent pull only the relevant body —{" "}
+ <Code>skills_read</Code> fetches the markdown when the turn
+ actually needs it.
  </p>
  </SubSection>
  </Section>
@@ -4481,7 +4463,7 @@ function SubstrateComposition() {
  <Term>Task registry</Term> contributes the durable work-
  tracking model. Subagents reuse it: every subagent run is a
  Task with <Code>kind=&apos;subagent&apos;</Code>. The /tasks
- page shows subagent runs alongside scenario workers without
+ page shows subagent runs alongside every other task kind without
  any subagent-specific UI.
  </li>
  <li>
@@ -4539,7 +4521,7 @@ function AuditSchema() {
  ts TEXT NOT NULL, -- ISO8601 UTC, microsecond precision
  actor TEXT, -- 'system' | 'user:<name>' | 'agent'
  action TEXT NOT NULL, -- one of manifest.audit.events
- target TEXT, -- 'connector:caldera' | 'tool:xsiam.execute_xql_query'
+ target TEXT, -- 'connector:xsiam' | 'tool:xsiam.run_xql_query'
  -- 'session:<uuid>' | 'task:<uuid>' | etc.
  status TEXT, -- 'success' | 'failure' | 'skipped'
  duration_ms INTEGER, -- nullable
@@ -4575,11 +4557,7 @@ function AuditEvents() {
  <ul className="list-disc pl-5 space-y-1.5 text-sm">
  <li>
  <Term>Pre-</Term>: <Code>tool_call</Code>,{" "}
- <Code>simulation_created</Code>,{" "}
- <Code>scenario_started</Code>,{" "}
- <Code>caldera_operation_created</Code>,{" "}
- <Code>detection_validation_recorded</Code>,{" "}
- <Code>coverage_report_generated</Code>,{" "}
+ <Code>instance_created</Code>,{" "}
  <Code>setup_completed</Code>, <Code>settings_changed</Code>,{" "}
  <Code>approval_requested</Code>, <Code>approval_resolved</Code>,
  etc.
@@ -4655,8 +4633,7 @@ function RestApi() {
  the edge middleware — see{" "}
  <Link href="#authentication" className="link">Authentication</Link>).
  The endpoints below are the surfaces unique to Guardian&apos;s
- control plane (the broader xlog GraphQL surface is documented
- in the Foundation section).
+ control plane.
  </p>
  <SubSection icon="api" title="Audit">
  <ul className="list-disc pl-5 space-y-0.5 font-mono text-[12px]">
@@ -4850,16 +4827,8 @@ function BootLifecycle() {
 3. If !configured: redirect every route to /setup
 4. If configured: hydrate operator session from cookie, render UI`}</Pre>
  </SubSection>
- <SubSection icon="schedule" title="xlog boot sequence">
- <p>
- Uvicorn comes up with 4 workers (configurable via{" "}
- <Code>WORKERS_NUMBER</Code>). The Strawberry GraphQL schema
- mounts at <Code>/</Code>. Module-level <Code>workers = {}</Code>{" "}
- dict is empty — there is no persistent worker state across
- restarts. Scenario files under <Code>scenarios/ready/*.json</Code>{" "}
- are read on demand.
- </p>
- </SubSection>
+ {/* [guardian v0.1.0] Retired: xlog boot sequence — simulation
+     subsystem removed. */}
  <SubSection icon="warning" title="Boot ordering subtleties">
  <ul className="list-disc pl-5 space-y-1.5 text-sm">
  <li>
@@ -5198,15 +5167,13 @@ function SetupWiring() {
  writes <Code>/opt/guardian/.env</Code> on first run. The file
  carries:
  </p>
- <Pre>{`# Service credentials + the 5 core compose-substitution digests
+ <Pre>{`# Service credentials + the 3 core compose-substitution digests
 GUARDIAN_DEFAULT_ADMIN_PASSWORD=<random-32-byte-base64>  # auto-generated, per-install
 GUARDIAN_SECRET_KEK=<random-32-byte-base64>              # AES-256-GCM key encryption key
 MCP_TOKEN=<random-32-byte-hex>                          # bearer for /api/v1/*
 GUARDIAN_VERSION=<current-tag>                           # runtime version marker
 DIGEST_GUARDIAN_AGENT=sha256:...                         # image-digest pinning per service
 DIGEST_GUARDIAN_UPDATER=sha256:...
-DIGEST_GUARDIAN_XLOG=sha256:...
-DIGEST_GUARDIAN_CALDERA=sha256:...
 DIGEST_GUARDIAN_BROWSER=sha256:...`}</Pre>
  <p>
  The <Code>.env</Code> file is owned by the customer. The
@@ -5342,9 +5309,9 @@ POST   /api/agent/providers/vertex/test -- probe credentials`}</Pre>
  With at least one provider configured, the operator picks
  connectors from the marketplace at{" "}
  <Code>/connectors</Code> and creates per-connector instances.
- Instance config (CALDERA URL + red/blue user credentials,
- XSIAM PAPI auth headers + playground id, xlog webhook
- endpoint + key, etc.) flows through the same dynamic-form
+ Instance config (XSIAM PAPI auth headers + tenant URL,
+ Cortex XDR API key + auth id, web connector CDP
+ endpoint, etc.) flows through the same dynamic-form
  widget vocabulary the manifest declares. See{" "}
  <Link href="#connectors-design" className="link">
  Connectors & Instances — Design
@@ -5618,12 +5585,11 @@ function KnowledgePipeline() {
  <Pre>{`bundles/spark/kbs/<name>/
 ├── schema.json            # JSON-Schema for entry validation
 └── entries/
-    ├── 001-arch-overview.md
-    ├── 002-scenario-runbook.md
+    ├── 001-process-hunting.md
+    ├── 002-network-events.md
     └── ...
 
-# Two KBs ship today:
-#   guardian-soc    — main reference content
+# One KB ships today:
 #   xql-examples   — 787 curated Cortex XQL / XSIAM queries for
 #                    RAG retrieval (787 entries:
 #                    158 hand-curated + live-tenant-validated
@@ -5646,8 +5612,7 @@ function KnowledgePipeline() {
  and runs cosine similarity against the KB&apos;s vector index.
  The xsiam connector wraps this in{" "}
  <Code>find_xql_examples_rag</Code> for natural-language XQL
- example retrieval; guardian-soc is queried whenever the agent
- needs conceptual context.
+ example retrieval.
  </p>
  </SubSection>
  <SubSection icon="science" title="Why bundle-shipped (not runtime CRUD)">
@@ -5673,11 +5638,12 @@ function SkillCatalogue() {
  start of relevant sessions to bias its tool selection. Unlike
  tools (which are runnable code), skills are{" "}
  <em>guidance</em> — they tell the agent &ldquo;when X, do
- Y&rdquo; in natural language. Three categories live under{" "}
- <Code>bundles/spark/mcp/skills/</Code>: foundation (5 skills),
- scenarios (12), workflows (3) — 20 skills total. Each MD file
- carries optional YAML frontmatter declaring its category,
- activation triggers, locked state, and loading mode.
+ Y&rdquo; in natural language. Two categories live under{" "}
+ <Code>bundles/spark/mcp/skills/</Code>: foundation (4 skills —
+ the Cortex KB-search + XQL-authoring family) and workflows
+ (1 skill — <Code>build_xql_query</Code>) — 5 skills total.
+ Each MD file carries optional YAML frontmatter declaring its
+ category, activation triggers, locked state, and loading mode.
  </p>
 
  <SkillsActivation />
@@ -5692,25 +5658,23 @@ function SkillCatalogue() {
  </p>
  <SubSection icon="article" title="Skill anatomy">
  <Pre>{`---
-name: generate_shared_iocs
-displayName: Generate Shared IOCs
-category: foundation
-locked: true               # platform-enforced; can't be disabled
-loadingMode: always        # vs "on_demand" (only when activation matches)
-when:
-  keywords: [ioc, indicator, observable]
+name: build_xql_query
+displayName: Build a working Cortex XQL query from natural language
+category: workflows
+locked: false              # locked: true = platform-enforced; can't be disabled
+loadingMode: on-demand     # vs "always" (inject every turn)
+keywords: [xql, query, hunt, detect]
 ---
 
-# Generate Shared IOCs
+# Build a working Cortex XQL query
 
-Pre-generates the indicators (IPs, domains, hashes, users) that
-downstream scenarios reuse — keeps cross-scenario telemetry coherent.
+Mandatory 7-step procedure for authoring XQL against XDR / XSIAM.
 
 ## When to use
 ...
 
 ## Steps
-1. Call \`xlog.populate_observable_catalog\` with seed=42
+1. Call \`knowledge_search\` against the XQL-examples KB
 2. ...`}</Pre>
  </SubSection>
  <SubSection icon="dns" title="Volume-mounted runtime">
@@ -5731,8 +5695,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
  <p>
  Skills with <Code>locked: true</Code> in frontmatter cannot be
  disabled by the operator — useful for foundational skills that
- break the agent if absent (e.g.{" "}
- <Code>generate_shared_iocs</Code>). Per-workspace overrides
+ break the agent if absent. Per-workspace overrides
  disable a skill in one workspace without affecting the global
  default; stored in <Code>skill_overrides</Code> table keyed by
  (workspace, skill_name).
@@ -5740,12 +5703,14 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
  </SubSection>
  <SubSection icon="terminal" title="Skills CRUD tools">
  <p>
- Two MCP tool families operate on the catalogue:{" "}
- <Code>skills_crud_*</Code> (list / get / upsert / delete; used
- by the /skills page) and <Code>simulation_skills_*</Code>{" "}
- (load / activate; used during chat to inject skills into the
- system prompt). Both read from the mounted volume so they see
- the live catalogue.
+ One MCP tool family (<Code>skills_crud.py</Code>) operates on
+ the catalogue: <Code>skills_list_all</Code> /{" "}
+ <Code>skills_read</Code> /{" "}
+ <Code>skills_create</Code> / <Code>skills_update</Code> /{" "}
+ <Code>skills_delete</Code> — used by the /skills page and by
+ the agent itself. All read from the mounted volume so they see
+ the live catalogue; the chat system prompt&apos;s skills block
+ is built from the same <Code>skills_list_all</Code> data.
  </p>
  </SubSection>
  <SubSection icon="auto_awesome" title="Frontmatter as the source of truth">
@@ -5785,14 +5750,14 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
  <p>
  The body textarea is controlled state with lazy-load — clicking
  into the editor pulls the live body via <Code>skills_read</Code>;
- not loaded eagerly because that&apos;d burn bytes for the 23+
+ not loaded eagerly because that&apos;d burn bytes for
  skills the operator only wants to scan. An unsaved-change guard
  fires <Code>window.confirm</Code> on close.
  </p>
  <p>
  The Create flow takes display name (auto-derives the filename
  via <Code>slugifyForFilename</Code>), category dropdown
- (foundation/scenarios/validation/workflows — the only valid
+ (foundation/workflows — the only valid
  ones), description, and body. Submit composes minimal
  frontmatter and POSTs. Locked skills (<Code>locked: true</Code>
  in frontmatter) render Delete as disabled with a
@@ -5808,7 +5773,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
  <Code>/api/skills</Code> with the same{" "}
  <Code>{`{category, filename, content}`}</Code> shape Create
  uses. Frontmatter-less files default to category{" "}
- <Code>scenarios</Code> with the filename as canonical name;
+ <Code>workflows</Code> with the filename as canonical name;
  the backend re-validates so a garbage category from a hand-
  edited frontmatter surfaces a clean error. Import + Download
  give operators a portable round-trip for skills between
@@ -5832,7 +5797,8 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
  The chat system prompt now includes an{" "}
  <Code>## AVAILABLE SKILLS</Code> block listing every installed
  skill&apos;s minimal metadata: name, displayName, category,
- description, ATT&amp;CK tactics. Total ~2-3KB for our 23 skills.
+ description, ATT&amp;CK tactics. Total ~2-3KB for the bundled
+ skills.
  The bodies stay out of the prompt (50-150KB if we shipped
  them); the agent calls <Code>skills_read</Code> when it decides
  to apply a specific skill.
@@ -5847,7 +5813,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
  every <Code>callGemini</Code> site. <Code>renderSkillsBlock</Code>{" "}
  in <Code>lib/system-prompt.ts</Code> formats the block with
  explicit instructions on when to apply / how to compose
- foundation+scenario+validation skills.
+ foundation+workflow skills.
  </p>
  <p>
  Failure mode is &ldquo;graceful skip&rdquo;: if{" "}
@@ -5904,17 +5870,18 @@ DELETE /api/agent/skills?file_path=<path>      -- soft-delete to .deleted/
 MCP   (agent-callable, bearer MCP_TOKEN)
 skills_list_all()           -- enumerate registry with metadata
 skills_read(file_path)      -- pull one skill's body
-skills_crud_upsert(...)     -- agent-side create + write
-skills_crud_delete(...)     -- agent-side soft-delete
-simulation_skills_load(keywords?)  -- system-prompt injection
-simulation_skills_activate(name)   -- explicit activation`}</Pre>
+skills_create(...)          -- agent-side create
+skills_update(...)          -- agent-side write
+skills_delete(...)          -- agent-side soft-delete`}</Pre>
  <p className="text-sm text-on-surface-variant">
  Read-side tools (<Code>skills_list_all</Code>,{" "}
  <Code>skills_read</Code>) are Tier 1 — no approval card. Write-
- side tools (<Code>skills_crud_upsert</Code>,{" "}
- <Code>skills_crud_delete</Code>) are Tier 2 — every change
+ side tools (<Code>skills_create</Code>,{" "}
+ <Code>skills_update</Code>, <Code>skills_delete</Code>) are
+ Tier 2 — every change
  surfaces an approval card and writes an audit row. The chat
- system prompt reads via <Code>simulation_skills_load</Code> at
+ system prompt builds its skills block server-side from{" "}
+ <Code>skills_list_all</Code> at
  turn start; this is server-side, no approval.
  </p>
  </SubSection>
@@ -5922,8 +5889,8 @@ simulation_skills_activate(name)   -- explicit activation`}</Pre>
  <SubSection icon="construction" title="Implementation references">
  <ul className="list-disc pl-6 space-y-1 text-sm">
  <li><Code>bundles/spark/mcp/skills/&lt;category&gt;/*.md</Code> — bundle-shipped skills source</li>
- <li><Code>bundles/spark/mcp/src/usecase/skills_crud.py</Code> — frontmatter parse + CRUD primitives</li>
- <li><Code>bundles/spark/mcp/src/usecase/simulation_skills.py</Code> — activation + chat-side load</li>
+ <li><Code>bundles/spark/mcp/src/usecase/builtin_components/skills_crud.py</Code> — frontmatter parse + CRUD primitives</li>
+ {/* [guardian v0.1.0] Retired: simulation_skills.py reference — simulation subsystem removed. */}
  <li><Code>bundles/spark/mcp/src/api/skills.py</Code> — REST routes</li>
  <li><Code>mcp/agent/app/api/skills/route.ts</Code> — Next.js proxy</li>
  <li><Code>mcp/agent/lib/skills-registry.ts</Code> — <Code>fetchSkillsForPrompt()</Code> + <Code>SkillSummary</Code> shape</li>
@@ -6068,7 +6035,7 @@ Agent's tool catalogue: <id>/<tool_name> entries appear`}</Pre>
  <SubSection icon="rule" title="Out of scope">
  <ul className="list-disc pl-6 space-y-1">
  <li><strong>Module-style or class-style dispatch.</strong> Schema enum is <Code>[&quot;container&quot;]</Code> only. Every connector runs as a per-instance container.</li>
- <li><strong>Env-var-driven instance creation.</strong> <Code>_AUTO_MIGRATION</Code> deleted; the env vars (CALDERA_URL, PAPI_AUTH_HEADER, etc.) are no longer consulted for instance materialization.</li>
+ <li><strong>Env-var-driven instance creation.</strong> <Code>_AUTO_MIGRATION</Code> deleted; the env vars (PAPI_AUTH_HEADER, etc.) are no longer consulted for instance materialization.</li>
  <li><strong>Bundle connector deletion at runtime.</strong> DELETE on a bundle id returns 403. Use uninstall to hide it.</li>
  <li><strong>Bundle/user id sharing.</strong> User uploads cannot reuse a bundle id; upload rejected at validation time.</li>
  <li><strong>Image building inside Guardian.</strong> Users publish their connector container to any OCI registry first; Guardian only references the image. No <Code>docker build</Code> inside our containers.</li>
@@ -6086,1180 +6053,16 @@ Agent's tool catalogue: <id>/<tool_name> entries appear`}</Pre>
  <li><strong>Agent tools</strong>: <Code>bundles/spark/mcp/src/usecase/builtin_components/self_mod_tools.py</Code> — <Code>marketplace_list</Code>, <Code>marketplace_install</Code>, <Code>marketplace_uninstall</Code>, <Code>connector_upload</Code>.</li>
  <li><strong>Updater</strong>: <Code>updater/src/main.py</Code> — <Code>image_ref</Code> body field for user-uploaded connectors.</li>
  <li><strong>Next.js proxies</strong>: <Code>mcp/agent/app/api/agent/marketplace/*</Code> — thin forwards to MCP.</li>
- <li><strong>CI</strong>: <Code>.github/workflows/build-connectors.yml</Code> (:dev builds for all 6) + <Code>release.yml</Code> (version-tagged + digest-pinned).</li>
+ <li><strong>CI</strong>: <Code>.github/workflows/build-connectors.yml</Code> (:dev builds for all 5) + <Code>release.yml</Code> (version-tagged + digest-pinned).</li>
  </ul>
  </SubSection>
  </Section>
 );
 }
+// ─── Retired sections ──────────────────────────────────────────────
 
-// ─── Data Sources marketplace (vendor schemas) ─────────────────────
-
-function DataSourcesMarketplace() {
- return (
- <>
- <Section id="data-sources" icon="dataset" title="Data Sources">
- <p>
- <strong>This section is the source of truth for the Data Sources
- marketplace.</strong> Data sources are vendor field schemas —
- a structured description of what a vendor&apos;s product
- actually emits on the wire. Install one and the agent generates
- simulated logs whose top-level keys match the vendor&apos;s
- native shape (FortiGate&apos;s{" "}
- <Code>srcip</Code> / <Code>dstport</Code> / <Code>sentbyte</Code>,
- Okta&apos;s <Code>eventType</Code> / <Code>actor.alternateId</Code>,
- CrowdStrike&apos;s <Code>event_simpleName</Code> /{" "}
- <Code>ComputerName</Code>, AWS CloudTrail&apos;s{" "}
- <Code>eventName</Code> / <Code>userIdentity</Code>, etc.).
- </p>
- <p>
- Because the records carry the vendor&apos;s real field names,
- any downstream system that already understands that vendor
- parses them cleanly — the vendor&apos;s own SIEM connector, a
- Splunk technology add-on, a Sentinel parser, an Elastic
- ingest pipeline, a custom Logstash filter, or any other
- platform&apos;s vendor-specific modeling rule. Guardian is
- destination-neutral; the data sources marketplace produces
- wire-faithful events, and the receiving system decides how
- to parse them.
- </p>
- <p>
- The bundled schemas are sourced from publicly-available
- vendor and platform catalogues — at build time the extractor
- reads any source that exposes canonical per-vendor field
- shapes. Today the build pipeline reads Cortex content packs;
- future iterations can layer Splunk mapping catalogues and
- other vendor-doc sources to widen coverage. The discovery
- source is a <em>build-time</em> concern, not a runtime
- dependency: once extracted, the bundled catalogue ships as
- plain YAML and the receiving platform at parse time is
- whatever the operator chose. Operators can also upload their
- own YAML to cover internal apps or vendors not in the bundle.
- </p>
- <p>
- The contract below covers the catalog source, storage, REST
- surface, MCP tool surface, and the skill chain that ties
- everything together.
- </p>
-
- <SubSection icon="storefront" title="Two marketplaces, two storage homes">
- <p>
- Guardian ships two distinct marketplaces. Both live under the
- catalog side of the{" "}
- <Link href="#authentication" className="link">
- catalog/credential boundary
- </Link>
- ; the agent can read + install + uninstall in both via
- narrow tools but never touches secrets.
- </p>
- <Pre>{`/connectors → Marketplace tab
-  └── Connector marketplace (see §Marketplace Logic)
-       state: marketplace.db (which connectors are installed)
-       atom:  connector + its instance containers + its tools
-
-/data-sources
-  └── Data Sources marketplace (this section)
-       state: data_sources.db (which vendor schemas are installed)
-       atom:  vendor + product + field inventory (with examples
-              for composite fields)`}</Pre>
- <p className="text-sm text-on-surface-variant">
- The two are decoupled by design. Installing a connector
- doesn&apos;t install its data sources, and installing a data
- source doesn&apos;t spin up a connector. Both can be exercised
- independently.
- </p>
- </SubSection>
-
- <SubSection icon="storage" title="Storage — data_sources.db (2 tables, FK cascade)">
- <p>
- Install state lives in a single SQLite store, owned by the MCP.
- Decoupled from <Code>marketplace.db</Code>. The table holds only
- data source–specific information (vendor truth + field
- inventory). Integration-specific metadata (e.g. Cortex pack /
- rule / dataset names, XDM mappings) lives as build-time
- provenance in the bundled YAMLs, NOT in the install store.
- </p>
- <Pre>{`data_sources.db  (DATA_ROOT/ — SQLite, sole source of truth)
-├── data_sources (
-│     id              TEXT PRIMARY KEY,    -- <vendor>_<product>
-│     vendor          TEXT NOT NULL,
-│     product         TEXT NOT NULL,
-│     description     TEXT,
-│     field_count     INTEGER NOT NULL,
-│     non_meta_field_count INTEGER NOT NULL,
-│     is_rawlog_only  INTEGER NOT NULL,
-│     is_pinned       INTEGER NOT NULL DEFAULT 0,
-│     pinned_version  TEXT,
-│     source_revision TEXT,
-│     installed_at    TEXT NOT NULL,
-│     installed_by    TEXT NOT NULL,
-│     logo_url        TEXT,
-│     logo_type       TEXT
-│   )
-└── data_source_fields (
-      data_source_id  TEXT NOT NULL REFERENCES data_sources(id)
-                      ON DELETE CASCADE,
-      name            TEXT NOT NULL,
-      type_hint       TEXT,
-      is_meta         INTEGER NOT NULL,
-      description     TEXT,
-      example         TEXT,                -- composite field shape
-      observable_overrides JSON,
-      PRIMARY KEY (data_source_id, name)
-    )`}</Pre>
- <p className="text-sm">
- <strong>Two tables, ON DELETE CASCADE</strong>. A single{" "}
- <Code>DELETE FROM data_sources WHERE id=…</Code> drops the
- vendor row and all its field rows in one transaction. No
- orphans.
- </p>
- <p className="text-sm">
- <strong>The <Code>example</Code> column</strong> on{" "}
- <Code>data_source_fields</Code> carries a small concrete
- sample for fields whose wire shape is composite — JSON
- dicts, arrays, nested objects. Without an example, the
- generator can&apos;t produce records that match what
- downstream parsers expect for that field. Simple scalar
- fields leave it NULL.
- </p>
- <p className="text-sm">
- <strong>The <Code>id</Code> composition</strong> is{" "}
- <Code>{`<vendor>_<product>`}</Code> (lowercased, non-
- alphanumeric chars → <Code>_</Code>). Matches the dataset-
- naming convention downstream parsers use — see{" "}
- <Code>vendor_product_raw</Code> in the{" "}
- <Link href="#xsiam-dataset-routing" className="link">
- XSIAM dataset routing
- </Link>{" "}
- subsection below. An operator who asks the agent
- &quot;what dataset for vendor X product Y?&quot; gets the
- answer derived directly from the data source <Code>id</Code>.
- </p>
- <div className="rounded-lg border border-tertiary/30 bg-tertiary/5 p-3 mt-3 text-sm">
- <strong className="text-tertiary">Implementation gap</strong>{" "}
- — the running code still carries the legacy columns{" "}
- <Code>pack_name</Code> / <Code>rule_name</Code> /{" "}
- <Code>dataset_name</Code> / <Code>pack_version</Code> /{" "}
- <Code>supported_modules</Code> on{" "}
- <Code>data_sources</Code>, the{" "}
- <Code>pack_description</Code> name (not yet renamed to{" "}
- <Code>description</Code>), an <Code>id</Code> composition
- of <Code>{`<pack>_<rule>_<dataset>`}</Code>, and an
- entire <Code>data_source_xdm_mappings</Code> table.
- The new <Code>example</Code> column on{" "}
- <Code>data_source_fields</Code> is also pending. These
- cleanups land in a follow-on sub-release once the YAML
- re-extraction + migration script are wired through.
- </div>
- </SubSection>
-
- <SubSection icon="folder_zip" title="Catalog source — per-source YAML, bundle + user">
- <p>
- The marketplace catalog is driven by per-source YAML files
- split across two storage roots:
- </p>
- <Pre>{`/app/bundle/data-sources/                  (image-baked, read-only)
-  data_source.schema.json                  -- JSON Schema draft 2020-12, v1
-  <vendor>__<product>/
-    data_source.yaml
-
-/app/data/user_data_sources/               (operator-uploaded, writable,
-                                             persists via guardian_mcp_data volume)
-  <operator-chosen-id>/
-    data_source.yaml`}</Pre>
- <p>
- The bundled root ships in the agent image — one YAML per
- vendor-product pair, refreshed when Guardian releases. The
- user root is a writable mount; operators populate it via the
- upload flow.
- </p>
- <p>
- Each YAML carries identity (vendor + product), display
- fields (description, categories), inline base64 logo,
- formats[], and field declarations (name + type + description +
- optional example for composite fields). The 26-type field
- vocabulary covers <Code>string_short</Code> /{" "}
- <Code>string_long</Code> / <Code>ipv4</Code> /{" "}
- <Code>ipv6</Code> / <Code>enum</Code>{" "}
- (requires <Code>enum_values</Code>) /{" "}
- <Code>regex</Code> (requires <Code>regex_pattern</Code>) /{" "}
- <Code>json</Code> / etc. Unknown types fall back to xlog&apos;s
- name-pattern matching.
- </p>
- <p>
- The bundled YAMLs also carry a <Code>source_provenance:</Code>{" "}
- block documenting where each pack came from at build time
- (e.g. a Cortex content pack name + rule + dataset tuple, or
- a Splunk add-on identifier in future iterations). The
- provenance block is build-time forensic info — useful for
- tracing back to the upstream source when fields need
- refreshing — and is intentionally NOT persisted into{" "}
- <Code>data_sources.db</Code>. The install store sees only
- vendor + product + field inventory.
- </p>
- <p>
- An optional <Code>how_to_use:</Code> field carries{" "}
- <em>operator-facing simulation guidance</em> as multi-line
- markdown. Multi-dataset packs (Okta&apos;s{" "}
- <Code>okta_okta_raw</Code> + <Code>okta_sso_raw</Code>,
- Office365&apos;s five workload variants, PANW NGFW&apos;s six
- log_type splits) carry sibling-dataset notes; nested-JSON
- vendors call out the CEF-wrap pattern (pack composites as
- JSON-string CEF extensions; the MR&apos;s{" "}
- <Code>json_extract_scalar</Code> parses at query time); every
- entry names the single-event XDM ceiling so the operator can
- plan single-event vs split-event saturation. The drawer
- surfaces this as a collapsible &quot;How to simulate&quot;
- section per pack — empty for packs not yet validated; rich
- for the 22 vendors smoked end-to-end as of v0.6.5.
- </p>
- <p className="text-sm">
- <strong>Loader contract</strong>:{" "}
- <Code>DataSourcesYamlLoader</Code> in{" "}
- <Code>bundles/spark/mcp/src/usecase/data_sources_yaml_loader.py</Code>{" "}
- reads from both roots on every catalog request (re-read, not
- cached) so operator uploads land without container restart.
- Bundle always wins on id collision — operators cannot
- override bundled packs; their custom sources must use new ids.
- </p>
- <p className="text-sm">
- <strong>vendor_map.yaml</strong> at the bundle root remains
- the per-vendor metadata source (display_name, primary_color)
- for the marketplace gradient — vendor-level metadata is
- intentionally separated from per-source YAML metadata.
- </p>
- <div className="rounded-lg border border-tertiary/30 bg-tertiary/5 p-3 mt-3 text-sm">
- <strong className="text-tertiary">Implementation gap</strong>{" "}
- — bundled YAMLs today are still organized under{" "}
- <Code>{`<pack>__<rule>__<dataset>/`}</Code> directories and
- carry their pack/rule/dataset tuple as top-level identity.
- Re-extraction into the new <Code>{`<vendor>__<product>/`}</Code>{" "}
- layout with the <Code>source_provenance:</Code> block is
- wired in the follow-on schema-migration sub-release.
- </div>
- </SubSection>
-
- <SubSection icon="verified" title="Validation tiers — Mapping Validated vs Raw Validated">
- <p>
- Each bundled data source can carry one of two mutually-exclusive
- validation marks, surfaced as a pill on the Browse card. The
- distinction reflects <em>how far we could prove the source on the
- live tenant</em> — both are real validations, but one is stronger
- than the other.
- </p>
- <ul className="list-disc pl-6 space-y-1 text-sm">
- <li>
- <strong className="text-secondary">Mapping Validated</strong>{" "}
- (green, YAML <Code>validated: true</Code>) — the source was
- smoke-tested end-to-end against the live XSIAM tenant and its{" "}
- <strong>modeling rule populates <Code>xdm.*</Code></strong>{" "}
- (or, when the vendor has no modeling rule, its parsing rule
- extracts the columns). The pack is installed, the rule is
- bound, and the synthetic event maps. This is the strong tier —
- the 40 sources confirmed via the simulate → XSIAM → XQL loop.
- </li>
- <li>
- <strong className="text-tertiary">Raw Validated</strong>{" "}
- (amber, YAML <Code>raw_validated: true</Code>) — the
- vendor&apos;s content pack is <strong>not installed</strong> on
- the tenant, so parsing/modeling cannot be exercised
- (<Code>datamodel</Code> returns 0). But a raw-dataset query —{" "}
- <Code>{`dataset = X | fields <rule columns> | limit 10`}</Code>{" "}
- — confirmed our synthetic data lands the <em>exact field names
- the rule would read</em>. Proven-correct shape, ready-to-map the
- moment the operator installs the pack. This validates content
- correctness independent of what&apos;s installed on the tenant.
- </li>
- </ul>
- <p className="text-sm mt-2">
- Raw validation only applies to <strong>named-column /
- JSON-composite</strong> rules, where the rule reads the columns
- our data lands. <Code>_raw_log</Code>-regex rules are excluded:
- their named columns can land yet the rule reads{" "}
- <Code>_raw_log</Code> content, so columns-present is not proof
- the rule would map. This follows the syslog/CEF-only doctrine —
- the broker, parsing rules, and modeling rules are
- protocol-agnostic and map on the data <em>shape</em>, so
- confirming the wire columns confirms the source regardless of
- how the real vendor is collected in production.
- </p>
- <p className="text-sm mt-2">
- <strong>Enforcement.</strong> Two canonical manifests under{" "}
- <Code>tooling/validate/</Code> —{" "}
- <Code>validated_data_sources.txt</Code> and{" "}
- <Code>raw_validated_data_sources.txt</Code> — MUST equal the set
- of YAMLs flagged with each mark.{" "}
- <Code>check_raw_validated_data_sources_manifest</Code> fails the
- build on drift OR on any source claiming both tiers, so neither
- pill ever ships unverified.
- </p>
- </SubSection>
-
- <SubSection icon="upload_file" title="Operator-uploaded sources — preview/commit flow">
- <p>
- Five REST endpoints let operators upload custom
- data_source.yaml files. The flow is two-phase to surface
- vendor-name conflicts BEFORE write:
- </p>
- <Pre>{`POST /api/v1/data-sources/user/preview
-  body: { yaml: "<text>" }  OR  { doc: {...parsed...} }
-  -> validates against data_source.schema.json
-  -> runs Levenshtein-2 + substring similarity vs known vendors
-  -> { ok, uploaded_vendor, similarity_matches[], bundle_collision, accept_token }
-
-POST /api/v1/data-sources/user
-  body: { yaml|doc, accept_token, vendor_choice }
-  -> re-hashes the doc; verifies accept_token matches
-  -> writes to /app/data/user_data_sources/<id>/data_source.yaml
-  -> 201 { ok, id, data_source }
-
-GET    /api/v1/data-sources/user           -- list operator-uploaded
-GET    /api/v1/data-sources/user/{id}      -- single + full YAML doc
-DELETE /api/v1/data-sources/user/{id}      -- cascade-uninstall from store
-GET    /api/v1/data-sources/user/{id}/logo -- stream inline base64 logo`}</Pre>
- <p>
- <strong>Accept-token semantics</strong>: SHA-256 of the
- canonical JSON form of the YAML doc, bound preview→commit by
- byte-exact match. Not a security boundary (operator is
- already bearer-authenticated); a sanity check that the
- operator commits exactly what they previewed.
- </p>
- <p>
- <strong>Vendor-grouping flow</strong>: if similarity matches
- surface (e.g. uploaded vendor &quot;Forinet&quot; → suggested
- &quot;Fortinet&quot;), the UI prompts{" "}
- <Code>create_new</Code> (keep as-typed) or{" "}
- <Code>group_under</Code> (rewrite the YAML&apos;s{" "}
- <Code>vendor</Code> field). Rewrite happens CLIENT-side, then
- the dialog re-previews to obtain a fresh accept_token bound
- to the rewritten bytes. Server-side rewriting would
- invalidate the token check.
- </p>
- <p className="text-sm">
- <strong>Install path branching</strong>:{" "}
- <Code>data_sources_install</Code> (REST + MCP tool) resolves
- by vendor + product against the YAML loader, then lifts the
- field declarations directly from the YAML. Both bundle and
- user-upload paths share the same lift today — the YAML is
- the canonical schema source at install time.
- </p>
- <p className="text-sm">
- Per CLAUDE.md § Credential vs catalog boundary: user uploads
- are CATALOG operations. The upload endpoints are REST-only
- (no agent MCP tool registered) because uploading is an
- explicit operator action with a similarity-check prompt the
- agent shouldn&apos;t auto-confirm.
- </p>
- </SubSection>
-
- <SubSection icon="api" title="REST surface — /api/v1/data-sources/*">
- <p>
- The MCP exposes a vendor-keyed REST surface, all bearer-
- protected. Order matters: literal <Code>/install</Code> +
- literal <Code>/catalog</Code> + literal{" "}
- <Code>{`/logo/{vendor}`}</Code> are registered before the
- catch-all <Code>{`/{vendor}/{product}`}</Code> pair so they
- don&apos;t collide.
- </p>
- <Pre>{`-- Installed-state (data_sources.db, sqlite)
-GET    /api/v1/data-sources                           -- list installed (?filter=)
-POST   /api/v1/data-sources/install                   -- {vendor, product}
-GET    /api/v1/data-sources/{vendor}/{product}        -- metadata only
-GET    /api/v1/data-sources/{vendor}/{product}/schema -- full field inventory
-DELETE /api/v1/data-sources/{vendor}/{product}        -- uninstall (CASCADE)
-
--- Marketplace browse (YAML loader)
-GET    /api/v1/data-sources/catalog                   -- bundle + user joined
-                                                       (?origin=bundle|user, ?include_rawlog=)
-
--- User uploads
-POST   /api/v1/data-sources/user/preview              -- {yaml|doc}; validates + similarity
-POST   /api/v1/data-sources/user                      -- commit with accept_token
-PUT    /api/v1/data-sources/user/{id}                 -- edit in place (accept_token-gated)
-GET    /api/v1/data-sources/user                      -- list operator-uploaded
-GET    /api/v1/data-sources/user/{id}                 -- single + full YAML doc
-DELETE /api/v1/data-sources/user/{id}                 -- cascade-uninstall from store
-GET    /api/v1/data-sources/user/{id}/logo            -- stream inline base64 logo
-
--- Logo serving (bundled)
-GET    /api/v1/data-sources/logo/{vendor}             -- SVG/PNG bytes, Cache-Control 1d`}</Pre>
- <div className="rounded-lg border border-tertiary/30 bg-tertiary/5 p-3 mt-3 text-sm">
- <strong className="text-tertiary">Implementation gap</strong>{" "}
- — the running routes still accept the legacy 3-tuple{" "}
- <Code>{`/{pack}/{rule}/{dataset}`}</Code> path shape and the{" "}
- <Code>install</Code> body still uses{" "}
- <Code>{`{pack_name, rule_name, dataset_name?}`}</Code>. The
- vendor + product surface lands when the schema migration
- sub-release ships; legacy routes get redirected to the new
- paths via a one-shot rewrite on first boot of the migrated
- image.
- </div>
- <p>
- The catalog endpoint loads from the{" "}
- <Code>DataSourcesYamlLoader</Code> (per-source YAMLs from
- bundle + user roots), overlays per-row{" "}
- <Code>installed: bool</Code> from <Code>data_sources.db</Code>,
- and enriches with <Code>vendor_primary_color</Code> from{" "}
- <Code>vendor_map.yaml</Code> for bundled rows.
- </p>
- <p className="text-sm">
- The Next.js side at <Code>mcp/agent/app/api/agent/data-sources/*</Code>{" "}
- forwards via <Link href="#rest-api" className="link"><Code>mcp-proxy</Code></Link>.
- Every route above has a thin proxy on the agent side; the
- agent always reaches the MCP through it.
- </p>
- </SubSection>
-
- <SubSection icon="smart_toy" title="MCP tool surface — agent-callable">
- <p>
- The agent has 3 data-sources tools — all on the CATALOG side
- of the boundary:
- </p>
- <ul className="list-disc pl-6 space-y-1 text-sm">
- <li><Code>data_sources_list(filter?)</Code> — read-only listing of installed schemas, optionally filtered by substring against vendor / product.</li>
- <li><Code>data_sources_get_schema(data_source_id)</Code> — full field inventory (name + type + description + example) for one installed data source. Returns the same shape as <Code>GET /api/v1/data-sources/{`{vendor}/{product}`}/schema</Code>.</li>
- <li><Code>data_sources_install(vendor, product)</Code> — idempotent install. Resolves the YAML by vendor + product key.</li>
- </ul>
- <p>
- The cortex-content connector also exposes 4 lower-level
- extraction tools (<Code>cortex_list_packs</Code>,{" "}
- <Code>cortex_extract_vendor_schema</Code>,{" "}
- <Code>cortex_extract_vendor_logo</Code>,{" "}
- <Code>cortex_extract_vendor_catalog</Code>) — these are
- build-time helpers used during YAML extraction and read
- directly from the baked tree without touching the install
- store. They are NOT part of the runtime install path; the
- install tool resolves by vendor + product against the
- already-extracted YAML.
- </p>
- <div className="rounded-lg border border-tertiary/30 bg-tertiary/5 p-3 mt-3 text-sm">
- <strong className="text-tertiary">Implementation gap</strong>{" "}
- — running tool signatures still accept the legacy 3-tuple
- (<Code>data_sources_install(pack_name, rule_name,
- dataset_name?)</Code>) and the response shape still includes
- XDM mappings. The vendor + product signatures + the new
- example field land in the follow-on MCP-tools sub-release.
- </div>
- <p className="text-sm">
- None of these tools touch a SecretStore value. There is no
- uninstall MCP tool today — uninstall happens via the UI&apos;s
- confirmation modal, deliberately operator-gated since dropping
- a schema can break in-flight simulation skills that reference it.
- </p>
- </SubSection>
-
- <SubSection icon="account_tree" title="Skill chain — simulate_vendor_logs">
- <p>
- The capability arc closes via a workflow skill:
- </p>
- <Pre>{`Operator: "simulate 50 FortiGate traffic logs"
-            ↓
-Agent:    matches simulate_vendor_logs skill (vendor-named request)
-            ↓
-Step 1:   data_sources_list(filter="fortigate")
-          → finds FortiGate/FortiGate_1_3/fortinet_fortigate_raw
-            ↓
-Step 2:   data_sources_get_schema(data_source_id)
-          → 176 fields (172 non-meta) with observable_overrides + XDM mappings
-            ↓
-Step 3:   guardian_generate_fake_data_v2(
-            request_input={records=50, type="json", ...},
-            schema_override={field_names_and_types from step 2}
-          )
-            ↓
-xlog:     generate_fake_data_v2 GraphQL resolver
-            ↓
-xlog:     dynamic_schema.py value generator
-          - observable_overrides → vendor-faithful IP/port/hash/etc.
-          - type_hint → typed faker (int/bool/timestamp/etc.)
-          - field-name pattern → heuristic (e.g. srcip→IPv4, sentbyte→int)
-          - fallback to Rosetta synthesis if all else fails
-            ↓
-Records:  3 sample records with srcip/dstip/srcport/dstport/proto/action/...
-          schemaApplied: true, vendorFieldCount: 11, fallbackReason: null`}</Pre>
- <p className="text-sm">
- If no installed data source matches the operator&apos;s vendor,
- the skill instructs the agent to STOP + tell the operator to
- install via <Code>/data-sources</Code> first — it does NOT
- auto-install. Install is operator-gated by skill discipline,
- not by tool guardrail (the agent CAN call{" "}
- <Code>data_sources_install</Code> if the operator says
- &ldquo;yes, install it&rdquo;).
- </p>
- </SubSection>
-
- <SubSection icon="bolt" title="xlog dynamic schema engine">
- <p>
- xlog ships two GraphQL fields for fake-data synthesis:
- </p>
- <ul className="list-disc pl-6 space-y-1 text-sm">
- <li><Code>generateFakeData(requestInput)</Code> — legacy path. Uses Rosetta&apos;s built-in field universe (generic Guardian-branded shape).</li>
- <li><Code>generateFakeDataV2(requestInput, schemaOverride?)</Code> — vendor-aware path. When <Code>schemaOverride</Code> is supplied, top-level keys + value generation come from the override. When omitted, falls back to identical Rosetta behavior — strict backward-compat.</li>
- </ul>
- <p>
- The override engine lives at <Code>xlog/app/dynamic_schema.py</Code>.
- Each field&apos;s value is resolved in priority order:{" "}
- <strong>(1)</strong> <Code>observable_overrides</Code> if present
- (vendor-faithful: real IP ranges, real action enums),{" "}
- <strong>(2)</strong> <Code>type_hint</Code> via typed faker,{" "}
- <strong>(3)</strong> field-name pattern (e.g. <Code>srcip</Code>{" "}
- → IPv4, <Code>sentbyte</Code> → byte-count integer),{" "}
- <strong>(4)</strong> Rosetta fallback. The resolver returns{" "}
- <Code>schemaApplied</Code> + <Code>vendorFieldCount</Code> + an
- optional <Code>fallbackReason</Code> in the response envelope
- so the agent can detect partial overrides.
- </p>
- </SubSection>
-
- <SubSection icon="construction" title="Implementation references">
- <ul className="list-disc pl-6 space-y-1 text-sm">
- <li><strong>Store</strong>: <Code>bundles/spark/mcp/src/usecase/data_sources_store.py</Code> — SQLite, install/uninstall/get/list/get_with_schema, FK cascade.</li>
- <li><strong>REST routes</strong>: <Code>bundles/spark/mcp/src/api/data_sources.py</Code> — 7 custom routes + 3 agent-callable functions + the extract/compose helper.</li>
- <li><strong>Catalog client</strong>: <Code>bundles/spark/connectors/cortex-content/src/_baked_client.py</Code> — local-filesystem reader, path-traversal guarded.</li>
- <li><strong>Cortex-content connector</strong>: <Code>bundles/spark/connectors/cortex-content/src/connector.py</Code> — 4 extract tools that operate on the baked tree.</li>
- <li><strong>Baked catalog</strong>: <Code>bundles/spark/connectors/cortex-content/baked/</Code> — 576 files / 2.9 MB / <Code>_manifest.json</Code> sentinel.</li>
- <li><strong>Refresh script</strong>: <Code>scripts/refresh_cortex_baked_catalog.py</Code> — maintainer-only, not invoked at runtime.</li>
- <li><strong>xlog dynamic schema</strong>: <Code>xlog/app/dynamic_schema.py</Code> + <Code>xlog/app/schema.py</Code> (<Code>generateFakeDataV2</Code> resolver).</li>
- <li><strong>xlog MCP tool</strong>: <Code>bundles/spark/connectors/xlog/src/data_faker.py</Code> — <Code>guardian_generate_fake_data_v2</Code>.</li>
- <li><strong>Skill</strong>: <Code>bundles/spark/mcp/skills/workflows/simulate_vendor_logs.md</Code>.</li>
- <li><strong>UI page</strong>: <Code>mcp/agent/app/data-sources/page.tsx</Code> — Browse + Installed tabs, drill-down drawer, ruby-red uninstall modal.</li>
- <li><strong>Next.js proxies</strong>: <Code>mcp/agent/app/api/agent/data-sources/*</Code> — thin forwards to MCP.</li>
- </ul>
- </SubSection>
-
- <SubSection icon="local_offer" title="Use-case taxonomy — vendor cards + filter dropdown">
- <p>
- Each <Code>data_source.yaml</Code> carries a curated{" "}
- <Code>use_cases</Code> field — short product-type labels
- meaningful to a SOC operator (F5 → <em>WAF</em>,{" "}
- <em>LoadBalancer</em>; Okta → <em>Identity</em>,{" "}
- <em>MFA</em>; CyberArk → <em>PAM</em>). The canonical taxonomy
- enumerates 44 labels across 8 domains:
- </p>
- <Pre>{`Network   : Network · Firewall · WAF · LoadBalancer · SDWAN · VPN
-            · Proxy · DNS · IDS · DDoS
-Endpoint  : EDR · AV · Endpoint · Forensics
-Identity  : Identity · MFA · PAM · AD · CIAM
-Data      : Email · DLP · CASB
-Cloud     : Cloud · SaaS · Container · Virtualization · CSPM
-Apps      : Database · Storage · Collab · DevOps · WebServer · AppServer
-SecOps    : SIEM · SOAR · XDR · ThreatIntel · Vuln · ASM · CTEM
-Specialty : OS · Honeypot · ICS · PhysSec · Voice · Analytics · Other`}</Pre>
- <p>
- One data source can belong to multiple use cases (Cisco is
- both <em>Firewall</em> and <em>EDR</em>). <Code>use_cases</Code>{" "}
- drives both the vendor-card badges and the filter dropdown
- above the Browse grid. A separate <Code>categories</Code> field
- on each YAML records the Cortex XSIAM platform module the pack
- ships under and is preserved for backend metadata — operators
- don&apos;t see it.
- </p>
- </SubSection>
-
- <SubSection icon="filter_list" title="Filter dropdown — multi-select use cases">
- <p>
- Above the Browse grid is a single pill-shaped{" "}
- <Term>Use case</Term> trigger that opens a Material 3 multi-
- select dropdown panel. The dropdown lets the operator narrow
- the 137-vendor catalog to one or more product types at a time:
- </p>
- <Pre>{`Trigger button:
-    ┌────────────────────────────────────────┐
-    │ ⚲ Use case  [3]  ▾                     │
-    └────────────────────────────────────────┘
-
-  Inline removable pills next to the trigger (capped at 6 + overflow):
-    [Firewall ×]  [EDR ×]  [WAF ×]   +5 more
-
-  Click trigger → floating panel (rounded, soft shadow):
-    ┌──────────────────────────────────────┐
-    │ Filter by use case · 3 of 44 selected│  All  Clear
-    │ ─────────────────────────────────────│
-    │ ⚲ Filter use cases…                  │
-    │ ─────────────────────────────────────│
-    │ ☑ Firewall          (24)             │
-    │ ☑ EDR               (18)             │
-    │ ☑ WAF               (12)             │
-    │ ☐ Identity          (15)             │
-    │ ...                                   │
-    │ ─────────────────────────────────────│
-    │ Multiple selections = OR (any match) │
-    └──────────────────────────────────────┘`}</Pre>
- <p className="text-sm text-on-surface-variant">
- Filter semantics: a vendor matches if ANY of its{" "}
- <Code>use_cases</Code> intersect with the selected set. Cisco
- tagged both Firewall and EDR shows under either selection.
- Selected items float to the top of the panel list so the
- active set stays easy to read and uncheck. Inline pills mirror
- the active selection so the operator can see + remove filters
- without re-opening the panel. Click-outside or Escape closes
- the panel.
- </p>
- </SubSection>
-
- <SubSection icon="image" title="Logo pipeline — one vendor logo per vendor">
- <p>
- Guardian serves vendor logos inline from each YAML&apos;s
- base64 <Code>logo:</Code> block. The catalog endpoint
- resolves a single <em>vendor</em> logo per vendor_key so every
- pack of the same vendor renders the same mark — every F5 pack
- carries the F5 logo, every FortiGate pack carries the
- Fortinet logo, regardless of which specific pack-rule-dataset
- row the UI is rendering.
- </p>
- <Pre>{`Logo resolution priority (per YAMLDataSource._compute_logo_url):
-
-  1. YAML has inline 'logo:' → /api/agent/data-sources/inline-logo/<id>
-                              served from the base64 blob in the YAML.
-  2. Else (user origin)     → /api/agent/data-sources/user/<id>/logo
-                              (legacy path; user uploads typically
-                              carry inline logos via path 1.)
-  3. Else                   → null. UI renders the inventory_2
-                              placeholder icon via LogoOrFallback.
-
-Catalog enrichment (api/data_sources.py):
-  After all rows are built, scan once and pick the first sibling-per-
-  vendor_key with a non-null logo_url. Set vendor_logo_url on every
-  row. Frontend prefers vendor_logo_url ?? logo_url so every F5 pack
-  renders the F5 mark, every FortiGate pack renders the Fortinet
-  mark, etc.
-
-Logo provenance is recorded in each YAML's 'logo:' block:
-  source:   "wikipedia:File:Avaya_Logo.svg" / "simpleicons:fortinet"
-            / "guardian-bundle" / "hand-crafted"
-  license:  Wikimedia Commons / vendor trademark / CC0-1.0 / CC BY-SA
-  fidelity: branded (vendor's actual artwork)
-            | branded-recolored (white→navy for visibility)
-            | monochrome-brand (simple-icons single-color mark)
-            | approximation (maintainer-authored wordmark)`}</Pre>
- </SubSection>
-
- <SubSection icon="speed" title="Loader cache — mtime-keyed">
- <p>
- <Code>DataSourcesYamlLoader.list_all()</Code> caches its scan
- of both YAML roots keyed by directory <Code>st_mtime_ns</Code>{" "}
- + an O(1) <Code>id</Code>-index dict. Modifying an existing
- YAML&apos;s contents doesn&apos;t bump the parent
- directory&apos;s mtime (always cache-hit); adding or removing
- a YAML does bump mtime (automatic invalidation). The upload
- and delete endpoints also call <Code>invalidate()</Code>{" "}
- explicitly as a safety net against the 1-second mtime
- quantization on ext4 + APFS.
- </p>
- <p className="text-sm text-on-surface-variant">
- Invariants: the bundle root never changes at runtime (baked
- into the image) so it&apos;s an effectively-eternal cache hit.
- The user root changes only via upload/delete endpoints which
- call <Code>invalidate()</Code> after writing. Container
- restart re-scans by design — YAMLs are the source of truth;
- the cache is purely an in-memory accelerator.
- </p>
- <p className="text-sm text-on-surface-variant">
- <strong>Schema-drawer resolution order (v0.17.102).</strong>{" "}
- A source&apos;s schema (drawer + the agent&apos;s{" "}
- <Code>data_sources_get_schema</Code> tool) resolves in order:
- (1) the installed store, for installed sources; (2) the{" "}
- <strong>bundled/user YAML</strong> via{" "}
- <Code>get_by_3tuple</Code> — the same source of truth the
- catalog lists from, so any catalog dataset opens even when
- uninstalled; (3) the cortex-content baked tree, only for packs
- with no YAML. Before v0.17.102 the YAML step was missing, so a
- second dataset under one pack+rule that cortex doesn&apos;t
- enumerate (e.g. <Code>okta_sso_raw</Code>) 404&apos;d in the
- drawer despite showing in Browse.
- </p>
- </SubSection>
-
- <SubSection icon="diagram_2" title="Picture — internal data flow">
- <p>
- The diagram below shows a single <Code>/data-sources</Code>{" "}
- request flowing through Guardian&apos;s four layers — browser →
- Next.js proxy → embedded MCP → YAML loader — and the two
- storage roots the loader scans (bundle: read-only, ships with
- the image; user: writable through the CRUD endpoints). The
- Response enrichment box on the right surfaces the four fields
- the API adds beyond the YAML&apos;s own attributes:{" "}
- <Code>vendor_logo_url</Code>, <Code>use_cases</Code>,{" "}
- <Code>origin</Code>, and <Code>vendor_key</Code>.
- </p>
- <DataSourcesFlow />
- <p className="text-sm text-on-surface-variant">
- The <Code>accept_token</Code> at the write gate is the SHA-256
- of the canonical-serialized YAML doc returned by the preview
- endpoint. Server re-hashes the incoming body and compares; a
- mismatch ⇒ HTTP 409 force re-preview. Same discipline applies
- to POST (create) and PUT (edit) — the operator must have
- previewed the exact bytes they&apos;re about to commit.
- </p>
- </SubSection>
-
- <SubSection icon="edit_note" title="Edit flow — PUT /user/{id}">
- <p>
- Operators edit a previously uploaded YAML in place via the{" "}
- <Code>PUT</Code> endpoint. The request body shape mirrors the
- upload POST — a YAML doc (or pre-parsed dict), an{" "}
- <Code>accept_token</Code> obtained from{" "}
- <Code>/user/preview</Code>, and a <Code>vendor_choice</Code>{" "}
- discriminator.
- </p>
- <Pre>{`PUT /api/v1/data-sources/user/{id}
-
-Body (same shape as POST /user):
-  {
-    "yaml":         "<full YAML text>" | "doc": { ...parsed... },
-    "accept_token": "<sha256(canonical_yaml) — from /user/preview>",
-    "vendor_choice": "create_new" | "group_under"
-  }
-
-Semantics — differs from POST /user in three places:
-  • Target MUST already exist                  →  HTTP 404
-  • Body's id MUST equal path id (no rename)   →  HTTP 409
-  • created_at preserved from on-disk YAML;    →  updated_at refreshed
-    operator's body value ignored                   server-side
-
-Success: 200  →  { ok: true, id, data_source: {...row...} }
-
-Audit row: data_source_user_edit (logs field-count delta + vendor delta)`}</Pre>
- <p className="text-sm text-on-surface-variant">
- Loader contract: <Code>DataSourcesYamlLoader.update_user(ds_id, doc)</Code>{" "}
- verifies the target exists, validates the body id matches the
- path id, preserves <Code>created_at</Code> from the on-disk
- YAML, refreshes <Code>updated_at</Code>, and busts the
- scan-cache + id-index after the successful write.
- </p>
- <p className="text-sm text-on-surface-variant">
- UI affordances surface the edit button in three places on the{" "}
- <Code>/data-sources</Code> page: the row inside an expanded
- vendor tray on the Browse tab (inline Edit button), the
- Installed card footer (pencil-icon button), and the Detail
- Drawer footer (pill alongside Install / Uninstall). All three
- are gated by <Code>row.origin === &quot;user&quot;</Code>. This
- flow edits the operator&apos;s <em>own</em> uploaded YAML in
- place. System (bundle) sources use the distinct{" "}
- <em>versioned overlay</em> edit described next — they are no
- longer read-only as of v0.17.99.
- </p>
- </SubSection>
-
- <SubSection icon="history" title="Versioning overlay — edit any source (v0.17.99, SP-4)">
- <p>
- <strong>Any data source — system (bundle) or user — can have
- its <Code>how_to_use</Code> guidance and field schema edited,
- with full version history.</strong> Edits never mutate the
- file on disk. Instead each save is a full-YAML snapshot in a
- new store, and the loader serves the newest snapshot as an{" "}
- <em>overlay</em>. The shipped/uploaded file stays pristine, so
- an operator can always roll back to the original.
- </p>
- <Pre>{`data_source_versions.db  (DATA_ROOT/ — SQLite, owned by MCP)
-└── data_source_versions (
-      data_source_id  TEXT NOT NULL,   -- "<pack>/<rule>/<dataset>"
-      version         INTEGER NOT NULL,
-      yaml_snapshot   TEXT NOT NULL,   -- full YAML doc at this version
-      created_at      TEXT NOT NULL,
-      author          TEXT NOT NULL,   -- "bundle-baseline" | "operator" | "agent"
-      note            TEXT,            -- optional change note
-      is_current      INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (data_source_id, version)
-    )
-
-Invariant: exactly one row per data_source_id has is_current=1.`}</Pre>
- <p className="text-sm">
- <strong>Resolution order (the overlay).</strong> The YAML
- loader resolves each source as: <em>store-current → user
- YAML → bundle YAML</em>. If the version store has a current
- snapshot for a source, that snapshot wins; otherwise the file
- (user root, then bundle root) is served as before. The overlay
- is applied in <Code>list_all()</Code> and{" "}
- <Code>get_by_3tuple()</Code> and degrades gracefully — any
- parse/store error falls back to the file.
- </p>
- <p className="text-sm">
- <strong>v1 = the original (baseline-on-first-edit).</strong>{" "}
- The first time a source is edited, the loader snapshots the
- <em>pristine</em> doc as version 1 (author{" "}
- <Code>bundle-baseline</Code>) before writing the edit as
- version 2. Unedited sources cost zero storage; edited sources
- always carry their original as v1.{" "}
- <strong>Rollback (v0.17.100, SP-5) is non-destructive</strong> —
- rolling back to vK copies vK&apos;s snapshot forward as a new
- current version; the intervening versions stay in history, so
- roll-forward always works. Nothing is ever deleted.
- </p>
- <Pre>{`Edit path (shared by REST + agent):
-  _apply_edit(pack, rule, dataset, *, how_to_use?, fields?, note?, author)
-   1. resolve current doc via loader.get_by_3tuple(...).to_doc()
-   2. patch how_to_use / fields
-   3. validate against data_source.schema.json + field-name uniqueness
-      └─ on failure → {ok: false, error} (NO snapshot written)
-   4. first edit? snapshot original as v1 (author "bundle-baseline")
-   5. snapshot the edit as the new current version
-   6. loader.invalidate()  → next read serves the overlay
-
-Rollback path (shared, v0.17.100):
-  _apply_rollback(pack, rule, dataset, *, version, author)
-   → store.rollback(id, k): copy vK's yaml_snapshot forward as a new
-     current version (note "rolled back to vK"); history preserved.
-
-REST (catalog-side; + Next.js /api/agent/... proxies):
-  PUT  /api/v1/data-sources/{pack}/{rule}/{dataset}/edit            edit (author "operator")
-  GET  /api/v1/data-sources/{pack}/{rule}/{dataset}/versions        history metadata list
-  GET  /api/v1/data-sources/{pack}/{rule}/{dataset}/versions/{n}    one version (full snapshot)
-  POST /api/v1/data-sources/{pack}/{rule}/{dataset}/rollback        body {version} (author "operator")
-  GET  /api/v1/data-sources/{pack}/{rule}/{dataset}/export[?version=n]  YAML; default = current overlay (v0.17.101)
-
-Agent MCP tools (catalog-side):
-  data_sources_edit · data_sources_list_versions · data_sources_rollback`}</Pre>
- <p className="text-sm text-on-surface-variant">
- <strong>Inter-service wiring.</strong>{" "}
- <Code>/data-sources</Code> page (Next.js, port 3000) → Next.js
- proxy <Code>PUT /api/agent/data-sources/{`{pack}/{rule}/{dataset}`}/edit</Code>{" "}
- → embedded MCP (Python FastMCP, loopback 8080, bearer{" "}
- <Code>MCP_TOKEN</Code>) → <Code>_apply_edit</Code> →{" "}
- <Code>data_source_versions.db</Code>. The agent reaches the same{" "}
- <Code>_apply_edit</Code> via the <Code>data_sources_edit</Code>{" "}
- MCP tool. Catalog-side (no secrets) per the{" "}
- <Link href="#authentication" className="link">
- catalog/credential boundary
- </Link>.
- </p>
- <p className="text-sm text-on-surface-variant">
- <strong>UI.</strong> The Detail Drawer footer shows an{" "}
- <Code>Edit guidance</Code> pill for system sources
- (<Code>origin !== &quot;user&quot;</Code>) in both preview and
- installed states. It opens a modal with a{" "}
- <Code>how_to_use</Code> editor + change note and a banner
- explaining the override semantics. Beside it (v0.17.100) a{" "}
- <Code>History</Code> pill opens the version-history panel —
- list every version (author / note / timestamp, current
- tagged), view any version&apos;s snapshot read-only, and roll
- back a non-current version. Schema-field editing from the UI
- is a tracked follow-up (the agent/API path already accepts a
- full <Code>fields</Code> list today).
- </p>
- </SubSection>
-
- <SubSection icon="restore" title="Backup + restore — data sources travel">
- <p>
- The backup zip captures personality, instances, memory, jobs,
- skills, knowledge, and data sources. The data-sources section
- is split into two manifests:
- </p>
- <Pre>{`backup.zip
-├── data_sources/
-│   ├── user/<id>.json     ← full parsed YAML doc per operator upload
-│   │                        (origin=user only — bundle YAMLs travel
-│   │                        with the image, not the backup)
-│   └── installed.json     ← [{pack_name, rule_name, dataset_name}, …]
-│                            install picks (both bundle + user)
-├── personality.json
-├── instances/...
-├── memory/...
-├── jobs/...
-├── skills/...
-└── knowledge/...
-
-Restore order (manifest.json restore_order):
-  personality → instances → skills → memory → knowledge → data_sources → jobs
-
-  Rationale: data_sources before jobs because runtime jobs may reference
-  installed data sources via the simulate-vendor-logs skill (which
-  reads data_sources_list at execution time, not at job-creation
-  time). Manifest-driven jobs reseed at boot, so the order only
-  matters for ad-hoc runtime jobs.`}</Pre>
- <p className="text-sm text-on-surface-variant">
- Restore is idempotent: each user upload goes through the
- normal preview → commit two-phase flow on the destination, so
- the same accept_token discipline applies; install-set entries
- hit <Code>POST /api/v1/data-sources/install</Code>; already-
- installed packs return 200 with no-op. Bundle YAMLs themselves
- are not exported — they re-arrive in the destination&apos;s
- image. What needs to travel is <em>which ones the operator
- picked</em> (install set) plus <em>what custom ones they
- added</em> (user uploads).
- </p>
- </SubSection>
- </Section>
-
-      <Section id="log-destinations" icon="cloud_upload" title="Log Destinations">
-        <p>
-          <strong>Log destinations are first-class, operator-managed
-          forwarding targets</strong> for synthesized security records.
-          Each destination has a stable name + uuid + a type-discriminated
-          config schema rendered live in the UI. The platform models
-          destinations as a typed domain object with a dedicated page
-          + dynamic form.
-        </p>
-
-        <SubSection icon="schema" title="Schema-driven type manifests">
-          <p>
-            Each destination type ships under{" "}
-            <Code>bundles/spark/destinations/&lt;id&gt;/</Code> with a
-            <Code> spec.yaml</Code> declaring the type&apos;s ConfigParam-style
-            field schema and a <Code>handler.py</Code> implementing two
-            async functions:
-          </p>
-          <Pre>{`bundles/spark/destinations/
-├── destination.schema.json    ← JSON Schema for the per-type spec.yaml
-├── syslog/
-│   ├── spec.yaml              ← fields[] + display + icon + handler ref
-│   └── handler.py             ← probe() + send() implementations
-├── webhook/                   ← 4 auth modes via visible_when discriminator
-├── xsiam_http/                ← x-xdr-auth-id + Authorization header pair
-└── splunk_hec/                ← Splunk HEC token + {event:...} batches`}</Pre>
-          <p className="text-sm text-on-surface-variant">
-            Adding a new destination type = ship one yaml + one Python
-            module. Loader auto-picks it up at boot. No code changes in
-            the REST surface or the UI form renderer. Matches the
-            connector-marketplace mental model.
-          </p>
-        </SubSection>
-
-        <SubSection icon="database" title="Storage + secret boundary">
-          <p>
-            SQLite store at <Code>/app/data/log_destinations.db</Code>{" "}
-            holds the row + non-secret config. Secret slots (declared by
-            <Code> type:&quot;secret&quot;</Code> fields in the spec.yaml)
-            land in SecretStore at{" "}
-            <Code>/agents/guardian/log_destinations/&lt;id&gt;/&lt;slot&gt;</Code>{" "}
-            and cascade-delete on row delete.
-          </p>
-          <Pre>{`CREATE TABLE log_destinations (
-    id                   TEXT PRIMARY KEY,
-    name                 TEXT NOT NULL UNIQUE,
-    type_id              TEXT NOT NULL,
-    config_json          TEXT NOT NULL,
-    secret_refs_json     TEXT NOT NULL,
-    enabled              INTEGER NOT NULL DEFAULT 1,
-    is_default           INTEGER NOT NULL DEFAULT 0,
-    description          TEXT,
-    created_at, updated_at  TEXT NOT NULL,
-    last_probe_at        TEXT,
-    last_probe_ok        INTEGER,
-    last_probe_error     TEXT,
-    consecutive_failures INTEGER NOT NULL DEFAULT 0
-);`}</Pre>
-        </SubSection>
-
-        <SubSection icon="vpn_key" title="Credential boundary">
-          <p>
-            Log destinations sit on the{" "}
-            <Link href="#authentication" className="link">credential side</Link>{" "}
-            of the boundary. The agent gets two read-only MCP tools:{" "}
-            <Code>log_destinations_list(type_id?)</Code> +{" "}
-            <Code>log_destinations_get(id_or_name)</Code> — both return
-            <Code> &quot;***&quot;</Code> sentinels for every secret slot.
-            All write + probe paths (POST / PATCH / DELETE /probe /set-default)
-            are REST-only; the operator UI is the only caller.
-          </p>
-        </SubSection>
-
-        <SubSection icon="alt_route" title="Store-driven log generation (the resolution chokepoint)">
-          <p>
-            When the agent generates logs it does NOT format a raw address
-            or touch any destination secret. It passes a{" "}
-            <strong>reference</strong> —{" "}
-            <Code>destination=&quot;logdest:&lt;id&gt;&quot;</Code> — to{" "}
-            <Code>guardian_create_data_worker</Code>. The reference is
-            resolved <strong>server-side, inside the MCP</strong>, at the
-            connector-proxy chokepoint, immediately before the call is
-            forwarded to the xlog connector container:
-          </p>
-          <Pre>{`agent (chat)
-  │  destination = "logdest:<id>"
-  ▼
-MCP  pkg/connector_proxy.proxy_call_tool          ← resolution chokepoint
-  │   └ usecase/log_destination_resolver.resolve_worker_args
-  │       • syslog      → destination = "<proto>:<host>:<port>"
-  │       • xsiam_http  → destination = "XSIAM_WEBHOOK"
-  │                       + webhook_url / webhook_key (plaintext auth_key,
-  │                         read from merged_config = store + SecretStore)
-  ▼  MCP-over-HTTP (bearer) — resolved address + injected key
-xlog connector  guardian-connector-xlog-<name>:9000
-  │   forwards webhookUrl / webhookKey on BOTH createDataWorker
-  │   and createScenarioWorkerFromQuery
-  ▼  GraphQL over HTTP
-xlog service  xlog:8000 → rosetta Sender / WebhookSender → destination`}</Pre>
-          <p>
-            <strong>Why resolve in the MCP</strong> — not the agent, not the
-            connector? The MCP is the only layer that can read BOTH{" "}
-            <Code>log_destinations.db</Code> AND the SecretStore. Resolving
-            here means the xsiam_http auth key travels only{" "}
-            MCP&nbsp;→&nbsp;connector&nbsp;→&nbsp;xlog over the internal
-            network — it never crosses the agent&apos;s tool surface, so the{" "}
-            <Link href="#authentication" className="link">credential
-            boundary</Link> holds even though the agent triggered the send.
-            The agent only ever sees the opaque{" "}
-            <Code>logdest:&lt;id&gt;</Code> handle.
-          </p>
-          <ul className="list-disc pl-6 mt-2 text-sm space-y-1">
-            <li><strong>Selection is the agent&apos;s job</strong> (system
-              prompt + the <Code>generate-logs</Code> skill): list configured
-              destinations, use the single transport match without asking,
-              ask on ambiguity, create a secretless syslog or guide the
-              operator on none.</li>
-            <li><strong>Resolution is the platform&apos;s job</strong>: the
-              agent never formats an address or reads a secret.</li>
-            <li>The agent CAN create secretless syslog destinations
-              (<Code>log_destinations_create</Code>) but never credentialed
-              ones — those stay on the operator-only REST + UI path.</li>
-          </ul>
-          <p className="text-sm text-on-surface-variant">
-            Scope: covers <Code>guardian_create_data_worker</Code> (both its{" "}
-            <Code>createDataWorker</Code> and{" "}
-            <Code>createScenarioWorkerFromQuery</Code> routes — xlog honors{" "}
-            <Code>webhookUrl</Code>/<Code>webhookKey</Code> on each, falling
-            back to the <Code>WEBHOOK_ENDPOINT</Code> env default when
-            absent). The file-scenario tool{" "}
-            (<Code>guardian_create_scenario_worker</Code>) takes a destination
-            object and is not yet on the <Code>logdest:</Code> path;{" "}
-            <Code>webhook</Code> / <Code>splunk_hec</Code> destination types
-            are not yet wired into generation.
-          </p>
-        </SubSection>
-
-        <SubSection icon="settings_ethernet" title="Per-type probe + send">
-          <p>
-            Each handler exposes two async callables:{" "}
-            <Code>probe(merged_config)</Code> sends a real test message and
-            returns <Code>{`{ok, error, latency_ms}`}</Code>;{" "}
-            <Code>send(merged_config, records)</Code> forwards a batch and
-            returns <Code>{`{sent, failed, errors}`}</Code>. The MCP boots
-            the handlers eagerly via file-path import — a missing handler.py
-            fails MCP boot loudly (no silent fallback).
-          </p>
-          <ul className="list-disc pl-6 mt-2 text-sm">
-            <li><strong>syslog</strong> — UDP/TCP/TLS. RFC3164 + RFC5424 framing.
-              TLS via in-memory PEM → temp files; full facility codes.</li>
-            <li><strong>webhook</strong> — 4 auth modes (none / bearer / basic /
-              api_key_header) via <Code>visible_when</Code> discriminator on
-              <Code> auth_type</Code>.</li>
-            <li><strong>xsiam_http</strong> — XSIAM-specific{" "}
-              <Code>x-xdr-auth-id</Code> + <Code>Authorization</Code> header pair;
-              <Code> {`{events: [...]}`}</Code> envelope.</li>
-            <li><strong>splunk_hec</strong> — Splunk HEC{" "}
-              <Code>Splunk &lt;token&gt;</Code> auth; newline-separated
-              <Code> {`{event:...}`}</Code> batches; optional verify-ssl toggle.</li>
-          </ul>
-          <p className="text-sm text-on-surface-variant mt-2">
-            <Code>probe()</Code> is live — it backs the <em>Test</em> button on{" "}
-            <Code>/log-destinations</Code> (REST{" "}
-            <Code>POST /&#123;id&#125;/probe</Code>). <Code>send()</Code> is the
-            per-handler forwarding primitive for direct destination delivery;
-            today the agent&apos;s log-<em>generation</em> path egresses through
-            xlog (see <strong>Store-driven log generation</strong> above), not{" "}
-            <Code>handler.send()</Code>.
-          </p>
-        </SubSection>
-
-        <SubSection icon="autorenew" title="Legacy WEBHOOK_ENDPOINT compatibility">
-          <p>
-            Older installs configured their XSIAM forwarding via the{" "}
-            <Code>WEBHOOK_ENDPOINT</Code> / <Code>WEBHOOK_KEY</Code> env
-            vars. On boot, if those env vars are set AND no{" "}
-            <Code>xsiam_http</Code> destination exists yet, the store
-            auto-creates an &quot;XSIAM Default&quot; destination marked{" "}
-            <Code>is_default=true</Code>. Idempotent on subsequent
-            boots; safe to leave in <Code>.env</Code> permanently.
-          </p>
-        </SubSection>
-
-        <SubSection icon="dataset" title="XSIAM dataset routing">
-          <p>
-            Knowing the dataset destinations write to is the difference
-            between &quot;agent verifies the records arrived&quot; and
-            &quot;agent reports zero rows because it queried the wrong
-            dataset.&quot; The conventions are stable per destination type:
-          </p>
-          <Pre>{`Destination type → XSIAM dataset
-
-xsiam_http   →  guardian_logs_raw   (ALWAYS; XSIAM-side hardcoded for
-                                    the 'guardian' brand on the collector)
-                Shape: 1 row per batch with an 'events' JSON-array
-                column holding the original record list. A downstream
-                modeling rule unflattens per-event if needed.
-
-syslog (CEF) →  <vendor>_<product>_raw   (lowercased, non-alphanumeric
-                                          chars → '_')
-                ONLY when records are CEF-formatted AND the destination
-                is an XSIAM broker VM. Example: vendor='Fortinet' +
-                product='FortiGate' → 'fortinet_fortigate_raw'.
-                Each CEF extension key (act, src, dst, spt, dpt, ...)
-                arrives as a typed column — no modeling rule needed
-                for the basic fields.
-
-syslog (JSON)→  depends on the broker's input config (no convention).
-                If you send raw JSON in the syslog MSG body, the
-                broker may drop it OR route to a catchall — ask the
-                operator which dataset their broker is mapped to.`}</Pre>
-          <p>
-            The <Code>guardian_create_data_worker</Code> docstring
-            teaches the agent these mappings so when an operator says
-            &quot;simulate 50 FortiGate logs and verify they arrived in
-            XSIAM,&quot; the agent fires the worker with the right{" "}
-            <Code>type/vendor/product</Code> AND queries{" "}
-            <Code>fortinet_fortigate_raw</Code> after the ingestion
-            wait window.
-          </p>
-        </SubSection>
-
-        <SubSection icon="diagram_2" title="Picture — internal data flow">
-          <p>
-            The diagram below shows a single{" "}
-            <Code>/log-destinations</Code> request flowing through
-            Guardian&apos;s four layers — browser → Next.js proxy →
-            embedded MCP → SQLite + SecretStore. The MCP lane splits
-            into three concerns: the <strong>types loader</strong>{" "}
-            (boot-time scan of <Code>bundles/spark/destinations/</Code>),
-            the <strong>store</strong> (CRUD + the one-shot{" "}
-            <Code>WEBHOOK_ENDPOINT</Code> migration), and the{" "}
-            <strong>handler registry</strong> (per-type{" "}
-            <Code>probe()</Code> + <Code>send()</Code> dispatch). The
-            credential boundary is explicit: secrets land in
-            SecretStore at{" "}
-            <Code>/agents/guardian/log_destinations/&lt;id&gt;/&lt;slot&gt;</Code>,
-            never in the SQLite row (which only carries{" "}
-            <Code>secret_refs_json</Code> pointers), and the
-            agent-callable MCP tools return <Code>&quot;***&quot;</Code>{" "}
-            sentinels for every secret slot.
-          </p>
-          <LogDestinationsFlow />
-          <p className="text-sm text-on-surface-variant">
-            The orange edge at the bottom-right is the{" "}
-            <strong>probe path</strong> (the <em>Test</em> button) — the
-            only edge in THIS diagram that leaves the trust boundary.
-            (Generated logs leave by a different route — the resolution
-            chokepoint → xlog — described under &quot;Store-driven log
-            generation&quot; above.) Every other write stays inside the
-            container. Adding a new destination type follows the
-            same shape: ship a <Code>spec.yaml</Code> + a{" "}
-            <Code>handler.py</Code> under{" "}
-            <Code>bundles/spark/destinations/&lt;id&gt;/</Code>; the
-            loader picks it up at next boot, the form-engine renders
-            the UI from the schema, and the handler registry imports
-            the dispatch callables. No REST surface or UI form code
-            changes.
-          </p>
-        </SubSection>
-
-        <SubSection icon="folder_open" title="Files of record">
-          <ul className="list-disc pl-6 text-sm">
-            <li><Code>bundles/spark/destinations/*</Code> — type manifests + handlers (this is the contract; add new types here)</li>
-            <li><Code>bundles/spark/mcp/src/usecase/destination_types_loader.py</Code> — YAML loader + JSON-schema validator</li>
-            <li><Code>bundles/spark/mcp/src/usecase/destination_handler_registry.py</Code> — file-path-based handler import + dispatch</li>
-            <li><Code>bundles/spark/mcp/src/usecase/log_destinations_store.py</Code> — SQLite CRUD + WEBHOOK_ENDPOINT migration</li>
-            <li><Code>bundles/spark/mcp/src/usecase/log_destination_resolver.py</Code> — resolves <Code>logdest:&lt;id&gt;</Code> → concrete address (syslog) or <Code>XSIAM_WEBHOOK</Code> + injected url/key (xsiam_http)</li>
-            <li><Code>bundles/spark/mcp/src/pkg/connector_proxy.py</Code> — the resolution chokepoint: <Code>proxy_call_tool</Code> resolves the reference MCP-side before forwarding to the xlog connector</li>
-            <li><Code>bundles/spark/mcp/src/api/log_destinations.py</Code> — REST routes (CRUD + probe + set-default)</li>
-            <li><Code>mcp/agent/app/log-destinations/page.tsx</Code> — operator UI</li>
-            <li><Code>mcp/agent/components/form-engine.tsx</Code> — reusable dynamic-form renderer with <Code>visible_when</Code> support</li>
-            <li><Code>mcp/agent/components/diagrams/log-destinations-flow.tsx</Code> — the diagram above</li>
-          </ul>
-        </SubSection>
-      </Section>
- </>
-);
-}
+// [guardian v0.1.0] Retired: data-sources — simulation subsystem removed.
+// [guardian v0.1.0] Retired: log-destinations — simulation subsystem removed.
 
 // ─── Operator workflow state ───────────────────────────────────────
 
@@ -7374,175 +6177,63 @@ Next.js proxy: /api/agent/operator-state/{key} (session-gated).
 
 // ─── External Connectors ───────────────────────────────────────────
 
-function XlogConnector() {
- return (
- <Section id="xlog-connector" icon="data_object" title="xlog Connector">
- <p>
- xlog is the synthetic-log generator. It runs as its own service
- (the <Code>guardian</Code> container) and exposes a Strawberry
- GraphQL API. The xlog MCP connector wraps that API as ~25 MCP
- tools so the agent can request log generation through chat. The
- diagram below shows xlog alongside CALDERA and XSIAM PAPI — the
- three external connector backends, each with its protocol, port,
- auth, and tool family.
- </p>
-
- <ExternalConnectorsAnatomy />
-
- <SubSection icon="api" title="GraphQL surface">
- <ul className="list-disc pl-5 space-y-1 text-sm">
- <li>
- <Code>query.listWorkers</Code> — currently active workers
- (in-memory module-level dict; non-persistent).
- </li>
- <li>
- <Code>mutation.createWorker</Code> — start a worker for one
- log type with given format / sender / rate.
- </li>
- <li>
- <Code>mutation.createScenarioWorker</Code> — start a worker
- from a scenario file; references{" "}
- <Code>scenarios/ready/&lt;name&gt;.json</Code>.
- </li>
- <li>
- <Code>mutation.createScenarioWorkerFromQuery</Code> — same
- but inline JSON instead of a file reference.
- </li>
- <li>
- <Code>mutation.stopWorker</Code> — terminate a running worker
- by id.
- </li>
- <li>
- <Code>query.listScenarios</Code> — discover what
- ready-scenario JSONs exist on disk.
- </li>
- </ul>
- </SubSection>
- <SubSection icon="settings" title="Workers, formats, and senders">
- <p>
- Worker types, formats, and senders are declared as Strawberry
- enums in <Code>app/types/datafaker.py</Code> and{" "}
- <Code>app/types/sender.py</Code>. Adding a new vendor format
- (FortiGate, CrowdStrike, etc.) requires touching both the
- enum and the dispatch in <Code>app/schema.py</Code>. Senders
- cover direct UDP, XSIAM HTTP collectors, and arbitrary
- webhook URLs.
- </p>
- </SubSection>
- <SubSection icon="link" title="rosetta-ce">
- <p>
- Vendor-specific event shapes come from the{" "}
- <Code>rosetta-ce</Code> library (external dependency). Guardian
- imports <Code>Events</Code>, <Code>Observables</Code>, and{" "}
- <Code>Sender</Code> classes; vendor catalogues live in
- rosetta-ce, not in this repo. Updating to support a new vendor
- means updating rosetta-ce and bumping the dep.
- </p>
- </SubSection>
- <SubSection icon="warning" title="Webhook auth quirk">
- <p>
- The webhook sender uses header{" "}
- <Code>Authorization: $WEBHOOK_KEY</Code> — raw, not{" "}
- <Code>Bearer</Code>. Any non-XSIAM webhook receiver must
- accept that form. See{" "}
- <Code>_get_webhook_headers</Code> in{" "}
- <Code>app/schema.py</Code>.
- </p>
- </SubSection>
- </Section>
-);
-}
-
-function CalderaConnector() {
- return (
- <Section id="caldera-connector" icon="swords" title="CALDERA Connector">
- <p>
- CALDERA is a MITRE ATT&amp;CK adversary emulation backend.
- Guardian runs CALDERA 5.3.0 in the <Code>caldera</Code>{" "}
- container and wraps its REST API as MCP tools. The connector
- carries its own state DB independent of guardian-mcp.
- </p>
- <SubSection icon="dns" title="Tool family">
- <ul className="list-disc pl-5 space-y-1 text-sm">
- <li>
- <Code>caldera_list_abilities</Code> — abilities indexed by
- MITRE technique id.
- </li>
- <li>
- <Code>caldera_list_adversaries</Code> — saved adversary
- profiles.
- </li>
- <li>
- <Code>caldera_list_agents</Code> — connected sandcat agents.
- </li>
- <li>
- <Code>caldera_start_operation</Code> — kick off an
- adversary against an agent group.
- </li>
- <li>
- <Code>caldera_get_results</Code> — operation output, per
- link.
- </li>
- <li>
- <Code>caldera_kill_operation</Code> — terminate.
- </li>
- </ul>
- </SubSection>
- <SubSection icon="settings_input_component" title="Authentication">
- <p>
- CALDERA exposes <Code>red</Code> and <Code>blue</Code> users
- plus a per-user API key. The connector authenticates as the
- red user (<Code>CALDERA_RED_USER</Code> +{" "}
- <Code>CALDERA_RED_PASSWORD</Code>) for operation control and
- uses the API key for query calls. Compose hard-fails the
- stack if those env vars are missing.
- </p>
- </SubSection>
- <SubSection icon="lan" title="Network shape">
- <p>
- CALDERA listens on <Code>:8888</Code> (HTTP) and{" "}
- <Code>:8443</Code> (HTTPS). On the compose network, MCP
- reaches it as <Code>http://caldera:8888</Code>. Sandcat
- agents in your simulated environment dial back to the
- same endpoint over whatever bridge your lab uses; that is
- outside the Guardian stack&apos;s scope.
- </p>
- </SubSection>
- </Section>
-);
-}
+// [guardian v0.1.0] Retired: xlog-connector — simulation subsystem removed.
+// [guardian v0.1.0] Retired: caldera-connector — simulation subsystem removed.
 
 function XsiamConnector() {
  return (
  <Section id="xsiam-connector" icon="security" title="XSIAM Connector">
  <p>
  The XSIAM connector wraps Cortex XSIAM&apos;s public API
- (PAPI). It is the bridge between Guardian&apos;s synthetic
- telemetry and a real detection-engineering surface — operators
- push log streams to XSIAM via webhook senders, then verify
- their detection content fired via XQL queries through this
- connector.
+ (PAPI). It is Guardian&apos;s primary investigation surface —
+ the agent runs evidence-gathering XQL queries, reads cases and
+ issues, inspects assets, and manages lookup datasets through
+ this connector (tool prefix <Code>xsiam_</Code>). The anatomy
+ diagram below shows the xsiam, cortex-xdr, and web connector
+ containers side-by-side, plus the investigation pipeline they
+ serve.
  </p>
+
+ <ExternalConnectorsAnatomy />
+
  <SubSection icon="api" title="Tool family">
  <ul className="list-disc pl-5 space-y-1 text-sm">
  <li>
- <Code>xsiam_run_xql</Code> — execute XQL with a
+ <Code>xsiam_run_xql_query</Code> — execute XQL with a
  timestamp window; returns rows.
  </li>
  <li>
- <Code>xsiam_find_xql_examples_rag</Code> — natural-language
+ <Code>xsiam_get_xql_examples</Code> /{" "}
+ <Code>xsiam_find_xql_examples_rag</Code> — curated +
+ natural-language
  retrieval against the bundled <Code>xql-examples</Code> KB
  (787 curated queries).
  </li>
  <li>
- Detection-content CRUD —{" "}
- <Code>xsiam_list_detection_rules</Code>,{" "}
- <Code>xsiam_get_rule</Code>,{" "}
- <Code>xsiam_upsert_rule</Code>.
+ Datasets + lookups —{" "}
+ <Code>xsiam_get_datasets</Code>,{" "}
+ <Code>xsiam_create_dataset</Code>,{" "}
+ <Code>xsiam_get_dataset_fields</Code>,{" "}
+ <Code>xsiam_add_lookup_data</Code>,{" "}
+ <Code>xsiam_get_lookup_data</Code>.
  </li>
  <li>
- Issue stream — read war-room issues and append comments via
- the playground id.
+ Cases / issues / assets —{" "}
+ <Code>xsiam_get_cases</Code>, <Code>xsiam_get_issues</Code>,{" "}
+ <Code>xsiam_get_assets</Code>,{" "}
+ <Code>xsiam_get_asset_by_id</Code>.
+ </li>
+ <li>
+ Incident-response families — incidents, alerts, IoCs,
+ endpoint actions (isolate / scan / retrieve file), scripts,
+ audit logs (<Code>xsiam_incidents_*</Code>,{" "}
+ <Code>xsiam_alerts_*</Code>, <Code>xsiam_endpoints_*</Code>,{" "}
+ <Code>xsiam_scripts_*</Code>, …).
+ </li>
+ <li>
+ <Code>xsiam_send_webhook_log</Code> — ad-hoc one-off log
+ injection to the tenant&apos;s HTTP custom collector (e.g.
+ a test event while validating a collector).
  </li>
  </ul>
  </SubSection>
@@ -7883,8 +6574,9 @@ function AuthIdentity() {
  <SubSection icon="cable" title="Guardian → external (per-connector)">
  <p>
  Each connector instance carries its own credentials in the
- secret store: CALDERA red-user + API key, XSIAM PAPI
- auth-id + auth-header, xlog webhook key, Vertex SA JSON. The
+ secret store: XSIAM PAPI
+ auth-id + auth-header, Cortex XDR API key + auth id,
+ Vertex SA JSON. The
  connector reads from the secret store at call time, never
  from process env.
  </p>
@@ -8147,8 +6839,8 @@ function SecretStore() {
  <li>
  <Code>/agents/guardian/connectors/&lt;instance_id&gt;/&lt;slot&gt;</Code>{" "}
  &mdash; per-connector-instance secrets (xsiam{" "}
- <Code>apiToken</Code>, caldera{" "}
- <Code>redPassword</Code>, etc.)
+ <Code>apiToken</Code>, cortex-xdr{" "}
+ <Code>api_key</Code>, etc.)
  </li>
  <li>
  <Code>/agents/guardian/providers/&lt;instance_id&gt;/&lt;slot&gt;</Code>{" "}
@@ -8257,7 +6949,7 @@ throw new ApprovalDeniedError(toolName, decision);`}</Pre>
  <SubSection icon="layers_clear" title="Batch propose — one card for N actions">
  <p>
  When the agent has multiple gated actions to perform in one
- turn (&ldquo;schedule a daily sim for each of my 5 skills&rdquo;,
+ turn (&ldquo;schedule a daily report job for each of my 5 skills&rdquo;,
  &ldquo;delete these 3 instances&rdquo;),{" "}
  <Code>agent_batch_propose(actions=[{`{tool, args}`}, ...])</Code>{" "}
  bundles N actions into ONE approval row. The card&apos;s UI
@@ -8267,7 +6959,7 @@ throw new ApprovalDeniedError(toolName, decision);`}</Pre>
  </p>
  <p>
  Dispatch flows through the <Code>tool_dispatcher()</Code>{" "}
- singleton so connector tools (xsiam, caldera, web,
+ singleton so connector tools (xsiam, cortex-xdr, web,
  cortex-content, …) reach the same fastmcp.Client path the
  job scheduler uses — preserving per-instance contextvar
  setup. Two hard exclusions:{" "}
@@ -8693,7 +7385,7 @@ function NotificationsFeed() {
  <Section id="notifications-feed" icon="notifications" title="Notifications Feed">
  <p>
  The notifications page is the platform&apos;s alert feed: job
- completions, failed scenarios, approval resolutions,
+ completions, failed runs, approval resolutions,
  configuration changes. It&apos;s an audit-log derivative,
  filtered to events with operator-visible severity.
  </p>
@@ -8704,10 +7396,7 @@ function NotificationsFeed() {
  disabled. From <Code>job_run_complete</Code>,{" "}
  <Code>job_run_failed</Code>.
  </li>
- <li>
- <Term>Scenarios</Term> — long-running scenario workers
- that finish or error.
- </li>
+ {/* [guardian v0.1.0] Retired: scenario-worker notifications — simulation subsystem removed. */}
  <li>
  <Term>Approvals</Term> — pending, granted, denied. From
  <Code>approval_*</Code> audit families.
@@ -8751,16 +7440,16 @@ function PipelineHealth() {
  The pipeline page is a live React Flow graph of every Guardian
  subsystem. Box borders flip green / amber / red based on health
  probes; edges pulse cyan when traffic flowed in the last 60
- seconds. The page is two data sources stitched in real time.
+ seconds. The page is two data feeds stitched in real time.
  </p>
  <SubSection icon="check_circle" title="Health probe machinery">
  <ul className="list-disc pl-5 space-y-1.5 text-sm">
  <li>
  <Term>Server-side fan-out</Term> —{" "}
  <Code>GET /api/agent/health</Code> probes each
- service-internal hostname (xlog{" "}
- <Code>/health</Code>, MCP <Code>/ping/</Code>, agent
- self-check, caldera root) from the agent backend. Returns
+ service-internal hostname (MCP <Code>/ping/</Code>, agent
+ self-check, per-instance connector containers) from the
+ agent backend. Returns
  a normalised <Code>{`{ name, http, latency_ms, ok }`}</Code>{" "}
  array.
  </li>
@@ -8772,7 +7461,8 @@ function PipelineHealth() {
  <li>
  <Term>Why server-side</Term> — browsers can&apos;t resolve
  compose-internal hostnames like{" "}
- <Code>https://xlog:8000</Code>. Routing all probes through
+ <Code>http://guardian-connector-xsiam-&lt;instance&gt;:9000</Code>.
+ Routing all probes through
  the agent backend solves that and gives one normalised
  contract.
  </li>
@@ -8780,9 +7470,9 @@ function PipelineHealth() {
  </SubSection>
  <SubSection icon="bolt" title="Edge pulses from audit">
  <p>
- Each edge on the graph (e.g. mcp → caldera) maps to a
+ Each edge on the graph (e.g. mcp → xsiam) maps to a
  substring of <Code>target</Code> in the audit log
- (<Code>tool:caldera.*</Code>). The page subscribes to recent
+ (<Code>tool:xsiam.*</Code>). The page subscribes to recent
  audit rows; an edge pulses if matching events appeared in the
  last 60 seconds. Source of truth is the same audit log that
  backs <Code>/observability/events</Code>.
@@ -8868,9 +7558,9 @@ job:weekly-coverage         // job name`}</Pre>
  <p>
  Counters declared in{" "}
  <Code>manifest.observability.metrics[]</Code> (dotted names
- like <Code>guardian.simulations_total</Code>) are
+ like <Code>guardian.mcp_tool_calls_total</Code>) are
  pre-registered at boot — Prometheus underscored form
- (<Code>guardian_simulations_total</Code>) appears in{" "}
+ (<Code>guardian_mcp_tool_calls_total</Code>) appears in{" "}
  <Code>/api/v1/metrics</Code> as 0-valued counters so
  dashboards never see &ldquo;metric not found&rdquo; gaps in
  the warm-up window. Histograms and lazily-created metrics

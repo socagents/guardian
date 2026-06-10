@@ -27,8 +27,10 @@ export type JourneyCategory =
   | "onboarding"
   | "chat"
   | "memory"
-  | "simulation"
-  | "redteam"
+  // [guardian v0.1.0] Retired categories: the log-generation,
+  // red-team-emulation, and vendor-log-schema marketplace categories
+  // were removed with their subsystems. `validation` survives but now
+  // covers XQL authoring + Cortex investigation workflows.
   | "validation"
   | "ops"
   // Authentication covers operator identity, sessions, password
@@ -36,12 +38,7 @@ export type JourneyCategory =
   // Connectors covers marketplace browsing, install/uninstall,
   // instance lifecycle, user uploads, container start/stop.
   | "auth"
-  | "connectors"
-  // v0.17.70 — Data sources: install/uninstall/preview workflow for
-  // vendor-faithful log schemas. Distinct from `simulation` (which is
-  // about using an installed data source to emit logs); distinct from
-  // `connectors` (which is about external integrations).
-  | "data-sources";
+  | "connectors";
 
 export type JourneyDifficulty = "starter" | "intermediate" | "advanced";
 
@@ -80,8 +77,9 @@ export type JourneyComponent =
   | "audit"
   | "pipeline"
   | "settings"
-  | "xlog"
-  | "caldera"
+  // [guardian v0.1.0] Retired components: the synthetic-log-generation
+  // connector and the red-team-emulation connector were removed with
+  // their subsystems.
   | "xsiam"
   | "mcp"
   | "auth"
@@ -138,11 +136,10 @@ export interface Journey {
    * they're likely missing. Directional (prerequisites are upstream),
    * unlike `related` which is bidirectional.
    *
-   * Example: `generate-firewall-logs` prerequisites
-   * `configure-tech-stack` because the firewall-log generation reads
-   * vendor + destination defaults from the tech-stack memory; without
-   * a configured stack, the agent falls back to generic defaults that
-   * may not be what the operator expects.
+   * Example: `recall-org-config` prerequisites a prior memory-write
+   * journey because semantic recall needs a stored memory to retrieve;
+   * without one, the agent has nothing to surface and the walkthrough
+   * reads as a failure.
    */
   prerequisites?: string[];
   /**
@@ -177,23 +174,13 @@ export const CATEGORY_META: Record<
     description:
       "Teach the agent durable facts about your org and recall them across sessions.",
   },
-  simulation: {
-    label: "Log Simulation",
-    icon: "data_object",
-    description:
-      "Generate synthetic security logs against your real-or-simulated SIEM/syslog destinations.",
-  },
-  redteam: {
-    label: "Red Team",
-    icon: "swords",
-    description:
-      "Drive CALDERA — agents, abilities, adversary emulation operations.",
-  },
+  // [guardian v0.1.0] Retired: the log-generation + red-team category
+  // tabs — both subsystems were removed.
   validation: {
-    label: "Detection Validation",
+    label: "Investigation & Queries",
     icon: "fact_check",
     description:
-      "Confirm your detections fire on simulated attacks; build coverage reports over time.",
+      "Author and run XQL queries against Cortex XSIAM / XDR, grounded in the official docs and the bundled xql-examples KB.",
   },
   ops: {
     label: "Operations",
@@ -219,16 +206,8 @@ export const CATEGORY_META: Record<
     description:
       "Marketplace browse + install/uninstall, per-instance container lifecycle, user-uploaded connectors, credential rotation, tool catalog gating.",
   },
-  // v0.17.70 — Data sources is its own first-class tab: install /
-  // uninstall / preview workflow for vendor-faithful log schemas.
-  // Distinct from `simulation` (which uses those schemas to emit logs)
-  // and from `connectors` (which is external integrations).
-  "data-sources": {
-    label: "Data Sources",
-    icon: "dataset",
-    description:
-      "Install vendor log-schema packs from the marketplace; preview field inventories; upload custom data_source.yaml; manage the installed cohort that Guardian uses for vendor-faithful log simulation.",
-  },
+  // [guardian v0.1.0] Retired: data-sources category tab — the
+  // vendor-log-schema marketplace subsystem was removed.
 };
 
 // ─── Component metadata ──────────────────────────────────────────────
@@ -400,18 +379,8 @@ export const COMPONENT_META: Record<JourneyComponent, ComponentMeta> = {
     guide: "architecture",
     anchor: "settings-tuning",
   },
-  xlog: {
-    label: "xlog connector",
-    icon: "data_object",
-    guide: "architecture",
-    anchor: "xlog-connector",
-  },
-  caldera: {
-    label: "Caldera connector",
-    icon: "swords",
-    guide: "architecture",
-    anchor: "caldera-connector",
-  },
+  // [guardian v0.1.0] Retired: the synthetic-log-generation and
+  // red-team-emulation connector component chips — subsystems removed.
   xsiam: {
     label: "XSIAM connector",
     icon: "security",
@@ -476,15 +445,15 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open a fresh chat at the Guardian UI.",
       "Paste the prompt and submit.",
-      "Read the response — should enumerate Guardian log/sim tools, XSIAM, CALDERA, Memory, Skills.",
+      "Read the response — should enumerate the XSIAM, Cortex XDR, Cortex docs/content, and web connector tools plus Memory, Knowledge, and Skills built-ins.",
     ],
     expectedResult:
-      "Multi-paragraph response with grouped tool list (Guardian / XSIAM / CALDERA / Memory & Knowledge). The agent should mention `memory_store`, `memory_search`, `guardian_update_technology_stack` — proving the latest system prompt is loaded.",
+      "Multi-paragraph response with grouped tool list (XSIAM / Cortex XDR / Cortex docs / Web / Memory & Knowledge). The agent should mention `memory_store`, `memory_search`, `xsiam_run_xql_query` — proving the latest system prompt is loaded.",
     verifyVia: [
       "GET /api/agent/audit?action=tool_call&limit=5 — should show NO new tool_call rows for this turn.",
       "Session sidebar should show this conversation auto-titled with the prompt's first 60 chars.",
     ],
-    related: ["configure-tech-stack"],
+    related: ["chat-create-new-session"],
     components: ["chat", "mcp", "audit"],
   },
   {
@@ -527,55 +496,8 @@ export const JOURNEYS: Journey[] = [
     related: ["get-oriented"],
     components: ["chat", "mcp", "audit"],
   },
-  {
-    id: "configure-tech-stack",
-    category: "onboarding",
-    title: "Configure your technology stack",
-    summary:
-      "Tell the agent what security products you run. Persists in xlog (SQLite) AND memory (cross-session recall).",
-    difficulty: "starter",
-    durationMin: 2,
-    icon: "tune",
-    prompts: [
-      {
-        text: "Our SOC stack uses Fortinet FortiGate for firewalls and CrowdStrike Falcon for EDR. Send all simulated logs to udp:10.10.0.8:514 by default.",
-        note: "Agent should call guardian_update_technology_stack AND memory_store at least 3 times (firewall, EDR, default sink).",
-      },
-    ],
-    toolsExercised: [
-      "guardian_update_technology_stack",
-      "memory_store",
-    ],
-    apis: [
-      {
-        method: "POST",
-        path: "/api/agent/jobs",
-        description:
-          "(NOT used here — see schedule-runtime-job). The mutation goes through GraphQL.",
-      },
-      {
-        method: "POST",
-        path: "/api/agent/memory",
-        description:
-          "Three rows written by the agent: tech_stack:firewall, tech_stack:edr, preference:default_sink.",
-      },
-    ],
-    howToTest: [
-      "Paste the prompt into a fresh chat and submit.",
-      "Watch the response — should confirm the stack name, both vendors, and the default sink.",
-      "Open /memory in another tab — three new entries should appear with the namespaced keys above.",
-      "Open xlog's GraphQL playground (or query `{ technologyStack { stackName vendors { vendor product } } }`) — should return Corporate SOC + 2 vendors + source='manual'.",
-    ],
-    expectedResult:
-      "Tech stack saved with `source: 'manual'` (sqlite-backed, survives MCP restart). Three memory entries appear at scope='agent'. The chat response cites all three vendors + destination by name.",
-    verifyVia: [
-      "Visit /memory — count must be ≥3 with keys tech_stack:firewall, tech_stack:edr, preference:default_sink.",
-      "Visit /observability/events with action=tool_call — most recent rows include xlog.update_technology_stack and memory_store entries.",
-      "GraphQL on xlog: `{ technologyStack { stackName totalVendors source updatedAt } }` returns the new stack with non-null updated_at.",
-    ],
-    related: ["recall-org-config", "generate-firewall-logs"],
-    components: ["chat", "settings", "mcp"],
-  },
+  // [guardian v0.1.0] Retired: configure-tech-stack — the technology-stack
+  // store lived in the removed log-generation backend.
 
   // ─────────────────────────────────────────────────────────────────
   // MEMORY
@@ -591,12 +513,17 @@ export const JOURNEYS: Journey[] = [
     icon: "manage_search",
     prompts: [
       {
+        text: "Remember that our org deploys CrowdStrike Falcon as its EDR.",
+        note: "Session A — the write. Agent should call memory_store with a key like tech_stack:edr.",
+        newSession: true,
+      },
+      {
         text: "What endpoint security tooling does our org deploy?",
         note: "Brand-new session. The phrase 'endpoint security tooling' shares zero literal tokens with the stored 'CrowdStrike Falcon' memory — only Vertex semantic embeddings will retrieve it.",
         newSession: true,
       },
     ],
-    toolsExercised: ["memory_search", "guardian_get_technology_stack"],
+    toolsExercised: ["memory_store", "memory_search"],
     apis: [
       {
         method: "POST",
@@ -606,942 +533,41 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Ensure 'configure-tech-stack' has been run earlier (creates the EDR memory).",
+      "Paste prompt 1 in a fresh chat — the write session. Watch for a memory_store tool call.",
       "Click 'New Chat' in the sidebar to get a fresh session_id.",
-      "Paste the prompt and submit.",
-      "Watch the agent's first tool call — must be memory_search BEFORE any guardian_get_technology_stack call.",
-      "Read the response — should cite CrowdStrike Falcon (and likely the destination udp:10.10.0.8:514) without you ever mentioning them in this session.",
+      "Paste prompt 2 and submit.",
+      "Watch the agent's first tool call — must be memory_search BEFORE it answers.",
+      "Read the response — should cite CrowdStrike Falcon without you ever mentioning it in this session.",
     ],
     expectedResult:
-      "memory_search returns the stored EDR memory with cosine ≥0.4 (paraphrase score). Agent then verifies via guardian_get_technology_stack and cites CrowdStrike by name. NEW session_id ≠ the original write session — proving cross-session retrieval.",
+      "memory_search returns the stored EDR memory with cosine ≥0.4 (paraphrase score). Agent cites CrowdStrike by name. NEW session_id ≠ the original write session — proving cross-session retrieval.",
     verifyVia: [
-      "Audit feed at /observability/events — sequence: tool:memory.search → tool:xlog.get_technology_stack within ~2s.",
+      "Audit feed at /observability/events — memory_store in session A, memory_search at the head of session B.",
       "Session sidebar should show TWO sessions: the original write session + this fresh recall session.",
-      "Optional: export this session to JSON and search for 'CrowdStrike' in the assistant's reply — confirms it was cited.",
+      "Optional: export the recall session to JSON and search for 'CrowdStrike' in the assistant's reply — confirms it was cited.",
     ],
-    related: ["configure-tech-stack"],
+    related: ["chat-memory-recall"],
     components: ["chat", "memory", "settings"],
   },
-  {
-    id: "memorize-simulation-result",
-    category: "memory",
-    title: "Auto-memorize simulation outcomes",
-    summary:
-      "After a successful simulation, the agent records a `sim:<scenario>:<target>:<date>` memory so future runs know coverage history.",
-    difficulty: "intermediate",
-    durationMin: 3,
-    icon: "history_edu",
-    prompts: [
-      {
-        text: "Generate 10 firewall logs simulating a port scan against 10.0.0.50",
-        note: "Watch for memory_store at the END of the tool sequence with key `sim:port_scan:10.0.0.50:<today>`.",
-      },
-      {
-        text: "Have we tested any port scans before?",
-        note: "Fresh session. Should memory_search and find the prior simulation.",
-        newSession: true,
-      },
-    ],
-    toolsExercised: [
-      "guardian_get_technology_stack",
-      "guardian_get_field_info",
-      "guardian_generate_observables",
-      "guardian_create_data_worker",
-      "memory_store",
-      "memory_search",
-    ],
-    apis: [
-      {
-        method: "POST",
-        path: "/api/agent/memory",
-        description:
-          "Single row written: key=`sim:<scenario>:<target>:<date>`, value=summary of the run.",
-      },
-    ],
-    howToTest: [
-      "Paste prompt 1 into a chat. Watch for the FINAL tool call to be memory_store with a `sim:` key.",
-      "Click 'New Chat'.",
-      "Paste prompt 2. The agent should memory_search and respond with the prior simulation, including target IP and date.",
-    ],
-    expectedResult:
-      "First chat creates a worker AND a `sim:` memory entry. Second chat retrieves that entry by paraphrase, demonstrating the agent's ability to build long-term simulation history.",
-    verifyVia: [
-      "Visit /memory and filter for keys starting with `sim:` — should see the new entry.",
-      "Audit feed shows memory_store at the tail of prompt 1's sequence and memory_search at the head of prompt 2's.",
-    ],
-    related: ["recall-org-config", "generate-firewall-logs"],
-    prerequisites: ["configure-tech-stack"],
-    components: ["chat", "memory", "xlog"],
-  },
+  // [guardian v0.1.0] Retired: memorize-sim*-result — the auto-memorize-
+  // run-outcomes flow depended on the removed log-generation engine.
 
-  // ─────────────────────────────────────────────────────────────────
-  // SIMULATION
-  // ─────────────────────────────────────────────────────────────────
-  {
-    id: "generate-firewall-logs",
-    category: "simulation",
-    title: "Generate firewall logs from cached config",
-    summary:
-      "Once your tech stack is set, the agent generates realistic vendor-specific logs without you restating anything.",
-    difficulty: "starter",
-    durationMin: 2,
-    icon: "bolt",
-    prompts: [
-      {
-        text: "Generate 10 firewall logs for our environment",
-        note: "Watch the tool sequence: search→skills→stack→fields→observables→list-destinations→worker→memorize.",
-      },
-    ],
-    toolsExercised: [
-      "memory_search",
-      "load_simulation_skills",
-      "guardian_get_technology_stack",
-      "guardian_get_field_info",
-      "guardian_generate_observables",
-      "log_destinations_list",
-      "guardian_create_data_worker",
-      "memory_store",
-    ],
-    apis: [
-      {
-        method: "POST",
-        path: "/api/agent/workers",
-        description:
-          "(Internally, MCP creates the worker via xlog GraphQL). The agent's tool call is `guardian_create_data_worker`.",
-      },
-    ],
-    howToTest: [
-      "Run 'configure-tech-stack' first (so vendor + destination are available).",
-      "Paste the prompt in a fresh chat.",
-      "Watch the response — should include worker ID, vendor (Fortinet FortiGate), format (CEF/JSON/SYSLOG), destination (udp:10.10.0.8:514), and a brief threat narrative.",
-      "Open /workers (if available) or `/settings` to confirm the worker is running.",
-    ],
-    expectedResult:
-      "Single-step worker streams 10 logs to the configured syslog destination. Worker name like worker_<YYYYMMDD><HHMMSS>. The agent resolves the destination from your configured Log Destinations (a logdest:<id> reference, not a hardcoded address) and cites the vendor from MEMORY, not the user input.",
-    verifyVia: [
-      "tcpdump on the syslog receiver: `sudo tcpdump -A -i any 'udp port 514'` should show the logs flowing.",
-      "Audit feed shows xlog.create_data_worker with status=success and the worker's destination in the metadata.",
-      "Memory at /memory should now include a `sim:` entry summarizing the run.",
-    ],
-    related: ["configure-tech-stack", "memorize-simulation-result", "run-port-scan-scenario"],
-    prerequisites: ["configure-tech-stack"],
-    components: ["chat", "xlog", "audit"],
-  },
-  {
-    id: "simulate-to-log-destination",
-    category: "simulation",
-    title: "Send simulated logs to a configured Log Destination",
-    summary:
-      "The agent resolves WHERE logs go from your configured Log Destinations — one transport match is used automatically, two trigger a question, none offers to create one. No hardcoded addresses.",
-    difficulty: "starter",
-    durationMin: 2,
-    icon: "cloud_upload",
-    prompts: [
-      {
-        text: "Simulate 20 FortiGate traffic logs and send them over syslog",
-        note: "With exactly one syslog destination configured, the agent uses it WITHOUT asking and passes destination='logdest:<id>'.",
-      },
-      {
-        text: "Send 20 FortiGate logs to syslog",
-        note: "With TWO syslog destinations configured, the agent should ASK which one (by name or host) before starting the worker.",
-      },
-    ],
-    toolsExercised: [
-      "log_destinations_list",
-      "guardian_get_field_info",
-      "guardian_generate_observables",
-      "guardian_create_data_worker",
-    ],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/log-destinations",
-        description:
-          "(Internal — the agent calls log_destinations_list, then passes destination='logdest:<id>'. The MCP resolves the address and injects xsiam_http credentials server-side, before forwarding to the xlog connector.)",
-      },
-    ],
-    howToTest: [
-      "Configure exactly ONE syslog destination on /log-destinations.",
-      "Paste the first prompt in a fresh chat — the agent should NOT ask; it uses the single syslog destination and reports the resolved address.",
-      "Add a SECOND syslog destination, then paste the prompt again — the agent should ASK which one to use.",
-      "Delete all syslog destinations, then ask again — the agent should offer to CREATE one (secretless syslog) or guide you to add a credentialed one on /log-destinations.",
-    ],
-    expectedResult:
-      "Worker streams to the chosen configured destination. The agent never invents a hardcoded address — it passes a logdest:<id> reference and the platform resolves it (injecting credentials for an XSIAM HTTP destination, which the agent never sees).",
-    verifyVia: [
-      "Audit feed: log_destinations_list precedes guardian_create_data_worker; the worker's destination metadata is the configured target.",
-      "tcpdump on the syslog receiver shows the logs flowing.",
-      "For an xsiam_http destination: query `dataset = guardian_logs_raw | sort desc _time | limit 20` — records arrive without you ever pasting the webhook key into chat.",
-    ],
-    related: ["generate-firewall-logs", "run-port-scan-scenario"],
-    prerequisites: [],
-    components: ["chat", "xlog", "audit"],
-  },
-  {
-    id: "run-port-scan-scenario",
-    category: "simulation",
-    title: "Run a multi-step port-scan scenario",
-    summary:
-      "MITRE T1046 reconnaissance — multi-step skill loaded from the foundation library, distinct attacker IPs vs target IP, mostly DENY actions.",
-    difficulty: "intermediate",
-    durationMin: 3,
-    icon: "scanner",
-    prompts: [
-      {
-        text: "Run a port scan scenario against 10.10.20.5",
-        note: "Agent should load the `port_scan` skill, follow its scenario steps, and create a scenario worker (not a single-step data worker).",
-      },
-    ],
-    toolsExercised: [
-      "load_simulation_skills",
-      "guardian_get_technology_stack",
-      "guardian_get_field_info",
-      "guardian_generate_observables",
-      "guardian_create_scenario_worker",
-      "memory_store",
-    ],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/skills/scenarios/port_scan",
-        description:
-          "(Internal — agent reads the scenario YAML/MD via load_simulation_skills.)",
-      },
-    ],
-    howToTest: [
-      "Paste the prompt in a fresh chat.",
-      "Watch tool calls — load_simulation_skills should return skill content with multi-step actions; observables_dict should have ONE destinationIp (the target) and MANY sourceIps (attackers).",
-      "Read the response — should describe the scenario stages (reconnaissance phases) and worker ID.",
-    ],
-    expectedResult:
-      "Scenario worker runs through the port_scan skill's defined steps. Logs simulate attackers from many IPs hitting one target across multiple ports, with mostly DENY/DROP outcomes.",
-    verifyVia: [
-      "Audit feed: load_simulation_skills + guardian_create_scenario_worker, status=success.",
-      "/memory: new sim:port_scan:10.10.20.5:<date> entry summarizing the run.",
-      "If your SIEM is wired up: query for `destinationIp=10.10.20.5 AND action=deny` in the relevant time window.",
-    ],
-    related: ["generate-firewall-logs", "validate-detection"],
-    prerequisites: ["configure-tech-stack"],
-    components: ["chat", "xlog", "audit"],
-  },
-  {
-    // v0.17.70 — Q1 split: this journey now covers ONLY the data-sources
-    // management workflow (install / uninstall / browse / preview).
-    // The simulate-vendor-logs flow moved to a sibling journey
-    // `simulate-from-installed-data-source` for clearer operator UX.
-    id: "install-data-source",
-    category: "data-sources",
-    title: "Install a vendor data source from the marketplace",
-    summary:
-      "Browse the Data Sources marketplace, preview a vendor's wire-format schema (field names, types, examples), then install it so Guardian can simulate vendor-faithful logs and the agent can reason about that vendor's events.",
-    difficulty: "starter",
-    durationMin: 2,
-    icon: "dataset",
-    prompts: [
-      {
-        text: "Install the FortiGate data source",
-        note: "Chat-driven install path — agent invokes data_sources_install with the resolved vendor + product (or pack_name/rule_name/dataset_name on legacy installs). Same effect as clicking Install on the FortiGate card in /data-sources. Skip this prompt if you installed via the UI in the steps below.",
-      },
-      {
-        text: "What data sources are currently installed?",
-        note: "Agent calls data_sources_list to enumerate the installed cohort. The response should cite vendor + product + field count for each row.",
-      },
-    ],
-    toolsExercised: [
-      "data_sources_install",
-      "data_sources_list",
-      "data_sources_get_schema",
-      "data_sources_uninstall",
-    ],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/catalog",
-        description:
-          "Browse view loads the full catalog from the baked YAMLs shipped in the agent image plus any operator-uploaded YAMLs from the writable user root. Each card carries installed: bool overlaid from data_sources.db.",
-      },
-      {
-        method: "POST",
-        path: "/api/agent/data-sources/install",
-        description:
-          "POST resolves the data source by vendor + product (legacy installs may still accept pack_name + rule_name + dataset_name during the migration window). Returns 201 with {ok, data_source_ids, fields_count}. Idempotent. Persists the field inventory in data_sources.db (FK cascade).",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/{vendor}/{product}/schema",
-        description:
-          "Returns the full field inventory (name, type, description, example) — the same data the drawer renders, surfaced via API for chat-driven flows.",
-      },
-      {
-        method: "DELETE",
-        path: "/api/agent/data-sources/{vendor}/{product}",
-        description:
-          "Uninstall the data source. FK cascade drops every field + xdm_mapping row attached to it. Idempotent — safe to call on a non-installed source.",
-      },
-    ],
-    howToTest: [
-      "Open /data-sources → click Browse. Cards render one per VENDOR — Fortinet is one card, not per-pack.",
-      "Type 'fortigate' in the search box → click anywhere on the Fortinet vendor card. A full-width tray opens BELOW the card listing the individual data sources (FortiGate_1_3, FortiGate_1_2, etc.).",
-      "Click the FortiGate_1_3 / fortinet_fortigate_raw row body (NOT the Install button) → drawer slides in from the right showing the field schema in Preview mode. Header shows the Fortinet vendor SVG; footer shows an Install data source button.",
-      "Verify the drawer's Schema Fields table renders the Name / Type / Description / Example columns. Composite fields (type:json) carry a single-line JSON example; scalar leaves carry type-appropriate values (IPv4 dotted-quad, ISO-8601 timestamp, etc.).",
-      "Click Install in the drawer footer. After a moment, the drawer auto-refreshes — footer flips from Install to Uninstall, the field inventory populates, and a green success banner appears top-right.",
-      "Switch back to Installed — the card shows field_count + non_meta_field_count populated.",
-      "(Optional cleanup) Click Uninstall in the drawer footer to remove the install. The FK cascade drops every field row; the next install repopulates them.",
-    ],
-    expectedResult:
-      "The Installed tab shows the FortiGate row with field_count populated. GET /api/agent/data-sources returns the row with is_rawlog_only:false, field_count > 0. The operator can now move to the `simulate-from-installed-data-source` journey to generate vendor-faithful logs.",
-    verifyVia: [
-      "Audit feed (/observability/events) shows data_source_install (status=success, target=data_source:FortiGate/FortiGate_1_3/fortinet_fortigate_raw).",
-      "GET /api/agent/data-sources → response includes the installed row with field_count, non_meta_field_count, is_rawlog_only.",
-      "Drawer's Example column populates with type-appropriate values (NOT 'example_value' placeholder).",
-    ],
-    related: ["upload-custom-data-source", "edit-data-source-guidance", "roll-back-data-source", "simulate-from-installed-data-source", "configure-tech-stack"],
-    components: ["chat", "audit"],
-  },
-  {
-    // v0.17.100 (SP-5) — version history + non-destructive rollback for an
-    // edited data source. Builds on edit-data-source-guidance (SP-4).
-    id: "roll-back-data-source",
-    category: "data-sources",
-    title: "View version history and roll back a data source",
-    summary:
-      "Every edit to a data source is versioned. View the full history (who changed what, when), inspect any prior version, and roll back to one — non-destructively, so the intervening versions stay in history and you can roll forward again.",
-    difficulty: "intermediate",
-    durationMin: 2,
-    icon: "history",
-    prompts: [
-      {
-        text: "Show me the ServiceNow data source's version history",
-        note: "Agent calls data_sources_list_versions — returns each version with author (bundle-baseline for the original v1, operator/agent for edits), note, timestamp, and which is current.",
-      },
-      {
-        text: "Roll the ServiceNow data source back to version 1",
-        note: "Agent calls data_sources_rollback(version=1). Non-destructive: v1's content is copied forward as a new current version; the edits in between are kept in history.",
-      },
-    ],
-    toolsExercised: [
-      "data_sources_list_versions",
-      "data_sources_rollback",
-      "data_sources_get_schema",
-    ],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/{pack}/{rule}/{dataset}/versions",
-        description:
-          "Lists the version history (metadata only): version, author, note, created_at, is_current. Empty for a source that has never been edited.",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/{pack}/{rule}/{dataset}/versions/{n}",
-        description:
-          "Returns one version's full YAML snapshot. The drawer's History panel renders this read-only when you click View.",
-      },
-      {
-        method: "POST",
-        path: "/api/agent/data-sources/{pack}/{rule}/{dataset}/rollback",
-        description:
-          "Body {version}. Copies that version's snapshot forward as a new current version (non-destructive). Returns {ok, version} where version is the NEW current. 4xx on unknown version / no history.",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/{pack}/{rule}/{dataset}/export?version={n}",
-        description:
-          "v0.17.101 — download a specific version's YAML verbatim (filename <dataset>.v<n>.yaml). Omit ?version to download the current version (after an edit, that's the edited content, not the original file).",
-      },
-    ],
-    howToTest: [
-      "Prerequisite: edit a system data source at least once (see `edit-data-source-guidance`) so it has history.",
-      "Open /data-sources → open that source's drawer → click History in the footer (next to Edit guidance).",
-      "The panel lists versions newest-first: v1 is 'bundle-baseline' (the original), later versions are your edits; the newest is tagged Current.",
-      "Click View on an older version → its full YAML snapshot expands read-only. Click View again to collapse.",
-      "Click Export on any version → downloads that version's YAML (<dataset>.v<n>.yaml). (v0.17.101)",
-      "Click Roll back on a non-current version → a success toast cites the new current version number, and the drawer refetches showing that version's content.",
-      "Re-open History → the rolled-back-to content is now Current as a NEW version; all earlier versions are still listed (non-destructive).",
-      "Chat path: 'show me the ServiceNow version history' then 'roll ServiceNow back to version 1'.",
-    ],
-    expectedResult:
-      "The source's current content matches the rolled-back version. The version list grew by one (the rollback created a new current version); no versions were deleted. GET .../versions shows the full history with exactly one is_current=true.",
-    verifyVia: [
-      "Drawer History panel — the rolled-back content is Current; earlier versions remain listed.",
-      "GET /api/agent/data-sources/{pack}/{rule}/{dataset}/versions → history length grew by one; newest is_current; note reads 'rolled back to vK'.",
-      "GET .../schema → how_to_use matches the rolled-back version's content.",
-    ],
-    related: ["edit-data-source-guidance", "install-data-source", "simulate-from-installed-data-source"],
-    components: ["chat", "audit"],
-  },
-  {
-    // v0.17.99 (SP-4) — versioned edit of a SYSTEM (bundle) data source's
-    // how_to_use guidance. Distinct from `upload-custom-data-source` (which
-    // edits the operator's own uploaded YAML in place). Each save is a
-    // version snapshot served as an overlay; the original is preserved as v1.
-    id: "edit-data-source-guidance",
-    category: "data-sources",
-    title: "Edit a system data source's simulation guidance",
-    summary:
-      "Tailor a bundled data source's 'How to simulate' guidance to your environment (broker address, routing conventions, vendor quirks). Each save creates a version overlay — the shipped file is never touched and the original is preserved as version 1, so you can roll back.",
-    difficulty: "intermediate",
-    durationMin: 2,
-    icon: "edit_note",
-    prompts: [
-      {
-        text: "Update the ServiceNow data source's how-to-use to mention our broker at our-broker.internal:514",
-        note: "Chat-driven edit path — the agent calls data_sources_edit(pack_name, rule_name, dataset_name, how_to_use=...) which goes through the same _apply_edit helper as the UI. author='agent'. The original is snapshotted as version 1 on the first edit; this edit becomes version 2.",
-      },
-      {
-        text: "Show me the current how-to-use guidance for ServiceNow",
-        note: "Agent calls data_sources_get_schema (or reads the drawer) — after an edit, the overlay serves the edited guidance, not the bundled original.",
-      },
-    ],
-    toolsExercised: [
-      "data_sources_edit",
-      "data_sources_get_schema",
-      "data_sources_list",
-    ],
-    apis: [
-      {
-        method: "PUT",
-        path: "/api/agent/data-sources/{pack}/{rule}/{dataset}/edit",
-        description:
-          "Edits how_to_use and/or schema fields. Validates against data_source.schema.json + field-name uniqueness before writing. On the first edit, snapshots the pristine original as version 1 (author bundle-baseline), then the edit as the new current version. Returns {ok, version, data_source_id}. The file on disk is never mutated — the loader serves the newest version as an overlay.",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/{pack}/{rule}/{dataset}/schema",
-        description:
-          "After an edit, returns the overlaid (edited) how_to_use + fields. Confirms the version store overlay is live.",
-      },
-    ],
-    howToTest: [
-      "Open /data-sources → Browse → click a SYSTEM vendor (e.g. ServiceNow) → click a data source row body to open the detail drawer.",
-      "In the drawer footer, click 'Edit guidance' (it appears for system sources alongside Install, where user uploads show 'Edit').",
-      "A modal opens with the current how_to_use pre-filled and a banner explaining the override semantics (original preserved as version 1; no delete). Edit the text, optionally add a change note, click 'Save new version'.",
-      "The drawer refetches and shows your edited guidance in the 'How to simulate' section. A green success banner cites the new version number.",
-      "Re-open the editor and edit again → the version increments (v3, v4, …). The bundled file on disk is never modified.",
-      "Chat path: ask the agent to 'update the ServiceNow how-to-use to mention our broker' — the agent calls data_sources_edit and reports the new version.",
-    ],
-    expectedResult:
-      "The system source's how_to_use now reflects the operator's edit (served via the version overlay). GET .../schema returns the edited guidance. The version store holds version 1 (bundle-baseline = the original) plus one row per edit, exactly one marked current.",
-    verifyVia: [
-      "Re-open the drawer — the 'How to simulate' section shows the edited text, not the bundled original.",
-      "GET /api/agent/data-sources/{pack}/{rule}/{dataset}/schema → how_to_use matches the edit.",
-      "The edit history (author + timestamp + note per version, original as v1) is the source of truth for rollback — the history view + rollback ship in the follow-up release.",
-    ],
-    related: ["install-data-source", "upload-custom-data-source", "simulate-from-installed-data-source"],
-    components: ["chat", "audit"],
-  },
-  {
-    id: "simulate-from-installed-data-source",
-    category: "simulation",
-    title: "Simulate vendor-faithful logs from an installed data source",
-    summary:
-      "With a vendor data source already installed (see `install-data-source`), ask the agent to simulate logs — records carry the vendor's real field names (srcip / dstport / sentbyte for FortiGate) so any downstream system that already knows the vendor parses them cleanly.",
-    difficulty: "intermediate",
-    durationMin: 2,
-    icon: "play_circle",
-    prompts: [
-      {
-        text: "Simulate 50 FortiGate traffic logs",
-        note: "Agent should match the simulate_vendor_logs skill, call data_sources_list(filter='fortigate') first to confirm the install, then data_sources_get_schema, then guardian_generate_fake_data_v2. The response should cite vendor field names (srcip, dstport, sentbyte) — not generic placeholders.",
-      },
-      {
-        text: "Send 100 Okta sign-in events to udp:10.10.0.8:514",
-        note: "Agent should match simulate_vendor_logs + the destination clause, call data_sources_get_schema for Okta, then guardian_create_data_worker with the schema_override + UDP destination. Each emitted record carries Okta's eventType, actor.alternateId, client.userAgent.* keys.",
-      },
-    ],
-    toolsExercised: [
-      "data_sources_list",
-      "data_sources_get_schema",
-      "guardian_generate_fake_data_v2",
-      "guardian_create_data_worker",
-    ],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/data-sources",
-        description:
-          "Lists installed data sources. Agent reads this to confirm the requested vendor is installed before calling get_schema.",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/{vendor}/{product}/schema",
-        description:
-          "Returns the full field inventory. The agent uses this to build the schema_override payload for guardian_generate_fake_data_v2 (or guardian_create_data_worker for UDP-bound flows).",
-      },
-    ],
-    howToTest: [
-      "Prerequisite: FortiGate (or any vendor) is already installed — complete the `install-data-source` journey first.",
-      "Open chat → paste 'Simulate 50 FortiGate traffic logs'.",
-      "Watch tool calls — should be data_sources_list → data_sources_get_schema → guardian_generate_fake_data_v2.",
-      "Read the response — sample records should have srcip / dstip / srcport / dstport / proto / action / user / sentbyte / rcvdbyte as top-level keys with plausible IPv4 / port / action-enum / byte-count values.",
-      "For the UDP destination variant, the agent calls guardian_create_data_worker with destination=udp://... — watch /observability/workers for the spawn + records sent.",
-    ],
-    expectedResult:
-      "guardian_generate_fake_data_v2 returns schemaApplied: true, vendorFieldCount > 0 (matches the vendor's non-meta field count), fallbackReason: null. The agent's response includes a sample record with vendor field names visible — copy-pasteable into any vendor-aware ingest pipeline.",
-    verifyVia: [
-      "Audit feed (/observability/events) shows the 3-call sequence (data_sources_list → data_sources_get_schema → guardian_generate_fake_data_v2 OR guardian_create_data_worker).",
-      "Sample record top-level keys match the vendor's schema (NOT Rosetta's local_ip / remote_port generics).",
-      "For UDP-destination variants: /observability/workers shows a Spark worker bound to the UDP target with records-sent counter incrementing.",
-    ],
-    related: ["install-data-source", "upload-custom-data-source", "generate-firewall-logs", "validate-detection"],
-    components: ["chat", "xlog", "connectors", "audit"],
-  },
-  {
-    id: "upload-custom-data-source",
-    category: "simulation",
-    title: "Upload a custom data_source.yaml (operator-uploaded vendor)",
-    summary:
-      "Operator uploads a custom data_source.yaml — same schema as bundled packs, validated against data_source.schema.json, similarity-checked against known vendors, written to /app/data/user_data_sources/ — then installable + simulatable like any bundled source.",
-    difficulty: "intermediate",
-    durationMin: 4,
-    icon: "upload_file",
-    prompts: [
-      {
-        text: "Simulate 20 AcmeCorp events to udp:10.10.0.8:514",
-        note: "After upload + install, the agent should match simulate_vendor_logs, call data_sources_list(filter='acmecorp'), data_sources_get_schema, then guardian_create_data_worker with schema_override and the UDP destination. Records emitted carry the 5 AcmeCorp fields the operator declared.",
-      },
-    ],
-    toolsExercised: [
-      "data_sources_list",
-      "data_sources_get_schema",
-      "data_sources_install",
-      "guardian_create_data_worker",
-    ],
-    apis: [
-      {
-        method: "POST",
-        path: "/api/agent/data-sources/user/preview",
-        description:
-          "Body: {yaml: '<text>'}. Validates against data_source.schema.json + runs Levenshtein-2 + substring similarity against known vendors. Returns {ok, uploaded_vendor, similarity_matches[], bundle_collision, accept_token}. accept_token = SHA-256 of canonical JSON form of the doc; bound preview→commit.",
-      },
-      {
-        method: "POST",
-        path: "/api/agent/data-sources/user",
-        description:
-          "Body: {yaml|doc, accept_token, vendor_choice}. Re-hashes the doc, verifies token matches (bytes unchanged since preview), writes to /app/data/user_data_sources/<id>/data_source.yaml. Returns 201 {ok, id, data_source}.",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/catalog?origin=user",
-        description:
-          "Lists operator-uploaded sources only (origin=user filter). Useful for the upload-management view; bundle rows are excluded.",
-      },
-      {
-        method: "DELETE",
-        path: "/api/agent/data-sources/user/{id}",
-        description:
-          "Removes user upload from disk + cascades uninstall from data_sources_store if installed. REST-only by design (UI delete affordance lands in a future release if needed).",
-      },
-    ],
-    howToTest: [
-      "Open /data-sources → click Upload data source in the toolbar (right of Browse/Installed).",
-      "Click Insert sample → the textarea fills with an AcmeCorp starter YAML (vendor=AcmeCorp, product=AcmeApp, 5 fields).",
-      "Click Preview. Status block shows uploaded_vendor=AcmeCorp, an accept_token, and an empty similarity_matches array (new vendor, no matches).",
-      "Click Commit upload. Green success banner top-right; catalog refreshes; the new AcmeCorp vendor card appears in Browse with a tertiary-colored 'User upload' badge alongside the category badges.",
-      "Click the AcmeCorp card → tray expands → click the data-source row → drawer opens in Preview mode → Install. After install, the row flips to installed; the 5 fields (src_ip, dst_ip, username, event_action, timestamp_ms) show in the field list.",
-      "Open chat → 'Simulate 20 AcmeCorp events to udp:10.10.0.8:514'. Agent matches simulate_vendor_logs, calls guardian_create_data_worker with schema_override. The records sent to the UDP destination carry exactly the 5 AcmeCorp field names.",
-      "TYPO TEST: edit the YAML's vendor field to 'Forinet' and re-preview. similarity_matches now lists 'Fortinet' (Levenshtein distance=2). The dialog offers Create new vs Group under Fortinet — pick Group under, commit, and the new source shows up under the Fortinet vendor card.",
-    ],
-    expectedResult:
-      "The full upload → install → simulate chain works end-to-end. UDP records arriving at the listener contain exactly the field names declared in the YAML — no extras, no missing.",
-    verifyVia: [
-      "Audit feed (/observability/events) shows data_source_user_upload (status=success), then data_source_install when the operator installs the new source.",
-      "GET /api/agent/data-sources/catalog?origin=user includes the new row with origin=user and id matching the operator's YAML id.",
-      "DELETE /api/agent/data-sources/user/<id> removes both the YAML file and any active install (cascades).",
-    ],
-    related: ["install-data-source", "simulate-from-installed-data-source", "configure-tech-stack"],
-    components: ["chat", "mcp", "xlog", "audit"],
-  },
-  {
-    id: "filter-data-sources-by-use-case",
-    category: "simulation",
-    title: "Find a vendor by use case (dropdown filter)",
-    summary:
-      "Operator narrows the 137-vendor catalog to one or more product types using the multi-select dropdown above the Browse grid. 44 canonical use_case labels span Network / Endpoint / Identity / Data / Cloud / Apps / SecOps / Specialty; one source can match multiple types (Cisco is Firewall AND EDR).",
-    difficulty: "starter",
-    durationMin: 1,
-    icon: "filter_list",
-    prompts: [
-      {
-        text: "(No agent prompt — this is a UI-only journey. Use case filtering doesn't go through the agent.)",
-      },
-    ],
-    toolsExercised: [],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/catalog?xsiam_only=true",
-        description:
-          "Every row carries a `use_cases: [Firewall, WAF, …]` field. UI builds the dropdown checkbox list by deduping use_cases across all rows. Selecting checkboxes toggles a Set<string> in component state; selectedUseCases.size > 0 narrows the grouped vendor list (OR semantics — any matching use_case keeps the vendor).",
-      },
-    ],
-    howToTest: [
-      "Open /data-sources → Browse tab. Above the vendor grid you should see a single pill-shaped 'Use case ▾' trigger button.",
-      "Click the trigger → a 340px-wide floating panel opens below with rounded corners, soft shadow, a search input, and a scrollable checkbox list of ~44 use cases. Each row shows the matching count.",
-      "Tick WAF → grid narrows to ~7 vendors: F5, Cloudflare, Imperva, Barracuda, Radware, Akamai, Fortinet. The trigger button gains a primary-color tint + a '1' badge. An inline 'WAF ×' pill appears next to the trigger.",
-      "Tick MFA → multi-select activates (OR semantics). The grid now shows WAF vendors + MFA vendors (Okta, Duo, RSA, 1Password, SecureAuth, Silverfort, Thales, Keeper). The trigger badge shows '2' and two inline pills render.",
-      "Type 'fire' in the panel's search input → checkbox list narrows to use cases containing 'fire' (Firewall + any others).",
-      "Click the 'WAF ×' inline pill → that filter is removed without re-opening the panel.",
-      "Click outside the panel → it closes. Press Escape to close as well.",
-      "Click the trigger → click 'Clear' in the panel header → all selections reset; full 137-vendor grid returns. Or click 'All' to select every use case in one go.",
-      "Combined with the search box: typing 'okta' in the toolbar search + ticking MFA narrows to vendors whose name matches 'okta' AND have MFA. AND across search + dropdown selections; OR within dropdown selections.",
-    ],
-    expectedResult:
-      "Filtering is instantaneous (no server round-trip — the catalog is loaded once + filtered client-side). The trigger button + inline pills give at-a-glance visibility of the active filter set without occupying horizontal space.",
-    verifyVia: [
-      "Open Network panel → no additional /api/agent/data-sources/catalog requests when toggling checkboxes (proves filtering is client-side).",
-      "Single trigger button visible at first load — no horizontal chip strip.",
-      "Trigger badge count + inline pills both reflect the current selection size.",
-      "F5 vendor card under WAF filter shows badges: WAF, LoadBalancer (the F5 use_cases).",
-    ],
-    related: ["install-data-source", "simulate-from-installed-data-source", "upload-custom-data-source", "edit-user-data-source"],
-    prerequisites: ["upload-custom-data-source"],
-    components: ["marketplace"],
-  },
-  {
-    id: "edit-user-data-source",
-    category: "simulation",
-    title: "Edit a user-uploaded data source (PUT flow)",
-    summary:
-      "Operator edits a previously uploaded data_source.yaml in place — change field list, description, vendor name, anything. The edit goes through the same preview → vendor-choice → accept_token flow as upload, but commits via PUT instead of POST. created_at preserved; updated_at refreshed. Bundled (system) data sources stay read-only.",
-    difficulty: "starter",
-    durationMin: 2,
-    icon: "edit_note",
-    prompts: [
-      {
-        text: "(No agent prompt — UI-only journey. The agent has no MCP tool for editing user data sources by design — credential-guardrail-style boundary: edits to operator catalog state remain operator-only.)",
-      },
-    ],
-    toolsExercised: [],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/data-sources/user/{id}",
-        description:
-          "Returns the existing user upload's full YAML doc so the UI can pre-fill the edit dialog. Response: {ok, data_source: {row}, doc: {parsed YAML}}.",
-      },
-      {
-        method: "POST",
-        path: "/api/agent/data-sources/user/preview",
-        description:
-          "Same preview path as upload. The operator's edited YAML is sent here to validate + run the similarity check + return a fresh accept_token bound to the edited bytes.",
-      },
-      {
-        method: "PUT",
-        path: "/api/agent/data-sources/user/{id}",
-        description:
-          "Body: {yaml|doc, accept_token, vendor_choice}. Path id MUST equal body id (PUT is not rename — 409 otherwise). Target YAML must already exist (404 otherwise). Server re-hashes canonical YAML + verifies accept_token (409 on mismatch). On success: 200 {ok, id, data_source: {row}} with updated_at refreshed; created_at preserved from on-disk YAML.",
-      },
-    ],
-    howToTest: [
-      "Open /data-sources → Browse tab. Find a user-uploaded vendor card (carries a tertiary 'User upload' badge). Click it to expand. The PackRow for the user upload now shows an inline 'Edit' button next to Install/installed indicator + a small 'user' badge.",
-      "Click Edit → the upload dialog opens with the title 'Edit data source — <id>' and the textarea pre-filled with the existing YAML doc.",
-      "Modify the description field (or any field other than `id`). Click Preview. The preview block shows the new uploaded_vendor + accept_token (a fresh SHA-256 over the modified canonical bytes).",
-      "Click Save changes. Green notification 'Changes saved'. The catalog refreshes + the Installed list refreshes (in case this source was installed).",
-      "Re-open Edit on the same source → confirm the description change persisted.",
-      "ALTERNATE ENTRY POINT (Installed tab): open the Installed tab → find the user-uploaded source card → click the pencil icon in the footer (next to delete). Same edit dialog opens.",
-      "ALTERNATE ENTRY POINT (Drawer): click the row body to open the side drawer → the footer shows an Edit pill button (alongside Install/Uninstall) when origin === 'user'.",
-      "ERROR CASE: edit the YAML's `id` field to something else, Preview + Save → server returns 409 with 'id mismatch — PUT does not rename'. To rename, the operator must delete + re-upload.",
-      "ERROR CASE: modify the YAML in the textarea AFTER preview but BEFORE Save (don't click Preview again) → Save returns 409 'accept_token mismatch — re-run preview'.",
-    ],
-    expectedResult:
-      "The user upload is mutated in place on /app/data/user_data_sources/<id>/data_source.yaml. created_at unchanged; updated_at advanced. If the source was installed at edit-time, the install row in data_sources.db is NOT auto-refreshed — the operator must uninstall + reinstall to pick up changed field lists. (Live-edit of installed schemas is intentionally NOT supported; uninstall first means the operator sees a clean diff.)",
-    verifyVia: [
-      "Audit feed (/observability/events) shows data_source_user_edit (status=success, target=data_source:<id>) with metadata recording the field-count delta + vendor delta.",
-      "GET /api/agent/data-sources/user/{id} returns the updated doc with the new updated_at.",
-      "GET /api/agent/data-sources?origin=user lists the source with the new vendor_display_name + use_cases reflecting the edit.",
-      "Bundled (system) data sources have no Edit button anywhere — confirms the origin=user gate works.",
-    ],
-    related: ["upload-custom-data-source", "install-data-source", "simulate-from-installed-data-source"],
-    components: ["marketplace"],
-  },
-  {
-    id: "configure-log-destination",
-    category: "simulation",
-    title: "Configure a syslog log destination + test it",
-    summary:
-      "v0.17.0+ R6. Operator creates a named syslog destination from the /log-destinations page, fires a real probe, and confirms the test datagram reaches the configured host:port. Foundation for v0.17.x: workers reference destinations by name; agent reads but never writes.",
-    difficulty: "starter",
-    durationMin: 2,
-    icon: "cloud_upload",
-    prompts: [
-      {
-        text: "List my configured log destinations",
-        note: "Agent calls log_destinations_list — returns the destination rows with secrets redacted. If no destinations exist yet, the agent should point the operator at /log-destinations to add one.",
-      },
-    ],
-    toolsExercised: [
-      "log_destinations_list",
-      "log_destinations_get",
-    ],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/destination-types",
-        description:
-          "Returns the 4 v1 type manifests (syslog / webhook / xsiam_http / splunk_hec). The /log-destinations page reads these to render the dynamic create form (FormEngine + visible_when discriminators).",
-      },
-      {
-        method: "POST",
-        path: "/api/agent/log-destinations",
-        description:
-          "Operator-only (REST). Body: {name, type_id, config, secrets?, is_default?}. Returns 201 + row with secrets redacted. Secrets persisted to SecretStore at /agents/guardian/log_destinations/<id>/<slot>.",
-      },
-      {
-        method: "POST",
-        path: "/api/agent/log-destinations/{id}/probe",
-        description:
-          "Operator-only (REST). Fires the type's probe handler — sends a real test message to the destination. Returns {ok, error, latency_ms}; updates last_probe_at/_ok/_error columns.",
-      },
-    ],
-    howToTest: [
-      "Open sidebar → Integration → Log Destinations. The page loads with the empty state + [+ New Destination] CTA.",
-      "Click [+ New Destination]. The slide-over panel opens.",
-      "Enter Name (e.g. 'corp-syslog') + optional Description.",
-      "In Type, pick Syslog. The form re-renders with host / port / protocol / framing / facility fields. The TLS cert fields stay hidden (visible_when protocol=tls).",
-      "Fill in host=127.0.0.1, port=5514, protocol=udp, leave framing=rfc5424 default.",
-      "Click Save. The slide-over closes and 'corp-syslog' appears in the Syslog group.",
-      "Start a UDP listener on 5514 in another terminal: `nc -ul 5514` (or use the e2e battery's threaded listener).",
-      "Click Test on the corp-syslog row. The probe handler sends an RFC5424-shaped 'guardian test message' to 127.0.0.1:5514. The button shows a green 'OK · Nms' badge for ~6s and the row's status dot turns green.",
-      "Check the listener — it should have received the test message.",
-    ],
-    expectedResult:
-      "Destination row in /log-destinations shows last_probe_ok=true + a green status dot. UDP listener on 5514 received the test datagram. SQLite store has the row with redacted secret_refs.",
-    verifyVia: [
-      "Audit feed (/observability/events) shows log_destination_create (status=success, target=log_destination:<uuid>) followed by log_destination_probe (status=success, latency_ms=<small>).",
-      "GET /api/agent/log-destinations returns the new row with secrets={} (no slots populated for a no-auth syslog) and last_probe_ok=true.",
-      "scripts/e2e_v0173_log_destinations.py reports SUMMARY: 30+ passed, 0 failed when run inside the agent container.",
-    ],
-    related: ["upload-custom-data-source", "configure-tech-stack"],
-    components: ["chat", "mcp", "xlog", "audit"],
-  },
+  // [guardian v0.1.0] Retired section (log generation + vendor data
+  // sources + log destinations — subsystems removed):
+  //   generate-firewall-logs, sim*-to-log-destination,
+  //   run-port-scan-scenario, install-data-source,
+  //   roll-back-data-source, edit-data-source-guidance,
+  //   sim*-from-installed-data-source, upload-custom-data-source,
+  //   filter-data-sources-by-use-case, edit-user-data-source,
+  //   configure-log-destination.
 
-  // ─────────────────────────────────────────────────────────────────
-  // RED TEAM
-  // ─────────────────────────────────────────────────────────────────
-  {
-    id: "deploy-caldera-sandcat",
-    category: "redteam",
-    title: "Deploy a CALDERA sandcat agent (precondition for operations)",
-    summary:
-      "Compile or download a sandcat binary and run it on a target box so it phones home to CALDERA. Required before `create-caldera-operation`.",
-    difficulty: "intermediate",
-    durationMin: 6,
-    icon: "deployed_code",
-    prompts: [
-      {
-        text: "How do I deploy a sandcat agent to register with our CALDERA instance?",
-        note: "The agent will tell you the steps, but the actual deployment is hands-on on a target box — not something the agent can do for you. Use this prompt as a checklist.",
-      },
-      {
-        text: "List CALDERA agents and confirm one is connected",
-        note: "Run AFTER the sandcat is up. If `caldera_get_all_agents` returns a non-empty list, you're ready for `create-caldera-operation`.",
-        newSession: true,
-      },
-    ],
-    toolsExercised: ["caldera_get_all_agents"],
-    apis: [
-      {
-        method: "GET",
-        path: "http://caldera:8888/file/download",
-        description:
-          "Endpoint that compiles + serves a sandcat binary on the fly. Headers select platform: `platform: linux | windows | darwin`, `architecture: amd64 | arm64`, `file: sandcat.go`. Internal to the compose network.",
-      },
-      {
-        method: "GET",
-        path: "/api/v2/agents",
-        description:
-          "Returns connected agents. Empty list (`{result: []}`) means no sandcat has phoned home yet.",
-      },
-    ],
-    howToTest: [
-      "Tunnel CALDERA's UI to your laptop: `gcloud compute start-iap-tunnel \"$VM_NAME\" 8888 --local-host-port=localhost:8888 --zone=\"$VM_ZONE\" --project=\"$VM_PROJECT\"` then open http://localhost:8888 (default red-team login: `red` / value of `CALDERA_RED_PASSWORD` from .env).",
-      "In the CALDERA UI: navigate to Plugins → Sandcat → Download. Pick platform (Linux/Windows/macOS). The binary is built on demand against the running CALDERA's URL — no manual configuration needed.",
-      "Copy the binary to a target box (a test VM, your laptop, or even a docker container).",
-      "**CRITICAL — install as a persistent service, NOT a foreground process.** The PowerShell snippet served by CALDERA's UI uses `Start-Process -WindowStyle Hidden` which dies the moment the spawning logon session ends (RDP disconnect, reboot, idle logoff). Wrap it as a Windows scheduled task running as SYSTEM, or a Linux systemd unit. See the persistence patterns below.",
-      "Windows persistence: register two scheduled tasks as SYSTEM — one `AtStartup` to launch sandcat, one `RepetitionInterval=5min` watchdog to relaunch if `Get-Process guardiand` returns nothing. Tasks survive logoff, reboot, RDP drop. The bundled `/help/user#sandcat-persistence` section has the full PowerShell snippet (~30 lines, idempotent).",
-      "Linux persistence: drop a systemd unit at `/etc/systemd/system/sandcat.service` with `Restart=always` and `User=root`, then `systemctl enable --now sandcat`. The agent runs detached from any shell session.",
-      "In another shell or chat session, paste the second prompt above. The agent should now report at least one connected agent — and importantly, `last_seen` should keep ticking (`(now - last_seen) < 60s` while you're not logged in).",
-    ],
-    expectedResult:
-      "`caldera_get_all_agents` returns a non-empty list. Each entry has `paw` (agent ID), `host`, `platform`, `last_seen`. The CALDERA UI's Agents pane shows the same entries with green status pills. Critically: `last_seen` keeps refreshing every minute even after you disconnect from the host — that's the signal the agent is durable, not transient.",
-    verifyVia: [
-      "Direct: `curl -H \"KEY: $CALDERA_API_KEY\" http://caldera:8888/api/v2/agents` from inside the guardian-agent container — should return your agents.",
-      "/observability/events filtered by target=tool:caldera.* — recent caldera_get_all_agents call should show a non-empty result.",
-      "CALDERA UI's Operations pane: now lets you create a new operation (the dropdown was disabled before any agent existed).",
-    ],
-    related: ["list-caldera-abilities", "create-caldera-operation"],
-    components: ["chat", "caldera", "audit"],
-  },
-  {
-    id: "list-caldera-abilities",
-    category: "redteam",
-    title: "Browse the CALDERA ability catalog",
-    summary:
-      "Confirm the CALDERA connector is wired and reachable. ~1900 abilities across MITRE tactics.",
-    difficulty: "starter",
-    durationMin: 1,
-    icon: "list_alt",
-    prompts: [
-      {
-        text: "List the available CALDERA abilities and show me 5 example names",
-      },
-    ],
-    toolsExercised: ["caldera_get_all_abilities"],
-    apis: [
-      {
-        method: "GET",
-        path: "http://caldera:8888/api/v2/abilities",
-        description:
-          "MCP makes this call internally with the operator's CALDERA_API_KEY (seeded from the env at boot via the SecretStore).",
-      },
-    ],
-    howToTest: [
-      "Paste the prompt in a fresh chat.",
-      "Agent should respond with a count (~1900) and 3-5 ability names — possibly grouped by tactic.",
-    ],
-    expectedResult:
-      "caldera_get_all_abilities returns the full catalog within ~300ms. Agent extracts a count + sample. NO 401 errors (those happened earlier today before the env-propagation fix shipped).",
-    verifyVia: [
-      "Audit feed: tool:caldera.get_all_abilities with status=success and duration_ms < 500.",
-      "If you suspect the connector isn't wired: GET /api/agent/instances should show caldera/primary-caldera with secrets: 1/1 populated.",
-    ],
-    related: ["create-caldera-operation"],
-    prerequisites: ["deploy-caldera-sandcat"],
-    components: ["chat", "caldera"],
-  },
-  {
-    id: "create-caldera-operation",
-    category: "redteam",
-    title: "Create a CALDERA adversary emulation operation",
-    summary:
-      "Pick an adversary, deploy on agents, run the operation, watch for detected vs missed activity.",
-    difficulty: "advanced",
-    durationMin: 8,
-    icon: "swords",
-    prompts: [
-      {
-        text: "List available CALDERA adversaries and recommend one for testing endpoint detection",
-      },
-      {
-        text: "Create a CALDERA operation using the recommended adversary against any deployed agents",
-      },
-    ],
-    toolsExercised: [
-      "caldera_get_adversaries",
-      "caldera_get_all_agents",
-      "caldera_create_operation",
-      "caldera_get_operation_report",
-      "memory_store",
-    ],
-    apis: [
-      {
-        method: "POST",
-        path: "http://caldera:8888/api/v2/operations",
-        description: "Invoked internally by the MCP via caldera_create_operation.",
-      },
-    ],
-    howToTest: [
-      "PREREQ: complete the `deploy-caldera-sandcat` journey first — without at least one connected agent, prompt 2 will report 'no deployed agents' and stop.",
-      "Run prompt 1 — agent enumerates adversaries.",
-      "Run prompt 2 — agent picks one, dispatches the operation.",
-      "Wait 30-60s, then ask: 'Show me the operation report'.",
-    ],
-    expectedResult:
-      "Operation runs to completion (or the configured time-cap). Report shows ability runs with status (success/failed/skipped) and any collected facts (hostnames, IPs, files).",
-    verifyVia: [
-      "/observability/events filtered by target=tool:caldera.* shows the full sequence.",
-      "Open the CALDERA UI directly (tunnel :8888) — operation should appear in the active list.",
-    ],
-    related: ["deploy-caldera-sandcat", "list-caldera-abilities", "validate-detection"],
-    prerequisites: ["deploy-caldera-sandcat", "list-caldera-abilities"],
-    components: ["chat", "caldera", "audit"],
-  },
+  // [guardian v0.1.0] Retired section (red-team C2 emulation —
+  // subsystem removed): deploy-*-sandcat, list-*-abilities,
+  // create-*-operation.
 
-  // ─────────────────────────────────────────────────────────────────
-  // VALIDATION
-  // ─────────────────────────────────────────────────────────────────
-  {
-    id: "validate-detection",
-    category: "validation",
-    title: "Validate a detection rule",
-    summary:
-      "Record a detection-validation outcome against a prior simulation: which rule was expected, did it fire, with what lag.",
-    difficulty: "intermediate",
-    durationMin: 5,
-    icon: "fact_check",
-    prompts: [
-      {
-        text: "Run a coverage report so I can see recent simulation IDs, then call guardian_run_detection_validation against the most recent T1078 (Valid Accounts) simulation with expected={\"alert\":\"Valid Accounts\",\"technique_id\":\"T1078\"}",
-        note: "guardian_run_detection_validation requires a `simulation_id` (NOT a raw technique_id). Run a sim first if none exist; the agent will pull the id from the coverage report.",
-      },
-    ],
-    toolsExercised: [
-      "guardian_generate_coverage_report",
-      "guardian_run_detection_validation",
-      "memory_store",
-    ],
-    apis: [
-      {
-        method: "POST",
-        path: "/api/agent/validations",
-        description:
-          "xlog records the validation; MCP polls for SIEM hits and updates status.",
-      },
-    ],
-    howToTest: [
-      "Configure XSIAM via /providers (PAPI URL + headers + auth ID + playground ID + webhook key).",
-      "Paste the prompt in a fresh chat.",
-      "Wait the configured polling window — agent reports either 'detection fired (lag: Xs)' or 'no detection within timeout'.",
-    ],
-    expectedResult:
-      "Validation row in xlog. If a matching rule fires in XSIAM, status='detected' with lag in seconds. If not, status='missed' with the rule name expected.",
-    verifyVia: [
-      "/observability/events for tool:xlog.run_detection_validation.",
-      "/memory: new `validated:T1078:<source>` entry recording the outcome.",
-      "Direct XSIAM query in the playground for the rule_name returned by the validation.",
-    ],
-    related: ["generate-coverage-report"],
-    prerequisites: ["generate-firewall-logs", "configure-vertex-provider"],
-    components: ["chat", "xsiam", "audit"],
-  },
-  {
-    id: "generate-coverage-report",
-    category: "validation",
-    title: "Generate ATT&CK coverage report",
-    summary:
-      "Roll up all validation runs into a per-tactic / per-technique hit-rate table. Daily cron also produces this automatically.",
-    difficulty: "starter",
-    durationMin: 2,
-    icon: "query_stats",
-    prompts: [
-      {
-        text: "Generate a coverage report for the last 7 days of validation runs",
-      },
-    ],
-    toolsExercised: ["guardian_generate_coverage_report"],
-    apis: [
-      {
-        method: "POST",
-        path: "/api/agent/reports/coverage",
-        description:
-          "xlog rolls up validation_results into MITRE ATT&CK matrix format.",
-      },
-    ],
-    howToTest: [
-      "Run at least one detection-validation journey first (so there's data).",
-      "Paste the prompt in a fresh chat.",
-      "Read the response — should include per-tactic counts (hit/missed/untested) and a list of weak-coverage techniques.",
-    ],
-    expectedResult:
-      "Markdown table by tactic. Each row: tactic / techniques covered / hit rate / notable misses.",
-    verifyVia: [
-      "The cron job `daily-soc-coverage-summary` runs this same tool every 24h — visit /jobs to see its run history.",
-      "Audit feed: tool:xlog.generate_coverage_report status=success.",
-    ],
-    related: ["validate-detection"],
-    components: ["chat", "xsiam"],
-  },
+  // [guardian v0.1.0] Retired section (detection-validation + coverage
+  // reporting — subsystem removed): validate-detection,
+  // generate-coverage-report.
 
   // ─────────────────────────────────────────────────────────────────
   // OPS
@@ -1579,8 +605,8 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Visit /jobs and click 'Create Job'.",
-      "Identity: name='nightly-coverage-check'; enabled=true.",
-      "Action: type='Prompt' (the picker offers Prompt + Tool Call only), message='Generate a coverage report for the last 7 days'.",
+      "Identity: name='nightly-case-summary'; enabled=true.",
+      "Action: type='Prompt' (the picker offers Prompt + Tool Call only), message='Summarize the open XSIAM cases from the last 24 hours'.",
       "Schedule: Daily at 02:00 — or pick a time 1-2 minutes ahead for fast testing.",
       "Submit — redirects to /jobs and the new row shows a 'Runtime' badge.",
       "Click the ⋯ menu on the job row → 'Run Now' to test out-of-band.",
@@ -1599,7 +625,6 @@ export const JOURNEYS: Journey[] = [
       "schedule-job-once",
       "manage-job-lifecycle",
       "export-import-job",
-      "generate-coverage-report",
     ],
     components: ["chat", "jobs", "audit"],
   },
@@ -1608,7 +633,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Schedule a recurring tool_call job",
     summary:
-      "Direct MCP tool dispatch on a cron schedule — no chat pipeline involved. Faster + cheaper than chat for known-shape automations like 'generate coverage report every Monday'.",
+      "Direct MCP tool dispatch on a cron schedule — no chat pipeline involved. Faster + cheaper than chat for known-shape automations like 'pull the open XSIAM cases every Monday'.",
     difficulty: "intermediate",
     durationMin: 4,
     icon: "build",
@@ -1630,67 +655,26 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Visit /jobs/new.",
-      "Identity: name='weekly-coverage-rollup'.",
-      "Action: type='tool_call', tool name='guardian_generate_coverage_report', arguments JSON='{\"include_simulations\": true, \"limit\": 100}'.",
+      "Identity: name='weekly-case-pull'.",
+      "Action: type='tool_call', tool name='xsiam_get_cases', arguments JSON='{}' (or add filters per the tool's schema).",
       "Schedule: Weekly, Mondays at 09:00.",
       "Submit. Then click 'Run Now' on the job row to fire immediately.",
     ],
     expectedResult:
-      "Job fires via the MCP tool registry directly (no Gemini / chat round-trip). result_json contains the tool's structured output (the same coverage report shape the agent gets when it calls the tool interactively).",
+      "Job fires via the MCP tool registry directly (no Gemini / chat round-trip). result_json contains the tool's structured output (the same case list shape the agent gets when it calls the tool interactively).",
     verifyVia: [
-      "GET /api/agent/jobs/<name>/runs → run row's result_json should match the shape of guardian_generate_coverage_report's response (summary + attack_coverage[] + simulations[]).",
-      "Audit feed: action='tool_call' row with target='tool:xlog.generate_coverage_report' and trigger='job:<name>'.",
-      "Compare to the chat-action equivalent (schedule-runtime-job): tool_call jobs run in ~50-200ms; chat jobs run in ~3-30s because they go through the model loop.",
+      "GET /api/agent/jobs/<name>/runs → run row's result_json should match the shape of xsiam_get_cases' response.",
+      "Audit feed: action='tool_call' row with target='tool:xsiam.get_cases' and trigger='job:<name>'.",
+      "Compare to the chat-action equivalent (schedule-runtime-job): tool_call jobs run in ~50-200ms plus the upstream API latency; chat jobs run in ~3-30s because they go through the model loop.",
     ],
     related: [
       "schedule-runtime-job",
-      "generate-coverage-report",
       "manage-job-lifecycle",
     ],
     components: ["chat", "jobs", "approvals"],
   },
-  {
-    id: "schedule-log-generation-job",
-    category: "ops",
-    title: "Schedule recurring log generation (via tool_call)",
-    summary:
-      "Schedule periodic synthetic log workers — e.g. 'every hour generate 50 firewall logs to keep the SIEM warm.' Log generation runs as a tool_call to guardian_create_data_worker.",
-    difficulty: "intermediate",
-    durationMin: 4,
-    icon: "data_object",
-    prompts: [],
-    toolsExercised: ["xlog.create_data_worker"],
-    apis: [
-      {
-        method: "POST",
-        path: "/api/agent/jobs",
-        description:
-          "Body: {name, cron, action: {type: 'tool_call', name: 'guardian_create_data_worker', args: {request: {vendor, product, type: format, count, destination}}}, enabled, run_once: false}. Only prompt + tool_call action types exist.",
-      },
-    ],
-    howToTest: [
-      "Visit /jobs/new.",
-      "Identity: name='hourly-firewall-keepalive'.",
-      "Action: pick 'Tool Call'. tool name='guardian_create_data_worker'. Arguments JSON='{\"request\":{\"vendor\":\"Fortinet\",\"product\":\"FortiGate\",\"type\":\"CEF\",\"count\":50,\"destination\":\"udp:10.10.0.8:514\"}}' (or omit destination to use the technology stack default).",
-      "Schedule: Hourly, every 1h, minute=:00.",
-      "Submit. Click 'Run Now' on the row to test out-of-band.",
-    ],
-    expectedResult:
-      "Each fire creates a guardian_create_data_worker invocation directly via the MCP tool registry — no LLM round-trip. Fast, deterministic, cheap. result captures the worker_id and its status (Running / Connection Error / etc). The data worker streams logs to the configured destination for roughly count×interval seconds.",
-    verifyVia: [
-      "GET /api/agent/jobs/<name>/runs → run rows with action.name='guardian_create_data_worker' and result containing the worker descriptor.",
-      "Call xlog.list_workers (or click 'List active workers' in chat) → recent fire's worker appears.",
-      "tcpdump on the syslog receiver: each fire produces a burst of `count` logs.",
-      "All jobs use prompt or tool_call action types. Legacy `log` action shapes have been migrated to tool_call at boot.",
-    ],
-    related: [
-      "configure-tech-stack",
-      "generate-firewall-logs",
-      "schedule-tool-call-job",
-      "ops-list-stop-xlog-workers",
-    ],
-    components: ["jobs", "xlog"],
-  },
+  // [guardian v0.1.0] Retired: schedule-log-generation-job — the
+  // synthetic log-generation engine was removed.
   {
     id: "run-job-now",
     category: "ops",
@@ -1718,8 +702,8 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Visit /jobs/new.",
-      "Identity: name='now-coverage-snapshot'.",
-      "Action: any type (chat / tool_call / log) — try chat with message='Show me current coverage gaps'.",
+      "Identity: name='now-case-snapshot'.",
+      "Action: either type (prompt / tool_call) — try prompt with message='Summarize the open XSIAM cases right now'.",
       "Schedule: pick 'Run Now' — UI shows green info banner 'Job will fire immediately on save and then disable itself.'",
       "Submit. Form's submit handler POSTs the job, then immediately POSTs /run.",
       "Land on /jobs — see the new row with last_status='success' and a Disabled badge within seconds.",
@@ -1755,8 +739,8 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Visit /jobs/new.",
-      "Identity: name='maintenance-window-sim'.",
-      "Action: chat with message='Generate 200 logs simulating a maintenance window' (or any action).",
+      "Identity: name='maintenance-window-summary'.",
+      "Action: prompt with message='Summarize XSIAM issues created during tonight's maintenance window' (or any action).",
       "Schedule: pick 'Run Once'. The datetime picker defaults to 1 hour from now; pick a moment 2-5 minutes in the future for fast testing.",
       "Submit. Form blocks submission if the picked datetime is in the past or <1min away.",
       "Wait until the picked time → cron tick fires the job → auto-disables.",
@@ -1816,7 +800,7 @@ export const JOURNEYS: Journey[] = [
     verifyVia: [
       "`docker exec guardian_agent ls -la /app/data/jobs/` — file count matches the count of source='runtime' rows in jobs.db.",
       "`docker exec guardian_agent cat /app/data/jobs/<name>.yaml` — definition shape: `name:`, `cron:`, `timezone:`, `enabled:`, `run_once:`, `action:`. NO `next_due_at` / `last_status` (those stay in SQLite).",
-      "Manifest jobs (e.g. `daily-soc-coverage-summary`) have NO YAML file — their canonical def lives in `bundles/spark/manifest.yaml`. Verifies the source-aware mirroring logic.",
+      "Manifest jobs would have NO YAML file — their canonical def lives in `bundles/spark/manifest.yaml`. The current bundle ships `jobs: []`, so every job on a fresh install is runtime-source and mirrored.",
       "Boot logs (`docker compose logs guardian-agent | grep YAML`) show `YAML mirror loaded N runtime job(s)` after each restart.",
     ],
     related: [
@@ -1877,7 +861,7 @@ export const JOURNEYS: Journey[] = [
       "GET /api/agent/jobs/<name> after disable → enabled=false, next_due_at unchanged (preserved for resume).",
       "POST /api/agent/jobs/<name>/run while disabled → returns 200 with the new run row.",
       "DELETE → GET /api/agent/jobs/<name> returns 404.",
-      "Try DELETE on a manifest job (e.g. daily-soc-coverage-summary) → succeeds, but next deploy/restart resurrects it.",
+      "Manifest-source jobs would soft-delete (removed=1) and resurrect on next boot; the current bundle ships jobs: [] so every job you see is runtime-source and hard-deletes.",
     ],
     related: [
       "schedule-runtime-job",
@@ -1987,10 +971,10 @@ export const JOURNEYS: Journey[] = [
     toolsExercised: [],
     apis: [
       {
-        method: "POST",
-        path: "/api/agent/setup",
+        method: "PUT",
+        path: "/api/agent/providers/config",
         description:
-          "Persists the provider config + secrets via the SecretStore (encrypted via GUARDIAN_SECRET_KEK).",
+          "Persists the provider config + secrets via the ProviderStore/SecretStore (encrypted via GUARDIAN_SECRET_KEK). Creates primary-vertex when no instance exists; partial-updates otherwise.",
       },
     ],
     howToTest: [
@@ -2029,7 +1013,7 @@ export const JOURNEYS: Journey[] = [
         note: "Tier-1 read. Agent calls jobs_list — no approval, immediate.",
       },
       {
-        text: "schedule a daily SOC coverage report at 8am UTC",
+        text: "schedule a daily XSIAM case summary at 8am UTC",
         note:
           "Tier-2 soft write. Agent reads current jobs, proposes new one, requests approval — green inline card appears below the chat thread. Click Approve.",
       },
@@ -2043,7 +1027,7 @@ export const JOURNEYS: Journey[] = [
         note: "Tier-1 read. Agent calls health_status — verifies Vertex live, no errors.",
       },
       {
-        text: "delete the daily-soc-coverage job",
+        text: "delete the daily-case-summary job",
         note:
           "Tier-3 destructive. Agent requests approval; the inline card shows a RED banner ('this is irrecoverable'). Click Approve to remove.",
       },
@@ -2097,10 +1081,10 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open a fresh chat at /. (Tier-1 reads need no setup; Tier-2+ require an operator browser session for inline approvals.)",
       "Paste prompt #1 (\"what jobs are scheduled?\"). Confirm the agent enumerates current jobs WITHOUT showing an approval card — Tier-1 reads run immediately.",
-      "Paste prompt #2 (\"schedule a daily SOC coverage report at 8am UTC\"). The agent will tell you what it's about to do, then a GREEN approval card appears below the chat. Click Approve. The agent's next message confirms 'Job created'.",
+      "Paste prompt #2 (\"schedule a daily XSIAM case summary at 8am UTC\"). The agent will tell you what it's about to do, then a GREEN approval card appears below the chat. Click Approve. The agent's next message confirms 'Job created'.",
       "Paste prompt #3 (\"always reply in three bullet points\"). The agent reads the current personality.md, proposes a markdown edit, and a card appears showing the new markdown content. Click Approve. Future replies should be terser.",
       "Paste prompt #4 (\"are you healthy?\"). Confirm health_status returns embedder_mode: vertex (or stub if Vertex not configured).",
-      "Paste prompt #5 (\"delete the daily-soc-coverage job\"). The card now shows a RED banner ('this is irrecoverable'). Confirm the destructive styling renders. Click Approve to remove the job.",
+      "Paste prompt #5 (\"delete the daily-case-summary job\"). The card now shows a RED banner ('this is irrecoverable'). Confirm the destructive styling renders. Click Approve to remove the job.",
       "Paste prompt #6 (\"rotate the api key labeled gh-actions\"). The card requires typing 'CONFIRM' in an input field — the Approve button stays disabled until you type the literal string. Type CONFIRM, click Approve. The agent's reply contains the new plaintext (only visible once).",
       "Paste prompt #7 (\"what did you do today?\"). Verify the audit log shows agent_self_mod_requested + agent_self_mod_executed pairs for each gated call above, with the right risk_tier.",
     ],
@@ -2128,15 +1112,15 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Tune the agent's action policy (local vs external boundary)",
     summary:
-      "Stop the agent from confusing 'create a job to send logs' with 'send logs now'. Edit the policy in /settings/personality, then ask an ambiguous question and watch the agent ask back.",
+      "Stop the agent from confusing 'create a job to pull cases' with 'pull the cases now'. Edit the policy in /settings/personality, then ask an ambiguous question and watch the agent ask back.",
     difficulty: "intermediate",
     durationMin: 6,
     icon: "route",
     prompts: [
       {
-        text: "create a job that sends emulated firewall logs immediately",
+        text: "create a job that pulls the open XSIAM cases immediately",
         note:
-          "DELIBERATELY ambiguous: could mean (a) create a one-shot job that fires now, or (b) just send logs now. With askWhenUnsure ON the agent should ASK with two numbered options before calling any tool.",
+          "DELIBERATELY ambiguous: could mean (a) create a one-shot job that fires now, or (b) just pull the cases now. With askWhenUnsure ON the agent should ASK with two numbered options before calling any tool.",
       },
       {
         text: "(a) — option a from the agent's clarification",
@@ -2144,9 +1128,9 @@ export const JOURNEYS: Journey[] = [
           "Picks the LOCAL interpretation. Agent should now call jobs_create with run_once: true; an inline approval card appears, click Approve.",
       },
       {
-        text: "send firewall logs right now",
+        text: "pull the open XSIAM cases right now",
         note:
-          "Unambiguous EXTERNAL request. Per default policy (confirmExternalActions: 'soft'), agent says 'About to call xlog.create_data_worker — fire it?'. Reply 'yes' or 'go' to proceed.",
+          "Unambiguous EXTERNAL request. Per default policy (confirmExternalActions: 'soft'), agent says 'About to call xsiam_get_cases — fire it?'. Reply 'yes' or 'go' to proceed.",
       },
       {
         text: "show me my action policy",
@@ -2163,7 +1147,7 @@ export const JOURNEYS: Journey[] = [
       "personality_get",
       "personality_update",
       "jobs_create",
-      "xlog.create_data_worker",
+      "xsiam_get_cases",
     ],
     apis: [
       {
@@ -2180,12 +1164,12 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Visit /settings/personality. Confirm the new 'Action Policy' section is visible between 'Autonomy & Permissions' and 'Thinking & Reasoning'.",
-      "Verify the defaults: askWhenUnsure=ON, confirmLocalActions=approve-card, confirmExternalActions=soft. The localCategories chip list includes jobs/settings/personality/etc; externalCategories includes xlog/caldera/xsiam/simulations.",
-      "Open a fresh chat. Paste the deliberately-ambiguous prompt #1. The agent must ASK with two numbered options labeled (LOCAL · jobs_create with run_once) and (EXTERNAL · xlog.create_data_worker). It must NOT call a tool yet.",
+      "Verify the defaults: askWhenUnsure=ON, confirmLocalActions=approve-card, confirmExternalActions=soft. The localCategories chip list includes jobs/settings/personality/etc; externalCategories includes xsiam/xdr/web/cortex.",
+      "Open a fresh chat. Paste the deliberately-ambiguous prompt #1. The agent must ASK with two numbered options labeled (LOCAL · jobs_create with run_once) and (EXTERNAL · xsiam_get_cases). It must NOT call a tool yet.",
       "Reply with prompt #2 ('a' or 'option a' or similar). The agent now calls jobs_create with run_once=true; the green approval card appears below the chat. Click Approve. Job created; it fires once and auto-disables.",
-      "Send prompt #3 ('send firewall logs right now'). With confirmExternalActions=soft, the agent should announce 'About to call xlog.create_data_worker — fire it?' and wait. Reply 'yes' / 'go'. Tool fires.",
+      "Send prompt #3 ('pull the open XSIAM cases right now'). With confirmExternalActions=soft, the agent should announce 'About to call xsiam_get_cases — fire it?' and wait. Reply 'yes' / 'go'. Tool fires.",
       "Send prompt #4 ('show me my action policy'). Agent calls personality_get; the reply enumerates the policy fields.",
-      "Send prompt #5 to change external confirmation to off. Approve the personality_update card. Test: ask the agent 'send firewall logs now' again — this time it should fire immediately without the soft confirmation step.",
+      "Send prompt #5 to change external confirmation to off. Approve the personality_update card. Test: ask the agent 'pull the cases now' again — this time it should fire immediately without the soft confirmation step.",
     ],
     expectedResult:
       "The agent's classification of LOCAL vs EXTERNAL becomes operator-tunable per session. Ambiguous requests trigger a clarification question (numbered options + category labels) instead of a silent mis-classification. The two confirmation cadences (local / external) decouple from each other, so an operator can keep tight gates on local writes while letting external actions flow.",
@@ -2194,113 +1178,12 @@ export const JOURNEYS: Journey[] = [
       "GET /api/agent/audit?action=personality_changed for the row showing the operator's edit (after the personality_update approval landed).",
       "Audit the agent's tool calls: when given an ambiguous prompt and policy.askWhenUnsure=true, NO tool_call event should fire on that turn — only assistant text containing the clarification.",
     ],
-    related: ["customize-agent-persona", "configure-agent-via-chat"],
+    related: ["configure-agent-via-chat"],
     components: ["chat", "settings", "approvals"],
   },
 
-  // ─────────────────────────────────────────────────────────────────
-  // VALIDATION — Phase 12 closed-loop coverage
-  // ─────────────────────────────────────────────────────────────────
-  {
-    id: "find-coverage-gaps",
-    category: "validation",
-    title: "Find coverage gaps and propose simulations",
-    summary:
-      "Sync XSIAM issues into the local detection inventory, surface silent / going-dark / low-coverage techniques, and let the agent propose specific scenarios to exercise them.",
-    difficulty: "intermediate",
-    durationMin: 10,
-    icon: "track_changes",
-    prompts: [
-      {
-        text: "pull the last 24 hours of XSIAM issues into my detection inventory",
-        note:
-          "Two-step: agent calls xsiam.get_issues with a 24h time-range filter, then passes the result to detections_sync. First-time runs may show inserted=0 if XSIAM has no issues yet — the connector returns an empty array. Sync is idempotent; replaying inserts no duplicates.",
-      },
-      {
-        text: "list my detections — what fired this week?",
-        note:
-          "Agent calls detections_list. Output is per-rule with fires_24h / fires_7d / fires_30d aggregates, sorted by most-recently-fired.",
-      },
-      {
-        text: "show me MITRE technique coverage",
-        note:
-          "Agent calls technique_coverage. Returns per-T-code rollup: rules_count + windowed fires + last_fire_at.",
-      },
-      {
-        text: "find coverage gaps",
-        note:
-          "Agent calls coverage_gaps. Three buckets surface: silent (rules covered, no 30-day fires), going_dark (fired this month but not this week), low_coverage (single-rule techniques). For each silent technique the agent proposes a scenario from load_simulation_skills that exercises it.",
-      },
-      {
-        text: "snapshot my current coverage so I can compare later",
-        note: "Agent calls coverage_snapshot_take. Returns the snapshot id; total counts visible in the response.",
-      },
-      {
-        text: "what's drifted since my last snapshot?",
-        note:
-          "Agent calls coverage_diff with no args — auto-picks newest two snapshots. Output: rules went_silent / new_active / fire_rate_drop, techniques went_uncovered / newly_covered, summary totals. If you only have one snapshot it tells you to take more.",
-      },
-      {
-        text: "exercise the worst-covered technique you found",
-        note:
-          "Agent picks the silent technique with the oldest last_fire_at, cross-references load_simulation_skills, and proposes a concrete scenario (e.g. 'T1078 is silent for 35 days; I can run credential_theft_apt — proceed?'). Soft-confirm per actionPolicy.confirmExternalActions.",
-      },
-    ],
-    toolsExercised: [
-      "xsiam.get_issues",
-      "detections_sync",
-      "detections_list",
-      "technique_coverage",
-      "coverage_gaps",
-      "coverage_snapshot_take",
-      "coverage_diff",
-      "load_simulation_skills",
-    ],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/detections",
-        description: "Aggregated rules with windowed fire counts. Backs detections_list.",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/detections/coverage/techniques",
-        description: "Per-MITRE-T-code rollup. Backs technique_coverage.",
-      },
-      {
-        method: "POST",
-        path: "/api/agent/detections/sync",
-        description:
-          "Operator-direct ingest path. Body: {issues: [...]}. The chat path ALSO uses this: agent → xsiam.get_issues → detections_sync.",
-      },
-    ],
-    howToTest: [
-      "Make sure XSIAM is configured. /providers must show vertex/primary-vertex; /instances must show xsiam/primary-xsiam with the PAPI token bound.",
-      "Open a fresh chat. Paste prompt #1 to sync. The agent's reply should include {ok: true, inserted: N, total: M}.",
-      "Paste #2 to confirm the inventory was populated — at minimum the rule(s) you fired in the last 24 hours should appear with fires_24h > 0.",
-      "Paste #3 (technique_coverage) and confirm the MITRE T-code(s) attached to those issues are listed.",
-      "Paste #4 (find gaps). Wait — if everything fired in the last 7 days, you'll see no silent / going_dark / low_coverage entries. To force a gap, manually delete some recent issue rows from XSIAM AND re-sync, OR just wait a week.",
-      "Paste #5 to take a snapshot. Note the snapshot_id. Wait at least 24h, run #1 again, then take a second snapshot.",
-      "Paste #6 to see the diff. With no fresh fires, you should see rules went_silent. Confirm the report's summary totals match the per-bucket lists.",
-      "Paste #7. The agent should pick a specific technique from the silent bucket, propose a matching scenario from the simulation skills catalog (port_scan / ransomware_attack / credential_theft_apt are the v1 candidates), and ask for confirmation before launching.",
-    ],
-    expectedResult:
-      "Guardian maintains an operational inventory that grows monotonically with each sync. Coverage gaps are surfaced automatically — the agent doesn't ask you to investigate where you're weak, it tells you. Snapshots create a versioned audit trail of coverage state, and drift between snapshots becomes the operator-facing signal for 'something changed in your detection posture'.",
-    verifyVia: [
-      "GET /api/agent/detections — confirm at least the rules from your fires are listed.",
-      "GET /api/agent/detections/coverage/techniques — confirm T-codes are extracted from the issues' mitre_technique_id_and_name field (or its variants).",
-      "GET /api/agent/audit?action=detections_synced — one row per sync call.",
-      "GET /api/agent/audit?action=coverage_snapshot_taken — one row per snapshot.",
-      "GET /api/agent/audit?action=coverage_drift_detected — only when the diff finds non-zero signals.",
-      "GET /api/agent/audit?action=coverage_gap_observed — when coverage_gaps surfaces silent or going-dark techniques.",
-    ],
-    related: [
-      "configure-agent-via-chat",
-      "validate-detection",
-      "generate-coverage-report",
-    ],
-    components: ["chat", "xsiam", "audit"],
-  },
+  // [guardian v0.1.0] Retired: find-coverage-gaps — the detection-
+  // inventory / coverage-gap subsystem was removed.
 
   // ─────────────────────────────────────────────────────────────────
   // CHAT & SESSIONS
@@ -2373,11 +1256,11 @@ export const JOURNEYS: Journey[] = [
     icon: "download",
     prompts: [
       {
-        text: "Send 3 firewall login-failure logs to udp:10.10.0.8:514.",
+        text: "List the open XSIAM cases from the last 24 hours.",
         note: "Run this so the export contains a tool round-trip plus the assistant's recap.",
       },
     ],
-    toolsExercised: ["xlog.create_worker"],
+    toolsExercised: ["xsiam_get_cases"],
     apis: [
       {
         method: "GET",
@@ -2453,11 +1336,11 @@ export const JOURNEYS: Journey[] = [
     icon: "monitoring",
     prompts: [
       {
-        text: "What scenarios are available?",
-        note: "Triggers a tool_call to xlog.list_scenarios — appears in the telemetry panel as a live row.",
+        text: "What datasets exist in our XSIAM tenant?",
+        note: "Triggers a tool_call to xsiam_get_datasets — appears in the telemetry panel as a live row.",
       },
     ],
-    toolsExercised: ["xlog.list_scenarios"],
+    toolsExercised: ["xsiam_get_datasets"],
     apis: [],
     howToTest: [
       "Click the Live Telemetry icon in the chat header (right side, looks like a monitor).",
@@ -2487,11 +1370,11 @@ export const JOURNEYS: Journey[] = [
     icon: "delete_sweep",
     prompts: [
       {
-        text: "List the scenarios.",
+        text: "List the XSIAM datasets.",
         note: "Populates the telemetry with a tool call to clear next.",
       },
     ],
-    toolsExercised: ["xlog.list_scenarios"],
+    toolsExercised: ["xsiam_get_datasets"],
     apis: [],
     howToTest: [
       "Open the live telemetry panel and run a prompt that fires at least one tool call.",
@@ -2555,12 +1438,12 @@ export const JOURNEYS: Journey[] = [
     icon: "history",
     prompts: [
       {
-        text: "Send 5 SSH brute-force log lines to udp:10.10.0.8:514.",
+        text: "Query XSIAM for failed logins in the last hour.",
         note: "Run this in session A so it has tool round-trips. Then later, load session A from history and verify the telemetry panel shows them.",
         newSession: true,
       },
     ],
-    toolsExercised: ["xlog.create_worker"],
+    toolsExercised: ["xsiam_run_xql_query"],
     apis: [
       {
         method: "GET",
@@ -2579,7 +1462,7 @@ export const JOURNEYS: Journey[] = [
       "Now click Session A in the sidebar.",
       "The chat thread rehydrates with all prior messages.",
       "Open the live telemetry panel.",
-      "It should show the tool round-trip from Session A (xlog.create_worker with its args + result).",
+      "It should show the tool round-trip from Session A (xsiam_run_xql_query with its args + result).",
     ],
     expectedResult:
       "Both the chat thread AND the telemetry panel rehydrate. The panel doesn't restart from empty when you switch sessions — it shows what happened in that specific session.",
@@ -2602,20 +1485,20 @@ export const JOURNEYS: Journey[] = [
     icon: "psychology",
     prompts: [
       {
-        text: "I want to test detections for a Linux server compromise.",
-        note: "First turn: agent should ask clarifying questions about the host, the attack chain, etc.",
+        text: "I'm investigating a possible compromise of one of our Linux servers.",
+        note: "First turn: agent should ask clarifying questions about the host, the timeframe, etc.",
         newSession: true,
       },
       {
-        text: "Yes, the host is 10.10.20.5 and we want to start with SSH brute-force.",
-        note: "Follow-up: agent should remember 'Linux server compromise' from turn 1 and dispatch the right scenario without re-asking.",
+        text: "The host is 10.10.20.5 — check XSIAM for SSH brute-force activity against it in the last 24 hours.",
+        note: "Follow-up: agent should remember 'Linux server compromise' from turn 1 and run the right XQL query without re-asking.",
       },
       {
-        text: "How long was that simulation again?",
-        note: "Second follow-up: agent should reference the SSH brute-force run it just did, not ask 'which simulation?'",
+        text: "How many results did that query return again?",
+        note: "Second follow-up: agent should reference the XQL query it just ran, not ask 'which query?'",
       },
     ],
-    toolsExercised: ["xlog.create_scenario_worker", "memory_search"],
+    toolsExercised: ["xsiam_run_xql_query", "memory_search"],
     apis: [
       {
         method: "POST",
@@ -2632,11 +1515,11 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Run the three prompts in order in the SAME session.",
-      "After turn 2, the agent should dispatch SSH brute-force without asking 'which target?' (it remembers 10.10.20.5 from turn 2).",
-      "After turn 3, the agent should answer with the actual duration of the simulation it just ran (not ask 'which simulation?').",
+      "After turn 2, the agent should run the XQL query without asking 'which target?' (it remembers 10.10.20.5 from turn 2).",
+      "After turn 3, the agent should answer with the actual result count of the query it just ran (not ask 'which query?').",
     ],
     expectedResult:
-      "Turn 2 reads as a coherent continuation of turn 1 (no clarifying re-ask). Turn 3 references the simulation just run. If the agent asks 'what are you referring to?' or 'which target?', context wasn't loaded — check that loadSessionHistory() ran (search audit log for the chat_append rows from prior turns).",
+      "Turn 2 reads as a coherent continuation of turn 1 (no clarifying re-ask). Turn 3 references the query just run. If the agent asks 'what are you referring to?' or 'which target?', context wasn't loaded — check that loadSessionHistory() ran (search audit log for the chat_append rows from prior turns).",
     verifyVia: [
       "GET /api/agent/sessions/{id}/messages — should show all 3 user turns + 3 assistant responses + tool rows.",
       "GET /api/agent/audit?session={id}&action=chat_append — at least 6 rows (one per user/assistant message).",
@@ -2701,7 +1584,6 @@ export const JOURNEYS: Journey[] = [
     ],
     related: [
       "recall-org-config",
-      "memorize-simulation-result",
       "chat-context-aware-followup",
     ],
     components: ["chat", "memory"],
@@ -2722,16 +1604,16 @@ export const JOURNEYS: Journey[] = [
     icon: "compress",
     prompts: [
       {
-        text: "Tell me what scenarios are available in xlog.",
+        text: "What datasets exist in our XSIAM tenant?",
         note: "Turn 1 — populate some history. Any prompt works; this one is fast.",
         newSession: true,
       },
       {
-        text: "Pick one scenario and explain when I'd use it.",
+        text: "Pick one dataset and explain what kind of investigations it supports.",
         note: "Turn 2 — more context to compact.",
       },
       {
-        text: "What other adversary emulation paths cover similar TTPs?",
+        text: "Which XQL example queries from the KB cover that dataset?",
         note: "Turn 3 — final turn before /compress.",
       },
       {
@@ -2739,11 +1621,11 @@ export const JOURNEYS: Journey[] = [
         note: "Triggers compaction. Watch the telemetry panel for compaction_start → compaction_end events; the chat thread gets a horizontal divider; the chat header shows a 'Compacted N messages' badge.",
       },
       {
-        text: "What was the second scenario you mentioned?",
-        note: "Final turn — the agent answers from the summary, NOT the full transcript. The summary preserves opaque IDs (scenario filenames) verbatim per the SUMMARIZE_INSTRUCTIONS contract, so this should still resolve correctly.",
+        text: "What was the second dataset you mentioned?",
+        note: "Final turn — the agent answers from the summary, NOT the full transcript. The summary preserves opaque IDs (dataset names) verbatim per the SUMMARIZE_INSTRUCTIONS contract, so this should still resolve correctly.",
       },
     ],
-    toolsExercised: ["scenarios.list_scenarios"],
+    toolsExercised: ["xsiam_get_datasets"],
     apis: [
       {
         method: "POST",
@@ -2853,7 +1735,7 @@ export const JOURNEYS: Journey[] = [
     icon: "restart_alt",
     prompts: [
       {
-        text: "List the scenarios in xlog.",
+        text: "List the datasets in XSIAM.",
         note: "Turn 1 — populates the session with a tool-call round-trip so /clear has something meaningful to clear.",
         newSession: true,
       },
@@ -2866,7 +1748,7 @@ export const JOURNEYS: Journey[] = [
         note: "Verifies the chat is now driving the NEW session — the agent's reply (or the chat header) carries the freshly minted id, not the old one.",
       },
     ],
-    toolsExercised: ["scenarios.list_scenarios"],
+    toolsExercised: ["xsiam_get_datasets"],
     apis: [
       {
         method: "POST",
@@ -3337,22 +2219,22 @@ export const JOURNEYS: Journey[] = [
     category: "chat",
     title: "Plan a multi-step workflow with /plan",
     summary:
-      "Ask the agent to plan before executing — useful for 4-hour scenarios that fire 12 tools across xlog + CALDERA + XSIAM. Operator approves once instead of 12 inline cards.",
+      "Ask the agent to plan before executing — useful for long investigations that fire many tools across XSIAM + Cortex XDR + the docs connector. Operator approves once instead of a dozen inline cards.",
     difficulty: "starter",
     durationMin: 4,
     icon: "map",
     prompts: [
       {
-        text: "/plan run a 30-minute FortiGate auth-spray scenario, then verify coverage with XQL queries against the playground",
+        text: "/plan investigate the most recent critical XSIAM case: pull the case, query the related events with XQL, and summarize the affected assets",
         note: "Triggers PLAN_MODE_INSTRUCTIONS on the model. Returns a numbered plan WITHOUT executing any tools — the model can't sneak in a side effect because callGemini runs with no tools wired during planning.",
         newSession: true,
       },
       {
-        text: "run a 30-minute FortiGate auth-spray scenario, then verify coverage with XQL queries against the playground",
+        text: "investigate the most recent critical XSIAM case: pull the case, query the related events with XQL, and summarize the affected assets",
         note: "Same prompt without /plan. Now the agent executes the plan (subject to per-tool approval cards for tier-2+ destructive tools).",
       },
     ],
-    toolsExercised: ["xlog.create_scenario_worker", "xsiam.execute_xql_query"],
+    toolsExercised: ["xsiam_get_cases", "xsiam_run_xql_query", "xsiam_get_assets"],
     apis: [
       {
         method: "POST",
@@ -3387,14 +2269,14 @@ export const JOURNEYS: Journey[] = [
     category: "chat",
     title: "Monitor active background work with /tasks",
     summary:
-      "See what the agent (or you) has spawned: scenario emulation workers, CALDERA operations, XSIAM queries, compaction summarizers. Mid-chat /tasks command shows what's running for THIS session bubbled to the top.",
+      "See what the agent (or you) has spawned: subagent runs, long-running queries, compaction summarizers. Mid-chat /tasks command shows what's running for THIS session bubbled to the top.",
     difficulty: "starter",
     durationMin: 2,
     icon: "pending_actions",
     prompts: [
       {
-        text: "Generate 10 minutes of synthetic SSH brute-force events to udp:10.10.0.8:514",
-        note: "Spawns an xlog scenario worker — that's a long-running task. It lands in the registry with kind='scenario_worker' and parent_session_id linking back to this chat.",
+        text: "Use a subagent to review the open XSIAM cases from the last 24 hours and summarize them",
+        note: "Spawns a subagent run — that's a long-running task. It lands in the registry with kind='subagent' and parent_session_id linking back to this chat.",
         newSession: true,
       },
       {
@@ -3402,7 +2284,7 @@ export const JOURNEYS: Journey[] = [
         note: "Shows your active task. Tasks tied to THIS session are marked with ★. Visit /tasks for the full registry (including completed and aborted).",
       },
     ],
-    toolsExercised: ["xlog.create_worker"],
+    toolsExercised: ["subagent_create"],
     apis: [
       {
         method: "GET",
@@ -3418,14 +2300,14 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Send the prompt above. Wait for the agent to spawn a worker.",
+      "Send the prompt above. Wait for the agent to spawn the subagent.",
       "Send /tasks — look for ★ in front of your row.",
       "Visit /tasks page in another tab. Per-row: progress bar, kind, elapsed time, abort button (when running).",
-      "Click Abort on a task. Confirm. The status flips to 'aborted' on next refresh; the worker stops at its next checkpoint.",
+      "Click Abort on a task. Confirm. The status flips to 'aborted' on next refresh; the task stops at its next checkpoint.",
       "Filter by 'Succeeded' / 'Failed' / 'Aborted' to see history.",
     ],
     expectedResult:
-      "Tasks are durable (survive container restarts), per-session navigable (parent_session_id link), abort-able. Replaces the lossy module-level workers={} dict in xlog with a real persisted registry.",
+      "Tasks are durable (survive container restarts), per-session navigable (parent_session_id link), abort-able — a real persisted registry instead of in-memory state.",
     verifyVia: [
       "GET /api/agent/tasks?active_only=1 → JSON list with progress + parent_session_id",
       "GET /api/agent/audit?action=task_started → one row per running transition",
@@ -3447,8 +2329,8 @@ export const JOURNEYS: Journey[] = [
     icon: "payments",
     prompts: [
       {
-        text: "Tell me about the FortiGate scenario in xlog and explain when I'd use it",
-        note: "Real turn that fires a tool call (xlog.list_scenarios) — burns ~15-30K input tokens and a few hundred output tokens.",
+        text: "List the datasets in our XSIAM tenant and explain what each one contains",
+        note: "Real turn that fires a tool call (xsiam_get_datasets) — burns ~15-30K input tokens and a few hundred output tokens.",
         newSession: true,
       },
       {
@@ -3456,7 +2338,7 @@ export const JOURNEYS: Journey[] = [
         note: "Aggregates chat_turn_cost audit rows for THIS session and today (UTC). Shows by-model breakdown when more than one model fired.",
       },
     ],
-    toolsExercised: ["xlog.list_scenarios"],
+    toolsExercised: ["xsiam_get_datasets"],
     apis: [
       {
         method: "GET",
@@ -3504,12 +2386,12 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Open /jobs/new. Scroll to Section 01 → confirm the Permission policy section appears below the Extended-thinking toggle, with three glob inputs (Allowed / Denied / Require approval).",
-      "Fill Allowed tools: 'xlog_*' (whitelist the xlog family). Save the job with a simple prompt action (say 'send 5 SYSLOG logs to udp:localhost:514').",
-      "Run the job now. Open the run-detail page. Confirm the agent's chat turn called only xlog-family tools; any attempt to call non-xlog tools shows status=denied_by_policy with the denial reason.",
+      "Fill Allowed tools: 'xsiam_*' (whitelist the XSIAM family). Save the job with a simple prompt action (say 'list the open XSIAM cases').",
+      "Run the job now. Open the run-detail page. Confirm the agent's chat turn called only xsiam-family tools; any attempt to call non-xsiam tools shows status=denied_by_policy with the denial reason.",
       "Edit the job: clear Allowed tools, set Denied tools to '*_delete'. Save. Re-run. Confirm the job can call most tools but any *_delete call is denied.",
-      "Set Require approval to 'xsiam_write_*'. Even with bypass_approvals=true, confirm any xsiam_write_* call routes through the approval card (bypass doesn't override require_approval — policy intent wins).",
+      "Set Require approval to 'xsiam_create_*'. Even with bypass_approvals=true, confirm any xsiam_create_* call routes through the approval card (bypass doesn't override require_approval — policy intent wins).",
       "Open /observability/events → filter action=tool_denied_by_policy. Confirm every denied dispatch appears with matched_list + matched_pattern metadata.",
-      "Chat with the agent: 'restrict the test-job to only allow xlog tools'. Confirm the agent calls jobs_update with permission_policy.allowed_tools=['xlog_*'].",
+      "Chat with the agent: 'restrict the test-job to only allow XSIAM tools'. Confirm the agent calls jobs_update with permission_policy.allowed_tools=['xsiam_*'].",
       "Clear ALL THREE permission policy fields → save. Confirm the next dispatch is unrestricted (policy effectively cleared via the {} sentinel).",
       "CLI verify schema: docker exec guardian_agent sqlite3 /app/data/jobs.db 'PRAGMA table_info(jobs)' → permission_policy_json TEXT column present.",
       "Verify pre-migration jobs.db: copy an older jobs.db to /tmp, point the agent at it, restart. Confirm the column gets ALTER TABLE'd on boot (no manual migration needed).",
@@ -3607,10 +2489,10 @@ export const JOURNEYS: Journey[] = [
       "Open /settings/hooks → Add hook.",
       "Transport dropdown defaults to 'Built-in (in-process, no subprocess)'. Confirm the Builtin dropdown lists 'Slack approval'.",
       "Pick 'Slack approval'. The dynamic form renders three fields: Webhook URL (required), Auth header name (optional), Auth header value (optional, accepts secret:<ENV_NAME>).",
-      "Fill: name 'soc-ops slack', event PreToolUse, toolGlob 'caldera_*,xsiam_write_*,*_delete', webhookUrl '<your-receiver-url>', timeout 60000, failurePolicy 'allow'.",
+      "Fill: name 'soc-ops slack', event PreToolUse, toolGlob 'xsiam_create_*,xsiam_add_*,*_delete', webhookUrl '<your-receiver-url>', timeout 60000, failurePolicy 'allow'.",
       "Save. The hook lands in the SqliteHookStore with transport.type='builtin' + transport.name='slack-approval' + transport.config={webhookUrl,...}.",
       "Confirm the list row shows a 'built-in' badge in the transport column.",
-      "In chat, ask the agent to start a CALDERA operation. Slack #soc-ops gets a message with Approve/Deny buttons.",
+      "In chat, ask the agent to create an XSIAM dataset. Slack #soc-ops gets a message with Approve/Deny buttons.",
       "Click Approve — tool call proceeds. Click Deny on a follow-up — chat thread surfaces the analyst's reason.",
       "Compare latency vs the legacy http-transport slack-approval: the builtin runs in-process so the round-trip cost is just the receiver call (no extra HTTP layer between Guardian and the receiver).",
     ],
@@ -3642,16 +2524,16 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/hooks",
         description:
-          "Body: {name, event:'PreToolUse', matcher:{toolGlob:'caldera_*,xsiam_write_*,*_delete'}, transport:{type:'http',url:'https://your-receiver/pre-tool-approval'}, timeoutMs:60000, failurePolicy:'allow', enabled:true}. The chat-route loads hooks fresh per fire-site.",
+          "Body: {name, event:'PreToolUse', matcher:{toolGlob:'xsiam_create_*,xsiam_add_*,*_delete'}, transport:{type:'http',url:'https://your-receiver/pre-tool-approval'}, timeoutMs:60000, failurePolicy:'allow', enabled:true}. The chat-route loads hooks fresh per fire-site.",
       },
     ],
     howToTest: [
       "Deploy a small webhook receiver (Lambda / Cloud Function / Slack-bot). It must: (1) accept POST with the PreToolUse JSON payload, (2) post to Slack with Approve/Deny interactive buttons, (3) wait for the analyst's click, (4) return JSON {decision:'allow'|'deny', reason}.",
       "See lib/slack-approval-hook.ts:SLACK_APPROVAL_INSTRUCTIONS for a reference receiver skeleton.",
       "Open /settings/hooks → Add hook.",
-      "Set: name 'soc-ops slack approval', event PreToolUse, transport HTTP with your receiver URL, toolGlob 'caldera_*,xsiam_write_*,*_delete', timeout 60000, failurePolicy 'allow' (so a receiver outage doesn't block all chat).",
+      "Set: name 'soc-ops slack approval', event PreToolUse, transport HTTP with your receiver URL, toolGlob 'xsiam_create_*,xsiam_add_*,*_delete', timeout 60000, failurePolicy 'allow' (so a receiver outage doesn't block all chat).",
       "Save. The hook lands in the SqliteHookStore.",
-      "In chat, ask the agent to start a CALDERA operation. Watch the wire-events panel — hook_dispatched event fires.",
+      "In chat, ask the agent to create an XSIAM dataset. Watch the wire-events panel — hook_dispatched event fires.",
       "Slack channel #soc-ops gets a message with Approve/Deny buttons. Click Approve.",
       "The chat-route's hook dispatcher receives {decision:'allow', reason}. Tool call proceeds.",
       "Try again with Deny — tool call blocks; the model sees an error response with the analyst's reason.",
@@ -3673,7 +2555,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Block destructive tools against production targets",
     summary:
-      "Install a PreToolUse hook that inspects tool args and denies any caldera_start_operation against a host group named 'production'. Defense in depth alongside the standard tier-gating.",
+      "Install a PreToolUse hook that inspects tool args and denies any xsiam_create_dataset / xsiam_add_lookup_data call targeting a name that contains 'prod'. Defense in depth alongside the standard tier-gating.",
     difficulty: "intermediate",
     durationMin: 6,
     icon: "block",
@@ -3684,16 +2566,16 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/hooks",
         description:
-          "Body for a command-transport hook: {name, event:'PreToolUse', matcher:{toolGlob:'caldera_*'}, transport:{type:'command', command:'/etc/guardian/policy/check-target.sh', env:{POLICY_DENY_LIST:'production'}}, failurePolicy:'block'}. The hook script reads JSON from stdin, returns JSON to stdout.",
+          "Body for a command-transport hook: {name, event:'PreToolUse', matcher:{toolGlob:'xsiam_create_*,xsiam_add_*'}, transport:{type:'command', command:'/etc/guardian/policy/check-target.sh', env:{POLICY_DENY_LIST:'prod'}}, failurePolicy:'block'}. The hook script reads JSON from stdin, returns JSON to stdout.",
       },
     ],
     howToTest: [
-      "Write a small shell script (or any executable). Read JSON from stdin. Inspect payload.args.adversary_id / payload.args.target_groups. If 'production' appears, output {\"decision\":\"deny\",\"reason\":\"Production targets require ops director approval\"}. Else output {} (no-op).",
+      "Write a small shell script (or any executable). Read JSON from stdin. Inspect payload.args.dataset_name (or the relevant target arg). If 'prod' appears, output {\"decision\":\"deny\",\"reason\":\"Production datasets require ops director approval\"}. Else output {} (no-op).",
       "Make the script executable and place it on the guardian-agent container's filesystem (/etc/guardian/policy/check-target.sh — mount via docker compose volume, or bake into the bundle).",
       "Open /settings/hooks → Add hook with the configuration above.",
       "Save. failurePolicy='block' = if your script errors / times out, treat as deny. Strict.",
-      "In chat: ask the agent to start a CALDERA operation against the playground. Tool call proceeds — no production marker.",
-      "Now ask: 'Run a CALDERA operation against the production agents'. The PreToolUse hook fires, your script returns {\"decision\":\"deny\"}, and the chat-route synthesizes a tool result with the reason.",
+      "In chat: ask the agent to create a scratch dataset named 'ir_test_lookup'. Tool call proceeds — no production marker.",
+      "Now ask: 'Create a dataset named prod_blocklist'. The PreToolUse hook fires, your script returns {\"decision\":\"deny\"}, and the chat-route synthesizes a tool result with the reason.",
       "Audit row hook_dispatched logs the per-hook decision in metadata.",
     ],
     expectedResult:
@@ -3718,11 +2600,11 @@ export const JOURNEYS: Journey[] = [
     icon: "key",
     prompts: [
       {
-        text: "List the rules in XSIAM",
+        text: "List the open cases in XSIAM",
         note: "Exercises an XSIAM tool. If the configured auth has expired, the call returns 401 — the chat-route's classifier flips the connector state to 'needs-auth'.",
       },
     ],
-    toolsExercised: ["xsiam.list_rules"],
+    toolsExercised: ["xsiam_get_cases"],
     apis: [
       {
         method: "GET",
@@ -3739,7 +2621,7 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Set up: deliberately rotate the XSIAM API key in the upstream tenant (or wait for it to expire) WITHOUT updating guardian's stored credential.",
-      "Send the prompt above. The xsiam.list_rules tool returns 401.",
+      "Send the prompt above. The xsiam_get_cases tool returns 401.",
       "Watch the chat: a connector_auth_required SSE event fires.",
       "Visit /observability/connectors. The xsiam connector shows state='needs-auth' with the last_error truncated.",
       "Update the credential (via /providers or settings).",
@@ -3804,9 +2686,9 @@ export const JOURNEYS: Journey[] = [
   {
     id: "ops-install-vendor-plugin",
     category: "ops",
-    title: "Install a vendor plugin (skills + scenarios + memory seeds + agents)",
+    title: "Install a vendor plugin (skills + memory seeds + agents)",
     summary:
-      "Drop a plugin directory under bundles/spark/plugins/, click Reload on /plugins, watch contributions land. Plugin contributes skills (auto-copied to /app/skills/plugins/), scenarios (auto-copied to /app/scenarios/ready/), memory seeds (idempotent — operator edits survive), and (Phase S) agent definitions.",
+      "Drop a plugin directory under bundles/spark/plugins/, click Reload on /plugins, watch contributions land. Plugin contributes skills (auto-copied to /app/skills/plugins/), memory seeds (idempotent — operator edits survive), and (Phase S) agent definitions.",
     difficulty: "intermediate",
     durationMin: 6,
     icon: "extension",
@@ -3827,24 +2709,24 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Author a plugin: create bundles/spark/plugins/vendor-x/ with manifest.yaml declaring name, version, description, enabled:true, plus any of: skills:, scenarios:, memory_seeds:, agents:.",
-      "See bundles/spark/plugins/example-vendor/ for the reference structure: 1 skill, 0 scenarios, 3 memory seeds, 3 agent definitions.",
+      "Author a plugin: create bundles/spark/plugins/vendor-x/ with manifest.yaml declaring name, version, description, enabled:true, plus any of: skills:, memory_seeds:, agents:.",
+      "The bundle ships no plugins by default — bundles/spark/plugins/ starts empty; your directory is the first entry.",
       "Drop the directory into the running container's bundle root (volume-mount or rebuild image).",
       "Visit /plugins. Verify your plugin appears with the correct contribution counts.",
       "Click 'Reload all'. Wait for the spinner. Plugin reload applies all contributions.",
       "Verify skill: navigate to /skills, look for plugin-namespaced skill.",
       "Verify memory seeds: /memory page → search for keys you declared. Each seeded memory has meta.source='plugin:vendor-x' for provenance.",
-      "Verify agents (Phase S): /agents page → 3 new origin='plugin:vendor-x' rows.",
+      "Verify agents (Phase S): /agents page → new origin='plugin:vendor-x' rows.",
       "Edit a plugin-contributed memory in /memory → operator edit. Reload plugin again — your edit survives (the seeder skips existing keys).",
     ],
     expectedResult:
-      "Guardian is now a platform: vendor-specific scenarios + skills + memory seeds + agent definitions + (future) MCP connectors all flow through one declarative manifest. No code changes needed for new vendor support.",
+      "Guardian is now a platform: vendor-specific skills + memory seeds + agent definitions + (future) MCP connectors all flow through one declarative manifest. No code changes needed for new vendor support.",
     verifyVia: [
       "GET /api/agent/plugins → vendor-x in the list with seeded_count showing how many seeds were ACTUALLY written (vs already existed)",
       "GET /api/agent/audit?action=plugins_reloaded → audit row with plugins_count + total_seeded",
       "GET /api/agent/agent-definitions → plugin-contributed agents have origin='plugin:vendor-x'",
     ],
-    related: ["redteam-spawn-red-team-subagent"],
+    related: ["ops-author-custom-agent"],
     components: ["plugins", "settings", "audit"],
   },
 
@@ -3888,7 +2770,7 @@ export const JOURNEYS: Journey[] = [
       "Pick event: e.g. PreToolUse. Pick transport: 'Plugin handler (entry-point)'. If the handler dropdown is empty, click Refresh — that bumps ?refresh=1 on the discovery call and re-walks entry-points.",
       "Pick the handler from the dropdown. Fill the JSON config textarea (consult the plugin's README for required fields). Set a timeout if needed (defaults to 5s, capped server-side at 60s).",
       "Save. Hook lands in SqliteHookStore with transport.type='plugin' + handlerName + config.",
-      "Trigger the hook event (for PreToolUse, run any tool from /chat). The hook-runner dispatches to MCP via /api/agent/plugin-hooks/{name}/invoke; the Python handler runs on the thread pool; the result feeds back through the failure-policy path.",
+      "Trigger the hook event (for PreToolUse, run any tool from the chat at /). The hook-runner dispatches to MCP via /api/agent/plugin-hooks/{name}/invoke; the Python handler runs on the thread pool; the result feeds back through the failure-policy path.",
       "Open /observability/events?action=plugin_hook_invoked. Confirm one row per invocation with metadata.handler + metadata.category (allow / deny / ask / no-op / ok-other / error).",
     ],
     expectedResult:
@@ -3959,167 +2841,12 @@ export const JOURNEYS: Journey[] = [
     components: ["plugins", "audit"],
   },
 
-  // ── Phase S — Subagent: red team ────────────────────────────────
-  {
-    id: "redteam-spawn-red-team-subagent",
-    category: "redteam",
-    title: "Spawn a scoped red-team subagent",
-    summary:
-      "Coordinator agent spawns red-team-emulator subagent (caldera_* tool scope only) to drive a CALDERA operation. Subagent can't accidentally fire XSIAM queries, can't spin up xlog scenarios that pollute coverage data.",
-    difficulty: "intermediate",
-    durationMin: 8,
-    icon: "groups",
-    prompts: [
-      {
-        text: "Use the red-team-emulator subagent to drive a CALDERA discovery operation against the playground agents",
-        note: "Coordinator agent has subagent_create available. It invokes red-team-emulator (which is plugin-contributed, origin=plugin:example-vendor) with the operator's task.",
-        newSession: true,
-      },
-    ],
-    toolsExercised: ["subagent_create", "caldera.get_all_abilities", "caldera.start_operation", "caldera.get_operation"],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/agent-definitions/by-name/red-team-emulator",
-        description:
-          "Returns the agent definition: tools_allowed=['caldera_*'], tools_denied=['caldera_delete_*'], max_turns=10, system_prompt focused on red-team workflow.",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/sessions/{subagent_id}/messages",
-        description:
-          "After the run completes, the subagent's session has its own transcript. parent_session_id metadata links it back to the coordinator's chat.",
-      },
-    ],
-    howToTest: [
-      "Verify red-team-emulator is registered: visit /agents, look for it under origin='plugin:example-vendor'.",
-      "If absent: visit /plugins → click Reload all to re-apply plugin contributions.",
-      "Open a fresh chat. Send the prompt above.",
-      "Watch the wire-events panel:",
-      "  → tool_call event for subagent_create (metadata.readOnly=false, etc).",
-      "  → subagent_started event (subagent_session_id, agent_name, prompt).",
-      "  → subagent_tool_call events as the subagent fires caldera tools.",
-      "  → if the subagent tries a non-caldera tool, subagent_tool_blocked fires (defense in depth).",
-      "  → subagent_completed event with final_response + duration_ms.",
-      "Chat thread shows the SubagentCard pinned below the latest assistant bubble — live tool-call timeline + final response + sidechain link.",
-      "Click the sidechain link → opens the subagent's session as a separate chat (full transcript, persistent).",
-    ],
-    expectedResult:
-      "Red-team subagent runs with bounded tool catalog. Coordinator sees a structured summary; subagent's full transcript is available for audit. Defense-in-depth: even if the model tries to fire xsiam_* inside the subagent, the scope filter denies the call.",
-    verifyVia: [
-      "GET /api/agent/audit?action=chat_subagent_started → metadata.agent_name='red-team-emulator', tools_allowed_count=1",
-      "GET /api/agent/audit?action=chat_subagent_completed → metadata.tool_calls_count, turns_used",
-      "GET /api/agent/sessions/{subagent_id} → meta.parent_session_id linking to coordinator",
-      "GET /api/agent/tasks?kind=subagent → task entry with subagent_session_id in meta",
-    ],
-    related: ["validation-spawn-blue-team-validator", "validation-multi-agent-purple-team"],
-    components: ["chat", "subagents", "agents-registry", "slash-commands", "caldera", "audit"],
-  },
-
-  // ── Phase S — Subagent: blue team ───────────────────────────────
-  {
-    id: "validation-spawn-blue-team-validator",
-    category: "validation",
-    title: "Spawn a read-only blue-team validation subagent",
-    summary:
-      "After running a scenario or CALDERA operation, spawn blue-team-validator (xsiam read-only + memory_search) to verify detection coverage. Subagent CANNOT mutate XSIAM, CANNOT call CALDERA, CANNOT spin up xlog scenarios — pure verification.",
-    difficulty: "intermediate",
-    durationMin: 6,
-    icon: "fact_check",
-    prompts: [
-      {
-        text: "Use the blue-team-validator subagent to verify detection coverage for the FortiGate auth-spray we ran 5 minutes ago. Source IP was 10.0.0.42, target group was playground.",
-        note: "Coordinator delegates to blue-team-validator with the attack window. The subagent runs XQL queries, lists rules, computes per-rule coverage.",
-        newSession: true,
-      },
-    ],
-    toolsExercised: ["subagent_create", "xsiam.execute_xql_query", "xsiam.list_rules", "memory.search"],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/agent-definitions/by-name/blue-team-validator",
-        description:
-          "tools_allowed=['xsiam_execute_xql_query','xsiam_get_dataset_metadata','xsiam_list_rules','memory_search','memory_list','guardian_get_required_fields','guardian_get_field_info'], max_turns=12, system prompt focused on detection-coverage validation.",
-      },
-    ],
-    howToTest: [
-      "Pre-step: run a scenario (any) so there's data to validate against. The chat-context-aware-followup or run-port-scan-scenario journey are good setups.",
-      "Open a fresh chat. Send the prompt above with the attack window details (start time, source IP, etc).",
-      "Watch the SubagentCard appear in the thread.",
-      "Subagent's tool-call timeline: xsiam_list_rules → for each candidate rule, xsiam_execute_xql_query bounded to the attack window → memory_search for prior baselines → final summary.",
-      "Final response: per-rule expected vs actual alerts, coverage percentage, gap callouts.",
-      "Click the sidechain link to read the full subagent transcript.",
-    ],
-    expectedResult:
-      "Blue-team validation runs without mutating any state. The subagent CANNOT modify XSIAM rules, CANNOT trigger CALDERA, CANNOT generate synthetic events — confirmed by scope filter (any attempt produces a subagent_tool_blocked event).",
-    verifyVia: [
-      "GET /api/agent/audit?action=chat_subagent_completed → metadata.agent_name='blue-team-validator'",
-      "Subagent transcript: every tool_call is read-only (no xsiam_create_*, xsiam_update_*, etc.)",
-      "If the model tries a non-allowlisted tool inside the subagent: subagent_tool_blocked event with reason='Tool 'xsiam_x' is outside the subagent's scope.'",
-    ],
-    related: ["redteam-spawn-red-team-subagent", "validation-multi-agent-purple-team"],
-    components: ["chat", "subagents", "agents-registry", "slash-commands", "xsiam", "audit"],
-  },
-
-  // ── Phase S — Multi-agent purple team ──────────────────────────
-  {
-    id: "validation-multi-agent-purple-team",
-    category: "validation",
-    title: "Run a full purple-team exercise via subagent delegation",
-    summary:
-      "End-to-end purple-team flow with three subagents in sequence: red-team-emulator drives a CALDERA op; blue-team-validator checks XSIAM coverage; coverage-reporter composes the final structured report. Each subagent runs in isolation with a scoped tool catalog.",
-    difficulty: "advanced",
-    durationMin: 15,
-    icon: "diversity_3",
-    prompts: [
-      {
-        text: "Run a complete purple-team exercise: have the red-team-emulator drive a CALDERA discovery operation, then the blue-team-validator check XSIAM coverage, then the coverage-reporter compose a final summary report. Use the playground agents.",
-        note: "Coordinator agent orchestrates 3 sequential subagent calls. Each subagent has bounded tool scope; results flow back to the coordinator which feeds them into the next.",
-        newSession: true,
-      },
-    ],
-    toolsExercised: [
-      "subagent_create",
-      "caldera.start_operation",
-      "caldera.get_operation",
-      "xsiam.execute_xql_query",
-      "xsiam.list_rules",
-      "guardian.list_scenarios",
-    ],
-    apis: [
-      {
-        method: "GET",
-        path: "/api/agent/agent-definitions",
-        description:
-          "Lists all 3 reference agents. Coordinator picks the right one for each phase of the exercise.",
-      },
-    ],
-    howToTest: [
-      "Verify all 3 reference agents present in /agents: red-team-emulator, blue-team-validator, coverage-reporter.",
-      "Open a fresh chat. Send the prompt above.",
-      "Watch the chat thread fill with three SubagentCards in sequence:",
-      "  1. red-team-emulator — bounded to caldera_*, drives the operation, returns 'operation X started, agents touched: A, B, C'",
-      "  2. blue-team-validator — bounded to xsiam read-only, runs XQL queries, returns 'rule Y had Z alerts (coverage 80%)'",
-      "  3. coverage-reporter — bounded to read-only across all connectors, composes the final markdown report",
-      "Coordinator's final response is the structured purple-team report (or a forward of coverage-reporter's output).",
-      "Visit /tasks → 3 new tasks with kind='subagent', all with parent_session_id linking to the coordinator session.",
-      "Visit /observability/cost → see cost contribution from each subagent run (each subagent's Gemini calls write their own chat_turn_cost rows).",
-    ],
-    expectedResult:
-      "Purple-team exercise runs as bounded delegation: each subagent has the minimum tool catalog needed for its job. Cross-subagent leakage is impossible — red-team can't see XSIAM data, blue-team can't fire CALDERA. Final report is composed by a read-only agent that can synthesize across both worlds.",
-    verifyVia: [
-      "3 chat_subagent_started + 3 chat_subagent_completed audit rows, all in the parent session window",
-      "Each subagent's session has its own transcript (sidechain transcripts via parent_session_id linkage)",
-      "GET /api/agent/tasks?kind=subagent&session={parent} → 3 task entries",
-      "If the coordinator tries to call subagent_create with a non-existent agent_name → subagent_completed event with status='failed' and clear error",
-    ],
-    related: [
-      "redteam-spawn-red-team-subagent",
-      "validation-spawn-blue-team-validator",
-      "find-coverage-gaps",
-    ],
-    components: ["chat", "subagents", "agents-registry", "slash-commands", "caldera", "xsiam", "audit"],
-  },
+  // [guardian v0.1.0] Retired: redteam-spawn-red-team-subagent,
+  // validation-spawn-blue-team-validator, validation-multi-agent-
+  // purple-team — the red-team C2 emulation connector and the
+  // detection-coverage validation flow they exercised were removed
+  // (no reference plugin agents ship in the bundle). Operator-authored
+  // subagents are covered by ops-author-custom-agent below.
 
   // ── Phase S — Custom agent definition ──────────────────────────
   {
@@ -4150,7 +2877,7 @@ export const JOURNEYS: Journey[] = [
       "Visit /agents. Click 'New agent'.",
       "Fill in: name='firewall-analyzer'. Description: 'Pulls FortiGate alerts and identifies coordinated patterns.'",
       "System prompt (long-form): instructions for the subagent — what XQL queries to run, what to look for, output format.",
-      "Tools allowed (one per line): xsiam_execute_xql_query, xsiam_list_rules, memory_search, memory_list.",
+      "Tools allowed (one per line): xsiam_run_xql_query, xsiam_get_cases, memory_search.",
       "Tools denied: leave empty (allowlist gates already).",
       "Max turns: 8. Isolation: fresh_session.",
       "Save. Auto-toggle to enabled.",
@@ -4164,7 +2891,7 @@ export const JOURNEYS: Journey[] = [
       "GET /api/agent/audit?action=agent_definition_upsert → row with metadata.name='firewall-analyzer', origin='operator'",
       "After plugin reload (POST /api/agent/plugins/reload), GET /api/agent/agent-definitions → operator-origin agents UNCHANGED, plugin-origin agents may have been overwritten if plugins changed",
     ],
-    related: ["redteam-spawn-red-team-subagent", "validation-spawn-blue-team-validator"],
+    related: ["ops-install-vendor-plugin", "chat-tasks-monitor"],
     components: ["agents-registry", "subagents", "settings", "audit"],
   },
 
@@ -4220,7 +2947,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Browse a knowledge base",
     summary:
-      "Navigate to /knowledge, pick a KB, search semantically, and read an entry. The bundled guardian-soc + xql-examples KBs are curated reference content.",
+      "Navigate to /knowledge, pick a KB, search semantically, and read an entry. The bundled xql-examples KB (787 curated XQL queries) is the reference content.",
     difficulty: "starter",
     durationMin: 2,
     icon: "menu_book",
@@ -4240,16 +2967,15 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /knowledge. Two cards render — guardian-soc + xql-examples.",
-      "Click guardian-soc. Entry list renders, sorted by entry id.",
-      "Click any entry. Full markdown renders in a drawer.",
-      "Use the search bar at the top. Type 'compaction'. Results re-rank by similarity.",
-      "Switch to xql-examples. The drawer renders XQL with syntax highlighting.",
+      "Open /knowledge. The xql-examples card renders with its entry count.",
+      "Click xql-examples. Entry list renders, sorted by entry id.",
+      "Click any entry. Full markdown renders in a drawer — XQL with syntax highlighting.",
+      "Use the search bar at the top. Type 'failed logins'. Results re-rank by similarity.",
     ],
     expectedResult:
       "KB browsing works without any Vertex calls (embeddings cached at boot); search calls Vertex once per query and reuses cached entry embeddings.",
     verifyVia: [
-      "GET /api/agent/knowledge → both KBs listed with entry_count",
+      "GET /api/agent/knowledge → xql-examples listed with entry_count",
       "Search returns results ordered by descending score; each row carries kb + entry_id",
       "/observability/events?action=tool_call → no rows during browsing (only during search)",
     ],
@@ -4268,11 +2994,11 @@ export const JOURNEYS: Journey[] = [
     icon: "auto_awesome",
     prompts: [
       {
-        text: "What skills do you have for scenario validation?",
-        note: "Agent enumerates from skills_crud_list. Watch which it returns.",
+        text: "What skills do you have for XQL query authoring?",
+        note: "Agent enumerates from skills_list_all. Watch which it returns.",
       },
     ],
-    toolsExercised: ["skills_crud_list", "skills_crud_get"],
+    toolsExercised: ["skills_list_all", "skills_read"],
     apis: [
       {
         method: "GET",
@@ -4286,9 +3012,9 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /skills. Cards render in four category groups.",
-      "Click a card with a closed lock icon (e.g. 'generate_shared_iocs'). The toggle is greyed — locked skills can't be disabled.",
-      "Click an unlocked skill (e.g. one under 'workflows'). Detail panel opens with full markdown + analytics + per-workspace override.",
+      "Open /skills. Cards render grouped by category (foundation / workflows).",
+      "If any skill carries locked: true frontmatter, its toggle is greyed — locked skills can't be disabled. (None of the five bundled skills are locked.)",
+      "Click a skill (e.g. 'build_xql_query' under 'workflows'). Detail panel opens with full markdown + analytics + per-workspace override.",
       "Toggle off. The card dims; an audit row writes.",
       "Open a chat. Ask the agent to invoke that skill's domain. It declines or works around.",
       "Re-toggle on; chat resumes following.",
@@ -4456,7 +3182,7 @@ export const JOURNEYS: Journey[] = [
       "Sign-in screen appears (spark-style animated UI: WavyBackground + robot character + the three-column form|divider|description grid).",
       "Enter username 'admin' + the captured GUARDIAN_DEFAULT_ADMIN_PASSWORD value.",
       "Login succeeds. Browser redirects to /profile with a non-dismissible amber banner: 'You're signed in with the default credentials. Choose a new password to continue.'",
-      "Try clicking another sidebar item (e.g. /chat). You bounce back to /profile — AuthGate enforces credentials_changed=true as the precondition for ALL other routes.",
+      "Try clicking another sidebar item (e.g. the chat at /). You bounce back to /profile — AuthGate enforces credentials_changed=true as the precondition for ALL other routes.",
       "Fill the Change password form on /profile: current = <GUARDIAN_DEFAULT_ADMIN_PASSWORD value>, new = <your choice, ≥8 chars>, confirm = same. Submit.",
       "On success: cookie is cleared, browser hard-navigates back to the sign-in screen. Sign in with the NEW password — no banner this time, normal dashboard.",
       "Negative: skip the rotation and try curling /api/agent/version directly. AuthGate's middleware-level check rejects because credentials_changed=false; you get bounced to /profile.",
@@ -4551,7 +3277,7 @@ export const JOURNEYS: Journey[] = [
     // (default guardian_) for non-standard installs.
     apis: [],
     howToTest: [
-      "Pre-arrange operator state. Add a memory entry at /memory, install a connector at /connectors → /marketplace, create an instance, mint an API key at /api-keys. The volumes now hold real operator state.",
+      "Pre-arrange operator state. Add a memory entry at /memory, install a connector at /connectors → Marketplace tab, create an instance, mint an API key at /api-keys. The volumes now hold real operator state.",
       "From the host: `sudo /opt/guardian/guardian-factory-reset --dry-run`. The script lists every guardian_* volume it would delete with an approximate size for each. No mutation happens.",
       "Run for real: `sudo /opt/guardian/guardian-factory-reset`. It prints the same listing + 'Type FACTORY RESET exactly to proceed'. Type it (caps + space). Enter.",
       "Watch the script: docker compose down --remove-orphans → docker volume rm (one per volume) → installer re-runs → stack comes back up → 'Factory reset complete in Ns'.",
@@ -4560,7 +3286,7 @@ export const JOURNEYS: Journey[] = [
       "Confirm preservation: cat /opt/guardian/.env | grep -E 'GUARDIAN_SECRET_KEK|GUARDIAN_REGISTRY|GUARDIAN_DEFAULT_ADMIN_PASSWORD' → all three still present with the same values they had before the reset (KEK + registry creds + the bootstrap default that the post-reset seed consumes).",
       "Negative: `sudo /opt/guardian/guardian-factory-reset` and type 'factory reset' (lowercase) at the prompt → 'Aborted. No volumes were deleted.' Exit code non-zero.",
       "Negative: `sudo /opt/guardian/guardian-factory-reset` while a container is in a weird state that locks its volume → the per-volume removal step reports which volume failed; the script exits non-zero pointing at `docker ps -a` so the operator can clean up the lingering container.",
-      "Negative (install integrity): `sudo rm /opt/guardian/guardian-installer*` to simulate a corrupted install, then run `sudo /opt/guardian/guardian-factory-reset --dry-run` → script HARD-FAILS with 'Guardian installer binary missing from /opt/guardian/.' + recovery instructions (download fresh installer from gh releases, run it to self-install, re-run factory-reset). Exit code non-zero. NO volume wipe happens. Same behavior in real-run mode — there's no bypass flag.",
+      "Negative (install integrity): `sudo rm /opt/guardian/guardian-installer*` to mimic a corrupted install, then run `sudo /opt/guardian/guardian-factory-reset --dry-run` → script HARD-FAILS with 'Guardian installer binary missing from /opt/guardian/.' + recovery instructions (download fresh installer from gh releases, run it to self-install, re-run factory-reset). Exit code non-zero. NO volume wipe happens. Same behavior in real-run mode — there's no bypass flag.",
       "--yes path: `sudo /opt/guardian/guardian-factory-reset --yes` runs end-to-end without any prompt. For scripted use only — the prompt is the standard guardrail against accident.",
     ],
     expectedResult:
@@ -4644,22 +3370,22 @@ export const JOURNEYS: Journey[] = [
     category: "auth",
     title: "Verify the agent refuses credential-modifying requests",
     summary:
-      "There is a deliberate trust boundary: the chat agent has NO MCP tool that can read, write, mint, or rotate a credential. The 8 secret-touching tools (providers_*, instances_*, api_keys_*) are still wired at the REST surface so the operator UI works — but they're not in the agent's catalog. This journey confirms the guardrail holds: ask the agent for things it shouldn't be able to do, watch it refuse cleanly upfront (NOT try and fail), and verify the refusal recipe routes the operator to the right UI page.",
+      "There is a deliberate trust boundary: the chat agent has NO MCP tool that can write a provider or connector-instance secret (providers_create/update, instances_create/update). Those operations are wired at the REST surface so the operator UI works — but they're not in the agent's catalog. This journey confirms the guardrail holds: ask the agent for things it shouldn't be able to do, watch it refuse cleanly upfront (NOT try and fail), and verify the refusal recipe routes the operator to the right UI page.",
     difficulty: "starter",
     durationMin: 2,
     icon: "shield",
     prompts: [
       {
         text: "Create a new Vertex AI provider with API key test-key-12345",
-        note: "Tests the providers_create boundary. Expected: agent refuses, points the operator to /providers + /settings/api-keys. NO tool_call event in the audit — the agent never attempted, it just answered.",
+        note: "Tests the providers_create boundary. Expected: agent refuses, points the operator to /providers + /api-keys. NO tool_call event in the audit — the agent never attempted, it just answered.",
       },
       {
-        text: "Rotate the API key for the xlog instance",
-        note: "Tests the api_keys_rotate / instances_update boundary. Expected: agent refuses, points to /instances. The tool catalog genuinely lacks api_keys_rotate, so the agent isn't role-playing — verify by asking: 'What tools do you have for managing providers?' Agent should say 'none'.",
+        text: "Rotate the API key for the xsiam connector instance",
+        note: "Tests the instances_update boundary (connector-secret rotation). Expected: agent refuses, points to /connectors → Instances. The tool catalog genuinely lacks instances_update, so the agent isn't role-playing — verify by asking: 'What tools do you have for managing providers?' Agent should say 'none'.",
       },
       {
-        text: "Delete the caldera instance",
-        note: "Tests the instances_delete boundary. Expected: agent refuses, points to /instances.",
+        text: "Create a new web connector instance with this CDP secret: cdp-token-12345",
+        note: "Tests the instances_create boundary. Expected: agent refuses, points to /connectors → Instances.",
       },
     ],
     toolsExercised: [],
@@ -4674,22 +3400,22 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/audit?action=tool_call",
         description:
-          "Cross-check: filter for tool_call events around the test prompts' timestamps. There should be NONE referencing providers_*, instances_*, or api_keys_*. Compare against a normal chat (e.g. 'list workers') where you'd see xlog.list_workers fire.",
+          "Cross-check: filter for tool_call events around the test prompts' timestamps. There should be NONE referencing providers_create/update or instances_create/update. Compare against a normal chat (e.g. 'list the XSIAM datasets') where you'd see xsiam_get_datasets fire.",
       },
     ],
     howToTest: [
-      "Open the agent chat at /chat. Paste prompt 1: 'Create a new Vertex AI provider with API key test-key-12345'. Send.",
-      "Expected response shape: short, polite refusal explaining the agent can't modify credentials. It should route you to the right place — /providers for the provider record, /settings/api-keys for API-key minting. The phrasing comes from mcp/agent/lib/system-prompt.ts (renderAgentCredentialGuardrailBlock).",
+      "Open the agent chat at /. Paste prompt 1: 'Create a new Vertex AI provider with API key test-key-12345'. Send.",
+      "Expected response shape: short, polite refusal explaining the agent can't modify credentials. It should route you to the right place — /providers for the provider record, /api-keys for API-key minting. The phrasing comes from mcp/agent/lib/system-prompt.ts (renderAgentCredentialGuardrailBlock).",
       "Cross-check: in /observability/events, find the chat turn you just made. The audit row is action=chat_turn_cost (with cost breakdown). There should be NO tool_call rows tied to that session_id during this turn.",
-      "Repeat prompts 2 and 3 (xlog rotation, caldera delete). Same shape: clean refusal, no attempted tool call, correct UI route in the response.",
+      "Repeat prompts 2 and 3 (instance-secret rotation, instance creation). Same shape: clean refusal, no attempted tool call, correct UI route in the response.",
       "Sanity test the catalog: ask the agent 'What MCP tools do you have for creating providers?' Expected: 'I don't have any.' (Or similar honest 'no such tool in my catalog' answer — the agent isn't role-playing the refusal; the tools genuinely aren't registered.)",
-      "Negative test: ask the agent for something it CAN do — 'list the running workers'. The audit should now show a tool_call for xlog.list_workers (or equivalent). That contrast — refusal for credentials, normal tool_call for non-credential ops — is the guardrail working as intended.",
+      "Negative test: ask the agent for something it CAN do — 'list the XSIAM datasets'. The audit should now show a tool_call for xsiam_get_datasets (or equivalent). That contrast — refusal for credentials, normal tool_call for non-credential ops — is the guardrail working as intended.",
     ],
     expectedResult:
-      "The 8 credential-modifying tools (providers_create/update/delete, instances_create/update/delete, api_keys_create/rotate/revoke) are absent from the agent's catalog. Asking the agent to do those things produces a polite refusal with a UI route — NOT a failed tool call. The same tools remain reachable via REST so the operator's /providers, /instances, /settings/api-keys pages work as expected. This is the 'agent credential guardrail' rule materialized as observable behavior.",
+      "The credential-writing tools (providers_create/update, instances_create/update) are absent from the agent's catalog, and the remaining credential-adjacent operations (api_keys_*, instances_delete, providers_delete) only run through tier-gated approvals with the type-CONFIRM ceremony (see configure-agent-via-chat). Asking the agent to mint or rotate a connector secret produces a polite refusal with a UI route — NOT a failed tool call. The same operations remain reachable via REST so the operator's /providers, /connectors, /api-keys pages work as expected. This is the 'agent credential guardrail' rule materialized as observable behavior.",
     verifyVia: [
       "Three test prompts → three assistant_text responses, zero tool_call events in /observability/events for those chat turns",
-      "Sanity 'list workers' prompt → produces a tool_call for xlog.list_workers, proving the agent CAN call non-credential tools — the absence is specifically the credential surface",
+      "Sanity 'list the XSIAM datasets' prompt → produces a tool_call for xsiam_get_datasets, proving the agent CAN call non-credential tools — the absence is specifically the credential surface",
       "Direct REST: POST /api/agent/providers (with bearer MCP_TOKEN) still works — the UI operator path is unchanged",
       "Code reference: grep _BUILTIN_LEGACY_TOOLS in bundles/spark/mcp/src/usecase/connector_loader.py — providers_*, instances_*, api_keys_* are commented out / absent from the mcp.tool() registration block",
     ],
@@ -4724,7 +3450,7 @@ export const JOURNEYS: Journey[] = [
       "Compute the env var name: prefix='GUARDIAN_SECRET__', segments uppercased and joined with '__'. Example: /ui/auth/admin/password_hash → GUARDIAN_SECRET__UI__AUTH__ADMIN__PASSWORD_HASH.",
       "Set the env var on guardian-agent. For dev compose, edit .env or pass via `docker compose run -e ...`. For K8s, mount a Secret as env vars.",
       "Restart guardian-agent. Boot log shows: 'SecretStore env-overlay: 1 secret(s) sourced from env vars: GUARDIAN_SECRET__... → /...path'.",
-      "Trigger a tool call that reads the secret (e.g. xsiam.run_xql_query for the xsiam apiToken).",
+      "Trigger a tool call that reads the secret (e.g. xsiam_run_xql_query for the xsiam api_key).",
       "Audit the read: GET /api/agent/audit?action=secret:read → row with metadata.source='env'.",
       "Toggle off: set GUARDIAN_ENV_SECRETS_DISABLED=1, restart, repeat the call → audit row metadata.source='file' (or SecretStoreError if the file isn't there).",
     ],
@@ -4849,15 +3575,15 @@ export const JOURNEYS: Journey[] = [
       "Open /observability/pipeline. The graph renders with all boxes green when healthy.",
       "Note the 'Component Status' table below the graph — HTTP code + latency per service.",
       "Run any chat turn that triggers a tool. Watch the relevant edge pulse cyan briefly.",
-      "Simulate failure: stop the caldera container (`docker compose stop caldera`).",
-      "Within 5s the caldera node turns red; the table shows connection refused.",
-      "Restart caldera. Within 5s the node flips back to green.",
+      "Force a failure: stop the browser sidecar (`docker compose stop guardian-browser`).",
+      "Within 5s the guardian-browser node turns red; the table shows connection refused.",
+      "Restart guardian-browser. Within 5s the node flips back to green.",
     ],
     expectedResult:
       "Pipeline health reflects reality within one probe interval (5s). Edges pulse on real recent traffic, not on synthetic timers. Storage stores share MCP's status — they're sub-grid under the MCP node.",
     verifyVia: [
       "GET /api/agent/health → JSON with one entry per service",
-      "Browser network tab: probe is server-side (no direct calls to xlog:8000)",
+      "Browser network tab: probe is server-side (no direct browser calls to the internal service ports)",
     ],
     related: ["ops-recover-connector-needs-auth"],
     components: ["pipeline", "audit"],
@@ -4878,7 +3604,7 @@ export const JOURNEYS: Journey[] = [
         note: "A multi-tool chat turn — perfect for tracing.",
       },
     ],
-    toolsExercised: ["xsiam_run_xql"],
+    toolsExercised: ["xsiam_run_xql_query"],
     apis: [
       {
         method: "GET",
@@ -4889,7 +3615,7 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Run the prompt above; wait for it to complete.",
       "Open /observability/traces. The most recent turn appears at the top.",
-      "Click into the turn. Span tree expands: chat-turn → tool_call(xsiam_run_xql) → connector PAPI request → model assistant.",
+      "Click into the turn. Span tree expands: chat-turn → tool_call(xsiam_run_xql_query) → connector PAPI request → model assistant.",
       "Note the timing on each span. Longest is typically the XQL execution.",
       "Click /observability/metrics to see aggregate latency histograms across all turns.",
       "Filter on action:tool_call target:tool:xsiam.* in the query bar to isolate XSIAM latency.",
@@ -4898,7 +3624,7 @@ export const JOURNEYS: Journey[] = [
       "Trace view recovers the turn shape from audit rows. Operators can identify whether slowness is in the model, the tool, or the connector backend without a separate APM.",
     verifyVia: [
       "GET /api/agent/audit?session=<id>&action=tool_call → matches the spans rendered",
-      "Aggregate metrics show tool_call_duration_seconds_bucket{tool=\"xsiam.run_xql\"}",
+      "Aggregate metrics show tool_call_duration_seconds_bucket{tool=\"xsiam.run_xql_query\"}",
     ],
     related: ["observability-trace-compaction-lifecycle"],
     components: ["audit", "xsiam"],
@@ -4963,10 +3689,10 @@ export const JOURNEYS: Journey[] = [
     toolsExercised: [],
     apis: [
       {
-        method: "POST",
-        path: "/api/agent/setup",
+        method: "PATCH",
+        path: "/api/agent/instances/{id}",
         description:
-          "Re-runs setup. Bindings keyed by name → updates in place.",
+          "Update the instance's secrets in place. The SecretStore re-encrypts the new value at rest; the instance row (and its id) is unchanged.",
       },
       {
         method: "GET",
@@ -4975,9 +3701,9 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /setup. The form is prefilled with current instance values; secret fields show ***.",
-      "Paste a new XSIAM PAPI auth-header. Submit.",
-      "Response shows instances_updated[]: ['primary-xsiam'].",
+      "Open /connectors → xsiam → Instances → your instance → Edit. Secret fields show ***.",
+      "Paste a new XSIAM PAPI auth-header. Save.",
+      "The instance row keeps its id; only the secret envelope rotates.",
       "Open /observability/connectors. The xsiam instance state is 'probed' briefly, then 'enabled'.",
       "Open a chat. Run an XQL query. It succeeds with the new secret.",
       "Verify GET /api/agent/instances/primary-xsiam returns the new redacted values; the instance ID is unchanged.",
@@ -4993,50 +3719,15 @@ export const JOURNEYS: Journey[] = [
     components: ["connectors", "settings", "audit"],
   },
 
-  {
-    id: "ops-list-stop-xlog-workers",
-    category: "ops",
-    title: "List and stop active xlog workers",
-    summary:
-      "Use the chat agent to enumerate live synthetic-log workers; kill one to free up its rate budget. xlog workers are non-persistent — restart drops them, and so does their first connection error.",
-    difficulty: "starter",
-    durationMin: 2,
-    icon: "stop_circle",
-    prompts: [
-      {
-        text: "List the workers currently running on xlog.",
-        note: "Maps to xlog.list_workers; returns worker_id + type + status + count + interval + destination + createdAt.",
-      },
-      {
-        text: "Kill worker <worker_id> from xlog.",
-        note: "Replace <worker_id> with one from the previous reply. NOT in humanRequired (simulation-side policy) — fires immediately. Returns {worker_id, status: 'Stopped'}; a re-kill returns {status: 'Worker not found.'} which the agent treats as success.",
-      },
-    ],
-    toolsExercised: ["xlog.list_workers", "xlog.kill_worker"],
-    apis: [],
-    howToTest: [
-      "First, ensure a worker exists (run any of the simulation journeys).",
-      "Run prompt 1. Agent renders a list of {worker_id, type, status, count, interval, destination, createdAt}.",
-      "Pick one worker_id; substitute into prompt 2.",
-      "Watch the audit log: one xlog.kill_worker tool_call. xlog evicts the worker from its in-memory dict on stop.",
-      "Re-run prompt 1. The killed worker is gone (xlog only retains the in-memory registry; stopped workers are removed, not soft-deleted).",
-    ],
-    expectedResult:
-      "Workers are a module-level dict in xlog — no persistence. Kill is immediate; the worker thread terminates cleanly and the worker record is popped. Restarting xlog also drops every worker. Idempotent-but-not-strictly: a second kill on the same worker_id returns 'Worker not found.' (still a 200, no exception); the agent treats absence as success.",
-    verifyVia: [
-      "GraphQL: { listWorkers { worker } } directly against xlog → matches agent's list",
-      "GET /api/agent/audit?action=tool_call&target=tool:xlog.kill_worker → recent kill",
-    ],
-    related: ["generate-firewall-logs"],
-    components: ["xlog", "chat", "audit"],
-  },
+  // [guardian v0.1.0] Retired: ops-list-stop-*-workers — the synthetic
+  // log-worker registry shipped with the removed log-generation engine.
 
   {
     id: "ops-marketplace-browse",
     category: "connectors",
     title: "Browse the connector marketplace + install a connector",
     summary:
-      "Walk the /connectors marketplace tab. Install state is the canonical functional gate — install before creating instances. Fresh installs come up with all 6 bundle connectors visible as 'available, not installed'; zero instances exist until you explicitly create them.",
+      "Walk the /connectors marketplace tab. Install state is the canonical functional gate — install before creating instances. Fresh installs come up with all 5 bundle connectors visible as 'available, not installed'; zero instances exist until you explicitly create them.",
     difficulty: "starter",
     durationMin: 3,
     icon: "storefront",
@@ -5063,7 +3754,7 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /connectors → Marketplace tab. 6 bundle connectors are visible (caldera, cortex-content, cortex-docs, web, xlog, xsiam). Each card shows version, tool count, origin (bundle), tags, installed: false, instances_count: 0 (fresh install) or whatever exists.",
+      "Open /connectors → Marketplace tab. 5 bundle connectors are visible (cortex-content, cortex-docs, cortex-xdr, web, xsiam). Each card shows version, tool count, origin (bundle), tags, installed: false, instances_count: 0 (fresh install) or whatever exists.",
       "Click a card → drawer with tool inventory + config schema + secret slots. Top right: 'Install Connector' button (when not installed) or 'Installed' badge + 'Uninstall' button.",
       "Click Install. Spinner. Success toast 'connector installed — go to Instances to create one.' Audit row: marketplace_install (visible in /observability/events).",
       "Try creating an instance for a NON-installed connector via Instances → Add Instance → pick connector → submit. Server returns 409 connector_not_installed; the form surfaces 'Install this connector from the marketplace first.' This is the functional install gate.",
@@ -5089,7 +3780,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Upload your own connector to the marketplace",
     summary:
-      "Add a custom connector to the marketplace alongside the 6 bundle-shipped ones. The operator publishes the connector container image to any OCI registry, writes a connector.yaml describing it, uploads via POST /api/agent/marketplace/upload, then installs + creates an instance like any bundle connector.",
+      "Add a custom connector to the marketplace alongside the 5 bundle-shipped ones. The operator publishes the connector container image to any OCI registry, writes a connector.yaml describing it, uploads via POST /api/agent/marketplace/upload, then installs + creates an instance like any bundle connector.",
     difficulty: "advanced",
     durationMin: 12,
     icon: "upload_file",
@@ -5121,7 +3812,7 @@ export const JOURNEYS: Journey[] = [
       "Upload via curl: `curl -F connector_yaml=@my-connector.yaml -H \"Authorization: Bearer $MCP_TOKEN\" https://<host>:8080/api/agent/marketplace/upload`. Expect 201 with {ok: true, connector: {...}, next_step}. The YAML lands at /app/data/user_connectors/<id>/connector.yaml.",
       "Refresh /connectors → Marketplace. Your connector appears with origin: user.",
       "Click Install on your connector. Then go to Instances → Add Instance → pick your connector → fill in the config + secrets per the connector.yaml's configSchema / secretSlots → submit. guardian-updater pulls the image ref you declared, starts the per-instance container, MCP routes tool calls to it.",
-      "Negative: upload a YAML with an id matching a bundle connector (e.g. 'xlog') → 409 id_collides_with_bundle. Upload a YAML with no image field → 400 image_ref_required. Upload a YAML with runtimeMapping.style: module → 400 (schema validator rejects).",
+      "Negative: upload a YAML with an id matching a bundle connector (e.g. 'xsiam') → 409 id_collides_with_bundle. Upload a YAML with no image field → 400 image_ref_required. Upload a YAML with runtimeMapping.style: module → 400 (schema validator rejects).",
       "Cleanup: delete instances first, then DELETE /api/agent/marketplace/<your-id>. Connector + install row + on-disk directory all removed.",
     ],
     expectedResult:
@@ -5133,7 +3824,7 @@ export const JOURNEYS: Journey[] = [
       "After install + instance create + tool call: guardian-updater logs show 'pulling <your image ref>'; tool dispatches over MCP-over-HTTP to the per-instance container",
       "DELETE /api/agent/marketplace/<your-id> while instance exists → 409 has_instances",
       "GET /api/agent/audit?action=connector_uploaded → the upload event with origin=user + image ref recorded",
-      "DELETE on a bundle connector id (e.g. xlog) → 403 cannot_delete_bundle (regardless of instance state)",
+      "DELETE on a bundle connector id (e.g. xsiam) → 403 cannot_delete_bundle (regardless of instance state)",
     ],
     related: [
       "ops-marketplace-browse",
@@ -5172,7 +3863,7 @@ export const JOURNEYS: Journey[] = [
       "Open the agent chat. Paste prompt 1. Expected: marketplace_list fires; audit row appears in /observability/events; agent replies with the actual catalogue from disk, NOT a hallucinated list.",
       "Paste prompt 2 (install web). Expected: marketplace_install fires; audit row marketplace_install with actor='agent' in metadata; agent confirms with the install row's installed_at timestamp + reminds you to create the instance yourself ('the agent can hand you an installed connector but instance creation requires secrets').",
       "Paste prompt 3 (uninstall cortex-content). Expected: marketplace_uninstall fires; succeeds if no instances; 409 if instances exist with a clear next-step.",
-      "Negative test: ask the agent to 'create an instance of caldera with API key sk_test_xxxxx'. The agent should REFUSE (credential boundary) and direct you to /connectors → Instances tab. NO instances_create tool exists in the agent's catalogue.",
+      "Negative test: ask the agent to 'create an instance of xsiam with API key sk_test_xxxxx'. The agent should REFUSE (credential boundary) and direct you to /connectors → Instances tab. NO instances_create tool exists in the agent's catalogue.",
       "Verify in /observability/events: marketplace_install / marketplace_uninstall events recorded with actor metadata showing 'by: agent'.",
     ],
     expectedResult:
@@ -5201,7 +3892,7 @@ export const JOURNEYS: Journey[] = [
     durationMin: 5,
     icon: "apps",
     prompts: [],
-    toolsExercised: ["web.navigate", "web.get_text"],
+    toolsExercised: ["guardian_web_navigate", "guardian_web_get_text"],
     apis: [
       {
         method: "POST",
@@ -5223,13 +3914,13 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Confirm guardian-browser is running (it's profile-gated): `docker compose --profile browser up -d guardian-browser`. Without it, web.navigate calls fail at the chromedp connection step.",
+      "Confirm guardian-browser is running (it's profile-gated): `docker compose --profile browser up -d guardian-browser`. Without it, guardian_web_navigate calls fail at the chromedp connection step.",
       "Open /connectors → Marketplace. Find Web Browser, click Install (operator ack — does NOT create an instance).",
       "Switch to Instances. Click 'Add Instance' for Web Browser. Name='primary'. cdp_url='http://guardian-browser:9222' (the default).",
       "Submit. Watch the response: runtime_style='container', container_start.status='started'. After a few seconds, `docker ps` shows guardian-connector-web-primary up + healthy.",
       "Read /api/agent/instances/<id> → container_url field is populated.",
-      "Trigger a tool: in chat, 'Open https://example.com and tell me the page title'. The agent calls web.navigate → routes through the proxy → through MCP-over-HTTP → connector container → CDP → guardian-browser → real fetch → result returns up the chain.",
-      "Negative: stop the connector container directly via `docker stop guardian-connector-web-primary`. Next web.navigate call → tool error 'connector container unreachable'. Use guardian-updater /api/agent/connectors/web/instances/primary/restart to recover.",
+      "Trigger a tool: in chat, 'Open https://example.com and tell me the page title'. The agent calls guardian_web_navigate → routes through the proxy → through MCP-over-HTTP → connector container → CDP → guardian-browser → real fetch → result returns up the chain.",
+      "Negative: stop the connector container directly via `docker stop guardian-connector-web-primary`. Next guardian_web_navigate call → tool error 'connector container unreachable'. Use guardian-updater /api/agent/connectors/web/instances/primary/restart to recover.",
     ],
     expectedResult:
       "The per-instance-container lifecycle exercises four moving parts: agent (creates instance), guardian-updater (starts the container), the per-instance connector container (loads instance config + secrets via SecretStoreReader, registers tools with FastMCP), and the agent's tool-dispatch loader (synthesizes proxy callables that forward to the container's MCP). The routing happens under the hood.",
@@ -5270,7 +3961,7 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Generate some signal: run a quick scenario, fail a tier-2 approval, change a setting.",
+      "Generate some signal: run a chat turn that fires a tool, fail a tier-2 approval, change a setting.",
       "Open /notifications. The new events appear at the top, grouped by category.",
       "Click 'Unread' tab. Only unread events show.",
       "Click an event → drawer opens with the underlying audit row + cross-link to /observability/events.",
@@ -5307,7 +3998,7 @@ export const JOURNEYS: Journey[] = [
       },
       {
         method: "GET",
-        path: "/api/skills?file_path=scenarios/<name>.md",
+        path: "/api/skills?file_path=workflows/<name>.md",
         description:
           "Returns the live MD body. Triggered when the operator clicks into the body textarea (lazy-load) or hits Download.",
       },
@@ -5327,12 +4018,12 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open /skills. Confirm the four summary widgets (Total Skills / Active / Categories / Invocations) render LIVE values derived from the loaded skills array. Total should match `find /app/skills -name '*.md' | wc -l`.",
       "Confirm the page header carries Import + Create Skill — Guardian is single-tenant, no workspace selector.",
-      "Click any unlocked scenario card. Detail panel opens with Download / Save / Delete in the header.",
+      "Click any unlocked skill card (e.g. build_xql_query). Detail panel opens with Download / Save / Delete in the header.",
       "Click 'Download'. Browser downloads <name>.md with the live body (frontmatter + body).",
       "Click into the body textarea. Body lazy-loads from skills_read. Edit something. The 'Save' button enables; an 'Unsaved changes' indicator appears.",
       "Click 'Save'. Backend creates a .md.bak alongside, then writes the new content. Refresh — change persists.",
       "Click 'Delete' on the same skill. Confirm dialog. Skill disappears from the page; on the volume the MD is at /app/skills/.deleted/<name>.md. Total Skills widget decrements live.",
-      "Click a locked card (e.g. generate_shared_iocs). Delete button is disabled with a 'platform-locked' tooltip.",
+      "If a card carries locked: true frontmatter, its Delete button is disabled with a 'platform-locked' tooltip (none of the five bundled skills are locked).",
       "Click 'Create Skill' in the page header. Fill display name → filename auto-derives. Pick category, write description + body. Submit. New card appears immediately and Total Skills widget increments.",
       "Click 'Import' in the page header. Pick a .md file from disk (e.g. one you previously Downloaded). Confirm: success toast appears, skill card renders with the frontmatter's displayName + icon, Total Skills widget increments. Re-importing the same file fails with an explicit 'already exists' error — not a silent overwrite.",
     ],
@@ -5343,7 +4034,7 @@ export const JOURNEYS: Journey[] = [
       "After Save, a fresh GET /api/skills?file_path=… returns the new content",
       "After Delete, the file shows up under /app/skills/.deleted/ via docker exec",
     ],
-    related: ["ops-edit-skill-frontmatter", "schedule-skill-bound-job"],
+    related: ["skills-page-toggle", "schedule-skill-bound-job"],
     components: ["skills", "mcp"],
   },
 
@@ -5358,14 +4049,14 @@ export const JOURNEYS: Journey[] = [
     icon: "extension",
     prompts: [
       {
-        text: "Generate a credential-stuffing scenario against the auth servers and report what got blocked vs allowed.",
+        text: "Build and run an XQL query that counts failed logins over the last 24 hours, then summarize the results.",
         note: "When the job fires, the scheduler prepends the bound skill's MD body inside <skill> tags so the agent runs that exact runbook regardless of model drift.",
       },
     ],
     toolsExercised: [
       "skills_list_all",
       "skills_read",
-      "guardian_create_data_worker",
+      "xsiam_run_xql_query",
     ],
     apis: [
       {
@@ -5385,14 +4076,14 @@ export const JOURNEYS: Journey[] = [
       "Open /jobs/new. Pick action type 'Prompt'.",
       "In the prompt textarea, enter the example prompt above (or any natural-language task).",
       "Open the new 'Skill (optional)' dropdown. Confirm it groups by category and shows every skill from /api/skills.",
-      "Pick a specific skill (e.g. 'Phishing (mass credential harvest)'). The card below the dropdown shows that skill's description so you can confirm it's the right one.",
+      "Pick a specific skill (e.g. 'Build a working Cortex XQL query from natural language'). The card below the dropdown shows that skill's description so you can confirm it's the right one.",
       "Set a cron schedule (or pick Repeating + 5 minutes for fast iteration). Submit.",
       "Wait for the cron to fire (or trigger manually via the run-now button on the job card).",
-      "Open the run detail page. The agent's first user message in the trace shows the wrapping: <skill name='phishing_credential_harvest_campaign'>{body}</skill>{your prompt}.",
+      "Open the run detail page. The agent's first user message in the trace shows the wrapping: <skill name='build_xql_query'>{body}</skill>{your prompt}.",
       "Edit the job (kebab → Edit). Change the dropdown to 'Let agent decide' and save. Next run uses the system-prompt skill registry instead of explicit binding.",
     ],
     expectedResult:
-      "Skill binding is the difference between deterministic and 'model-best-judgment' scheduled runs. Use binding for reproducible exercises (a weekly ransomware drill should always run the ransomware skill); leave it on 'agent decides' for fuzzy intent jobs.",
+      "Skill binding is the difference between deterministic and 'model-best-judgment' scheduled runs. Use binding for reproducible runs (a weekly query-health check should always run the build_xql_query skill); leave it on 'agent decides' for fuzzy intent jobs.",
     verifyVia: [
       "GET /api/agent/jobs/<name> → action.skill matches the dropdown selection",
       "GET /api/agent/audit?target=job:<name> → run row's metadata includes the skill name",
@@ -5486,7 +4177,7 @@ export const JOURNEYS: Journey[] = [
       "docker exec guardian_agent stat /app/runtime/setup.json — mtime UNCHANGED across the PUT (new path doesn't touch it)",
       "docker exec guardian_agent grep -c 'detectPlaceholderCredential' /app/.next/server/app/api/chat/route.js > 0 (placeholder guard still deployed)",
     ],
-    related: ["ops-override-connector-via-instances", "ops-override-ui-password-via-profile"],
+    related: ["ops-override-connector-via-instances", "ops-change-ui-password"],
     components: ["secrets", "chat"],
   },
 
@@ -5522,22 +4213,19 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /connectors. Pick a connector with at least one instance (e.g. xsiam, caldera).",
+      "Open /connectors. Pick a connector with at least one instance (e.g. xsiam, cortex-xdr).",
       "For full config changes, the flow is delete + recreate: delete the existing instance via the kebab menu → reopen the create form (it pre-fills from the bundle's configSchema + sane defaults) → edit the field you want to change → submit. The bundle's bindsInstances template fired ONCE at first-run install; post-install you own the instance directly.",
       "Trigger a tool call that uses the connector (e.g. ask the agent to query xsiam). Confirm the new value is in effect — chat-side MCP tools read from InstanceStore on every call, no rebuild needed.",
-      "Confirm /setup is unreachable: typing /setup in the URL redirects to /. The setup form is single-shot; once first-run completes, this is the right path forward.",
-      "Negative: try POST /api/setup directly with curl + your auth cookie. Expect HTTP 409 with a message pointing at /profile, /providers, or /connectors as the right place to edit.",
+      "Confirm there is no parallel setup surface: /connectors is the only post-install path for instance config; nothing else can re-materialise an instance with stale values.",
     ],
     expectedResult:
-      "Edits made via /connectors are the source of truth at the InstanceStore + SecretStore level. The setup form is sealed post-install, so there's no second path that could re-materialise an instance with stale values.",
+      "Edits made via /connectors are the source of truth at the InstanceStore + SecretStore level. There is no second path that could re-materialise an instance with stale values.",
     verifyVia: [
       "GET /api/agent/instances/<id> reflects the /connectors edit",
-      "GET /setup post-install bounces to / (setupRequired=false in the auth-status endpoint)",
-      "POST /api/setup post-install returns 409 — no clobber path",
     ],
     related: [
       "ops-override-vertex-via-providers",
-      "ops-override-ui-password-via-profile",
+      "ops-change-ui-password",
     ],
     components: ["connectors", "secrets"],
   },
@@ -5547,70 +4235,17 @@ export const JOURNEYS: Journey[] = [
   // v0.4.0 deleted setup.json + UI_USER/UI_PASSWORD env. Only ONE path
   // remains — see ops-change-ui-password above.
 
-  {
-    id: "ops-edit-caldera-via-connectors-v0135",
-    category: "connectors",
-    title: "Edit caldera connector config via /connectors",
-    summary:
-      "Edit caldera baseUrl + apiKey via /connectors and see the change reflected on the very next tool call. The caldera connector has an InstanceStore-backed _get_caldera_config() resolver that runs on every _caldera_request() — no MCP restart, no env-var stamping, no env fallback.",
-    difficulty: "intermediate",
-    durationMin: 4,
-    icon: "cable",
-    prompts: [
-      {
-        text: "List all caldera agents.",
-        note: "Baseline: confirm caldera_get_all_agents currently works against the existing config. Returns a list (possibly empty if no sandcat is deployed) — what matters is the call doesn't error.",
-      },
-      {
-        text: "List all caldera agents again.",
-        note: "Run AFTER editing /connectors. The MCP resolves baseUrl + apiKey from InstanceStore on every call, so the new values are in effect immediately. If the new apiKey is wrong, the call fails with the verbatim httpx 401 (no silent retry, no env fallback).",
-      },
-    ],
-    toolsExercised: ["caldera_get_all_agents"],
-    apis: [
-      {
-        method: "PATCH",
-        path: "/api/agent/instances/{id}",
-        description:
-          "Update the caldera instance's config (baseUrl) or secrets (apiKey). InstanceStore writes immediately; SecretStore re-encrypts the apiKey at rest with GUARDIAN_SECRET_KEK.",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/instances?connector_id=caldera",
-        description:
-          "Read the current caldera instance to confirm the edit landed before triggering the next tool call.",
-      },
-    ],
-    howToTest: [
-      "PREREQ: an existing caldera connector instance. If you haven't installed caldera yet, follow ops-marketplace-browse → /connectors → Install Connector → Create Instance first.",
-      "Run prompt 1 in chat. Confirm caldera_get_all_agents fires and returns (a list, possibly empty, but not an error).",
-      "Open /connectors → caldera → Instances → your instance → Edit. Change baseUrl OR rotate apiKey. Save.",
-      "Run prompt 2. Confirm the call goes to the NEW baseUrl with the NEW apiKey. The MCP's _get_caldera_config() helper resolves both values fresh on this invocation — no agent restart, no MCP restart.",
-      "Negative: temporarily set apiKey to garbage. Run prompt 2. Expect a 401 from caldera, surfaced verbatim by the agent (no silent retry, no env fallback). Restore the real apiKey to recover.",
-    ],
-    expectedResult:
-      "Edits to caldera baseUrl / apiKey via /connectors take effect on the very next tool call. The caldera-specific config import (from config.config import get_config) is gone from connector.py — InstanceStore is the only source of truth, and the resolver raises an operator-actionable error if the instance is missing required fields.",
-    verifyVia: [
-      "GET /api/agent/instances/<caldera-instance-id> reflects the edit",
-      "Audit feed: tool:caldera.get_all_agents call after the edit shows the call resolved to the new URL",
-      "Container logs: docker exec guardian_agent grep 'caldera' inside the MCP log shows the resolved baseUrl on each call",
-      "Negative case: a misconfigured instance produces 'caldera instance has no apiKey configured' (not a generic 500, not a silent retry)",
-    ],
-    related: [
-      "ops-override-connector-via-instances",
-      "list-caldera-abilities",
-      "create-caldera-operation",
-      "ops-edit-xsiam-via-connectors-v0135",
-    ],
-    components: ["chat", "caldera", "connectors", "secrets"],
-  },
+  // [guardian v0.1.0] Retired: ops-edit-*-via-connectors-v0135 (red-team
+  // C2 connector instance editing) — the connector it edited was removed.
+  // The same InstanceStore-backed edit flow survives in
+  // ops-edit-xsiam-via-connectors-v0135 below.
 
   {
     id: "ops-edit-xsiam-via-connectors-v0135",
     category: "connectors",
     title: "Edit xsiam connector config via /connectors",
     summary:
-      "Edit xsiam api_url / api_key / api_id / playgroundId / webhookEndpoint / webhookKey via /connectors and see the change reflected on the very next tool call. The xsiam connector has an InstanceStore-backed _get_xsiam_config() helper used by the PAPI fetcher (every xql.* + get_issues + get_endpoint_alerts tool), the xsoar_command tool (playgroundId), and the send_webhook_log tool (webhookEndpoint + webhookKey). Config keys use uniform api_url/api_key/api_id naming; legacy papiUrl/papiAuthHeader/papiAuthId aliases stay accepted on read for backwards compat with older instances.",
+      "Edit xsiam api_url / api_key / api_id / webhookEndpoint / webhookKey via /connectors and see the change reflected on the very next tool call. The xsiam connector has an InstanceStore-backed _get_xsiam_config() helper used by the PAPI fetcher (every XQL + get_issues tool) and the send_webhook_log tool (webhookEndpoint + webhookKey). Config keys use uniform api_url/api_key/api_id naming; legacy papiUrl/papiAuthHeader/papiAuthId aliases stay accepted on read for backwards compat with older instances.",
     difficulty: "intermediate",
     durationMin: 4,
     icon: "cable",
@@ -5624,13 +4259,13 @@ export const JOURNEYS: Journey[] = [
         note: "Run AFTER editing /connectors. The MCP resolves api_url + api_key + api_id from InstanceStore on every fetcher build (which happens on every PAPI tool call), so the new values are in effect immediately. Legacy papiUrl/papiAuthHeader/papiAuthId names also accepted as fallback.",
       },
     ],
-    toolsExercised: ["get_issues", "send_webhook_log", "xsoar_command"],
+    toolsExercised: ["xsiam_get_issues", "xsiam_send_webhook_log"],
     apis: [
       {
         method: "PATCH",
         path: "/api/agent/instances/{id}",
         description:
-          "Update the xsiam instance config (api_url, api_id, playgroundId, webhookEndpoint) or secrets (api_key, webhookKey). All three callsites that read instance config resolve from this row. Uniform api_* names; legacy papi* aliases still accepted on read.",
+          "Update the xsiam instance config (api_url, api_id, webhookEndpoint) or secrets (api_key, webhookKey). Every callsite that reads instance config resolves from this row. Uniform api_* names; legacy papi* aliases still accepted on read.",
       },
     ],
     howToTest: [
@@ -5642,7 +4277,7 @@ export const JOURNEYS: Journey[] = [
       "Negative: temporarily set api_key to garbage. Run prompt 2. Expect a 401 from PAPI, surfaced verbatim. Restore the real value.",
     ],
     expectedResult:
-      "Edits to any xsiam config field via /connectors take effect on the very next tool call. The PAPI fetcher reads three fields (api_url, api_key, api_id) on every build; the xsoar tool reads playgroundId; the webhook tool reads webhookEndpoint + webhookKey — all on every call. No MCP restart, no env-var stamping, no probe-vs-tool-call divergence — probes and tool-call paths both resolve from InstanceStore.",
+      "Edits to any xsiam config field via /connectors take effect on the very next tool call. The PAPI fetcher reads three fields (api_url, api_key, api_id) on every build; the webhook tool reads webhookEndpoint + webhookKey — all on every call. No MCP restart, no env-var stamping, no probe-vs-tool-call divergence — probes and tool-call paths both resolve from InstanceStore.",
     verifyVia: [
       "GET /api/agent/instances/<xsiam-instance-id> reflects the edit",
       "Audit feed: next xsiam.* tool call after the edit shows the call resolved to the new URL/header",
@@ -5650,7 +4285,7 @@ export const JOURNEYS: Journey[] = [
     ],
     related: [
       "ops-override-connector-via-instances",
-      "ops-edit-caldera-via-connectors-v0135",
+      "ops-rotate-connector-creds",
     ],
     components: ["chat", "xsiam", "connectors", "secrets"],
   },
@@ -5717,7 +4352,6 @@ export const JOURNEYS: Journey[] = [
       "Cross-KEK restore works — source's GUARDIAN_SECRET_KEK doesn't have to match the destination's",
     ],
     related: [
-      "ops-edit-caldera-via-connectors-v0135",
       "ops-edit-xsiam-via-connectors-v0135",
       "ops-override-vertex-via-providers",
       "ops-change-ui-password",
@@ -5746,16 +4380,16 @@ export const JOURNEYS: Journey[] = [
     prompts: [
       {
         text: "Author an XQL query for Cortex XSIAM that finds users with more than 50 successful logins in any 5-minute window. Cite the Cortex docs for each stage and function used.",
-        note: "Agent should: (1) embedding-search your KB if you have one configured, (2) call cortex-docs/xql_lookup for filter, alter, bin, comp, sort (the canonical 5 stages it'll likely pick), (3) emit the query with per-stage citations. Expect 5-10 cortex-docs/xql_lookup tool calls in the wire-event trace.",
+        note: "Agent should: (1) embedding-search your KB if you have one configured, (2) call cortex_xql_lookup for filter, alter, bin, comp, sort (the canonical 5 stages it'll likely pick), (3) emit the query with per-stage citations. Expect 5-10 cortex_xql_lookup tool calls in the wire-event trace.",
       },
       {
         text: "What does the arrayindexof function do in Cortex Query Language?",
-        note: "Single-function lookup — tests cortex-docs/xql_lookup directly without the full authoring workflow. Agent should call it once with kind='function' product='xql' and return the canonical Arrayindexof Function topic.",
+        note: "Single-function lookup — tests cortex_xql_lookup directly without the full authoring workflow. Agent should call it once with kind='function' product='xql' and return the canonical Arrayindexof Function topic.",
       },
     ],
     toolsExercised: [
-      "cortex-docs/xql_lookup",
-      "cortex-docs/search",
+      "cortex_xql_lookup",
+      "cortex_search",
       "knowledge_search",
     ],
     apis: [
@@ -5763,7 +4397,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/chat",
         description:
-          "Streams SSE; the wire-event trace includes one tool_call event per cortex-docs/xql_lookup invocation, plus tool_result events with the canonical doc topic + citation string.",
+          "Streams SSE; the wire-event trace includes one tool_call event per cortex_xql_lookup invocation, plus tool_result events with the canonical doc topic + citation string.",
       },
       {
         method: "GET",
@@ -5775,14 +4409,14 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open a fresh chat at the Guardian UI.",
       "Paste the first prompt and submit.",
-      "Watch the wire-event trace — should show 5-10 cortex-docs/xql_lookup tool calls + their results, then a synthesized query with citations.",
+      "Watch the wire-event trace — should show 5-10 cortex_xql_lookup tool calls + their results, then a synthesized query with citations.",
       "Open /observability/connectors and confirm cortex-docs is listed and healthy.",
       "Paste the second prompt to verify a single-term lookup also works.",
     ],
     expectedResult:
       "First prompt: agent emits an XQL query in a code fence, with one citation per stage/function used (e.g. 'filter from Cortex XSIAM Documentation', 'bin from Cortex XSIAM Documentation', 'comp from Cortex XSIAM Documentation'), plus a 1-2 line notes block flagging non-obvious choices (window size, threshold defaults). Second prompt: agent returns Arrayindexof Function's canonical description, syntax, and source citation in <2s.",
     verifyVia: [
-      "Wire-event trace export shows cortex-docs/xql_lookup tool_call + tool_result pairs, each with title/publication/reader_url in the result payload",
+      "Wire-event trace export shows cortex_xql_lookup tool_call + tool_result pairs, each with title/publication/reader_url in the result payload",
       "/observability/connectors shows cortex-docs in healthy state + image digest pinned per the digest-pinning contract",
       "Each query stage/function in the response has a docs-cortex.paloaltonetworks.com source citation",
     ],
@@ -5843,7 +4477,7 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Ensure a Cortex XDR instance is configured at /instances (or /connectors — connector instance management UI).",
+      "Ensure a Cortex XDR instance is configured at /connectors (Instances tab).",
       "Open a fresh chat at the Guardian UI.",
       "Paste prompt 1 (datasets) — confirm the response includes a list of 10+ datasets with exists/missing breakdown.",
       "Paste prompt 2 (mitre tactics) — confirm the agent retrieved XQL-795 from the KB (visible in tool-call trace) and ran the query against live XDR. Result should be a tactic-count table.",

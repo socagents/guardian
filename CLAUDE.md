@@ -11,7 +11,7 @@ For local conventions, read the directory's own `CLAUDE.md`:
 - [`mcp/agent/CLAUDE.md`](mcp/agent/CLAUDE.md) — Next.js + embedded MCP host (the `guardian-agent` container)
 - [`bundles/spark/mcp/CLAUDE.md`](bundles/spark/mcp/CLAUDE.md) — Python FastMCP server
 - [`bundles/spark/connectors/CLAUDE.md`](bundles/spark/connectors/CLAUDE.md) — connector authoring conventions
-- [`xlog/CLAUDE.md`](xlog/CLAUDE.md) — log-generation backend (GraphQL + Rosetta)
+<!-- [guardian v0.1.0] Retired: log-generation backend CLAUDE.md entry — that subsystem was removed when Guardian was carved out of Phantom -->
 - [`installer/CLAUDE.md`](installer/CLAUDE.md) — customer installer template
 - [`updater/CLAUDE.md`](updater/CLAUDE.md) — guardian-updater container-lifecycle daemon
 
@@ -20,7 +20,7 @@ For the AI Layer (hooks, skills, MCP servers, subagents, plugin marketplace) rea
 
 ## What Guardian is
 
-Continuous SOC simulation platform: synthetic security log generation, scenario-based MITRE ATT&CK telemetry, and AI-orchestrated red/blue workflows over MCP. Ships as a 5-service Docker Compose stack — see [`CODEBASE_MAP.md`](CODEBASE_MAP.md) for the topology.
+AI incident-response agent for Cortex XSIAM/XSOAR: evidence-grounded investigations, XQL hunts, case enrichment, and response orchestration over MCP. Ships as a Docker Compose stack — `guardian-agent` (Next.js UI + embedded Python FastMCP subprocess behind a TLS proxy), `guardian-browser` (headless-Chromium CDP sidecar), `guardian-updater` (container-lifecycle daemon), plus per-instance connector containers — see [`CODEBASE_MAP.md`](CODEBASE_MAP.md) for the topology.
 
 ## Operator communication context
 
@@ -96,7 +96,7 @@ When a workflow or install fails in a way that doesn't immediately reveal its ca
 - **PAT recipes** — [docs/CICD.md § PAT recipes](docs/CICD.md#pat-recipes).
 - **Rollback procedure** — [docs/CICD.md § Rollback procedure](docs/CICD.md#rollback-procedure).
 - **guardian-updater's role in releases** — [docs/CICD.md § guardian-updater in the release loop](docs/CICD.md#guardian-updater-in-the-release-loop). Also see [`updater/CLAUDE.md`](updater/CLAUDE.md).
-- **Monorepo release invariant** — [docs/CICD.md § Monorepo release invariant](docs/CICD.md#monorepo-release-invariant). All 11 images ship at the same `vX.Y.Z`.
+- **Monorepo release invariant** — [docs/CICD.md § Monorepo release invariant](docs/CICD.md#monorepo-release-invariant). All 9 images ship at the same `vX.Y.Z`.
 - **PR cycle vs main-push cycle** — [docs/CICD.md § PR cycle](docs/CICD.md#pr-cycle-vs-main-push-cycle).
 
 ## Agent credential guardrail (MANDATORY)
@@ -122,7 +122,7 @@ v0.5.0 added agent tools for the **marketplace catalogue** — `marketplace_list
 | **Credential** | SecretStore values: UI password, provider creds, per-instance secrets, API keys plaintext, KEK material | **Forbidden** — no mcp.tool() registered for read OR write |
 | **Catalog** | Connector schemas, marketplace install state, registry membership, manifest-level metadata | **Permitted** — agent can read AND mutate via the v0.5.0 tools |
 
-**Why the distinction matters:** catalog operations (*"install the web connector"*, *"upload this connector.yaml"*) are administrative metadata operations that don't touch any secret — the worst case if the agent gets one wrong is a confused operator who has to click Uninstall in the UI. Credential operations (*"create a Vertex provider with this API key"*, *"rotate the xlog API token"*) are security-relevant — if the agent gets one wrong, a secret either lands in the wrong place or is destroyed.
+**Why the distinction matters:** catalog operations (*"install the web connector"*, *"upload this connector.yaml"*) are administrative metadata operations that don't touch any secret — the worst case if the agent gets one wrong is a confused operator who has to click Uninstall in the UI. Credential operations (*"create a Vertex provider with this API key"*, *"rotate the XSIAM connector instance's API key"*) are security-relevant — if the agent gets one wrong, a secret either lands in the wrong place or is destroyed.
 
 When adding new MCP tools, ask BOTH questions:
 1. **Does this tool read or write a SecretStore value?** If yes → credential side → REST-only.
@@ -169,9 +169,12 @@ Operational details for working with guardian-vm. CI/CD pipeline mechanics live 
 
 - Project: `cortex-gcp-labs`
 - Zone: `us-central1-f`
-- Instance: `guardian` (internal IP `10.10.0.81`, no external IP)
-- Firewall tag: `allow-ssh`
+- Instance: `guardian` (internal IP `10.10.0.17`, no external IP)
+- Network tags: `allow-ssh`, `guardian-services`
+- Firewall rules: `allow-iap-guardian-services` (tcp 22/3000/8080/8090 from the IAP range `35.235.240.0/20`) + `allow-internal-guardian-services`
 - Access path: **IAP tunnel → password SSH** as user `ayman`
+- Preinstalled: Docker CE + compose plugin + git
+- GitHub Actions runner v2.334.0 named `guardian`, registered to `github.com/kite-production/guardian`, running as the systemd service `actions.runner.kite-production-guardian.guardian` (user `ayman`, member of the `docker` group)
 
 ### Credentials — never commit
 
@@ -229,7 +232,7 @@ Prefer `sshpass -e` (reads `SSHPASS` from environment) over `sshpass -p` (expose
 
 Interactive shell: `gcloud compute ssh "ayman@$VM_NAME" --zone="$VM_ZONE" --tunnel-through-iap`.
 
-Service-port tunnels (when smoke-testing the deployed UI): see [docs/CICD.md § Smoke-test commands](docs/CICD.md#smoke-test-commands). Local-port mapping intentionally offsets by +1 from the remote port (3001→3000, 8081→8080, 8889→8888, 9000→8999) so the operator can run a parallel local dev server on the same port without collision.
+Service-port tunnels (when smoke-testing the deployed UI): see [docs/CICD.md § Smoke-test commands](docs/CICD.md#smoke-test-commands). Local-port mapping intentionally offsets by +1 from the remote port (3001→3000, 8081→8080, 8091→8090) so the operator can run a parallel local dev server on the same port without collision.
 
 Never upload `.env.vm` anywhere — it's local-only. The VM's own `.env` (for `docker compose`) lives at `$VM_REMOTE_REPO/.env` and is managed in the runner's environment + GitHub Secrets, not in the repo.
 
@@ -272,7 +275,7 @@ npx tsc --noEmit                  # type-check (TS)
 npm run lint                      # ESLint (TS)
 npm run build                     # full Next.js production build — catches strict route validation
 cd ../../bundles/spark/mcp
-PYTHONPATH=$PWD/src python3 -m pytest tests/ -x   # embedded MCP tests (~7-8s, ~421 tests)
+PYTHONPATH=$PWD/src python3 -m pytest tests/ -x   # embedded MCP tests (~7-8s, ~349 tests)
 ```
 
 **`PYTHONPATH=$PWD/src` is REQUIRED.** Half the test files use `from usecase.X import Y` which needs `src/` on the path.
@@ -440,20 +443,7 @@ DOCS CHECKLIST → ASK FOR APPROVAL → git tag → release.yml
 
 The "read before code, write after build" pattern is symmetric. Skip either side and the drift returns.
 
-## Data-source validation doctrine (MANDATORY — syslog/CEF ONLY)
-
-When onboarding, simulating, or validating a data source against Cortex XSIAM, follow the **`data-source-xdm-validation` skill** (auto-activates on `bundles/spark/data-sources/**`).
-
-**What counts as a data source (the admission rule — check this BEFORE adding any vendor):** A Guardian data source MUST correspond to a real Cortex XSIAM **log-ingestion + parsing path** — the vendor has a **parsing rule and/or modeling rule** (shipped in a content pack OR built-in/native to the platform, e.g. PingFederate's native authentication parser) so its logs land in a dataset and get *structured*. **A vendor whose only Cortex presence is an XSOAR/Marketplace integration with no Parsing/Modeling rules is NOT a data source — it is an action integration** (it fetches alerts/incidents or runs response actions via API; it does not ingest+parse logs into a dataset). **Do not add action integrations to the data-source catalog.** SIEMs that are log *destinations* (IBM QRadar, Rapid7 InsightIDR) are likewise not sources. Litmus: does Cortex ship/native a parsing or modeling rule that produces structured columns/`xdm.*` for this vendor? No rule anywhere → not a data source. (v0.17.144 removed 12 vendors that failed this test — CrowdStrike, Sophos ×2, PingOne, Wiz, Rapid7 ×2, SAP, ESET, Snowflake, Veeam, QRadar — keeping only PingFederate.)
-
-The load-bearing rules, which govern every data-source decision:
-
-1. **Guardian ALWAYS delivers synthetic logs over syslog/CEF to the Cortex Broker. NEVER an HTTP collector or API integration — full stop.** This holds even when the real-world vendor is collected that way in production (CrowdStrike FDR pulling from S3, Snowflake/Wiz/Rapid7/PingOne API pollers, HTTP event collectors). `guardian_create_data_worker` is always `type=CEF` (or SYSLOG/LEEF) to a `udp:<broker>:514` destination.
-2. **Why it's sound:** the broker, parsing rules, and modeling rules are **protocol-agnostic** — they map on the **data shape** (field/column/JSON structure), not on how the event arrived. A rule reading `json_extract_scalar(evt, "$.a.b")` maps our event whether it came via API or syslog, as long as it carries `a.b` in the expected shape.
-3. **The job is reverse-engineering, not transport.** Read the vendor's parsing + modeling rules → derive the exact field shape they expect (names, types, JSON paths, value types, the gate) → encode it into `data_source.yaml` `fields[]` (name + type + description + example) and `how_to_use` → the agent crafts events of that shape → ships them as CEF → the rules parse + map → `xdm.*` populates → validated.
-4. **Corrections this enforces:** a vendor being "native-collector-only"/"API-integration" is **irrelevant** to validatability — never dismiss it for that reason. `raw>0, xdm=0` means **no modeling rule is bound** (not "can't map") — obtain + reverse-engineer the rule. The `how_to_use` documents the **data shape + syslog/CEF routing literal**, NOT the vendor's real-world collection plumbing (describing "FDR S3/SQS" as the *mechanism* misleads the agent into thinking it needs an HTTP collector — it never does).
-
-See the skill's `## Delivery doctrine` section + `references/diagnostic-playbook.md` for the full loop.
+<!-- [guardian v0.1.0] Retired: § Data-source validation doctrine — the marketplace data-sources catalog, its validation skill, and the synthetic-log delivery doctrine were removed when Guardian was carved out of Phantom -->
 
 ## Architecture page is the spec (MANDATORY — read before editing)
 
@@ -469,7 +459,7 @@ See the skill's `## Delivery doctrine` section + `references/diagnostic-playbook
 | TLS, cert generation, SSL_CERT_PEM/SSL_KEY_PEM, /tls/ volume | `#tls-proxy` |
 | Per-instance connector containers | `#connector-containers` |
 | MCP / agent topology, ports, auth surface | `#stack` |
-| Data sources (v0.8.0+) | `#data-sources` |
+<!-- [guardian v0.1.0] Retired row: Data sources / #data-sources — subsystem removed when Guardian was carved out of Phantom -->
 
 **The rule**: if about to change behaviour in any of those areas, open the architecture page first and confirm what you're about to do conforms to the spec. If it doesn't, EITHER update the code to match the spec, OR get explicit operator approval to update the spec itself + update the page in the same PR.
 

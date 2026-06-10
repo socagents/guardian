@@ -80,7 +80,7 @@ The diagram now reads top-to-bottom as **lifecycle → pipeline**: the top secti
 
 ## Overview
 
-Guardian ships to customers as a Docker Compose stack of 5 stack-level images (xlog, agent, caldera, updater, browser) plus N per-instance connector containers managed dynamically by guardian-updater. Two distribution flavors:
+Guardian ships to customers as a Docker Compose stack of 3 stack-level images (agent, updater, browser) plus N per-instance connector containers managed dynamically by guardian-updater (built from the connector-runtime base image + 5 per-connector images). Two distribution flavors:
 
 | Flavor | For | Built by | Distributed via | Pull access |
 |---|---|---|---|---|
@@ -91,7 +91,7 @@ Both installers execute the **same script body** (`installer/guardian-installer.
 
 The CI/CD pipeline has three sequential steps per push to main:
 
-1. **Per-service build** — `build-xlog.yml` / `build-agent.yml` / `build-caldera.yml` / `build-connectors.yml`. Each fires ONLY when its service's source changed. Pushes `:dev` image tag.
+1. **Per-service build** — `build-agent.yml` / `build-updater.yml` / `build-connectors.yml`. Each fires ONLY when its service's source changed. Pushes `:dev` image tag.
 2. **Dev installer build + prerelease publish** — `build-dev-installer.yml`. Fans in from any of the above (`workflow_run`) OR fires on `installer/**` changes. Resolves current `:dev` digests, builds `guardian-installer-dev`, stages at `/home/ayman/guardian-installer-dev`, publishes `dev-latest` prerelease (load-bearing for operator-PAT pull access).
 3. **Customer release** — `release.yml`. Fires ONLY on `v*.*.*` tag push, AFTER explicit operator approval in chat. Builds customer images (conditional rebuild via path diff against previous tag), publishes GitHub Release with the customer installer asset, deletes `dev-latest` prerelease.
 
@@ -105,7 +105,7 @@ Every change to the codebase falls into one of three scenarios. The scenario det
 
 **Code-only change. Installer unchanged.** Customer re-runs their EXISTING installer for the upgrade.
 
-**Trigger**: source change under `mcp/agent/**`, `bundles/spark/**`, `xlog/**`, `third_party/caldera/**` (submodule pin move), or `bundles/spark/connectors/**`. NO change to `installer/**`.
+**Trigger**: source change under `mcp/agent/**`, `bundles/spark/**`, `updater/**`, `bundles/spark/connectors/**`, or `guardian-connector-runtime/**`. NO change to `installer/**`.
 
 **Versioning**: **MINOR bump within the current major** — `v5.29` → `v5.30`. The installer's major version stays constant; only the right side increments. Customers know "same major = same install ceremony."
 
@@ -248,7 +248,7 @@ When planning a change, walk this tree to identify the scenario:
 ```
 What did the change touch?
 │
-├── Only source under mcp/agent/, bundles/spark/, xlog/, third_party/caldera/,
+├── Only source under mcp/agent/, bundles/spark/, updater/,
 │   bundles/spark/connectors/, guardian-connector-runtime/ ?
 │   AND backwards-compatible with prior storage schema?
 │   → SCENARIO 1
@@ -397,7 +397,7 @@ Every deprecated feature moves through 3 stages:
 ### Examples (hypothetical, none shipped yet)
 
 - "Legacy `setup.json` config file format" — deprecated in v0.6.0, warning surfaced in v0.6.5, removed in v1.0.0 (with installer-side migration to `.env`-only).
-- "Old MCP tool name `guardian_log_query` replaced by `xlog_search`" — both registered in v0.7.0 with deprecation notice on old, removed in v1.0.0.
+- "Old MCP tool name `guardian_case_query` replaced by `xsiam_get_cases`" — both registered in vX.Y.0 with deprecation notice on old, removed in v(X+1).0.0.
 
 ### Forbidden in deprecation work
 
@@ -443,7 +443,7 @@ The Change Scenarios section above describes the UPGRADE path (customer already 
 
 3. **Step 4 — Registry credentials** (interactive prompt): Customer pastes their `read:packages` PAT. The installer validates against `ghcr.io` (v0.5.8+ probe — see [PAT recipes](#pat-recipes)); on validation success, the PAT is written to `/opt/guardian/.env` as `GUARDIAN_REGISTRY_TOKEN=ghp_…`.
 
-4. **Step 7 — Stack startup**: installer pulls + starts 4 services (`xlog`, `caldera`, `guardian-agent`, `guardian-updater`; `guardian-browser` stays profile-gated until a web connector instance is configured). On healthy guardian-agent, banner prints:
+4. **Step 7 — Stack startup**: installer pulls + starts the stack services (`guardian-agent`, `guardian-updater`; `guardian-browser` stays profile-gated until a web connector instance is configured). On healthy guardian-agent, banner prints:
    ```
    ✓ Guardian v0.5.X is running.
      Open in a browser:    https://<vm-ip>:3000
@@ -461,7 +461,7 @@ The Change Scenarios section above describes the UPGRADE path (customer already 
 
 6. **Configure providers + connectors**:
    - `/providers` → add a model provider (Vertex AI service-account JSON or Gemini API key).
-   - `/instances` → spawn connector instances per the customer's environment (xlog, xsiam, caldera, web, cortex-docs, cortex-content).
+   - `/connectors` → spawn connector instances per the customer's environment (xsiam, cortex-xdr, web, cortex-docs, cortex-content).
 
 7. **Done.** From here the customer uses the UI. Upgrades happen via the installer ONLY (no in-UI Update button by design): minor releases (Scenario 1) re-run their existing installer; major releases (Scenarios 2 + 3) download a new installer from the GitHub Release.
 
@@ -605,7 +605,7 @@ See [CI/CD failure modes #4 (PREV_V race)](#4-prev_v-race-when-tagging-two-versi
 ### Primary role: per-instance connector container lifecycle
 
 When the customer creates a connector instance (via `/instances`), guardian-updater:
-- Pulls the corresponding connector image (e.g., `guardian-connector-xlog:vX.Y.Z`) by digest.
+- Pulls the corresponding connector image (e.g., `guardian-connector-xsiam:vX.Y.Z`) by digest.
 - Starts a per-instance container with the customer's instance-specific config + secret-store handle.
 - Tracks the container's lifecycle (health, restart, removal) for the agent's `/instances` page.
 
@@ -615,7 +615,7 @@ This is the load-bearing reason guardian-updater exists today. The image lifecyc
 
 - Source: [`updater/src/main.py`](../updater/src/main.py) — FastAPI service.
 - Port: not exposed externally; guardian-agent calls it internally over the compose network.
-- Image: `ghcr.io/<owner>/guardian-updater:vX.Y.Z` — built by release.yml only (not on the dev cycle; that's why `guardian-updater` shows up as STABLE-ADVANCED in `build-dev-installer.yml`'s diagnostic, not REBUILT).
+- Image: `ghcr.io/<owner>/guardian-updater:vX.Y.Z` — built by `build-updater.yml` on the dev cycle (`updater/**` path filter) and by `release.yml` on tag push.
 
 ### Auth
 
@@ -691,13 +691,13 @@ The two binaries execute the **identical** script body — same install/upgrade 
 
 ### Monorepo release invariant
 
-**Guardian is a monorepo release**: all 5 stack-level services (`guardian-xlog`, `guardian-agent`, `guardian-caldera`, `guardian-updater`, `guardian-browser`) + 6 per-connector images (`guardian-connector-{runtime,xlog,xsiam,caldera,web,cortex-docs,cortex-content}`) ship in lockstep at the same `vX.Y.Z` version. Mixed-version manifests are NOT supported by guardian-installer or guardian-updater.
+**Guardian is a monorepo release**: all 3 stack-level services (`guardian-agent`, `guardian-updater`, `guardian-browser`) + 6 per-connector images (`guardian-connector-{runtime,xsiam,cortex-xdr,web,cortex-docs,cortex-content}`) — 9 images total — ship in lockstep at the same `vX.Y.Z` version. Mixed-version manifests are NOT supported by guardian-installer or guardian-updater.
 
 - `release.yml`'s conditional rebuild logic is **purely an optimization** — it retags from the previous version's digests when a service's source is unchanged, so the resulting customer compose still has only ONE version string but contains a mix of newly-built and retagged-from-prev digests.
 - The version string in `/opt/guardian/.env` (`GUARDIAN_VERSION=0.5.X`) refers to the **release as a whole**, not to any individual image's source-version.
-- Customers can't pick "give me guardian-agent v0.5.10 but xlog v0.5.4." Guardian-updater + guardian-installer both refuse mixed-version manifests by reading `GUARDIAN_VERSION` as authoritative.
+- Customers can't pick "give me guardian-agent v0.5.10 but guardian-updater v0.5.4." Guardian-updater + guardian-installer both refuse mixed-version manifests by reading `GUARDIAN_VERSION` as authoritative.
 
-When working on a release that "only touches agent," the resulting `vX.Y.Z+1` will still publish manifest entries for xlog/caldera/updater/browser — just retagged from the previous release's digests. That's not a bug; it's the unified-release contract.
+When working on a release that "only touches agent," the resulting `vX.Y.Z+1` will still publish manifest entries for updater/browser/connectors — just retagged from the previous release's digests. That's not a bug; it's the unified-release contract.
 
 **Forbidden**:
 - Hand-editing `GUARDIAN_VERSION` in `/opt/guardian/.env` to mix versions.
@@ -883,34 +883,33 @@ Empty output under each of the FOUR headers = consistent. Any output means a con
 
 ### Forbidden when adding a connector
 
-- **Don't ship just the synthetic-card entry (#7) without the manifest entry (#4).** That produces the "visible but uninstallable" failure mode v0.5.61 introduced. The marketplace UI deliberately reads from #7 (synthetic card) for display + from #4 (manifest catalogue) for install — splitting their data sources lets the synthetic card serve advance-preview content for connectors not yet shipped, but means you MUST update both when actually shipping.
-- **Don't reuse a field name pattern that doesn't match the rest of the codebase.** v0.5.59 standardized Cortex-family connectors on `api_url` / `api_id` / `api_key`. A new Cortex-family connector adopts these from day 1; non-Cortex connectors pick names that fit their pattern (xlog has `baseUrl` + `apiToken`, caldera has `apiKey` + `redUser`, etc.). Document the pattern choice in the connector.yaml's description.
+- **Don't ship just the synthetic-card entry (#7) without the manifest entry (#4).** That produces the "visible but uninstallable" failure mode v0.5.61 introduced. The marketplace UI deliberately reads from #7 (synthetic card) for display + from #4 (manifest catalogue) for install — splitting their sources of truth lets the synthetic card serve advance-preview content for connectors not yet shipped, but means you MUST update both when actually shipping.
+- **Don't reuse a field name pattern that doesn't match the rest of the codebase.** v0.5.59 standardized Cortex-family connectors on `api_url` / `api_id` / `api_key`. A new Cortex-family connector adopts these from day 1; non-Cortex connectors pick names that fit their pattern (web has `cdp_url` + its browser-shaped fields, etc.). Document the pattern choice in the connector.yaml's description.
 - **Don't merge a connector PR without running the quick-check above.** It's two seconds; it catches the failure mode immediately.
 
 ## Per-service path-filter contract
 
-**A service's image is rebuilt iff its source changed.** This is the load-bearing mechanic that lets caldera + xlog containers preserve in-memory state across pushes that don't touch their code, enforced through path filters on each per-service workflow.
+**A service's image is rebuilt iff its source changed.** This is the load-bearing mechanic that lets untouched services' containers preserve in-memory state across pushes that don't touch their code, enforced through path filters on each per-service workflow.
 
 | Workflow | Triggers on changes under | Produces |
 |---|---|---|
-| `build-xlog.yml` | `xlog/**` | Rebuilt `guardian-xlog:dev` |
 | `build-agent.yml` | `mcp/agent/**` or `bundles/spark/**` | Rebuilt `guardian-agent:dev` (+ runs pytest/lint inside the freshly built image) |
-| `build-caldera.yml` | `third_party/caldera/**` (submodule pin moves) | Rebuilt `guardian-caldera:dev` |
-| `build-connectors.yml` | `bundles/spark/connectors/**` or `guardian-connector-runtime/**` | Rebuilt per-connector images (FROM-dependency cascade rebuilds all six when the runtime base changes) |
-| `build-dev-installer.yml` | `installer/**` OR `workflow_run` from any of the four above | Re-resolves current `:dev` digests + rebuilds the dev installer + republishes `dev-latest` |
+| `build-updater.yml` | `updater/**` | Rebuilt `guardian-updater:dev` |
+| `build-connectors.yml` | `bundles/spark/connectors/**` or `guardian-connector-runtime/**` | Rebuilt per-connector images (FROM-dependency cascade rebuilds all five when the runtime base changes) |
+| `build-dev-installer.yml` | `installer/**` OR `workflow_run` from any of the three above | Re-resolves current `:dev` digests + rebuilds the dev installer + republishes `dev-latest` |
 
 **v0.5.12 narrowing**: previously the `paths:` lists also included `.github/workflows/build-<svc>.yml` and `.github/actions/build-and-push-dev-image/**`. Workflow header edits were triggering rebuilds + `docker build --pull` was fetching fresh base layers, producing new image digests despite zero source changes. v0.5.12 removed those self-paths.
 
 ### The "untouched services" invariant — load-bearing rule
 
-For services whose source did NOT change between releases (`xlog`, `caldera`, etc. when their paths are unchanged):
+For services whose source did NOT change between releases (`guardian-updater`, `guardian-browser`, individual connectors, etc. when their paths are unchanged):
 
 - **NO new image build.** The per-service `build-<svc>.yml` workflow does not fire — its path-filter doesn't match.
 - **NO new release tag.** `release.yml`'s "Detect changed services" step diffs the source paths against the previous tag and marks unchanged services as `changed=0`. For those services, release.yml runs the retag-from-prev path: `docker pull` the previous tag → `docker tag` to the new tag → `docker push`. The PUSHED IMAGE IS BIT-IDENTICAL TO THE PREVIOUS RELEASE'S (same content digest).
 - **Same content digest pinned in the new manifest.** The new `release-manifest-vX.Y.Z+1.env` lists the unchanged service with the SAME `DIGEST_<SVC>` as the prior release.
 - **Customer compose does NOT recreate the container.** When the customer pulls the new manifest into `/opt/guardian/.env` and runs `docker compose up -d`, compose sees identical service-spec (same image digest) for the unchanged service → leaves the container running untouched.
 
-This is the load-bearing reason caldera + xlog preserve in-memory state across pushes that don't touch their code. Without this rule, every release would recreate every container, nuking caldera's live implant tracking + xlog's worker dict on every upgrade.
+This is the load-bearing reason untouched services preserve in-memory state across pushes that don't touch their code. Without this rule, every release would recreate every container, nuking guardian-updater's live container-tracking state + every connector instance's in-process state on every upgrade.
 
 ### Forensic verification
 
@@ -919,11 +918,11 @@ To confirm a release did NOT rebuild an untouched service:
 ```bash
 # 1. Check the workflow run history — should show no build-<svc>.yml run
 #    for the commit range between the two release tags
-gh run list --workflow=build-xlog.yml --limit 5
+gh run list --workflow=build-updater.yml --limit 5
 
 # 2. Compare the image digest between the two releases
-gh release view v5.29 --json assets,body | jq -r '.body' | grep DIGEST_GUARDIAN_XLOG
-gh release view v5.30 --json assets,body | jq -r '.body' | grep DIGEST_GUARDIAN_XLOG
+gh release view v5.29 --json assets,body | jq -r '.body' | grep DIGEST_GUARDIAN_UPDATER
+gh release view v5.30 --json assets,body | jq -r '.body' | grep DIGEST_GUARDIAN_UPDATER
 # Identical → unchanged service was retagged, not rebuilt.
 ```
 
@@ -938,14 +937,14 @@ The invariant in summary:
 A common misreading: the installer's Step 7 output
 
 ```
-✔ Image ghcr.io/.../guardian-caldera@sha256:97ed21b2…  Pulled  1.0s
+✔ Image ghcr.io/.../guardian-browser@sha256:97ed21b2…  Pulled  1.0s
 ```
 
 says "Pulled" for EVERY image in the compose, not just the ones that changed. For an image whose digest matches what's already cached on the host, the "pull" is a manifest-verify against the registry (~0.5-1.5s round trip), NOT a layer fetch. The forensic indicator that nothing was actually downloaded is the followup `docker compose up`:
 
 ```
-✔ Container caldera   Running   0.0s   ← unchanged; container was NOT recreated
-✔ Container xlog      Healthy   2.6s   ← unchanged; just confirming health
+✔ Container guardian_browser   Running   0.0s   ← unchanged; container was NOT recreated
+✔ Container guardian_updater   Healthy   2.6s   ← unchanged; just confirming health
 ✔ Container guardian_agent   Started   2.1s   ← REBUILT — digest changed → recreate
 ```
 
@@ -975,7 +974,7 @@ Together: a workflow run with no source change is a no-op (path filter skips); a
 
 `docker build --pull` (used by every build job) fetches the freshest version of the base image referenced by `FROM`. With floating tags (`FROM python:3.12-slim`), the freshest version may have advanced since the last build — even when YOUR source is unchanged. Build N+1 then produces a different image digest from build N, despite no source delta.
 
-Pre-v0.5.12 example: v0.5.11 push edited `build-xlog.yml`'s comment header. Self-path-filter (now removed) triggered the workflow. `docker build --pull` re-fetched `python:3.12` (xlog's base) and got newer layers. xlog's image digest changed from `06c29496…` to `822359cb…` despite zero xlog source changes.
+Pre-v0.5.12 example (inherited from the upstream codebase): a push edited one per-service workflow's comment header. Self-path-filter (now removed) triggered the workflow. `docker build --pull` re-fetched that service's `python:3.12` base and got newer layers. The image digest changed from `06c29496…` to `822359cb…` despite zero source changes for the service.
 
 v0.5.12's fix: pin every external base by digest (`FROM python:3.12-slim@sha256:401f6e1a…`). `docker build --pull` becomes idempotent against a stable digest.
 
@@ -996,19 +995,12 @@ Paste the new `sha256:…` into the `FROM` line. Commit. Push. The next `build-<
 | Service | Dockerfile | Pinned base(s) |
 |---|---|---|
 | guardian-agent | `mcp/agent/Dockerfile` | `node:20-alpine` (Stage 1), `python:3.12-slim` (Stages 2 + 3) |
-| guardian-xlog | `xlog/Dockerfile` | `python:3.12` |
 | guardian-updater | `updater/Dockerfile` | `python:3.12-slim` |
 | guardian-browser | `guardian-browser/Dockerfile` | `chromedp/headless-shell:latest` (digest-pinned despite the `:latest` tag) |
 | guardian-connector-runtime | `guardian-connector-runtime/Dockerfile` | `python:3.12-slim` |
-| 6 per-connector images | `bundles/spark/connectors/*/Dockerfile` | `guardian-connector-runtime:${GUARDIAN_RUNTIME_VERSION}` — internal, inherits stability from the runtime base |
+| 5 per-connector images | `bundles/spark/connectors/*/Dockerfile` | `guardian-connector-runtime:${GUARDIAN_RUNTIME_VERSION}` — internal, inherits stability from the runtime base |
 
-### Carve-out: caldera
-
-`third_party/caldera` is a git submodule pointing at MITRE's upstream — we don't control it. We can't add digest pinning to caldera's Dockerfile without forking the submodule.
-
-Mitigation:
-- Path-filter contract limits caldera rebuilds to **deliberate submodule pin updates** (the only time `third_party/caldera/**` actually changes).
-- If caldera base drift becomes a real operator problem, options are: fork the submodule and pin bases there, or wrap caldera's Dockerfile in our own stage-0 that pulls digest-pinned bases. Neither is cheap; defer until needed.
+<!-- [guardian v0.1.0] Retired: "Carve-out: caldera" subsection — simulation subsystem (third_party submodule) removed; every remaining Dockerfile is repo-controlled and digest-pinned. -->
 
 ## Build cache observability
 
@@ -1071,7 +1063,7 @@ sudo docker buildx du   # null op if buildx isn't the active builder
 
 ### Cleanup recipes
 
-**Safe daily-hygiene prune** (preserves volumes — caldera state etc.):
+**Safe daily-hygiene prune** (preserves volumes — `guardian_*` state etc.):
 
 ```bash
 sudo docker system prune -af --volumes=false
@@ -1172,9 +1164,8 @@ The dev flow lives in five workflow files + one composite action. Each per-servi
 
 | File | Triggers | Purpose |
 |---|---|---|
-| `.github/workflows/build-xlog.yml` | push/PR + paths `xlog/**` | Build guardian-xlog → push `:dev` → capture digest |
 | `.github/workflows/build-agent.yml` | push/PR + paths `mcp/agent/**` or `bundles/spark/**` | Build guardian-agent → push `:dev` → run pytest + lint inside the freshly-built image |
-| `.github/workflows/build-caldera.yml` | push/PR + paths `third_party/caldera/**` | Build guardian-caldera → push `:dev` |
+| `.github/workflows/build-updater.yml` | push/PR + paths `updater/**` | Build guardian-updater → push `:dev` |
 | `.github/workflows/build-connectors.yml` | push/PR + paths `bundles/spark/connectors/**` or `guardian-connector-runtime/**` | Build per-instance connector images → push `:dev` |
 | `.github/workflows/build-dev-installer.yml` | `workflow_run` on any build-* above, OR push to `installer/**` | Resolve current `:dev` digests from GHCR + latest stable manifest for updater/browser → build guardian-installer-dev → **stage at `/home/ayman/guardian-installer-dev`** + upload artifact + **publish `dev-latest` prerelease** (load-bearing for operator-PAT pull access). NO install. |
 | `.github/workflows/release.yml` | `v*.*.*` tag push (AFTER explicit operator approval) | Build customer images (conditional rebuild via path diff) → publish GitHub Release → delete `dev-latest` prerelease |
@@ -1182,7 +1173,7 @@ The dev flow lives in five workflow files + one composite action. Each per-servi
 
 Properties this layout gives you:
 
-- **Only changed services rebuild.** A push that only touches `mcp/agent/` runs build-agent.yml; build-xlog.yml + build-caldera.yml stay idle.
+- **Only changed services rebuild.** A push that only touches `mcp/agent/` runs build-agent.yml; build-updater.yml + build-connectors.yml stay idle.
 - **`:dev` is the source-of-truth for the latest dev digests.** Each per-service build overwrites `ghcr.io/<owner>/<svc>:dev`. build-dev-installer.yml queries GHCR for current digests instead of coordinating artifacts across workflow runs.
 - **Composite action enforces "only image tag differs."** The build + push + digest-capture mechanics live in ONE place.
 - **Installer-only changes still trigger a fresh installer build.** build-dev-installer.yml also triggers on push to `installer/**`.
@@ -1294,13 +1285,13 @@ When `build-dev-installer.yml` completes with `conclusion=success` AND its auto-
 
 ### The `build-and-push-dev-image` composite action
 
-[`.github/actions/build-and-push-dev-image/action.yml`](../.github/actions/build-and-push-dev-image/action.yml) is shared by `build-xlog.yml`, `build-agent.yml`, `build-caldera.yml`, and `build-connectors.yml`. The mechanical enforcement of the "only image tag differs" rule — the build, push, and digest-capture logic live in ONE place so dev + release paths can't drift in subtle ways.
+[`.github/actions/build-and-push-dev-image/action.yml`](../.github/actions/build-and-push-dev-image/action.yml) is shared by `build-agent.yml`, `build-updater.yml`, and `build-connectors.yml`. The mechanical enforcement of the "only image tag differs" rule — the build, push, and digest-capture logic live in ONE place so dev + release paths can't drift in subtle ways.
 
 **Inputs**:
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `service-name` | yes | — | `guardian-xlog` / `guardian-agent` / `guardian-caldera` / `guardian-connector-<id>` |
+| `service-name` | yes | — | `guardian-agent` / `guardian-updater` / `guardian-connector-<id>` |
 | `build-context` | yes | — | Path passed to `docker build` as the build context |
 | `dockerfile-path` | no | empty | Optional `-f` flag for Dockerfile path; blank → infer from context |
 | `build-args` | no | empty | Multi-line `KEY=VALUE` list for `--build-arg` (one per line) |
@@ -1329,8 +1320,8 @@ When `build-dev-installer.yml` completes with `conclusion=success` AND its auto-
 - Reusable workflows would require explicit artifact passing of the digest output, which is heavier than composite-action step outputs.
 
 **When changing this action**, remember:
-- It's used by ALL 4 per-service build workflows. A bug here breaks all of them simultaneously.
-- v0.5.12's path-filter narrowing means a change here doesn't trigger any `build-<svc>.yml`. To exercise a change before the next source push, use `gh workflow run build-xlog.yml` (or any per-service workflow) manually.
+- It's used by ALL 3 per-service build workflows. A bug here breaks all of them simultaneously.
+- v0.5.12's path-filter narrowing means a change here doesn't trigger any `build-<svc>.yml`. To exercise a change before the next source push, use `gh workflow run build-agent.yml` (or any per-service workflow) manually.
 - Inputs are positional/named per `with:` block in each caller; adding a required input means updating every caller.
 
 ## Build & release workflow (mechanics)
@@ -1352,7 +1343,7 @@ local pre-deploy gate (tsc + lint + npm run build) — fast feedback BEFORE push
 git commit + git push origin <branch>             # PR — build-*.yml: builds + tests, no install
    OR git push origin main                        # build-*.yml: builds + tests, build-dev-installer.yml: stages binary
    ↓
-build-xlog.yml │ build-agent.yml │ build-caldera.yml │ build-connectors.yml
+build-agent.yml │ build-updater.yml │ build-connectors.yml
   (only ones whose source changed actually run)
                                   ↓
               build-dev-installer.yml (workflow_run, fans in)
@@ -1557,8 +1548,6 @@ The lifecycle is now genuinely two-stage where the second stage adds value beyon
 | Label | Path filter scope |
 |---|---|
 | `component:agent` | `mcp/agent/**` or `bundles/spark/**` |
-| `component:xlog` | `xlog/**` |
-| `component:caldera` | `third_party/caldera/**` (submodule pin) |
 | `component:connectors` | `bundles/spark/connectors/**` or `guardian-connector-runtime/**` |
 | `component:installer` | `installer/**` |
 | `component:workflows` | `.github/workflows/**` or `.github/actions/**` |
@@ -1715,8 +1704,8 @@ If guardian-vm is rebuilt or the runner is migrated, redo all three.
 **Current state**: ONE self-hosted runner (`[self-hosted, Linux, X64, guardian]`) running on guardian-vm itself. Concurrent workflows queue serially per the runner's job slot.
 
 **Why one runner is sufficient today**:
-- Per-service builds are fast (build-xlog ~2 min, build-agent ~4-5 min, build-caldera ~3 min, build-connectors ~3-7 min depending on which connectors changed) — even with multiple per-service workflows triggered by the same push, total wall-clock is rarely > 10-12 min.
-- The path-filter narrowing (v0.5.12) means most pushes trigger only 1-2 per-service workflows, not all four.
+- Per-service builds are fast (build-agent ~4-5 min, build-updater ~2 min, build-connectors ~3-7 min depending on which connectors changed) — even with multiple per-service workflows triggered by the same push, total wall-clock is rarely > 10-12 min.
+- The path-filter narrowing (v0.5.12) means most pushes trigger only 1-2 per-service workflows, not all three.
 - build-dev-installer.yml's `concurrency: cancel-in-progress: false` serializes the install-building cycle naturally — multiple `workflow_run` triggers queue rather than racing.
 
 **When to add a second runner**:
@@ -1796,16 +1785,13 @@ gcloud compute start-iap-tunnel "$VM_NAME" 8080 \
   --local-host-port=localhost:8081 \
   --zone="$VM_ZONE" --project="$VM_PROJECT" &
 
-# Caldera UI — remote 8888 → local 8889
-gcloud compute start-iap-tunnel "$VM_NAME" 8888 \
-  --local-host-port=localhost:8889 \
-  --zone="$VM_ZONE" --project="$VM_PROJECT" &
-
-# xlog GraphQL — remote 8999 → local 9000
-gcloud compute start-iap-tunnel "$VM_NAME" 8999 \
-  --local-host-port=localhost:9000 \
+# guardian-updater — remote 8090 → local 8091 (connector lifecycle probes)
+gcloud compute start-iap-tunnel "$VM_NAME" 8090 \
+  --local-host-port=localhost:8091 \
   --zone="$VM_ZONE" --project="$VM_PROJECT" &
 ```
+
+<!-- [guardian v0.1.0] Retired: Caldera-UI (8888→8889) + log-generator GraphQL (8999→9000) tunnel recipes — simulation subsystem removed. -->
 
 ## `installer/build-guardian-installer.sh` env-var contract
 
@@ -1827,14 +1813,14 @@ v0.3.0+ replaced tag-based image references in the customer compose with **conte
 
 | File | Pinning | Used by | Used when |
 |---|---|---|---|
-| **`docker-compose.yml`** (repo root) | `image: xlog:local` (tag, dev-only) | dev-workstation local-dev | Any time a developer runs `docker compose up` from the repo root |
-| **`installer/docker-compose.yml`** | `image: ghcr.io/.../xlog@${DIGEST_GUARDIAN_XLOG}` (digest, customer + dev-installer) | The guardian-installer binaries; packaged into customer install kits + dev installer | On customer hosts + guardian-vm after running an installer |
+| **`docker-compose.yml`** (repo root) | `image: guardian-agent:local` (tag, dev-only) | dev-workstation local-dev | Any time a developer runs `docker compose up` from the repo root |
+| **`installer/docker-compose.yml`** | `image: ghcr.io/.../guardian-agent@${DIGEST_GUARDIAN_AGENT}` (digest, customer + dev-installer) | The guardian-installer binaries; packaged into customer install kits + dev installer | On customer hosts + guardian-vm after running an installer |
 
 Both shapes are valid Docker compose syntax. Don't try to unify them — the dev compose needs `:local` so it works without a manifest file, and the customer/dev-installer compose needs digests so upgrades are content-aware.
 
 ### Anti-patterns specific to digest pinning
 
-- **Mixing modes within one compose file.** Don't ship `image: xlog:0.3.0` in `installer/docker-compose.yml` for one service while every other service uses digest refs.
+- **Mixing modes within one compose file.** Don't ship `image: guardian-agent:0.3.0` in `installer/docker-compose.yml` for one service while every other service uses digest refs.
 - **Hand-editing `DIGEST_GUARDIAN_*` lines in customer `.env`.** They're manifest-managed; the next `guardian-installer` run strips and rewrites the whole block.
 - **Forgetting the fail-loud fallback.** The compose pattern is `@${DIGEST_GUARDIAN_<SVC>:-sha256:invalid_digest_run_installer_first}`.
 
@@ -1904,7 +1890,7 @@ When something in the pipeline fails, recognizing the pattern saves diagnostic t
 
 ### 3. Workflow_run cascade serialization producing "all UNCHANGED" diagnostic
 
-**Symptom**: Push causes `build-dev-installer.yml` to fire twice (push-triggered AND workflow_run-triggered after a per-service build). The LATEST workflow_run-triggered run's diagnostic table shows all 5 services ✓ UNCHANGED even though source clearly changed (e.g., release-notes.ts changed → build-agent fired → new digest exists on `:dev`).
+**Symptom**: Push causes `build-dev-installer.yml` to fire twice (push-triggered AND workflow_run-triggered after a per-service build). The LATEST workflow_run-triggered run's diagnostic table shows all services ✓ UNCHANGED even though source clearly changed (e.g., release-notes.ts changed → build-agent fired → new digest exists on `:dev`).
 
 **Cause**: An INTERMEDIATE workflow_run-triggered build-dev-installer.yml ran first, picked up the new digest from `:dev`, republished dev-latest with the new digest. The LATEST run then compared its (new) digest against the (already-new) prior dev-latest → match → reports UNCHANGED.
 
@@ -1913,7 +1899,7 @@ When something in the pipeline fails, recognizing the pattern saves diagnostic t
 ```bash
 gh run list --workflow=build-dev-installer.yml --branch main --limit 5
 # Look for the run that ran BETWEEN your push and the latest run
-gh run view <intermediate-run-id> --log | grep -E "guardian-(xlog|agent|caldera)\s+(UNCHANGED|REBUILT|FIRST-BUILD|STABLE-ADVANCED)"
+gh run view <intermediate-run-id> --log | grep -E "guardian-(agent|updater|browser)\s+(UNCHANGED|REBUILT|FIRST-BUILD|STABLE-ADVANCED)"
 ```
 
 **Prevention**: Future improvement: bake the rebuild summary into a workflow artifact / commit comment / similar so it survives even when the latest run sees "no delta." Not implemented today; the run-history workaround is sufficient.
@@ -1997,7 +1983,7 @@ Wait for completion, retry the install.
    ```
 5. If restart doesn't help, check disk space (`df -h`), check docker daemon (`docker info`), check network (`curl https://github.com`).
 
-**Prevention**: Disk-space monitoring on guardian-vm (gh-actions builds accumulate layers under `/var/lib/docker`). Periodic `docker system prune -af --volumes=false` (CAREFUL: don't prune volumes — caldera state). A monthly cadence cleanup is healthy.
+**Prevention**: Disk-space monitoring on guardian-vm (gh-actions builds accumulate layers under `/var/lib/docker`). Periodic `docker system prune -af --volumes=false` (CAREFUL: don't prune volumes — `guardian_*` state). A monthly cadence cleanup is healthy.
 
 ### 9. `release.yml` partial failure mid-flight
 
@@ -2035,7 +2021,7 @@ Wait for completion, retry the install.
    ```bash
    # Safe: removes stopped containers, dangling images, unused networks
    sudo docker system prune -af --volumes=false
-   # Specifically dangerous: --volumes would wipe guardian_* (caldera state etc)
+   # Specifically dangerous: --volumes would wipe guardian_* (secrets, audit, kb etc)
    ```
 4. If still tight, remove old `:vX.Y.Z` image tags on the runner (they're still on GHCR; runner-local cache is rebuildable):
    ```bash
@@ -2048,7 +2034,7 @@ Wait for completion, retry the install.
 
 ### 12. Per-connector docker build 401 on FROM guardian-connector-runtime:dev (chronic since v0.5.11; fixed in v0.5.60 #38)
 
-**Symptom**: every per-connector job in `build-connectors.yml` (xlog/xsiam/caldera/web/cortex-docs/cortex-content) fails in ~6s with:
+**Symptom**: every per-connector job in `build-connectors.yml` (xsiam/cortex-xdr/web/cortex-docs/cortex-content) fails in ~6s with:
 
 ```
 #2 [internal] load metadata for ghcr.io/<owner>/guardian-connector-runtime:dev
@@ -2075,38 +2061,27 @@ even though the SAME workflow run's `build-runtime` job succeeded seconds earlie
 
 **Prevention**: build-dev-installer.yml's existing `docker pull` before inspect is the mitigation. If we see this recur, consider explicit `docker pull --no-cache` (not a real flag) or `docker rmi $IMG:dev && docker pull $IMG:dev` before inspect.
 
-### 13. release.yml per-service path-detection misses overlay content directory (fixed v0.6.2 retro)
+### 13. release.yml per-service path-detection misses a build-input directory (fixed v0.6.2/v0.6.3 retro, inherited)
 
-**Symptom**: customer release tag publishes a `release-manifest-vX.Y.Z.env` where the `guardian-caldera` digest is byte-identical to the PREVIOUS customer release, even though `bundles/spark/caldera-content/` had real changes between the two tags. Operator-visible: customers running the new installer get the OLD caldera image content under the NEW version tag. Adversaries / abilities added since the previous release are missing from the customer Caldera UI.
+<!-- [guardian v0.1.0] Retired: the original incident write-up concerned a simulation-subsystem image removed in the Guardian fork. The two load-bearing lessons are preserved below in service-neutral form. -->
 
-**Cause**: `release.yml`'s "Detect changed services since previous release" step had `CALDERA=$(changed third_party/caldera/)` — only the submodule path. But the caldera image is built by `build-caldera.yml` which overlays `bundles/spark/caldera-content/` into the image at build time (the "Overlay Guardian kill-chain content" step). When ONLY the overlay content changes (no submodule update), `changed third_party/caldera/` returns 0 and the conditional rebuild path takes the retag branch: `docker tag ghcr.io/.../guardian-caldera:${PREV_V} ghcr.io/.../guardian-caldera:${V}`. New version, same digest, customer image identical to PREV.
+**Symptom**: customer release tag publishes a `release-manifest-vX.Y.Z.env` where one service's digest is byte-identical to the PREVIOUS customer release, even though a directory that feeds that service's image had real changes between the two tags. Operator-visible: customers running the new installer get the OLD image content under the NEW version tag. release.yml reports "success" — the silent regression is invisible without comparing digests manifest-vs-manifest.
 
-**v0.6.1 (the regression) — concrete example**:
-- v0.6.0 -> v0.6.1 commits: phishing v3.3 (`bundles/spark/caldera-content/abilities/01-initial-access/phishing-emailclient-spawn.yml`), T1518.001 PSh replacements (2 new files in `abilities/03-discovery/`), 2 swapped adversary YAMLs.
-- `build-caldera.yml` correctly fired on each push-to-main (its path-filter DOES include `bundles/spark/caldera-content/**`), publishing fresh `:dev` images with the new content.
-- `release.yml`'s detection only checked `third_party/caldera/` (unchanged), so it retagged v0.6.0's digest as v0.6.1.
-- Customer downloading v0.6.1 installer + running install gets v0.6.0 content. release.yml reports "success" — the silent regression is invisible without comparing digests manifest-vs-manifest.
-
-**Remediation**:
-
-1. **The fix (one-line)**: `CALDERA=$(changed third_party/caldera/ bundles/spark/caldera-content/)`. Now BOTH paths trigger a rebuild.
-2. **Republish the affected version**: tag the NEXT patch (v0.6.2 in this case) with the same content + the fixed detection. release.yml now rebuilds caldera from the fresh `:dev` source. Customers who already pulled v0.6.1 download v0.6.2 to get the actual content.
+**Cause**: `release.yml`'s "Detect changed services since previous release" step watched only the service's primary source path. But the per-service `build-<svc>.yml` workflow consumed an ADDITIONAL input directory at build time. When ONLY that extra directory changed, `release.yml`'s `changed <primary-path>` returned 0 and the conditional rebuild took the retag branch: new version, same digest, customer image identical to PREV.
 
 **Prevention**:
 
-- **The path-detection list MUST stay in lockstep with build-*.yml's path-filter triggers**. If `build-caldera.yml` (or any per-service build) watches paths X+Y, `release.yml`'s `CHANGED=$(changed X Y)` MUST watch the same paths. The two lists are not redundant — they answer different questions ("should the per-service `:dev` rebuild?" vs "should the customer release rebuild?"). But they must agree on what "this service changed" means.
-- **Quick sanity check before tagging**: `diff <(yq '... build-caldera.yml path filters') <(grep CALDERA release.yml)`. Or just: when you add content overlay paths to a per-service build, ALSO add them to release.yml's detection in the same PR.
+- **The path-detection list MUST stay in lockstep with build-*.yml's path-filter triggers**. If any per-service build watches paths X+Y, `release.yml`'s `CHANGED=$(changed X Y)` MUST watch the same paths. The two lists are not redundant — they answer different questions ("should the per-service `:dev` rebuild?" vs "should the customer release rebuild?"). But they must agree on what "this service changed" means.
+- **Quick sanity check before tagging**: diff the per-service workflow's path filters against the corresponding `changed …` list in release.yml. When you add build-input paths to a per-service build, ALSO add them to release.yml's detection in the same PR.
 - **Verify post-release**: after `release.yml` succeeds, download the `release-manifest-v*.env` and compare DIGEST_* lines vs the previous tag's manifest. Any service that had source changes since the previous tag MUST have a different digest. If a digest is unchanged when source changed, the detection missed it — recover via a new patch tag with the path-list fix.
 
-**Deeper bug also fixed in v0.6.3**: even after the detection-path fix, v0.6.2's caldera digest matched v0.6.0's. Root cause: release.yml's `docker build third_party/caldera/` had no overlay step — the Guardian plugin content and CTID emu plans were ONLY overlaid into the build context by `build-caldera.yml` (the `:dev` builder), never by `release.yml`. So even when the detection correctly fired CHANGED=1, the resulting customer image was vanilla Caldera. **Every customer release since v0.5.57 (when caldera-content overlay was introduced) through v0.6.2 shipped vanilla aymanam-style Caldera with no Guardian adversaries**.
-
-The v0.6.3 fix changes release.yml's caldera build to pull `:dev` (which build-caldera.yml correctly built with the full Guardian + CTID overlay) and retag it as the customer release version — instead of rebuilding from source. Falls back to vanilla rebuild only if `:dev` pull fails. Single source of truth for caldera image content: `build-caldera.yml`. No more 60-line duplication between two workflows.
+**Deeper companion bug (fixed v0.6.3, inherited)**: even after the detection-path fix, the customer image still missed the extra build input — because release.yml rebuilt the image from source WITHOUT the build step the `:dev` builder ran. The fix: release.yml pulls `:dev` (which the per-service workflow built correctly) and retags it as the customer release version, falling back to a from-source rebuild only if the `:dev` pull fails. Single source of truth for image content: the per-service build workflow. No duplicated build logic between two workflows.
 
 Trade-off accepted: customer release image = `:dev` digest at release time. This is intentional — `:dev` IS the canonical current-main-HEAD build; the release tag just FREEZES the digest customers should pin. Customers later upgrading get a NEWER frozen snapshot while `:dev` keeps moving.
 
 ### 14. GitHub API `/releases/latest` intermittent 404 in build-dev-installer.yml (fixed in v0.17.84)
 
-**Symptom**: `build-dev-installer.yml`'s "Resolve dev digests from GHCR" step succeeds at resolving all four `:dev` digests, then fails at the next sub-step "fetch latest stable manifest for updater/browser" with `curl: (22) The requested URL returned error: 404` on `GET /repos/.../releases/latest`. Exit code 22. Three consecutive runs (initial push + two `gh run rerun` dispatches) all fail at the exact same point within ~5 minutes of each other.
+**Symptom**: `build-dev-installer.yml`'s "Resolve dev digests from GHCR" step succeeds at resolving the `:dev` digests, then fails at the next sub-step "fetch latest stable manifest for updater/browser" with `curl: (22) The requested URL returned error: 404` on `GET /repos/.../releases/latest`. Exit code 22. Three consecutive runs (initial push + two `gh run rerun` dispatches) all fail at the exact same point within ~5 minutes of each other.
 
 **Cause**: GitHub's `/releases/latest` REST endpoint occasionally returns 404 even when a non-prerelease, non-draft release is marked `isLatest=True`. The same endpoint returns 200 from a different shell ~1s later — confirming the API is returning intermittent 4xx for the same logical request. Cause unclear: likely cache-edge eventual-consistency tied to recent `dev-latest` prerelease publish/delete cycles by other workflow runs running concurrently. The workflow's bare `curl -fsSL` had no retry, so a single 404 fails the step + the whole build chain.
 

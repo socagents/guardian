@@ -394,11 +394,10 @@ export default function CicdGuide() {
 
           <Section id="build-pipeline" icon="construction" title="Build Pipeline">
             <p>
-              A push to <Code>main</Code> triggers up to four per-service workflows in
+              A push to <Code>main</Code> triggers up to three per-service workflows in
               parallel. Each is gated by a <Code>paths:</Code> filter on the source paths
               it owns — a push that only touches <Code>mcp/agent/**</Code> fires only{" "}
-              <Code>build-agent.yml</Code>; <Code>xlog/**</Code>,{" "}
-              <Code>third_party/caldera/**</Code>, and{" "}
+              <Code>build-agent.yml</Code>; <Code>updater/**</Code> and{" "}
               <Code>bundles/spark/connectors/**</Code> stay untouched and retain their
               previous <Code>:dev</Code> digests.
             </p>
@@ -435,11 +434,11 @@ export default function CicdGuide() {
 
             <SubSection icon="link_off" title="The untouched-services invariant">
               <p>
-                For services whose source didn&apos;t change between releases (e.g. xlog
-                during an agent-only release), <Code>release.yml</Code>&apos;s retag-from-prev
+                For services whose source didn&apos;t change between releases (e.g. the
+                connectors during an agent-only release), <Code>release.yml</Code>&apos;s retag-from-prev
                 path produces a <em>bit-identical</em> image. <Code>docker compose up -d</Code>{" "}
-                recognizes the same digest and leaves the container running.{" "}
-                <Code>caldera</Code> and <Code>xlog</Code> in-memory state survives across
+                recognizes the same digest and leaves the container running.
+                Connector-container in-memory state survives across
                 releases that don&apos;t touch their code.
               </p>
             </SubSection>
@@ -482,10 +481,10 @@ export default function CicdGuide() {
                 service:
               </p>
               <Pre>{`DIGEST_GUARDIAN_AGENT=sha256:abc...
-DIGEST_GUARDIAN_XLOG=sha256:def...
-DIGEST_GUARDIAN_CALDERA=sha256:ghi...
 DIGEST_GUARDIAN_UPDATER=sha256:jkl...
 DIGEST_GUARDIAN_BROWSER=sha256:mno...
+DIGEST_GUARDIAN_CONNECTOR_XSIAM=sha256:def...
+DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR=sha256:ghi...
 DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:pqr...
 ...`}</Pre>
             </SubSection>
@@ -620,9 +619,9 @@ DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:pqr...
                   <Code>bundles/spark/connectors/*/src/</Code>; fix every hit OR document
                   why the remaining hits are left alone. The blast radius of a
                   connector-system bug is rarely one connector — usually a code pattern
-                  that was copy-evolved across the family. Caught after the v0.5.77
+                  that was copy-evolved across the family. Caught after a
                   cortex-xdr <Code>usecase.instance_store</Code> fix missed identical
-                  bugs in caldera, xsiam, and cortex-content.
+                  bugs in xsiam and cortex-content.
                 </li>
               </ol>
             </SubSection>
@@ -716,8 +715,8 @@ DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:pqr...
               </p>
               <p>
                 This is why the &quot;untouched services preserve state&quot; invariant works
-                during an upgrade and why <Code>caldera</Code>&apos;s in-flight implant
-                tracking + <Code>xlog</Code>&apos;s active workers survive a release that
+                during an upgrade and why connector containers&apos; in-memory state
+                (open sessions, warm caches) survives a release that
                 only touches <Code>guardian-agent</Code>.
               </p>
             </SubSection>

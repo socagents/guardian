@@ -218,7 +218,7 @@ const WRITES: WriteSurface[] = [
     id: "connectors",
     variant: "connectors",
     name: "/connectors/[id]",
-    detail: "Per-instance edits — caldera, xsiam, xlog credentials.",
+    detail: "Per-instance edits — xsiam, cortex-xdr credentials.",
     path: "/api/agent/instances → MCP /api/v1/instances",
   },
   {
@@ -242,7 +242,7 @@ const READS: ReadSurface[] = [
     id: "mcp-tools",
     variant: "live",
     name: "MCP tool calls",
-    detail: "caldera.*, xsiam.*, xlog.*",
+    detail: "xsiam_*, xdr_*, guardian_web_*",
   },
   {
     id: "ui-auth",

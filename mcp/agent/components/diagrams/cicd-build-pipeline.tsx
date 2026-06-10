@@ -3,26 +3,26 @@
  *
  * Visualizes how `git push origin main` cascades through:
  *
- *   - 4 per-service workflows (build-agent, build-connectors,
- *     build-caldera, build-xlog) each gated by a path filter on the
+ *   - 3 per-service workflows (build-agent, build-connectors,
+ *     build-updater) each gated by a path filter on the
  *     source paths it owns. A push touching only mcp/agent/** triggers
- *     ONLY build-agent (xlog/caldera/connectors stay untouched + retain
+ *     ONLY build-agent (updater/connectors stay untouched + retain
  *     their previous :dev digest).
  *
  *   - workflow_run trigger: build-dev-installer fires automatically
- *     after ANY of the four per-service workflows finishes, even if
+ *     after ANY of the three per-service workflows finishes, even if
  *     only one ran. It re-resolves :dev tags into digests + republishes
  *     the dev-installer binary as the `dev-latest` GitHub prerelease.
  *
- *   - guardian-updater + guardian-browser DON'T rebuild on dev. The
- *     dev-installer pulls their digests from the latest customer
- *     release manifest ("STABLE-ADVANCED" carve-out). Fixes that touch
- *     updater/main.py only reach customers on a v0.5.x → v0.5.x+1
- *     customer release tag, not on dev push.
+ *   - guardian-browser DOESN'T rebuild on dev. The dev-installer
+ *     pulls its digest from the latest customer release manifest
+ *     ("STABLE-ADVANCED" carve-out). Fixes that touch
+ *     guardian-browser/ only reach customers on a customer release
+ *     tag, not on dev push.
  *
  * This is the load-bearing diagram for understanding why some fixes
- * (agent/connectors/xlog/caldera) ship to dev immediately + others
- * (updater/browser) need a customer release tag to reach operators.
+ * (agent/connectors/updater) ship to dev immediately + others
+ * (browser) need a customer release tag to reach operators.
  */
 
 import { DIAGRAM_THEME_CSS, DiagramMarkers } from "./_diagram-theme";
@@ -77,12 +77,11 @@ export function CicdBuildPipeline() {
         <text x="60" y="430" className="cicd-track-label">DEV CASCADE</text>
         <text x="60" y="640" className="cicd-track-label">CUSTOMER ONLY</text>
 
-        {/* 4 per-service workflows */}
+        {/* 3 per-service workflows */}
         {[
-          { x: 60, name: "build-agent.yml", paths: "mcp/agent/** OR bundles/spark/**", image: "guardian-agent:dev" },
-          { x: 320, name: "build-connectors.yml", paths: "bundles/spark/connectors/**", image: "guardian-connector-*:dev" },
-          { x: 580, name: "build-caldera.yml", paths: "third_party/caldera/**", image: "guardian-caldera:dev" },
-          { x: 840, name: "build-xlog.yml", paths: "xlog/**", image: "guardian-xlog:dev" },
+          { x: 150, name: "build-agent.yml", paths: "mcp/agent/** OR bundles/spark/**", image: "guardian-agent:dev" },
+          { x: 480, name: "build-connectors.yml", paths: "bundles/spark/connectors/**", image: "guardian-connector-*:dev" },
+          { x: 810, name: "build-updater.yml", paths: "updater/**", image: "guardian-updater:dev" },
         ].map((s) => (
           <g key={s.name}>
             <rect x={s.x} y="240" width="240" height="110" rx="12" className="pipe-job" />
@@ -94,10 +93,9 @@ export function CicdBuildPipeline() {
         ))}
 
         {/* Arrows from trigger to each job */}
-        <path className="edge operator" d="M 540 174 Q 480 200 180 240" />
-        <path className="edge operator" d="M 580 174 L 440 240" />
-        <path className="edge operator" d="M 620 174 L 700 240" />
-        <path className="edge operator" d="M 660 174 Q 720 200 960 240" />
+        <path className="edge operator" d="M 550 174 Q 480 200 270 240" />
+        <path className="edge operator" d="M 600 174 L 600 240" />
+        <path className="edge operator" d="M 650 174 Q 720 200 930 240" />
 
         {/* dev-installer cascade — single workflow_run target */}
         <rect x="280" y="450" width="640" height="90" rx="14" className="pipe-installer" />
@@ -108,16 +106,15 @@ export function CicdBuildPipeline() {
         </text>
 
         {/* Arrows from each job to dev-installer */}
-        <path className="edge compose" d="M 180 350 Q 200 400 350 450" />
-        <path className="edge compose" d="M 440 350 Q 480 400 520 450" />
-        <path className="edge compose" d="M 700 350 Q 680 400 680 450" />
-        <path className="edge compose" d="M 960 350 Q 950 400 850 450" />
+        <path className="edge compose" d="M 270 350 Q 290 400 400 450" />
+        <path className="edge compose" d="M 600 350 L 600 450" />
+        <path className="edge compose" d="M 930 350 Q 910 400 800 450" />
 
         {/* STABLE-ADVANCED carve-out — bottom row, dashed boxes */}
         <rect x="60" y="600" width="500" height="120" rx="12" className="pipe-skipped" />
-        <text x="310" y="628" textAnchor="middle" className="cicd-card-title" style={{fontSize: 14}}>guardian-updater + guardian-browser</text>
+        <text x="310" y="628" textAnchor="middle" className="cicd-card-title" style={{fontSize: 14}}>guardian-browser</text>
         <text x="310" y="650" textAnchor="middle" className="node-subtitle">NOT built on dev cycle</text>
-        <text x="310" y="672" textAnchor="middle" className="muted" fontSize="11">dev-installer pulls these digests from the latest</text>
+        <text x="310" y="672" textAnchor="middle" className="muted" fontSize="11">dev-installer pulls its digest from the latest</text>
         <text x="310" y="688" textAnchor="middle" className="muted" fontSize="11">customer release manifest (STABLE-ADVANCED)</text>
         <text x="310" y="708" textAnchor="middle" className="state-warn-fill" fontSize="11" fontFamily='"JetBrains Mono", monospace'>
           fixes here need a vX.Y.Z customer tag to reach operators
@@ -126,10 +123,10 @@ export function CicdBuildPipeline() {
         <rect x="640" y="600" width="500" height="120" rx="12" className="pipe-job" />
         <text x="890" y="628" textAnchor="middle" className="cicd-card-title" style={{fontSize: 14}}>release.yml (on tag push)</text>
         <text x="890" y="650" textAnchor="middle" className="node-subtitle">git tag vX.Y.Z && git push origin vX.Y.Z</text>
-        <text x="890" y="672" textAnchor="middle" className="muted" fontSize="11">rebuilds ALL services (or retags unchanged ones)</text>
-        <text x="890" y="688" textAnchor="middle" className="muted" fontSize="11">incl. guardian-updater + guardian-browser</text>
+        <text x="890" y="672" textAnchor="middle" className="muted" fontSize="11">rebuilds ALL 9 images (or retags unchanged ones)</text>
+        <text x="890" y="688" textAnchor="middle" className="muted" fontSize="11">incl. guardian-browser</text>
         <text x="890" y="708" textAnchor="middle" className="state-success-fill" fontSize="11" fontFamily='"JetBrains Mono", monospace'>
-          this is when updater/browser fixes actually ship
+          this is when browser fixes actually ship
         </text>
 
         {/* Arrow from dev-installer down to stable advanced (to indicate "pulls from") */}

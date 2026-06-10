@@ -3,11 +3,11 @@
 /**
  * Guardian External Connectors Anatomy.
  *
- * Three connector backends shown side-by-side, each as a card with:
- * protocol · port · auth header · tool family · sample call. Below
- * the cards: the synthetic-log pipeline showing how xlog feeds the
- * downstream webhook receiver, CALDERA emits operation results, and
- * XSIAM returns XQL query rows.
+ * Three representative connector containers shown side-by-side, each
+ * as a card with: protocol · endpoint · auth header · tool family ·
+ * sample call. Below the cards: the investigation pipeline showing
+ * how a case flows from intake through XQL authoring to evidence in
+ * chat. (cortex-docs + cortex-content follow the same anatomy.)
  */
 
 import { DIAGRAM_THEME_CSS, DiagramMarkers } from "./_diagram-theme";
@@ -20,9 +20,9 @@ const STYLES =
   stroke: var(--dgm-stroke-strong);
   stroke-width: 1.6;
 }
-.dgm-root.exc .conn-card.xlog { stroke: var(--dgm-edge-compose); }
-.dgm-root.exc .conn-card.caldera { stroke: var(--dgm-edge-compose); }
 .dgm-root.exc .conn-card.xsiam { stroke: var(--dgm-edge-external); }
+.dgm-root.exc .conn-card.xdr { stroke: var(--dgm-edge-external); }
+.dgm-root.exc .conn-card.web { stroke: var(--dgm-edge-compose); }
 .dgm-root.exc .conn-name {
   fill: var(--dgm-text-main);
   font-size: 22px;
@@ -50,17 +50,17 @@ const STYLES =
   stroke: var(--dgm-stroke-muted);
   stroke-width: 1;
 }
-.dgm-root.exc .tool-pill.xlog { stroke: var(--dgm-edge-compose); }
-.dgm-root.exc .tool-pill.caldera { stroke: var(--dgm-edge-compose); }
 .dgm-root.exc .tool-pill.xsiam { stroke: var(--dgm-edge-external); }
+.dgm-root.exc .tool-pill.xdr { stroke: var(--dgm-edge-external); }
+.dgm-root.exc .tool-pill.web { stroke: var(--dgm-edge-compose); }
 .dgm-root.exc .tool-pill-text {
   font-size: 10.5px;
   font-weight: 600;
   font-family: "JetBrains Mono", "SFMono-Regular", monospace;
 }
-.dgm-root.exc .tool-pill-text.xlog { fill: var(--dgm-edge-compose); }
-.dgm-root.exc .tool-pill-text.caldera { fill: var(--dgm-edge-compose); }
 .dgm-root.exc .tool-pill-text.xsiam { fill: var(--dgm-edge-external); }
+.dgm-root.exc .tool-pill-text.xdr { fill: var(--dgm-edge-external); }
+.dgm-root.exc .tool-pill-text.web { fill: var(--dgm-edge-compose); }
 .dgm-root.exc .pipeline-card {
   fill: var(--dgm-bg-1);
   stroke: var(--dgm-stroke-muted);
@@ -87,7 +87,7 @@ const STYLES =
 `;
 
 interface Connector {
-  id: "xlog" | "caldera" | "xsiam";
+  id: "xsiam" | "xdr" | "web";
   name: string;
   tagline: string;
   protocol: string;
@@ -102,63 +102,63 @@ interface Connector {
 
 const CONNECTORS: Connector[] = [
   {
-    id: "xlog",
-    name: "xlog",
-    tagline: "synthetic security telemetry",
-    protocol: "GraphQL",
-    port: "compose-internal :8000",
-    auth: "AUTH",
-    authValue: "no wire auth (internal)",
-    toolPrefix: "xlog.*",
-    toolCount: "~25 tools",
-    sampleTool: "xlog.create_scenario_worker",
-    tools: [
-      "list_workers",
-      "create_worker",
-      "create_scenario_worker",
-      "stop_worker",
-      "list_scenarios",
-      "send_observable",
-    ],
-  },
-  {
-    id: "caldera",
-    name: "caldera",
-    tagline: "MITRE ATT&CK adversary emulation",
-    protocol: "REST",
-    port: "compose-internal :8888",
-    auth: "AUTH",
-    authValue: "red-user + api_key",
-    toolPrefix: "caldera.*",
-    toolCount: "~20 tools",
-    sampleTool: "caldera.start_operation",
-    tools: [
-      "list_abilities",
-      "list_adversaries",
-      "list_agents",
-      "start_operation",
-      "get_results",
-      "kill_operation",
-    ],
-  },
-  {
     id: "xsiam",
-    name: "XSIAM PAPI",
-    tagline: "Cortex Cloud · external SaaS",
+    name: "xsiam",
+    tagline: "Cortex XSIAM PAPI · external SaaS",
     protocol: "HTTPS",
-    port: "tenant.paloaltonetworks.com",
+    port: "api-<tenant>.xdr.<region>.paloaltonetworks.com",
     auth: "AUTH",
-    authValue: "x-xdr-auth-id + bearer",
-    toolPrefix: "xsiam.*",
-    toolCount: "~30 tools",
-    sampleTool: "xsiam.run_xql",
+    authValue: "x-xdr-auth-id + Authorization",
+    toolPrefix: "xsiam_*",
+    toolCount: "59 tools",
+    sampleTool: "xsiam_run_xql_query",
     tools: [
-      "run_xql",
+      "run_xql_query",
       "find_xql_examples_rag",
-      "list_detection_rules",
-      "get_rule",
-      "upsert_rule",
-      "list_issues",
+      "get_datasets",
+      "get_cases",
+      "get_issues",
+      "get_assets",
+    ],
+  },
+  {
+    id: "xdr",
+    name: "cortex-xdr",
+    tagline: "Cortex XDR API · external SaaS",
+    protocol: "HTTPS",
+    port: "api-<tenant>.xdr.<region>.paloaltonetworks.com",
+    auth: "AUTH",
+    authValue: "x-xdr-auth-id + Authorization",
+    toolPrefix: "xdr_*",
+    toolCount: "50 tools",
+    sampleTool: "xdr_get_cases_and_issues",
+    tools: [
+      "get_cases_and_issues",
+      "run_xql_query",
+      "get_xql_results",
+      "list_datasets",
+      "xdr_endpoints_isolate",
+      "xdr_alerts_list",
+    ],
+  },
+  {
+    id: "web",
+    name: "web",
+    tagline: "Playwright via guardian-browser sidecar",
+    protocol: "CDP",
+    port: "ws://guardian-browser:9222",
+    auth: "AUTH",
+    authValue: "compose-internal (no wire auth)",
+    toolPrefix: "guardian_web_*",
+    toolCount: "10 tools",
+    sampleTool: "guardian_web_navigate",
+    tools: [
+      "navigate",
+      "get_text",
+      "screenshot",
+      "extract_links",
+      "click",
+      "fill",
     ],
   },
 ];
@@ -189,8 +189,8 @@ export function ExternalConnectorsAnatomy() {
       >
         <title id="exc-title">External Connectors Anatomy</title>
         <desc id="exc-desc">
-          xlog, CALDERA, and XSIAM PAPI side-by-side with their protocols,
-          ports, auth, and tool families.
+          xsiam, cortex-xdr, and web side-by-side with their protocols,
+          endpoints, auth, and tool families.
         </desc>
 
         <defs>
@@ -212,8 +212,8 @@ export function ExternalConnectorsAnatomy() {
           External Connectors Anatomy
         </text>
         <text x="60" y="68" className="detail" fontSize="13">
-          Three connector backends each get a column: protocol, port, auth,
-          tool family. Bottom band traces the synthetic-log pipeline.
+          Three connector containers each get a column: protocol, endpoint,
+          auth, tool family. Bottom band traces the investigation pipeline.
         </text>
 
         {/* Connector cards */}
@@ -302,7 +302,7 @@ export function ExternalConnectorsAnatomy() {
           );
         })}
 
-        {/* Synthetic-log pipeline (bottom strip) — only meaningful for xlog */}
+        {/* Investigation pipeline (bottom strip) — case → XQL → evidence */}
         <g>
           <rect
             className="pipeline-card"
@@ -318,16 +318,16 @@ export function ExternalConnectorsAnatomy() {
             y={PIPE_TOP - 8}
             fontSize="11"
           >
-            SYNTHETIC-LOG PIPELINE (xlog → webhook)
+            INVESTIGATION PIPELINE (case → XQL → evidence)
           </text>
 
           {/* Pipeline steps */}
           {[
-            { name: "scenario JSON", detail: "scenarios/ready/*.json" },
-            { name: "worker spawn", detail: "module-level dict + thread" },
-            { name: "rosetta-ce events", detail: "vendor-shaped log lines" },
-            { name: "sender", detail: "UDP / HTTPS webhook / collector" },
-            { name: "receiver", detail: "XSIAM HTTP collector / arbitrary" },
+            { name: "case intake", detail: "xsiam_get_cases / get_issues" },
+            { name: "example retrieval", detail: "find_xql_examples_rag(query)" },
+            { name: "query authoring", detail: "build_xql_query skill" },
+            { name: "XQL execution", detail: "xsiam_run_xql_query" },
+            { name: "evidence in chat", detail: "rows → agent analysis" },
           ].map((s, si, all) => {
             const stepW = 240;
             const totalSteps = all.length;
@@ -389,9 +389,10 @@ export function ExternalConnectorsAnatomy() {
             Why three columns?
           </text>
           <text className="legend-text" x="180" y="4">
-            xlog and CALDERA run inside the Compose network (green); XSIAM is
-            external SaaS (orange). All three present the same shape — a
-            namespaced tool family the agent invokes via function_call.
+            web runs inside the Compose network against the guardian-browser
+            sidecar (green); XSIAM and XDR are external SaaS (orange). All
+            connectors present the same shape — a namespaced tool family the
+            agent invokes via function_call.
           </text>
         </g>
       </svg>
