@@ -45,7 +45,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 from api.auth import require_bearer
 from usecase.audit_log import SqliteAuditLog
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_audit_routes(mcp: FastMCP, audit: SqliteAuditLog) -> None:
@@ -215,7 +215,7 @@ def register_audit_routes(mcp: FastMCP, audit: SqliteAuditLog) -> None:
 
         The actor is fixed to "user:operator" because the bearer
         token already authenticates the caller. The trigger is
-        inherited from the X-Phantom-Trigger header (handled by the
+        inherited from the X-Guardian-Trigger header (handled by the
         trigger_context middleware via the contextvar).
 
         We intentionally don't constrain `action` to a closed enum —

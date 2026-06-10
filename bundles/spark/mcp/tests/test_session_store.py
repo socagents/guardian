@@ -3,7 +3,7 @@
 v0.3.6 — added `exclude_scheduled` filter to `list_sessions`. The
 `scheduled_by`-tagged sessions are created by the recurring-job
 dispatcher (chat-route writes `meta.scheduled_by=<job-name>` when
-X-Phantom-Trigger is `job:*`). The chat sidebar uses the new filter
+X-Guardian-Trigger is `job:*`). The chat sidebar uses the new filter
 so operator-driven sessions don't drown under scheduled-job churn
 on busy installs.
 """

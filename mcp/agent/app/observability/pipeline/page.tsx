@@ -19,7 +19,7 @@ import "@xyflow/react/dist/style.css";
 import { useEffect, useMemo, useState } from "react";
 
 /**
- * Pipeline page — live React Flow graph of phantom's component
+ * Pipeline page — live React Flow graph of guardian's component
  * topology, plus a Component Status table and a Recent Traffic feed.
  *
  * Why React Flow (round-8): the previous hand-coded SVG worked but
@@ -81,45 +81,45 @@ const NODES_DEF: Array<Omit<Node<NodeData>, "data"> & { data: NodeData }> = [
   // Lane 1 — request flow (y=40)
   {
     id: "browser",
-    type: "phantomNode",
+    type: "guardianNode",
     position: { x: 60, y: 40 },
     data: { label: "Browser", sub: "operator UI", status: "ok" },
     draggable: true,
   },
   {
     id: "agent",
-    type: "phantomNode",
+    type: "guardianNode",
     position: { x: 320, y: 40 },
-    data: { label: "phantom-agent", sub: "Next.js 15 / :3000", status: "checking", probeId: "phantom-agent" },
+    data: { label: "guardian-agent", sub: "Next.js 15 / :3000", status: "checking", probeId: "guardian-agent" },
     draggable: true,
   },
   {
     id: "mcp",
-    type: "phantomNode",
+    type: "guardianNode",
     position: { x: 580, y: 40 },
-    data: { label: "phantom-mcp", sub: "FastMCP / :8080", status: "checking", probeId: "phantom-mcp" },
+    data: { label: "guardian-mcp", sub: "FastMCP / :8080", status: "checking", probeId: "guardian-mcp" },
     draggable: true,
   },
   {
     id: "vertex",
-    type: "phantomNode",
+    type: "guardianNode",
     position: { x: 840, y: 40 },
     data: { label: "Vertex / Gemini", sub: "external LLM", status: "checking" },
     draggable: true,
   },
 
   // Lane 2 — storage (y=220) — 6 stores in a single row, fanned from MCP
-  { id: "audit", type: "phantomStore", position: { x: 30, y: 220 }, data: { label: "audit_log", sub: "sqlite", status: "checking" }, draggable: true },
-  { id: "memory", type: "phantomStore", position: { x: 220, y: 220 }, data: { label: "memory_store", sub: "sqlite + vector", status: "checking" }, draggable: true },
-  { id: "secrets", type: "phantomStore", position: { x: 410, y: 220 }, data: { label: "secret_store", sub: "AES-256-GCM", status: "checking" }, draggable: true },
-  { id: "settings", type: "phantomStore", position: { x: 600, y: 220 }, data: { label: "settings_store", sub: "sqlite", status: "checking" }, draggable: true },
-  { id: "sessions", type: "phantomStore", position: { x: 790, y: 220 }, data: { label: "sessions", sub: "sqlite", status: "checking" }, draggable: true },
-  { id: "jobs", type: "phantomStore", position: { x: 980, y: 220 }, data: { label: "jobs", sub: "sqlite cron", status: "checking" }, draggable: true },
+  { id: "audit", type: "guardianStore", position: { x: 30, y: 220 }, data: { label: "audit_log", sub: "sqlite", status: "checking" }, draggable: true },
+  { id: "memory", type: "guardianStore", position: { x: 220, y: 220 }, data: { label: "memory_store", sub: "sqlite + vector", status: "checking" }, draggable: true },
+  { id: "secrets", type: "guardianStore", position: { x: 410, y: 220 }, data: { label: "secret_store", sub: "AES-256-GCM", status: "checking" }, draggable: true },
+  { id: "settings", type: "guardianStore", position: { x: 600, y: 220 }, data: { label: "settings_store", sub: "sqlite", status: "checking" }, draggable: true },
+  { id: "sessions", type: "guardianStore", position: { x: 790, y: 220 }, data: { label: "sessions", sub: "sqlite", status: "checking" }, draggable: true },
+  { id: "jobs", type: "guardianStore", position: { x: 980, y: 220 }, data: { label: "jobs", sub: "sqlite cron", status: "checking" }, draggable: true },
 
   // Lane 3 — connectors (y=380) — 3 connectors centered under MCP
-  { id: "xsiam", type: "phantomNode", position: { x: 320, y: 380 }, data: { label: "xsiam", sub: "Cortex PAPI", status: "checking" }, draggable: true },
-  { id: "xdr", type: "phantomNode", position: { x: 580, y: 380 }, data: { label: "cortex-xdr", sub: "XDR Public API", status: "checking" }, draggable: true },
-  { id: "web", type: "phantomNode", position: { x: 840, y: 380 }, data: { label: "web", sub: "phantom-browser / CDP", status: "checking" }, draggable: true },
+  { id: "xsiam", type: "guardianNode", position: { x: 320, y: 380 }, data: { label: "xsiam", sub: "Cortex PAPI", status: "checking" }, draggable: true },
+  { id: "xdr", type: "guardianNode", position: { x: 580, y: 380 }, data: { label: "cortex-xdr", sub: "XDR Public API", status: "checking" }, draggable: true },
+  { id: "web", type: "guardianNode", position: { x: 840, y: 380 }, data: { label: "web", sub: "guardian-browser / CDP", status: "checking" }, draggable: true },
 ];
 
 const EDGES_DEF: Edge[] = [
@@ -176,7 +176,7 @@ function relativeAge(iso?: string): string {
 // the theme-aware --status-* vars. Handles are positioned on edges so
 // edges enter/exit cleanly.
 
-function PhantomNode({ data }: NodeProps<Node<NodeData>>) {
+function GuardianNode({ data }: NodeProps<Node<NodeData>>) {
   const stroke = STATUS_VAR[data.status];
   const dotOpacity = data.status === "checking" ? 0.6 : 1;
   return (
@@ -199,7 +199,7 @@ function PhantomNode({ data }: NodeProps<Node<NodeData>>) {
           style={{
             background: stroke,
             opacity: dotOpacity,
-            animation: data.status === "checking" ? "phantom-pulse 1.5s ease-in-out infinite" : undefined,
+            animation: data.status === "checking" ? "guardian-pulse 1.5s ease-in-out infinite" : undefined,
           }}
         />
         <div className="font-semibold text-sm text-on-surface truncate">{data.label}</div>
@@ -209,7 +209,7 @@ function PhantomNode({ data }: NodeProps<Node<NodeData>>) {
   );
 }
 
-function PhantomStore({ data }: NodeProps<Node<NodeData>>) {
+function GuardianStore({ data }: NodeProps<Node<NodeData>>) {
   const stroke = STATUS_VAR[data.status];
   const dotOpacity = data.status === "checking" ? 0.6 : 1;
   return (
@@ -231,7 +231,7 @@ function PhantomStore({ data }: NodeProps<Node<NodeData>>) {
           style={{
             background: stroke,
             opacity: dotOpacity,
-            animation: data.status === "checking" ? "phantom-pulse 1.5s ease-in-out infinite" : undefined,
+            animation: data.status === "checking" ? "guardian-pulse 1.5s ease-in-out infinite" : undefined,
           }}
         />
         <div className="font-semibold text-[13px] text-on-surface truncate">{data.label}</div>
@@ -242,8 +242,8 @@ function PhantomStore({ data }: NodeProps<Node<NodeData>>) {
 }
 
 const NODE_TYPES = {
-  phantomNode: PhantomNode,
-  phantomStore: PhantomStore,
+  guardianNode: GuardianNode,
+  guardianStore: GuardianStore,
 };
 
 // ── Page ────────────────────────────────────────────────────────────
@@ -282,7 +282,7 @@ export default function PipelinePage() {
       }
 
       // Stores inherit MCP's status — same model as before.
-      const mcpStatus = probeStatus.get("phantom-mcp") ?? "checking";
+      const mcpStatus = probeStatus.get("guardian-mcp") ?? "checking";
       const STORE_IDS = new Set(["audit", "memory", "secrets", "settings", "sessions", "jobs"]);
 
       // Recent audit events for traffic pulses + activity feed.
@@ -373,7 +373,7 @@ export default function PipelinePage() {
           <h1 className="font-headline text-3xl font-bold tracking-tight text-on-surface">Pipeline</h1>
         </div>
         <p className="text-sm text-on-surface-variant ml-9">
-          Phantom component graph with live readiness + traffic. Refresh: 5s. Drag nodes to rearrange. Pulsing links show paths active in the last 60s.
+          Guardian component graph with live readiness + traffic. Refresh: 5s. Drag nodes to rearrange. Pulsing links show paths active in the last 60s.
           {lastProbeAt && (
             <span className="ml-2 text-on-surface-variant/60">
               · last probe {relativeAge(lastProbeAt)}
@@ -402,7 +402,7 @@ export default function PipelinePage() {
 
       {/* ── React Flow graph ────────────────────────────────── */}
       <div
-        className="rounded-2xl overflow-hidden phantom-flow-shell"
+        className="rounded-2xl overflow-hidden guardian-flow-shell"
         style={{
           background: "var(--glass-bg-strong)",
           backdropFilter: "blur(12px)",
@@ -573,21 +573,21 @@ export default function PipelinePage() {
       </section>
 
       <style jsx global>{`
-        @keyframes phantom-pulse {
+        @keyframes guardian-pulse {
           0%, 100% { opacity: 0.4; }
           50% { opacity: 1; }
         }
-        @keyframes phantom-edge-flow {
+        @keyframes guardian-edge-flow {
           to { stroke-dashoffset: -20; }
         }
-        .phantom-flow-shell .react-flow__edge-path-active {
+        .guardian-flow-shell .react-flow__edge-path-active {
           stroke-dasharray: 6 4;
-          animation: phantom-edge-flow 0.9s linear infinite;
+          animation: guardian-edge-flow 0.9s linear infinite;
         }
         /* Theme-aware controls — the default React Flow controls have
            a hardcoded white bg that fights the navy dark theme. Lift
            them onto the same glass surface as everything else. */
-        .phantom-flow-shell .react-flow__controls {
+        .guardian-flow-shell .react-flow__controls {
           background: var(--glass-bg-strong);
           border: 0.5px solid var(--glass-border);
           backdrop-filter: blur(12px);
@@ -595,13 +595,13 @@ export default function PipelinePage() {
           overflow: hidden;
           box-shadow: var(--glass-shadow);
         }
-        .phantom-flow-shell .react-flow__controls-button {
+        .guardian-flow-shell .react-flow__controls-button {
           background: transparent;
           border-bottom: 0.5px solid var(--glass-border);
           color: var(--graph-text-primary);
           fill: var(--graph-text-primary);
         }
-        .phantom-flow-shell .react-flow__controls-button:hover {
+        .guardian-flow-shell .react-flow__controls-button:hover {
           background: var(--glass-bg-elev);
         }
       `}</style>

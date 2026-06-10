@@ -443,7 +443,7 @@ async def xsiam_send_webhook_log(
       "params": {
         "name": "xsiam_send_webhook_log",
         "arguments": {
-          "message": "Test log from Phantom MCP",
+          "message": "Test log from Guardian MCP",
           "event_type": "mcp_event",
           "severity": "info"
         }

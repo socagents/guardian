@@ -9,7 +9,7 @@ import { useEffect, useMemo } from "react";
 // myworkassistant's ToolsStackCard.
 //
 // v0.17.39 — middle slot (the largest 64px ring orb) swapped from the
-// gold `bolt` glyph to the actual Phantom logo (/logo.svg, same asset
+// gold `bolt` glyph to the actual Guardian logo (/logo.svg, same asset
 // as the sidebar). Same orb shell, same sequential-bounce animation,
 // same ring; only the inner content differs. The 4 outer orbs keep
 // their material-symbol glyphs unchanged.
@@ -20,7 +20,7 @@ type ToolItem =
 const logoItems: ToolItem[] = [
   { key: "agents", kind: "icon", icon: "smart_toy", color: "#60a5fa", size: "text-lg" },
   { key: "memory", kind: "icon", icon: "memory", color: "#a78bfa", size: "text-xl" },
-  { key: "phantom", kind: "logo", logoSrc: "/logo.svg", logoSize: 44 },
+  { key: "guardian", kind: "logo", logoSrc: "/logo.svg", logoSize: 44 },
   { key: "observe", kind: "icon", icon: "monitoring", color: "#34d399", size: "text-xl" },
   { key: "mcp", kind: "icon", icon: "api", color: "#f472b6", size: "text-lg" },
 ];
@@ -77,15 +77,15 @@ const Skeleton = ({ animationsEnabled }: { animationsEnabled: boolean }) => {
             )}
           >
             {item.kind === "logo" ? (
-              /* v0.17.39 — Phantom logo inside the middle orb. Same
-                 SVG asset as the sidebar's PhantomLogo (animation
+              /* v0.17.39 — Guardian logo inside the middle orb. Same
+                 SVG asset as the sidebar's GuardianLogo (animation
                  lives inside the SVG file itself, not the wrapper),
                  sized to fill the 64px ring with the visual weight
                  of the glyph it replaced. */
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={item.logoSrc}
-                alt="Phantom logo"
+                alt="Guardian logo"
                 width={item.logoSize}
                 height={item.logoSize}
                 style={{ display: "block" }}

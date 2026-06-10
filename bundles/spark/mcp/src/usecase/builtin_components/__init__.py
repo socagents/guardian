@@ -1,1 +1,1 @@
-"""Built-in MCP components for Phantom operations."""
+"""Built-in MCP components for Guardian operations."""

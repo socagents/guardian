@@ -3,7 +3,7 @@
  *
  * GET     → fetch instance + its derived enabled/state (sourced from
  *           connector_state since instance↔connector is 1:1 in
- *           single-tenant Phantom).
+ *           single-tenant Guardian).
  * PATCH   → partial update; currently `{enabled: bool}` is the only
  *           supported field. Toggles connector_state.disabled and
  *           gates tool advertisement accordingly.

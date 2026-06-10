@@ -128,7 +128,7 @@ export function CicdSmokeDiscipline() {
         <polygon points="510,130 550,160 510,190 490,160" className="smoke-gate" />
         <text x="520" y="218" textAnchor="middle" className="smoke-actor" fill="var(--dgm-state-warn)">GATE B</text>
         <text x="520" y="232" textAnchor="middle" className="muted" fontSize="10">operator hands-on</text>
-        <text x="520" y="246" textAnchor="middle" className="muted" fontSize="10">smoke on phantom-vm</text>
+        <text x="520" y="246" textAnchor="middle" className="muted" fontSize="10">smoke on guardian-vm</text>
 
         {/* Chip 3 — testing-complete */}
         <rect x="560" y="130" width="180" height="60" rx="10" className="smoke-chip" />

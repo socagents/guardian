@@ -1,6 +1,6 @@
 """Entry-point plugin discovery — Issue #29 (v0.5.31) — SCOPED.
 
-Phantom already has a filesystem-based plugin loader at
+Guardian already has a filesystem-based plugin loader at
 `plugin_loader.py` (Round-15 / Phase X — directory-discovered plugins
 under `bundles/spark/plugins/<name>/`). v0.5.31 adds the DISTRIBUTABLE
 side: Python entry-point discovery, mirroring Octagon's
@@ -17,8 +17,8 @@ v0.5.31 ships the DISCOVERY SCAFFOLDING:
 
   - `discover_plugins(group)` walks `importlib.metadata.entry_points`
     for a named group and returns refs.
-  - Five group names reserved: phantom.skills, phantom.connectors,
-    phantom.hooks, phantom.scanners, phantom.providers.
+  - Five group names reserved: guardian.skills, guardian.connectors,
+    guardian.hooks, guardian.scanners, guardian.providers.
   - At MCP boot, `log_discovery()` walks all five and logs counts —
     fresh installs see zero plugins (no third-party packages target
     these groups yet); the contract is in place for future packages.
@@ -36,10 +36,10 @@ target while the consumer-side wiring happens in parallel.
 
 In your `pyproject.toml`:
 
-    [project.entry-points."phantom.skills"]
+    [project.entry-points."guardian.skills"]
     my-skill = "my_pkg.skills:my_skill_factory"
 
-The agent walks these at boot via `discover_plugins("phantom.skills")`.
+The agent walks these at boot via `discover_plugins("guardian.skills")`.
 """
 
 from __future__ import annotations
@@ -49,18 +49,18 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 # Reserved entry-point group names. Third-party packages contribute
-# via `entry_points={"phantom.X": [...]}` in their setup.py /
+# via `entry_points={"guardian.X": [...]}` in their setup.py /
 # pyproject.toml.
 SUPPORTED_GROUPS: tuple[str, ...] = (
-    "phantom.skills",
-    "phantom.connectors",
-    "phantom.hooks",
-    "phantom.scanners",
-    "phantom.providers",
+    "guardian.skills",
+    "guardian.connectors",
+    "guardian.hooks",
+    "guardian.scanners",
+    "guardian.providers",
 )
 
 
@@ -91,7 +91,7 @@ def discover_plugins(group: str) -> list[PluginRef]:
     Returns one PluginRef per entry-point. Safe on systems with no
     plugins installed — returns empty list.
 
-    Modern keyword form (Python 3.10+); Phantom's agent container
+    Modern keyword form (Python 3.10+); Guardian's agent container
     runs 3.12 so this is always supported.
     """
     if group not in SUPPORTED_GROUPS:
@@ -102,7 +102,7 @@ def discover_plugins(group: str) -> list[PluginRef]:
     try:
         eps = metadata.entry_points(group=group)
     except TypeError:
-        # Defensive: older importlib.metadata API. Phantom doesn't
+        # Defensive: older importlib.metadata API. Guardian doesn't
         # ship on a Python where this path would actually trigger; it's
         # here so test environments with stripped-down stdlib don't
         # blow up.

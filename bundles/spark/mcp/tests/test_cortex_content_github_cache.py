@@ -229,7 +229,7 @@ def test_read_failure_emits_warning_but_returns_none(client, caplog):
     etc.), the cache layer logs a warning and returns None instead
     of propagating. The connector then proceeds as if cold-cache."""
     import logging
-    caplog.set_level(logging.WARNING, logger="Phantom MCP.cortex-content")
+    caplog.set_level(logging.WARNING, logger="Guardian MCP.cortex-content")
 
     key = "k"
     client._cache_write(key, "v")

@@ -12,8 +12,8 @@ Each channel's webhook URL is read from an env var at startup.
 The naming convention:
 
     target              env var
-    channel:soc         PHANTOM_NOTIFICATION_CHANNEL_SOC
-    channel:purple-team PHANTOM_NOTIFICATION_CHANNEL_PURPLE_TEAM
+    channel:soc         GUARDIAN_NOTIFICATION_CHANNEL_SOC
+    channel:purple-team GUARDIAN_NOTIFICATION_CHANNEL_PURPLE_TEAM
                         (hyphens become underscores in the var name)
 
 Channels with no configured URL skip cleanly — the notification
@@ -28,7 +28,7 @@ bearer-equivalent). Two reasons env vars are the right surface for
 this iteration:
 
   1. Operators already manage env-style config via .env (MCP_TOKEN,
-     PHANTOM_SECRET_KEK live there). Adding more env vars matches
+     GUARDIAN_SECRET_KEK live there). Adding more env vars matches
      the existing operational model.
   2. The SecretStore is the right home for connector secrets — those
      flow through the setup form. Notification webhooks are a
@@ -37,7 +37,7 @@ this iteration:
 
 A future improvement could add a setup-form section for channel
 URLs that writes them to the SecretStore at paths like
-`/agents/phantom/notifications/channels/<name>/webhook_url`. Until
+`/agents/guardian/notifications/channels/<name>/webhook_url`. Until
 then, env-var config keeps the surface small and the
 configurable-without-rebuild story intact.
 
@@ -82,10 +82,10 @@ from typing import Any
 
 import httpx
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 CHANNEL_PREFIX = "channel:"
-ENV_PREFIX = "PHANTOM_NOTIFICATION_CHANNEL_"
+ENV_PREFIX = "GUARDIAN_NOTIFICATION_CHANNEL_"
 DEFAULT_TIMEOUT_S = 10.0
 
 

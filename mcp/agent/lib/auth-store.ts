@@ -1,5 +1,5 @@
 /**
- * Phantom v0.4.0 — TypeScript client for the MCP-side auth_store.
+ * Guardian v0.4.0 — TypeScript client for the MCP-side auth_store.
  *
  * The MCP-side `bundles/spark/mcp/src/api/ui_auth.py` is the source of
  * truth for credentials + sessions. The Next.js side (login route,
@@ -314,7 +314,7 @@ export async function validateSession(
   return result;
 }
 
-/** Validate a `phantom_ak_*` API key against the MCP api_keys store.
+/** Validate a `guardian_ak_*` API key against the MCP api_keys store.
  *  30s positive cache (negative results are NOT cached so revocation
  *  surfaces fast). Mirrors `validateSession`. Consumed by middleware.ts. */
 export async function validateApiKey(token: string): Promise<ApiKeyResult> {

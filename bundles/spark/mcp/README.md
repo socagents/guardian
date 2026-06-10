@@ -1,8 +1,8 @@
-# Embedded MCP server (Phantom v1.2 bundle)
+# Embedded MCP server (Guardian v1.2 bundle)
 
 This directory IS the embedded MCP runtime — Dockerfile, Python
 source, dependencies, and entrypoint all live here. The
-`phantom-mcp` Docker service builds from this directory and runs as
+`guardian-mcp` Docker service builds from this directory and runs as
 the agent's tool surface.
 
 ## Layout
@@ -25,7 +25,7 @@ bundles/spark/mcp/
 │   │   ├── connector_loader.py  # reads bundle, gates tools on instances, wraps with contextvar
 │   │   ├── instance_store.py    # sqlite-backed CRUD over data_root/instances.db
 │   │   └── builtin_components/  # runtime built-ins (skills_*, simulation_skills)
-│   ├── service/phantom_mcp/server.py  # FastMCP instance factory
+│   ├── service/guardian_mcp/server.py  # FastMCP instance factory
 │   ├── pkg/setup_logging.py # shared infra (logging only)
 │   └── entities/mcp_context.py # shared types
 ├── resources/              # bundled XQL doc + examples
@@ -37,7 +37,7 @@ bundles/spark/mcp/
 
 At boot, `main.py`:
 
-1. Constructs the FastMCP server (`service/phantom_mcp/server.py`)
+1. Constructs the FastMCP server (`service/guardian_mcp/server.py`)
 2. Mounts the admin HTTP API (`api/instances.py` + `api/setup.py`)
 3. Calls `connector_loader.iter_registrations()`:
    - Reads `/app/bundle/manifest.yaml` → `toolConnectors[]`
@@ -61,8 +61,8 @@ The Docker image bind-mounts these from the bundle root:
 | `/app/bundle/manifest.yaml` | `bundles/spark/manifest.yaml` | toolConnectors[] + setup.bindsInstances[] |
 | `/app/bundle/connectors/<id>/connector.yaml` | bundle | tool catalog + runtimeMapping |
 | `/app/bundle/connectors/<id>/src/` | bundle | connector implementations |
-| `/app/data/instances.db` | `phantom_mcp_data` volume | sqlite instance store |
-| `/app/skills/` | `phantom_mcp_skills` volume | runtime-mutable skills (seeded from `skills-default/`) |
+| `/app/data/instances.db` | `guardian_mcp_data` volume | sqlite instance store |
+| `/app/skills/` | `guardian_mcp_skills` volume | runtime-mutable skills (seeded from `skills-default/`) |
 
 ## Spark-platform mode (stage 3E — coming)
 

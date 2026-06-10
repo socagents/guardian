@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/actions/file_retrieval_details/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_response_get_file_retrieval_details`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 ## Purpose
 
@@ -40,5 +40,5 @@ Returns a GetActionStatus object if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_response_get_file_retrieval_details`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_response_get_file_retrieval_details`
 - Source mapping: `ebarti/cortex_xdr_client/api/actions_api.py` → `get_file_retrieval_details`

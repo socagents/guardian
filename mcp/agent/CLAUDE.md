@@ -1,6 +1,6 @@
-# `mcp/agent/` — Phantom Agent (UI + embedded MCP host)
+# `mcp/agent/` — Guardian Agent (UI + embedded MCP host)
 
-The `phantom-agent` customer container. Next.js 15 + React 19 (UI on port 3000) with a Python FastMCP subprocess inside the same container (loopback port 8080). TLS terminates at `tls-proxy.js` then forwards to both.
+The `guardian-agent` customer container. Next.js 15 + React 19 (UI on port 3000) with a Python FastMCP subprocess inside the same container (loopback port 8080). TLS terminates at `tls-proxy.js` then forwards to both.
 
 **Repo-wide rules live in the [root CLAUDE.md](../../CLAUDE.md)** — pre-deploy gate, contained-release discipline, documentation discipline, credential guardrail, spec-driven workflow. This file holds only conventions that are LOCAL to `mcp/agent/`.
 
@@ -29,7 +29,7 @@ The agent's Next.js side talks to MCP over loopback at `http://localhost:8080/ap
 
 ## Skills bootstrap + per-release marker (v0.3.2+)
 
-`entrypoint.sh` runs a marker-driven auto-merge of image-baked default skills into the persistent `phantom_mcp_skills` volume on every boot. Operators upgrading to a new release automatically see the new release's skills appear in `/skills` — no manual `docker exec` needed.
+`entrypoint.sh` runs a marker-driven auto-merge of image-baked default skills into the persistent `guardian_mcp_skills` volume on every boot. Operators upgrading to a new release automatically see the new release's skills appear in `/skills` — no manual `docker exec` needed.
 
 **Boot logic** (`entrypoint.sh` §1):
 
@@ -37,16 +37,16 @@ The agent's Next.js side talks to MCP over loopback at `http://localhost:8080/ap
 |---|---|
 | `FORCE_SKILLS_SYNC=1` env set | Always merge image defaults into the volume; stamp marker |
 | Volume empty (fresh install) | Seed; stamp marker |
-| `phantom_mcp_skills/.seeded_version` missing OR mismatches `PHANTOM_VERSION` | **Merge image defaults; stamp marker** — the per-release auto-rollout path |
+| `guardian_mcp_skills/.seeded_version` missing OR mismatches `GUARDIAN_VERSION` | **Merge image defaults; stamp marker** — the per-release auto-rollout path |
 | Marker matches running version | No-op (operator deletions of default skills stick across same-version restarts) |
 
 **The merge is MERGE-not-REPLACE.** Files in image only → copied in. Files in volume only (operator-created) → stay. Files in both → image wins.
 
-To permanently retire an image-default skill, the operator's option today is `docker exec phantom_agent rm /app/skills/<category>/<file>.md` after each upgrade; long-term fix is a bundle-level denylist.
+To permanently retire an image-default skill, the operator's option today is `docker exec guardian_agent rm /app/skills/<category>/<file>.md` after each upgrade; long-term fix is a bundle-level denylist.
 
 ## Auth surfaces
 
-- **UI session**: cookie `phantom_session` (32-byte random server-validated token; renamed from the pre-v0.4.0 `phantom_auth=1` flat flag), set by `/api/auth/login` after PBKDF2-HMAC-SHA256 password verification. Layout-level `AuthGate` (client-side) controls UI render; `middleware.ts` (server-side, v0.9.1+) gates every `/api/agent/**` + `/api/chat` + `/api/skills/**` request against the same cookie via `validateSession`.
+- **UI session**: cookie `guardian_session` (32-byte random server-validated token; renamed from the pre-v0.4.0 `guardian_auth=1` flat flag), set by `/api/auth/login` after PBKDF2-HMAC-SHA256 password verification. Layout-level `AuthGate` (client-side) controls UI render; `middleware.ts` (server-side, v0.9.1+) gates every `/api/agent/**` + `/api/chat` + `/api/skills/**` request against the same cookie via `validateSession`.
 - **MCP loopback**: bearer `MCP_TOKEN`.
 - **Provider auth**: Gemini via `GEMINI_API_KEY`; Vertex AI via `GOOGLE_APPLICATION_CREDENTIALS` (GCP service-account JSON).
 - **SecretStore + EnvSecretStore overlay**: at-rest AES-256-GCM with PBKDF2 KDF; env vars in `.env` shadow stored secrets at read time without overwriting them.

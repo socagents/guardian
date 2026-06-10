@@ -1,5 +1,5 @@
 /**
- * Per-key memory proxy — phantom's MCP keys memory rows by `key`
+ * Per-key memory proxy — guardian's MCP keys memory rows by `key`
  * (per `/api/v1/memories/by-key/{key}`). The route folder is named
  * `[key]` and the destructured param matches, so callers using the
  * memory's `key` field from the list/search responses can address

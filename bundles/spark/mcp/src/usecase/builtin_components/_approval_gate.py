@@ -48,7 +48,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 @lru_cache(maxsize=1)
@@ -136,7 +136,7 @@ async def gate_and_execute(
     approval_id: str | None = None
 
     # v0.1.27: bypass mode. When the inbound request carried
-    # `X-Phantom-Approval-Bypass: 1` (set by chat sessions with the
+    # `X-Guardian-Approval-Bypass: 1` (set by chat sessions with the
     # bypass dropdown enabled, or jobs with bypass_approvals=true),
     # skip the operator-confirmation dance and execute immediately.
     # Still record a full audit pair so post-hoc review can surface

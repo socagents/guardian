@@ -12,12 +12,12 @@ import { QueryBar } from "@/components/observability/query-bar";
 import { listJobs } from "@/lib/api/jobs";
 
 /**
- * Events page — paginated query against the phantom MCP's audit log.
+ * Events page — paginated query against the guardian MCP's audit log.
  * Replaces what used to live at /audit, now under /observability with
  * the rest of the observability surfaces. The live (SSE-streamed)
  * version is at /activity.
  *
- * Each row is one phantom audit_events row (tool_call,
+ * Each row is one guardian audit_events row (tool_call,
  * setup_completed, settings_changed, …). Filters via a single
  * Lucene-light query bar — see lib/observability-query.ts for syntax.
  * URL-syncs `?q=...` so deep-links from /jobs/[id] (and operator
@@ -151,7 +151,7 @@ export default function EventsPage() {
             </h1>
           </div>
           <p className="text-sm text-on-surface-variant ml-9">
-            Phantom audit log — every tool call, approval decision, settings change. Append-only.
+            Guardian audit log — every tool call, approval decision, settings change. Append-only.
             For the high-signal runtime telemetry stream (<code>rt.tool.failed</code>, etc.), see{" "}
             <a className="text-primary hover:underline" href="/observability/runtime-events">
               /observability/runtime-events

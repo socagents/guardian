@@ -1,12 +1,12 @@
 /**
  * CLI wrapper — port of Spark's plugin-runner/internal/cli pattern,
- * adapted for Phantom's in-process spawn model.
+ * adapted for Guardian's in-process spawn model.
  *
  * Spark runs each CLI tool (Claude Code, Codex) inside a dedicated
- * Docker container with --cap-drop=ALL for isolation. Phantom-agent
+ * Docker container with --cap-drop=ALL for isolation. Guardian-agent
  * already ships Node.js inside its single container, so we spawn the
  * CLI as a child process directly. The tradeoff is less isolation,
- * matching Phantom's single-host single-container deployment model.
+ * matching Guardian's single-host single-container deployment model.
  * Container-level isolation can be layered in later if needed (the
  * per-instance-connector-container pattern provides the template).
  *

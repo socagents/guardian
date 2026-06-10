@@ -57,7 +57,7 @@ export default function WhatsNewPage() {
           What&apos;s new in
         </p>
         <h1 className="font-headline text-3xl font-bold tracking-tight text-on-surface">
-          Phantom v{version ?? "—"}
+          Guardian v{version ?? "—"}
         </h1>
         {!current && version && (
           <p className="text-[12px] text-on-surface-variant mt-1">

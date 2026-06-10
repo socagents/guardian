@@ -7,11 +7,11 @@ export type AgentWorkflow = {
 };
 
 export const agentContract = {
-  apiVersion: 'phantom.agentic/v1alpha1',
+  apiVersion: 'guardian.agentic/v1alpha1',
   kind: 'AgentRuntimeContract',
   metadata: {
-    id: 'phantom-soc-agent',
-    name: 'Phantom Agent',
+    id: 'guardian-soc-agent',
+    name: 'Guardian Agent',
     version: '0.1.0',
     description:
       'AI incident-response agent for Cortex XSIAM/XDR: case investigation, XQL query authoring, asset context, and web research over MCP tools.',
@@ -26,7 +26,7 @@ export const agentContract = {
   interfaces: {
     ui: {
       route: '/',
-      mountPath: '/agents/phantom-soc-agent',
+      mountPath: '/agents/guardian-soc-agent',
     },
     manifest: {
       method: 'GET',
@@ -101,7 +101,7 @@ export const agentWorkflows: AgentWorkflow[] = [
     title: 'Research a CVE or IOC on the web',
     prompt:
       'Open the vendor advisory for the given CVE, extract the readable text, and summarize impact and remediation guidance with source links.',
-    requiredTools: ['phantom_web_navigate', 'phantom_web_get_text', 'phantom_web_extract_links'],
+    requiredTools: ['guardian_web_navigate', 'guardian_web_get_text', 'guardian_web_extract_links'],
     outputs: ['advisory_summary', 'remediation_steps', 'source_links'],
   },
 ];

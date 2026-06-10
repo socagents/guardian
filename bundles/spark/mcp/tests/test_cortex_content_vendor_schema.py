@@ -413,7 +413,7 @@ def test_extract_logo_finds_svg_first(monkeypatch):
     assert out["ok"] is True
     assert out["logo_type"] == "svg"
     assert out["source_path"] == "Packs/FortiGate/Integrations/FortiGate/FortiGate_dark.svg"
-    # Logo URL is always the Phantom-local serving route — bytes stream
+    # Logo URL is always the Guardian-local serving route — bytes stream
     # via the agent's /api/agent/data-sources/logo/<pack> handler.
     assert out["logo_url"] == "/api/agent/data-sources/logo/FortiGate"
     # searched_paths should list the SVG (loop broke before trying PNG)

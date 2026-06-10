@@ -1,7 +1,7 @@
 /**
  * POST /api/chat/cli — Claude Code CLI shell-out endpoint.
  *
- * First release of the multi-provider arc (A1). Phantom-agent ships
+ * First release of the multi-provider arc (A1). Guardian-agent ships
  * Claude Code (the `@anthropic-ai/claude-code` npm package) pre-
  * installed in the image. This route spawns it as a child process,
  * streams stdout back as SSE events, and writes an audit row for the
@@ -38,10 +38,10 @@
  *
  * # What happens to the agent's MCP tools
  *
- * On this path, Claude Code DOES NOT see Phantom's MCP tools (data
+ * On this path, Claude Code DOES NOT see Guardian's MCP tools (data
  * sources, connectors, skills). It only has its own built-in tools
  * (file system, bash, web fetch, etc.). To give Claude Code access
- * to Phantom's MCP, we'd need to register Phantom's MCP as an
+ * to Guardian's MCP, we'd need to register Guardian's MCP as an
  * external server via Claude Code's `--mcp-config` flag — that's a
  * follow-on enhancement, not part of A1's scope.
  */
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       {
         error:
           "Anthropic credentials not configured. Set ANTHROPIC_API_KEY or " +
-          "CLAUDE_CODE_OAUTH_TOKEN in /opt/phantom/.env, or configure via " +
+          "CLAUDE_CODE_OAUTH_TOKEN in /opt/guardian/.env, or configure via " +
           "/providers once the ProviderStore write path is wired.",
       },
       { status: 400 },
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
             //     "--dangerously-skip-permissions cannot be used with root/sudo
             //     privileges for security reasons" when bypassPermissions is
             //     requested from a root process. The guard's premise is "we
-            //     can't tell whether you're sandboxed." For phantom_agent that
+            //     can't tell whether you're sandboxed." For guardian_agent that
             //     premise is false by inspection — the agent runs in a Docker
             //     container with bind-mount volumes only, ephemeral FS
             //     otherwise, no host access path. Setting IS_SANDBOX=1 (the

@@ -24,7 +24,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.benchmark import BenchRunStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_bench_routes(mcp: FastMCP, store: BenchRunStore) -> None:

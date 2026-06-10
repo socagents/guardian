@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const mcpUrl =
     (config.MCP_URL || '').trim() ||
     process.env.MCP_URL?.trim() ||
-    'http://phantom-mcp:8080/api/v1/stream/mcp';
+    'http://guardian-mcp:8080/api/v1/stream/mcp';
   const mcpToken =
     (config.MCP_TOKEN || '').trim() || process.env.MCP_TOKEN?.trim() || '';
   if (!mcpToken) {
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   const mcpUrl =
     (config.MCP_URL || '').trim() ||
     process.env.MCP_URL?.trim() ||
-    'http://phantom-mcp:8080/api/v1/stream/mcp';
+    'http://guardian-mcp:8080/api/v1/stream/mcp';
   const base = deriveMcpBaseUrl(mcpUrl);
   if (!base) {
     return NextResponse.json({ error: 'bad MCP URL' }, { status: 500 });

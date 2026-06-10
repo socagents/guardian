@@ -1,4 +1,4 @@
-# Files NOT bundled into the phantom-agent docker image.
+# Files NOT bundled into the guardian-agent docker image.
 #
 # v0.7.4: introduced when myrobo.webp got re-encoded q=100→q=82 (1.6 MB
 # → 172 KB, 9.5× reduction). The original was kept locally for rollback

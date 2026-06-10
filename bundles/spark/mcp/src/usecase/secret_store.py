@@ -9,17 +9,17 @@ Per spec §6.10, `secrets` has two backend impls:
 
 This module is a third backend — file-backed, encrypted-at-rest with
 AES-256-GCM, with the same `read(path) → value` interface as the
-planned Infisical backend. It exists because Phantom's setup-form UX
+planned Infisical backend. It exists because Guardian's setup-form UX
 (operator types secrets in the browser) doesn't fit the env-var
 pattern (which assumes secrets pre-exist in `process.env` before
-container boot). When/if Phantom adopts Infisical for standalone,
+container boot). When/if Guardian adopts Infisical for standalone,
 the SecretStore becomes a thin router that delegates to either the
 encrypted file backend (today) or the Infisical client (later).
 The `read(path)`/`write(path, value)` interface stays unchanged.
 
 # Encryption-at-rest (Phase 13)
 
-When `PHANTOM_SECRET_KEK` is set in the environment, every secret
+When `GUARDIAN_SECRET_KEK` is set in the environment, every secret
 value gets encrypted before it touches disk:
 
     plaintext value
@@ -37,7 +37,7 @@ secret becomes unrecoverable** (the operator must re-fill the setup
 form). This trade-off is the security win: the secrets directory +
 backup tarball are useless without the KEK.
 
-When `PHANTOM_SECRET_KEK` is unset, the store falls back to the
+When `GUARDIAN_SECRET_KEK` is unset, the store falls back to the
 legacy plaintext mode with a loud startup warning. This preserves
 upgrade compatibility for existing deploys; operators upgrade to
 encryption by setting the env var and restarting (the next read of
@@ -47,11 +47,11 @@ behavior in `read()`).
 # Path conventions
 
 Paths follow the spec's `/<scope>/<id>/<sub-id>/<slot>` form. For
-Phantom-locally-materialized secrets (those collected via the setup
+Guardian-locally-materialized secrets (those collected via the setup
 form), the convention is:
 
-    /agents/phantom/connectors/<instance_id>/<slot_name>
-    /agents/phantom/providers/<instance_id>/<slot_name>
+    /agents/guardian/connectors/<instance_id>/<slot_name>
+    /agents/guardian/providers/<instance_id>/<slot_name>
 
 These paths get persisted in `instances.db:secrets_json` /
 `provider_instances.db:secrets_json` instead of the secret VALUES,
@@ -65,14 +65,14 @@ The file backend mirrors the path structure 1:1 under
 
     /app/data/secrets/
     └── agents/
-        └── phantom/
+        └── guardian/
             ├── connectors/
             │   ├── 64b06eab-.../api_key       (mode 0600)
             │   └── c2caee7b-.../bot_token
             └── providers/
                 └── 9d3e1f.../service_account_json
 
-When PHANTOM_SECRET_KEK is set, file contents are base64-encoded
+When GUARDIAN_SECRET_KEK is set, file contents are base64-encoded
 ciphertext with a `v1\\x00` magic header. Without the KEK they're
 UTF-8 plaintext (legacy / first-boot state).
 
@@ -94,7 +94,7 @@ import threading
 from pathlib import Path
 from typing import Iterable
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 SECRETS_SUBDIR = "secrets"
@@ -113,7 +113,7 @@ GCM_NONCE_LEN = 12
 GCM_TAG_LEN = 16
 KEK_BYTE_LEN = 32  # AES-256
 
-KEK_ENV_VAR = "PHANTOM_SECRET_KEK"
+KEK_ENV_VAR = "GUARDIAN_SECRET_KEK"
 
 
 class SecretStoreError(RuntimeError):
@@ -176,23 +176,23 @@ class SecretStore:
     that changes when we adopt Infisical is the `_resolve_path` /
     `_read_file` / `_write_file` internals.
 
-    When `PHANTOM_SECRET_KEK` is set (32-byte base64 / hex / raw),
+    When `GUARDIAN_SECRET_KEK` is set (32-byte base64 / hex / raw),
     values are encrypted with AES-256-GCM before write and decrypted
     on read. Legacy plaintext files are detected at read time
     (no envelope header) and rewritten as encrypted in-place — so
     the operator gets transparent migration the moment they set the
     env var and the agent reads each secret again.
 
-    v0.3.7+: the KEK is REQUIRED. If `PHANTOM_SECRET_KEK` is unset, the
+    v0.3.7+: the KEK is REQUIRED. If `GUARDIAN_SECRET_KEK` is unset, the
     store raises at construction time instead of falling back to
     plaintext-on-disk mode. The fallback was a silent-by-default gap:
     secrets like Vertex SA JSON would land cleartext under
     `/app/data/secrets/...` if the operator never set the env var. The
-    `phantom-installer` always generates a fresh KEK on first install
+    `guardian-installer` always generates a fresh KEK on first install
     (`openssl rand -base64 32` at
-    installer/phantom-installer.template.sh:387) so customer installs
+    installer/guardian-installer.template.sh:387) so customer installs
     are unaffected; only manual deploys without the env var hit the
-    new error. Operator escape hatch — set `PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT=1`
+    new error. Operator escape hatch — set `GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT=1`
     explicitly to acknowledge the risk and proceed without encryption
     (still emits the loud startup warning). This is the only sanctioned
     path to plaintext mode now; silent fallback is gone.
@@ -223,21 +223,21 @@ class SecretStore:
         if self._kek is None:
             # v0.3.7+: refuse to start without a KEK by default. Operator
             # must explicitly opt into plaintext mode via the escape-hatch
-            # env var. Customer installs via phantom-installer always
+            # env var. Customer installs via guardian-installer always
             # generate a KEK on first install, so this path is only
             # reachable on manual deploys that skipped the installer.
             allow_plaintext = os.getenv(
-                "PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT", ""
+                "GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT", ""
             ).strip().lower() in ("1", "true", "yes")
             if not allow_plaintext:
                 raise SecretStoreError(
                     f"{KEK_ENV_VAR} is required but not set. Customer installs "
-                    "via phantom-installer always generate this automatically; "
+                    "via guardian-installer always generate this automatically; "
                     "this error means you've deployed without the installer. "
                     "Fix by either:\n"
                     f"  1. Generate a KEK: {KEK_ENV_VAR}=$(openssl rand -base64 32)\n"
                     "  2. Or acknowledge the risk and proceed without encryption:\n"
-                    "     PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT=1\n"
+                    "     GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT=1\n"
                     "Pre-v0.3.7 the store silently fell back to plaintext mode; "
                     "that fallback has been removed because it caused secrets like "
                     "Vertex SA JSON to land unencrypted on disk without operator "
@@ -247,7 +247,7 @@ class SecretStore:
                 "SecretStore: %s is NOT set and %s=1 is in effect — secrets stored as PLAINTEXT on disk. "
                 "This is the operator-acknowledged escape hatch; clear it once you set %s.",
                 KEK_ENV_VAR,
-                "PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT",
+                "GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT",
                 KEK_ENV_VAR,
             )
         else:
@@ -261,11 +261,11 @@ class SecretStore:
         # which secrets are coming from the runtime environment vs.
         # the file backend. Values are NEVER logged — only the env
         # var name + the corresponding secret-path it overrides.
-        if os.environ.get("PHANTOM_ENV_SECRETS_DISABLED", "").strip() in (
+        if os.environ.get("GUARDIAN_ENV_SECRETS_DISABLED", "").strip() in (
             "1", "true", "True", "yes", "YES",
         ):
             logger.info(
-                "SecretStore env-overlay: DISABLED via PHANTOM_ENV_SECRETS_DISABLED",
+                "SecretStore env-overlay: DISABLED via GUARDIAN_ENV_SECRETS_DISABLED",
             )
         else:
             overlay_envs = [
@@ -323,8 +323,8 @@ class SecretStore:
     #     browser at every install)
     #
     # Path → env-var mapping (deterministic):
-    #   /agents/phantom/connectors/foo/api_key
-    #     → PHANTOM_SECRET__AGENTS__PHANTOM__CONNECTORS__FOO__API_KEY
+    #   /agents/guardian/connectors/foo/api_key
+    #     → GUARDIAN_SECRET__AGENTS__GUARDIAN__CONNECTORS__FOO__API_KEY
     #
     # Why double-underscore separator: secret slot names (e.g.
     # `password_hash`, `api_token`) contain single underscores, so
@@ -332,19 +332,19 @@ class SecretStore:
     # within-segment underscores. `__` is unambiguous, and the result
     # round-trips: split on `__`, lowercase each segment.
     #
-    # Disable knob: set `PHANTOM_ENV_SECRETS_DISABLED=1` to turn off
+    # Disable knob: set `GUARDIAN_ENV_SECRETS_DISABLED=1` to turn off
     # the overlay entirely (read returns to file-only behavior). Useful
     # for testing or for deployments that intentionally don't want
     # env-var precedence.
 
-    _ENV_PREFIX = "PHANTOM_SECRET__"
+    _ENV_PREFIX = "GUARDIAN_SECRET__"
 
     @classmethod
     def _path_to_env_var(cls, path: str) -> str:
         """Map a secret path to its overlay env-var name.
 
         Example: `/ui/auth/admin/password_hash` →
-                 `PHANTOM_SECRET__UI__AUTH__ADMIN__PASSWORD_HASH`
+                 `GUARDIAN_SECRET__UI__AUTH__ADMIN__PASSWORD_HASH`
         """
         # _validate_path will raise if the path is malformed; we don't
         # need to revalidate here because callers always reach this
@@ -362,7 +362,7 @@ class SecretStore:
         deliberate, so a future env-var rotation (rare; usually a pod
         restart) is picked up without process restart.
         """
-        if os.environ.get("PHANTOM_ENV_SECRETS_DISABLED", "").strip() in (
+        if os.environ.get("GUARDIAN_ENV_SECRETS_DISABLED", "").strip() in (
             "1", "true", "True", "yes", "YES",
         ):
             return None
@@ -520,7 +520,7 @@ class SecretStore:
         or corrupted ciphertext.
 
         Resolution order (Issue #16):
-          1. Env-var overlay — if PHANTOM_SECRET__<UPPERCASE_PATH> is
+          1. Env-var overlay — if GUARDIAN_SECRET__<UPPERCASE_PATH> is
              set in the process environment, return its value. Lets
              operators pre-bake secrets via Kubernetes / Terraform /
              .env without going through the setup form. See
@@ -534,7 +534,7 @@ class SecretStore:
         Operators get transparent at-rest encryption simply by setting
         the env var and waiting for each secret to be touched once.
         """
-        # Step 1: env-var overlay. Honors PHANTOM_ENV_SECRETS_DISABLED
+        # Step 1: env-var overlay. Honors GUARDIAN_ENV_SECRETS_DISABLED
         # so deployments can opt out. Audit captures the source so
         # SOC operators can tell at-a-glance which secrets came from
         # env-var bootstrap vs. the file backend.
@@ -735,7 +735,7 @@ class SecretStore:
 # Path builders — keep callers consistent
 # ─────────────────────────────────────────────────────────────────
 
-AGENT_SCOPE = "/agents/phantom"
+AGENT_SCOPE = "/agents/guardian"
 
 
 def connector_secret_path(instance_id: str, slot_name: str) -> str:

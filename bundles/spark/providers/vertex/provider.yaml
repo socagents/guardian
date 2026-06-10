@@ -1,4 +1,4 @@
-# Google Cloud Vertex AI provider for the Phantom SOC simulation agent.
+# Google Cloud Vertex AI provider for the Guardian SOC simulation agent.
 #
 # Per spark-agents spec v1.2 §7.6 — model providers are parallel to
 # tool connectors but contribute models, not tools. The setup form

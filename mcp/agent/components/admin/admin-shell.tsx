@@ -28,7 +28,7 @@ export function AdminShell({
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-on-surface-variant/70">
-            Phantom · Admin
+            Guardian · Admin
           </p>
           <h1 className="text-3xl font-headline font-semibold text-on-surface md:text-4xl">
             {title}

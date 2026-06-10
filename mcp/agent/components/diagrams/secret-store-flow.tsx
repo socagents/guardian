@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom SecretStore Flow.
+ * Guardian SecretStore Flow.
  *
  * Visual argument: the SecretStore is the single encrypted-at-rest
  * source of truth for every operator credential the platform handles.
@@ -23,7 +23,7 @@
  *  2. The SecretStore lives on the bind-mounted /app/runtime path so
  *     the encrypted file survives `docker compose down + up` with a
  *     new image (the canonical upgrade flow). The PBKDF2 key derives
- *     from PHANTOM_SECRET_KEY pinned in .env — losing that key
+ *     from GUARDIAN_SECRET_KEY pinned in .env — losing that key
  *     bricks the store.
  *
  *  3. v1.2 transition state: the chat handler today reads Vertex
@@ -456,7 +456,7 @@ export function SecretStoreFlow() {
           x={HERO_X + 80}
           y={HERO_Y + 126}
         >
-          Key derives from PHANTOM_SECRET_KEY (env-pinned)
+          Key derives from GUARDIAN_SECRET_KEY (env-pinned)
         </text>
         {/* Path-prefix exemplars */}
         <text

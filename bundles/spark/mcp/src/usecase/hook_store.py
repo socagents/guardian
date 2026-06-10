@@ -60,7 +60,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 
@@ -110,7 +110,7 @@ class SqliteHookStore:
     def _resolve_data_root() -> Path:
         from os import environ
 
-        return Path(environ.get("PHANTOM_DATA_ROOT", str(DEFAULT_DATA_ROOT)))
+        return Path(environ.get("GUARDIAN_DATA_ROOT", str(DEFAULT_DATA_ROOT)))
 
     @property
     def db_path(self) -> Path:

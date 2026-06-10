@@ -1,22 +1,22 @@
 /**
  * Standard observability event-name aliases — Round-15 / Phase Y.
  *
- * Round-14 Phase D introduced phantom-specific audit action names
+ * Round-14 Phase D introduced guardian-specific audit action names
  * (chat_compaction_*, chat_context_warning, chat_cache_hit). Round-15
  * Phase H + T + P + M + $ added more (hook_dispatched, task_*,
  * chat_plan_*, connector_*, chat_turn_cost).
  *
- * This file documents the mapping from those phantom-internal names
+ * This file documents the mapping from those guardian-internal names
  * to the SnowAgent / OTel-conventional standard event names. Useful
  * when:
  *   - Forwarding to external observability (Datadog, OTel collector)
  *   - Querying across heterogeneous deploys with different vendor
  *     conventions
  *   - Operators familiar with SnowAgent's event names looking up
- *     the equivalent Phantom action
+ *     the equivalent Guardian action
  *
- * The mapping is consultative — Phantom continues to write the
- * phantom-internal names as the canonical action column; this file
+ * The mapping is consultative — Guardian continues to write the
+ * guardian-internal names as the canonical action column; this file
  * provides the OTel-friendly form for downstream consumers. A future
  * phase can wire the mapping into an OTel exporter that re-emits
  * audit rows under the standard names.
@@ -82,31 +82,31 @@ export const AUDIT_EVENT_NAME_ALIASES: Record<string, string> = {
   agent_definition_disabled: "agent.definition.disabled",
   agent_definition_deleted: "agent.definition.deleted",
 
-  // Existing phantom families — pre-Round-15. Surface them here
+  // Existing guardian families — pre-Round-15. Surface them here
   // so downstream consumers see consistent dot-namespaced names.
   tool_call: "agent.tool.call",
   approval_requested: "agent.approval.requested",
   approval_resolved: "agent.approval.resolved",
 };
 
-/** Inverse mapping: standard name → phantom action. Used by
+/** Inverse mapping: standard name → guardian action. Used by
  *  observability importers that need to translate. */
-export const AUDIT_STANDARD_TO_PHANTOM: Record<string, string> = (() => {
+export const AUDIT_STANDARD_TO_GUARDIAN: Record<string, string> = (() => {
   const out: Record<string, string> = {};
-  for (const [phantom, std] of Object.entries(AUDIT_EVENT_NAME_ALIASES)) {
-    out[std] = phantom;
+  for (const [guardian, std] of Object.entries(AUDIT_EVENT_NAME_ALIASES)) {
+    out[std] = guardian;
   }
   return out;
 })();
 
-/** Resolve a phantom action name to its standard form, or pass
+/** Resolve a guardian action name to its standard form, or pass
  *  through if no mapping exists. */
 export function toStandardEventName(action: string): string {
   return AUDIT_EVENT_NAME_ALIASES[action] ?? action;
 }
 
-/** Resolve a standard event name to its phantom form. Identity
+/** Resolve a standard event name to its guardian form. Identity
  *  fallback for unknown names. */
-export function toPhantomActionName(standard: string): string {
-  return AUDIT_STANDARD_TO_PHANTOM[standard] ?? standard;
+export function toGuardianActionName(standard: string): string {
+  return AUDIT_STANDARD_TO_GUARDIAN[standard] ?? standard;
 }

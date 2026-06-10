@@ -55,7 +55,7 @@ async function fetchYamlIssues(token: string | undefined): Promise<YamlIssue[]> 
   if (!token) return [];
   try {
     const r = await fetch("http://localhost:3000/api/agent/jobs/yaml-issues", {
-      headers: { cookie: `phantom_session=${token}` },
+      headers: { cookie: `guardian_session=${token}` },
       cache: "no-store",
     });
     if (!r.ok) return [];
@@ -137,7 +137,7 @@ export default async function JobsPage() {
       {/* v0.3.13 — YAML-load issues banner. Renders only when one or
           more files in /app/data/jobs/*.yaml failed to load at boot.
           Operator can either fix the YAML in place (docker exec
-          phantom_agent vi /app/data/jobs/<basename>) or delete the
+          guardian_agent vi /app/data/jobs/<basename>) or delete the
           file. Pre-v0.3.13 these failures were buried as WARN-per-file
           lines in docker compose logs; surfacing them in the UI is
           per the platform's "issues belong in /observability + UI"

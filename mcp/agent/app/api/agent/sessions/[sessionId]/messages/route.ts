@@ -13,7 +13,7 @@ async function resolveMcp() {
   const mcpUrl =
     (config.MCP_URL || '').trim() ||
     process.env.MCP_URL?.trim() ||
-    'http://phantom-mcp:8080/api/v1/stream/mcp';
+    'http://guardian-mcp:8080/api/v1/stream/mcp';
   const mcpToken =
     (config.MCP_TOKEN || '').trim() || process.env.MCP_TOKEN?.trim() || '';
   const base = deriveMcpBaseUrl(mcpUrl);

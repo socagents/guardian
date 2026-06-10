@@ -3,8 +3,8 @@
  *
  * Returns ALL pinning information for the running stack:
  *   - Stack-tier images (5 services) with their pinned digests
- *     sourced from compose-injected DIGEST_PHANTOM_* env vars
- *   - Per-instance connector containers, queried from phantom-updater
+ *     sourced from compose-injected DIGEST_GUARDIAN_* env vars
+ *   - Per-instance connector containers, queried from guardian-updater
  *     so we get accurate "what's actually running" info per instance
  *     (rather than what the manifest says SHOULD be running)
  *
@@ -21,10 +21,10 @@
  *     sidebar render. Synchronous, env-only, no upstream calls.
  *   - /api/agent/digests is the rich endpoint hit on demand
  *     (observability page open, About modal expanded). Async, may
- *     proxy to phantom-updater for per-instance info, can be slower.
+ *     proxy to guardian-updater for per-instance info, can be slower.
  *
  * Auth surface: same cookie-based auth as the rest of /api/agent/*.
- * The phantom-updater query uses the same MCP_TOKEN proxying pattern
+ * The guardian-updater query uses the same MCP_TOKEN proxying pattern
  * as other /api/agent/* → updater calls.
  */
 
@@ -48,7 +48,7 @@ interface ConnectorInstanceDigest {
   instance_name: string;
   /** sha256:... — the digest the running container is pinned to.
    * Null if the per-instance container is not running, or if the
-   * connector instance is in tag-fallback mode (DIGEST_PHANTOM_CONNECTOR_*
+   * connector instance is in tag-fallback mode (DIGEST_GUARDIAN_CONNECTOR_*
    * env not present in updater's environment). */
   digest: string | null;
   /** "digest" (canonical) or "tag" (fallback — should never happen
@@ -56,7 +56,7 @@ interface ConnectorInstanceDigest {
    * in /observability/connectors). */
   pinning_mode: 'digest' | 'tag';
   /** The image ref actually used for `docker run`, e.g.
-   * "ghcr.io/.../phantom-connector-xsiam@sha256:..." */
+   * "ghcr.io/.../guardian-connector-xsiam@sha256:..." */
   image_ref: string;
 }
 
@@ -64,12 +64,12 @@ interface DigestsResponse {
   version: string;
   /** ISO timestamp of when the response was generated. */
   generated_at: string;
-  /** Per-stack-service digests (3 entries: phantom-agent,
-   * phantom-updater, phantom-browser). */
+  /** Per-stack-service digests (3 entries: guardian-agent,
+   * guardian-updater, guardian-browser). */
   stack: StackImageDigest[];
   /** Per-instance connector container digests. Empty array if the
    * operator hasn't created any connector instances OR if the
-   * phantom-updater query failed (in which case `connectors_error`
+   * guardian-updater query failed (in which case `connectors_error`
    * is set and the UI shows a soft error state). */
   connectors: ConnectorInstanceDigest[];
   /** If the connectors query failed, the human-readable reason.
@@ -78,15 +78,15 @@ interface DigestsResponse {
 }
 
 const STACK_SERVICE_TO_ENV: Array<[string, string]> = [
-  ['phantom-agent', 'DIGEST_PHANTOM_AGENT'],
-  ['phantom-updater', 'DIGEST_PHANTOM_UPDATER'],
-  ['phantom-browser', 'DIGEST_PHANTOM_BROWSER'],
+  ['guardian-agent', 'DIGEST_GUARDIAN_AGENT'],
+  ['guardian-updater', 'DIGEST_GUARDIAN_UPDATER'],
+  ['guardian-browser', 'DIGEST_GUARDIAN_BROWSER'],
 ];
 
 export async function GET() {
   const version =
-    process.env.PHANTOM_VERSION?.trim() ||
-    process.env.NEXT_PUBLIC_PHANTOM_VERSION?.trim() ||
+    process.env.GUARDIAN_VERSION?.trim() ||
+    process.env.NEXT_PUBLIC_GUARDIAN_VERSION?.trim() ||
     'dev';
 
   // Stack-tier: synchronous env lookup. Cheap, always succeeds.
@@ -96,7 +96,7 @@ export async function GET() {
     return { service: svc, digest, pinned: digest !== null };
   });
 
-  // Per-instance connectors: query phantom-updater. The updater knows
+  // Per-instance connectors: query guardian-updater. The updater knows
   // both the env-var-pinned digests AND the actual `docker inspect`
   // result for each running container, so it's the authoritative
   // source. If the updater is unreachable (network blip, container
@@ -107,8 +107,8 @@ export async function GET() {
 
   try {
     const updaterUrl =
-      process.env.PHANTOM_UPDATER_URL?.replace(/\/$/, '') ||
-      'http://phantom-updater:8090';
+      process.env.GUARDIAN_UPDATER_URL?.replace(/\/$/, '') ||
+      'http://guardian-updater:8090';
     const mcpToken = process.env.MCP_TOKEN || '';
     const r = await fetch(`${updaterUrl}/api/v1/connectors/digests`, {
       method: 'GET',

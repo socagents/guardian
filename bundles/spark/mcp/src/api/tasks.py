@@ -47,7 +47,7 @@ from usecase.audit_log import (
     reset_current_actor,
 )
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_task_routes(

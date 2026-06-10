@@ -8,7 +8,7 @@
  *
  * Sources (tried in order):
  *   1. /app/bundle/manifest.yaml         (containerized deploy)
- *   2. process.env.PHANTOM_BUNDLE_ROOT/manifest.yaml
+ *   2. process.env.GUARDIAN_BUNDLE_ROOT/manifest.yaml
  *   3. MCP /api/v1/manifest_approvals    (future — not yet exposed
  *                                          as REST; today the manifest
  *                                          file is always reachable)
@@ -91,8 +91,8 @@ const CANDIDATE_PATHS = [
   '/app/bundle/manifest.yaml',
   // Inside the agent container the bundle is also reachable via the
   // BUNDLE_ROOT env var the MCP uses — same convention.
-  process.env.PHANTOM_BUNDLE_ROOT
-    ? path.join(process.env.PHANTOM_BUNDLE_ROOT, 'manifest.yaml')
+  process.env.GUARDIAN_BUNDLE_ROOT
+    ? path.join(process.env.GUARDIAN_BUNDLE_ROOT, 'manifest.yaml')
     : null,
   // Local dev: workspace root.
   path.resolve(process.cwd(), '../../bundles/spark/manifest.yaml'),

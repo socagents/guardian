@@ -137,7 +137,7 @@ function redactedPrefix(key: ApiKey): string {
   // Backend stores only sha256(<secret>); after creation we have no
   // way to reconstitute the secret portion of the bearer token, so
   // the listing shows the structurally-identifiable prefix only.
-  return `phantom_ak_${key.id}_${"•".repeat(8)}`;
+  return `guardian_ak_${key.id}_${"•".repeat(8)}`;
 }
 
 function mostRecentLastUsed(keys: ApiKey[]): string {
@@ -350,7 +350,7 @@ export default function ApiKeysPage() {
         </div>
         <p className="text-sm text-on-surface-variant leading-relaxed">
           Keys are presented to the MCP as{" "}
-          <code className="font-mono text-on-surface">Authorization: Bearer phantom_ak_…</code>.
+          <code className="font-mono text-on-surface">Authorization: Bearer guardian_ak_…</code>.
           The plaintext secret is shown <strong>once</strong> at creation —
           treat it like a password and store it in your secret manager
           immediately. Listing, minting, and revocation here all require

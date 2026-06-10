@@ -3,7 +3,7 @@
 /**
  * useTheme — read/write the operator's theme preference.
  *
- * Persistence: localStorage key `phantom.theme`. Possible values:
+ * Persistence: localStorage key `guardian.theme`. Possible values:
  *   "dark"   (default; the navy-blue look we ship today)
  *   "light"  (white surface variant — full implementation lands in
  *             the next commit; for now the toggle persists the
@@ -26,7 +26,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type Theme = "dark" | "light";
 
-const STORAGE_KEY = "phantom.theme";
+const STORAGE_KEY = "guardian.theme";
 const ATTR = "data-theme";
 
 function applyTheme(theme: Theme) {

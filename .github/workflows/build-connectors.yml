@@ -19,15 +19,15 @@ name: Build connectors
 # "only image tag differs" rule).
 #
 # Each connector job:
-#   * Builds its image FROM phantom-connector-runtime:dev
-#   * Pushes to GHCR as ghcr.io/<owner>/phantom-connector-<id>:dev
+#   * Builds its image FROM guardian-connector-runtime:dev
+#   * Pushes to GHCR as ghcr.io/<owner>/guardian-connector-<id>:dev
 #   * Surfaces the digest as a job output (for the downstream
 #     deploy-dev-installer workflow to pin in the manifest)
 #
-# The phantom-connector-runtime base image rebuilds on its own path
-# filter (phantom-connector-runtime/**). When the base rebuilds,
+# The guardian-connector-runtime base image rebuilds on its own path
+# filter (guardian-connector-runtime/**). When the base rebuilds,
 # every per-connector image needs a fresh build to inherit the new
-# layer — handled by listing phantom-connector-runtime/** in each
+# layer — handled by listing guardian-connector-runtime/** in each
 # connector job's path filter, so any change there triggers all of
 # them. Same dependency model release.yml uses for its v*.*.* path.
 #
@@ -59,12 +59,12 @@ on:
       # `gh workflow run build-connectors.yml` to force-exercise a
       # workflow change ahead of source movement.
       - 'bundles/spark/connectors/**'
-      - 'phantom-connector-runtime/**'
+      - 'guardian-connector-runtime/**'
   pull_request:
     branches: [main]
     paths:
       - 'bundles/spark/connectors/**'
-      - 'phantom-connector-runtime/**'
+      - 'guardian-connector-runtime/**'
   workflow_dispatch:
 
 concurrency:
@@ -78,7 +78,7 @@ permissions:
 jobs:
   # v0.5.60 (issue #38) — per-connector jobs use `pull-policy: never`
   # to skip the --pull flag when pulling their FROM
-  # phantom-connector-runtime:dev base. Pre-fix all per-connector
+  # guardian-connector-runtime:dev base. Pre-fix all per-connector
   # builds chronically failed with 401 from GHCR because --pull races
   # against per-version prerelease association (the just-pushed
   # runtime :dev tag is private until build-dev-installer.yml's
@@ -89,8 +89,8 @@ jobs:
   # is python:3.12-slim from Docker Hub — a first-party publicly-
   # readable image that benefits from CVE-fresh pulls.
   build-runtime:
-    name: Build phantom-connector-runtime base
-    runs-on: [self-hosted, Linux, X64, phantom]
+    name: Build guardian-connector-runtime base
+    runs-on: [self-hosted, Linux, X64, guardian]
     outputs:
       digest: ${{ steps.image.outputs.digest }}
     steps:
@@ -104,15 +104,15 @@ jobs:
       - id: image
         uses: ./.github/actions/build-and-push-dev-image
         with:
-          service-name: phantom-connector-runtime
-          build-context: phantom-connector-runtime
+          service-name: guardian-connector-runtime
+          build-context: guardian-connector-runtime
           owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-actor: ${{ github.actor }}
 
   build-xsiam-connector:
-    name: Build phantom-connector-xsiam
-    runs-on: [self-hosted, Linux, X64, phantom]
+    name: Build guardian-connector-xsiam
+    runs-on: [self-hosted, Linux, X64, guardian]
     needs: build-runtime
     steps:
       - name: Reset workspace ownership (pre-checkout)
@@ -124,19 +124,19 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
       - uses: ./.github/actions/build-and-push-dev-image
         with:
-          service-name: phantom-connector-xsiam
+          service-name: guardian-connector-xsiam
           build-context: '.'
           dockerfile-path: bundles/spark/connectors/xsiam/Dockerfile
           build-args: |
-            PHANTOM_RUNTIME_VERSION=dev
+            GUARDIAN_RUNTIME_VERSION=dev
           pull-policy: never
           owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-actor: ${{ github.actor }}
 
   build-web-connector:
-    name: Build phantom-connector-web
-    runs-on: [self-hosted, Linux, X64, phantom]
+    name: Build guardian-connector-web
+    runs-on: [self-hosted, Linux, X64, guardian]
     needs: build-runtime
     steps:
       - name: Reset workspace ownership (pre-checkout)
@@ -148,19 +148,19 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
       - uses: ./.github/actions/build-and-push-dev-image
         with:
-          service-name: phantom-connector-web
+          service-name: guardian-connector-web
           build-context: '.'
           dockerfile-path: bundles/spark/connectors/web/Dockerfile
           build-args: |
-            PHANTOM_RUNTIME_VERSION=dev
+            GUARDIAN_RUNTIME_VERSION=dev
           pull-policy: never
           owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-actor: ${{ github.actor }}
 
   build-cortex-docs-connector:
-    name: Build phantom-connector-cortex-docs
-    runs-on: [self-hosted, Linux, X64, phantom]
+    name: Build guardian-connector-cortex-docs
+    runs-on: [self-hosted, Linux, X64, guardian]
     needs: build-runtime
     steps:
       - name: Reset workspace ownership (pre-checkout)
@@ -172,19 +172,19 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
       - uses: ./.github/actions/build-and-push-dev-image
         with:
-          service-name: phantom-connector-cortex-docs
+          service-name: guardian-connector-cortex-docs
           build-context: '.'
           dockerfile-path: bundles/spark/connectors/cortex-docs/Dockerfile
           build-args: |
-            PHANTOM_RUNTIME_VERSION=dev
+            GUARDIAN_RUNTIME_VERSION=dev
           pull-policy: never
           owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-actor: ${{ github.actor }}
 
   build-cortex-content-connector:
-    name: Build phantom-connector-cortex-content
-    runs-on: [self-hosted, Linux, X64, phantom]
+    name: Build guardian-connector-cortex-content
+    runs-on: [self-hosted, Linux, X64, guardian]
     needs: build-runtime
     steps:
       - name: Reset workspace ownership (pre-checkout)
@@ -196,11 +196,11 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
       - uses: ./.github/actions/build-and-push-dev-image
         with:
-          service-name: phantom-connector-cortex-content
+          service-name: guardian-connector-cortex-content
           build-context: '.'
           dockerfile-path: bundles/spark/connectors/cortex-content/Dockerfile
           build-args: |
-            PHANTOM_RUNTIME_VERSION=dev
+            GUARDIAN_RUNTIME_VERSION=dev
           pull-policy: never
           owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -210,8 +210,8 @@ jobs:
   # pattern as the other per-connector builds — see the build-runtime
   # comment above for the #38 rationale.
   build-cortex-xdr-connector:
-    name: Build phantom-connector-cortex-xdr
-    runs-on: [self-hosted, Linux, X64, phantom]
+    name: Build guardian-connector-cortex-xdr
+    runs-on: [self-hosted, Linux, X64, guardian]
     needs: build-runtime
     steps:
       - name: Reset workspace ownership (pre-checkout)
@@ -223,11 +223,11 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
       - uses: ./.github/actions/build-and-push-dev-image
         with:
-          service-name: phantom-connector-cortex-xdr
+          service-name: guardian-connector-cortex-xdr
           build-context: '.'
           dockerfile-path: bundles/spark/connectors/cortex-xdr/Dockerfile
           build-args: |
-            PHANTOM_RUNTIME_VERSION=dev
+            GUARDIAN_RUNTIME_VERSION=dev
           pull-policy: never
           owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}

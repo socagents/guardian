@@ -1,5 +1,5 @@
 """cortex-content connector — MCP tools for the Cortex content
-catalog bundled with Phantom.
+catalog bundled with Guardian.
 
 Tool names auto-namespace as `cortex-content/<bare_name>` per the
 embedded MCP's connector loader; `connector.yaml`'s
@@ -62,7 +62,7 @@ from ._github_client import (
     GitHubRateLimitError,
 )
 
-logger = logging.getLogger("Phantom MCP.cortex-content")
+logger = logging.getLogger("Guardian MCP.cortex-content")
 
 
 # ─── Config resolution ──────────────────────────────────────────────
@@ -71,7 +71,7 @@ logger = logging.getLogger("Phantom MCP.cortex-content")
 def _get_client():
     """Return the cortex-content client.
 
-    The catalog ships with Phantom under
+    The catalog ships with Guardian under
     `bundles/spark/connectors/cortex-content/baked/`. The client reads
     everything from that local directory — no network calls, no
     per-instance configuration.
@@ -910,7 +910,7 @@ def _emit_index_run_metric(*, pack_name: str, result: str) -> None:
         if reg is None:
             return
         c = reg.counter(
-            "phantom_cortex_content_index_runs_total",
+            "guardian_cortex_content_index_runs_total",
             "cortex-content/index_kb calls broken down by overall result",
         )
         c.inc(pack=pack_name, result=result)
@@ -929,7 +929,7 @@ def _emit_index_doc_metric(action: str) -> None:
         if reg is None:
             return
         c = reg.counter(
-            "phantom_cortex_content_indexed_docs_total",
+            "guardian_cortex_content_indexed_docs_total",
             "cortex-content/index_kb per-document outcomes (insert/update/unchanged)",
         )
         c.inc(action=action)
@@ -1187,7 +1187,7 @@ async def _cortex_extract_vendor_logo_impl(pack_name: str) -> dict[str, Any]:
         except GitHubNotFoundError:
             pass
 
-    # Logo URL always points at Phantom's local serving route. The
+    # Logo URL always points at Guardian's local serving route. The
     # /api/agent/data-sources/logo/<pack> handler streams the bytes
     # from the bundled catalog with appropriate Content-Type.
     logo_url: str | None = (
@@ -1218,7 +1218,7 @@ async def cortex_extract_vendor_catalog(
     a card shows the rule list; clicking a rule shows the field
     inventory.
 
-    All data comes from Phantom's local catalog. Sub-millisecond.
+    All data comes from Guardian's local catalog. Sub-millisecond.
 
     Args:
         xsiam_only: when True (default), only packs with

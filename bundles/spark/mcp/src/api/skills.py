@@ -44,7 +44,7 @@ providers, settings, personality, etc. — see `api/jobs.py`,
 that didn't have its REST counterpart; this module closes that gap.
 
 Earlier attempt (v0.3.4 commit b6900e8) tried to bypass the gate by
-sending `X-Phantom-Approval-Bypass: 1` from the Next.js side, relying
+sending `X-Guardian-Approval-Bypass: 1` from the Next.js side, relying
 on the trigger_context middleware to set a contextvar that
 `gate_and_execute` reads. Empirically that contextvar does NOT
 propagate from the Starlette middleware into FastMCP's streamable-HTTP
@@ -69,7 +69,7 @@ from api.auth import require_bearer
 from usecase.audit_log import reset_current_actor, set_current_actor
 from usecase.builtin_components import skills_crud
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _decode(raw: Any) -> Any:

@@ -2,19 +2,19 @@
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
-## What Phantom is
+## What Guardian is
 
 Continuous SOC simulation platform: synthetic security log generation, scenario-based MITRE ATT&CK telemetry, and AI-orchestrated red/blue workflows over MCP. Ships as a 4-service Docker Compose stack.
 
 ## Remote-first workflow (MANDATORY)
 
-**All builds, deploys, tests, and container runs happen on the remote `phantom` VM in GCP — never on the local workstation.** The local repo is for editing and version control only. Docker is not expected to run locally.
+**All builds, deploys, tests, and container runs happen on the remote `guardian` VM in GCP — never on the local workstation.** The local repo is for editing and version control only. Docker is not expected to run locally.
 
 ### VM coordinates
 
 - Project: `cortex-gcp-labs`
 - Zone: `us-central1-f`
-- Instance: `phantom` (internal IP `10.10.0.81`, no external IP)
+- Instance: `guardian` (internal IP `10.10.0.81`, no external IP)
 - Firewall tag: `allow-ssh`
 - Access path: **IAP tunnel → password SSH** as user `ayman`
 
@@ -35,7 +35,7 @@ The VM has no external IP, so every SSH-like operation goes through a Google IAP
 ```bash
 set -a && source .env.vm && set +a
 
-# 1. Open the tunnel in the background (localhost:$VM_LOCAL_SSH_PORT -> phantom:22)
+# 1. Open the tunnel in the background (localhost:$VM_LOCAL_SSH_PORT -> guardian:22)
 gcloud compute start-iap-tunnel "$VM_NAME" 22 \
   --local-host-port="localhost:$VM_LOCAL_SSH_PORT" \
   --zone="$VM_ZONE" --project="$VM_PROJECT" &
@@ -86,7 +86,7 @@ Every "command" in the sections below is meant to run **inside the VM**, either 
 # Full stack
 … "cd $VM_REMOTE_REPO && docker compose up -d"
 … "cd $VM_REMOTE_REPO && docker compose ps"
-… "cd $VM_REMOTE_REPO && docker compose logs -f phantom-mcp"
+… "cd $VM_REMOTE_REPO && docker compose logs -f guardian-mcp"
 … "cd $VM_REMOTE_REPO && docker compose down"
 
 # MCP server tests
@@ -102,14 +102,14 @@ Local-only operations: editing files, `git` on the tracked repo, reading logs yo
 
 | Service (container) | Source | Language | Host port | Purpose |
 |---|---|---|---|---|
-| `phantom` | [main.py](main.py), [app/](app/) | Python 3.12 (FastAPI + Strawberry GraphQL) | 8999 → 8000 | Log generator + streaming worker engine |
-| `phantom-mcp` (`phantom_mcp`) | [bundles/spark/mcp/](bundles/spark/mcp/) | Python 3.12 (FastMCP) | 8080 | MCP tools for Phantom, XSIAM (PAPI), CALDERA |
-| `phantom-agent` (`phantom_agent`) | [mcp/agent/](mcp/agent/) | Next.js 15 + React 19 | 3000 | Chat UI, skills browser, Gemini/Vertex orchestration |
+| `guardian` | [main.py](main.py), [app/](app/) | Python 3.12 (FastAPI + Strawberry GraphQL) | 8999 → 8000 | Log generator + streaming worker engine |
+| `guardian-mcp` (`guardian_mcp`) | [bundles/spark/mcp/](bundles/spark/mcp/) | Python 3.12 (FastMCP) | 8080 | MCP tools for Guardian, XSIAM (PAPI), CALDERA |
+| `guardian-agent` (`guardian_agent`) | [mcp/agent/](mcp/agent/) | Next.js 15 + React 19 | 3000 | Chat UI, skills browser, Gemini/Vertex orchestration |
 | `caldera` | prebuilt image `aymanam/caldera:5.3.0` | — | 8888, 8443, etc. | Red-team operations backend |
 
 Container-to-container URLs (use in `.env`, not `localhost`):
 - `XLOG_URL=http://xlog:8000`
-- `MCP_URL=http://phantom-mcp:8080/api/v1/stream/mcp`
+- `MCP_URL=http://guardian-mcp:8080/api/v1/stream/mcp`
 - `CALDERA_URL=http://caldera:8888`
 
 ## Command reference (runs on the VM — wrap with the SSH pattern above)
@@ -118,7 +118,7 @@ Container-to-container URLs (use in `.env`, not `localhost`):
 # Full stack
 cd "$VM_REMOTE_REPO" && docker compose up -d
 cd "$VM_REMOTE_REPO" && docker compose ps
-cd "$VM_REMOTE_REPO" && docker compose logs -f phantom-mcp
+cd "$VM_REMOTE_REPO" && docker compose logs -f guardian-mcp
 cd "$VM_REMOTE_REPO" && docker compose down
 
 # Root GraphQL app (standalone, on the VM)
@@ -142,41 +142,41 @@ cd "$VM_REMOTE_REPO/mcp/agent" && npm run build && npm run start
 cd "$VM_REMOTE_REPO/mcp/agent" && npm run lint
 
 # Force-reseed MCP skills (overrides volume with image defaults)
-cd "$VM_REMOTE_REPO" && docker compose run --rm -e FORCE_SKILLS_SYNC=1 phantom-mcp
+cd "$VM_REMOTE_REPO" && docker compose run --rm -e FORCE_SKILLS_SYNC=1 guardian-mcp
 ```
 
-Service endpoints, when tunneled: use `gcloud compute start-iap-tunnel phantom <remote-port> --local-host-port=localhost:<local-port>` to reach them from your browser — e.g., tunnel `3000→3000` for the agent UI, `8080→8080` for the MCP server, `8999→8999` for GraphQL, `8888→8888` for Caldera.
+Service endpoints, when tunneled: use `gcloud compute start-iap-tunnel guardian <remote-port> --local-host-port=localhost:<local-port>` to reach them from your browser — e.g., tunnel `3000→3000` for the agent UI, `8080→8080` for the MCP server, `8999→8999` for GraphQL, `8888→8888` for Caldera.
 
 ## Architecture that isn't obvious from the tree
 
-### GraphQL + in-process workers (`phantom` service)
+### GraphQL + in-process workers (`guardian` service)
 
 - [main.py](main.py) mounts Strawberry GraphQL at `/` on the FastAPI app.
-- [app/schema.py](app/schema.py) defines all queries/mutations. **Active workers are stored in a module-level `workers = {}` dict** — no persistence. Restarting the `phantom` container drops every streaming worker; `listWorkers` is per-replica.
+- [app/schema.py](app/schema.py) defines all queries/mutations. **Active workers are stored in a module-level `workers = {}` dict** — no persistence. Restarting the `guardian` container drops every streaming worker; `listWorkers` is per-replica.
 - Log synthesis comes from the external `rosetta-ce` library (`Events`, `Observables`, `Sender`) — not in this repo. Format types, scenario shapes, and worker I/O are declared in [app/types/](app/types/) (`datafaker.py`, `scenarios.py`, `sender.py`).
 - Webhook sender uses header `Authorization: <WEBHOOK_KEY>` (raw, not `Bearer`) — see `_get_webhook_headers` in `app/schema.py`. Any non-XSIAM webhook receiver must accept that form.
 - Scenario files live in `scenarios/ready/*.json`. `createScenarioWorker` takes the filename **without `.json`**. For inline scenarios use `createScenarioWorkerFromQuery` instead.
 
-### MCP server (`phantom-mcp` service)
+### MCP server (`guardian-mcp` service)
 
 - Entry: [bundles/spark/mcp/src/main.py](bundles/spark/mcp/src/main.py). Registers ~80 tools in one block inside `async_main` — `mcp.tool()(module.fn)` per tool. Add new tools by importing from `usecase/builtin_components/` and calling `mcp.tool()` there.
 - Layout is intentional (clean-architecture flavor):
   - `src/config/config.py` — pydantic-settings, reads env vars via `validation_alias`.
-  - `src/service/phantom_bundles/spark/mcp.py` — FastMCP instance factory.
+  - `src/service/guardian_bundles/spark/mcp.py` — FastMCP instance factory.
   - `src/usecase/builtin_components/` — tool implementations (`data_faker`, `workers`, `scenarios`, `xsiam_tools`, `caldera_tools`, `simulation_skills`, `skills_crud`, `observables_catalog`, `field_info`).
-  - `src/pkg/` — shared clients: `graphql_client` (talks to `phantom` service), `papi_client` (XSIAM), `caldera_factory`, `xql_rag_service` (chromadb + sentence-transformers for XQL examples retrieval).
+  - `src/pkg/` — shared clients: `graphql_client` (talks to `guardian` service), `papi_client` (XSIAM), `caldera_factory`, `xql_rag_service` (chromadb + sentence-transformers for XQL examples retrieval).
 - Transports: `MCP_TRANSPORT=stdio` (default in Dockerfile) or `streamable-http`. HTTP path is configurable via `MCP_PATH` (default `/api/v1/stream/mcp`).
 - SSL: supports file paths (`SSL_CERT_FILE`/`SSL_KEY_FILE`) OR inline PEM with `\n` escapes (`SSL_CERT_PEM`/`SSL_KEY_PEM`). When PEM env is used, `main.py` writes tempfiles and cleans up via `atexit`.
 
 ### Skills library — volume-seeded
 
-The MCP image builds skills into `/app/skills-default/` and `docker-compose.yml` mounts volume `phantom_mcp_skills` at `/app/skills`. [bundles/spark/mcp/entrypoint.sh](bundles/spark/mcp/entrypoint.sh):
+The MCP image builds skills into `/app/skills-default/` and `docker-compose.yml` mounts volume `guardian_mcp_skills` at `/app/skills`. [bundles/spark/mcp/entrypoint.sh](bundles/spark/mcp/entrypoint.sh):
 1. On first run (empty volume), copies `skills-default/*` → `/app/skills/`.
 2. On subsequent runs, leaves volume content alone — **edits to `bundles/spark/mcp/skills/*.md` in the repo do not appear in a running container unless you `docker compose down -v` (drops volume) or set `FORCE_SKILLS_SYNC=1`**.
 
 Skill categories under `bundles/spark/mcp/skills/`: `foundation/`, `scenarios/`, `validation/`, `workflows/`. The `skills_crud` and `simulation_skills` MCP tools operate on the mounted `/app/skills/` inside the container.
 
-### Agent (`phantom-agent` service)
+### Agent (`guardian-agent` service)
 
 - Next.js App Router ([mcp/agent/app/](mcp/agent/app/)). API routes under `app/api/{auth,chat,skills}`.
 - Authenticates MCP calls with `MCP_TOKEN` (shared secret). `UI_USER` + `UI_PASSWORD` gate the UI itself.
@@ -187,7 +187,7 @@ Skill categories under `bundles/spark/mcp/skills/`: `foundation/`, `scenarios/`,
 
 Two unrelated config surfaces:
 
-1. **[config.yml](config.yml)** (root) — read by the GraphQL `phantom` service for worker count, log rotation, XSIAM mandatory/optional parsed fields. Mostly overridden by env vars (`WORKERS_NUMBER`, `LOGGING_*`, `XSIAM_*`), see [app/config.py](app/config.py).
+1. **[config.yml](config.yml)** (root) — read by the GraphQL `guardian` service for worker count, log rotation, XSIAM mandatory/optional parsed fields. Mostly overridden by env vars (`WORKERS_NUMBER`, `LOGGING_*`, `XSIAM_*`), see [app/config.py](app/config.py).
 2. **`.env`** (root, copy from `.env.example`) — the primary knob. Loaded by `docker compose`. Critical keys:
    - Shared auth: `MCP_TOKEN`
    - XSIAM PAPI: `CORTEX_MCP_PAPI_URL`, `CORTEX_MCP_PAPI_AUTH_HEADER`, `CORTEX_MCP_PAPI_AUTH_ID`, `PLAYGROUND_ID` (issue-war-room ID for remote execution context)

@@ -71,7 +71,7 @@ export interface Job {
    */
   run_once?: boolean;
   /** v0.1.27 — when true, the scheduler sends
-   *  `X-Phantom-Approval-Bypass: 1` on every chat dispatch so the
+   *  `X-Guardian-Approval-Bypass: 1` on every chat dispatch so the
    *  MCP-side gate auto-approves any humanRequired tools the agent
    *  calls. Audit rows still record each fired tool with
    *  `auto_approved=true`. Toggleable via the kebab menu (existing
@@ -147,7 +147,7 @@ export interface UpdateJobPayload {
 
 // ─── Wire-shape normalizer ────────────────────────────────────────────────────
 //
-// The phantom MCP (FastMCP, see bundles/spark/mcp/src/api/jobs.py + the
+// The guardian MCP (FastMCP, see bundles/spark/mcp/src/api/jobs.py + the
 // JobRow.to_dict() in usecase/job_scheduler.py) uses cron-native names:
 //
 //   { name, cron, timezone, action, enabled, removed,

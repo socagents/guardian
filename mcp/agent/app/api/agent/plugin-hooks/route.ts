@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   const mcpUrl =
     (config.MCP_URL || "").trim() ||
     process.env.MCP_URL?.trim() ||
-    "http://phantom-mcp:8080/api/v1/stream/mcp";
+    "http://guardian-mcp:8080/api/v1/stream/mcp";
   const base = deriveMcpBaseUrl(mcpUrl);
   if (!base) return NextResponse.json({ error: "bad MCP URL" }, { status: 500 });
 

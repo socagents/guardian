@@ -23,15 +23,15 @@
  *      to the new vX.Y.Z (and minor + latest aliases) + `docker push`.
  *
  *   4. Manifest assembly — release-manifest-vX.Y.Z.env file with one
- *      DIGEST_PHANTOM_* line per service. Customer's /opt/phantom/.env
+ *      DIGEST_GUARDIAN_* line per service. Customer's /opt/guardian/.env
  *      is overwritten with this manifest at install time.
  *
  *   5. GitHub release publish — installer binary + manifest + tarball
- *      + manifest.sha256 attached as release assets. The "Phantom
+ *      + manifest.sha256 attached as release assets. The "Guardian
  *      vX.Y.Z" release page is what the customer downloads from.
  *
  * Critically: release.yml is the ONLY workflow that rebuilds
- * phantom-updater + phantom-browser. Dev cycle never touches them.
+ * guardian-updater + guardian-browser. Dev cycle never touches them.
  */
 
 import { DIAGRAM_THEME_CSS, DiagramMarkers } from "./_diagram-theme";
@@ -72,7 +72,7 @@ export function CicdReleaseLifecycle() {
           release.yml lifecycle: tag → build/retag → manifest → release
         </text>
         <text x="600" y="68" textAnchor="middle" className="detail" fontSize="13">
-          The ONLY workflow that rebuilds phantom-updater + phantom-browser. Customer downloads from the GitHub release at the end.
+          The ONLY workflow that rebuilds guardian-updater + guardian-browser. Customer downloads from the GitHub release at the end.
         </text>
 
         {/* Trigger — top */}
@@ -124,9 +124,9 @@ export function CicdReleaseLifecycle() {
         <text x="740" y="328" textAnchor="middle" className="rel-step muted">writes:</text>
         <text x="740" y="346" textAnchor="middle" className="rel-step-code">release-manifest-vX.Y.Z.env</text>
         <text x="740" y="374" textAnchor="middle" className="rel-step muted">contents:</text>
-        <text x="740" y="390" textAnchor="middle" className="rel-step-code">DIGEST_PHANTOM_AGENT=sha256:...</text>
-        <text x="740" y="406" textAnchor="middle" className="rel-step-code">DIGEST_PHANTOM_XLOG=sha256:...</text>
-        <text x="740" y="422" textAnchor="middle" className="rel-step-code">DIGEST_PHANTOM_UPDATER=...</text>
+        <text x="740" y="390" textAnchor="middle" className="rel-step-code">DIGEST_GUARDIAN_AGENT=sha256:...</text>
+        <text x="740" y="406" textAnchor="middle" className="rel-step-code">DIGEST_GUARDIAN_XLOG=sha256:...</text>
+        <text x="740" y="422" textAnchor="middle" className="rel-step-code">DIGEST_GUARDIAN_UPDATER=...</text>
 
         {/* Phase 4 — GHCR access propagation (per-version access semantics) */}
         <rect x="900" y="210" width="240" height="220" rx="12" className="rel-phase" />
@@ -147,7 +147,7 @@ export function CicdReleaseLifecycle() {
         <text x="600" y="612" textAnchor="middle" className="cicd-card-title">GitHub release publish</text>
         <text x="600" y="636" textAnchor="middle" className="rel-step">Attaches as release assets:</text>
         <text x="600" y="654" textAnchor="middle" className="rel-step-code">
-          phantom-installer · release-manifest-vX.Y.Z.env · install.tar.gz · manifest.sha256
+          guardian-installer · release-manifest-vX.Y.Z.env · install.tar.gz · manifest.sha256
         </text>
         <text x="600" y="672" textAnchor="middle" className="muted" fontSize="11">
           Customer browses to github.com/.../releases/tag/vX.Y.Z + downloads the installer
@@ -164,7 +164,7 @@ export function CicdReleaseLifecycle() {
         <text x="170" y="458" textAnchor="middle" className="state-warn-fill" fontSize="12" fontWeight="700">
           ⚠ Critical reminder
         </text>
-        <text x="170" y="480" textAnchor="middle" className="rel-step">phantom-updater + phantom-browser</text>
+        <text x="170" y="480" textAnchor="middle" className="rel-step">guardian-updater + guardian-browser</text>
         <text x="170" y="496" textAnchor="middle" className="rel-step">rebuild ONLY here, never on dev push.</text>
         <text x="170" y="518" textAnchor="middle" className="muted" fontSize="11">A fix in updater/src/main.py only</text>
         <text x="170" y="534" textAnchor="middle" className="muted" fontSize="11">reaches customers when this fires.</text>

@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/endpoints/update_agent_name/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_endpoints_set_alias`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 ## Purpose
 
@@ -49,5 +49,5 @@ A ResponseStatusResponse if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_endpoints_set_alias`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_endpoints_set_alias`
 - Source mapping: `ebarti/cortex_xdr_client/api/endpoints_api.py` → `set_endpoint_alias`

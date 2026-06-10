@@ -11,7 +11,7 @@
  *    seed defaults and this route returns 503. There is no "try the
  *    UI_PASSWORD env" path.
  *  - Cookie value is a random 32-byte server-side session token
- *    (not the flat `phantom_auth=1` of pre-v0.4.0). The token's
+ *    (not the flat `guardian_auth=1` of pre-v0.4.0). The token's
  *    SHA-256 hash + metadata live in auth_sessions.db on the MCP
  *    side; that's the source of truth on every subsequent request.
  *  - Cookie attributes: HttpOnly + Secure + SameSite=Strict (CSRF

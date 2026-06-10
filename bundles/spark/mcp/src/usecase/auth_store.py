@@ -1,4 +1,4 @@
-"""Phantom v0.4.0 auth store — sessions + first-boot flag.
+"""Guardian v0.4.0 auth store — sessions + first-boot flag.
 
 Layers on top of `usecase.ui_auth.ui_auth_store` (which owns the
 PBKDF2 password hash in SecretStore) to add:
@@ -58,7 +58,7 @@ from typing import Any, Iterator
 from usecase.secret_store import SecretStore, SecretStoreError
 from usecase.ui_auth import UiAuthError, UiAuthStore
 
-logger = logging.getLogger("Phantom MCP.auth_store")
+logger = logging.getLogger("Guardian MCP.auth_store")
 
 
 # SecretStore path for the credentials_changed boolean. Sibling of the
@@ -268,8 +268,8 @@ class AuthStore:
 
         v0.5.5: fails loud if seeding is needed but `default_password`
         is empty. Pre-v0.5.5 the caller hardcoded the literal
-        `"phantom-admin-CHANGE-ME"`; v0.5.5 moves it out of the image
-        into PHANTOM_DEFAULT_ADMIN_PASSWORD (sourced from .env). An
+        `"guardian-admin-CHANGE-ME"`; v0.5.5 moves it out of the image
+        into GUARDIAN_DEFAULT_ADMIN_PASSWORD (sourced from .env). An
         empty `default_password` here means the env var wasn't set,
         which on a fresh install would land an empty PBKDF2 hash and
         nobody could log in. Refuse instead.
@@ -287,11 +287,11 @@ class AuthStore:
             raise ValueError(
                 "seed_admin_defaults_if_empty: SecretStore is empty for "
                 f"user {username!r} but default_password is empty. v0.5.5+ "
-                "sources this from PHANTOM_DEFAULT_ADMIN_PASSWORD in "
-                "/opt/phantom/.env. The installer auto-generates a random "
+                "sources this from GUARDIAN_DEFAULT_ADMIN_PASSWORD in "
+                "/opt/guardian/.env. The installer auto-generates a random "
                 "value on first install; if this is missing, re-run the "
-                "installer (sudo /opt/phantom/phantom-installer) or run "
-                "sudo /opt/phantom/phantom-reset-admin-password to set "
+                "installer (sudo /opt/guardian/guardian-installer) or run "
+                "sudo /opt/guardian/guardian-reset-admin-password to set "
                 "credentials interactively."
             )
         try:

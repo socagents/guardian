@@ -6,12 +6,12 @@ the standard OTel env vars:
 
     OTEL_EXPORTER_OTLP_ENDPOINT      e.g. http://collector:4318
     OTEL_EXPORTER_OTLP_HEADERS       e.g. authorization=Bearer xxx
-    OTEL_SERVICE_NAME                defaults to "phantom-agent"
+    OTEL_SERVICE_NAME                defaults to "guardian-agent"
     OTEL_RESOURCE_ATTRIBUTES         e.g. deployment.environment=prod
 
 # Activation gate
 
-  * PHANTOM_OTEL=1 — operator opt-in. Off by default so the SDK
+  * GUARDIAN_OTEL=1 — operator opt-in. Off by default so the SDK
     stays out of the hot path for deploys that don't have a
     collector.
   * OTEL_EXPORTER_OTLP_ENDPOINT set — without an endpoint there's
@@ -32,7 +32,7 @@ Auto:
     request span via context propagation.
 
 Manual instrumentation hooks remain available via
-opentelemetry.trace.get_tracer("phantom") for tools that want to
+opentelemetry.trace.get_tracer("guardian") for tools that want to
 add domain-specific spans (e.g. an XQL query run with the query id
 as a span attribute). Today no manual instrumentation is wired; the
 auto-instrumentation alone gives a useful waterfall.
@@ -50,26 +50,26 @@ from __future__ import annotations
 import logging
 import os
 
-logger = logging.getLogger("Phantom MCP.tracing")
+logger = logging.getLogger("Guardian MCP.tracing")
 
 
-def install(app, *, service_name: str = "phantom-agent") -> bool:
+def install(app, *, service_name: str = "guardian-agent") -> bool:
     """Install OTel auto-instrumentation onto the given Starlette app.
 
     Returns True iff instrumentation was actually installed (deps
     available + activation gate passed). Returns False (no exception)
     in all the no-op cases so main.py can call this unconditionally.
     """
-    if os.getenv("PHANTOM_OTEL", "0").lower() not in {"1", "true", "yes"}:
+    if os.getenv("GUARDIAN_OTEL", "0").lower() not in {"1", "true", "yes"}:
         logger.info(
-            "OTel tracing disabled (PHANTOM_OTEL not set). "
-            "Set PHANTOM_OTEL=1 + OTEL_EXPORTER_OTLP_ENDPOINT to enable.",
+            "OTel tracing disabled (GUARDIAN_OTEL not set). "
+            "Set GUARDIAN_OTEL=1 + OTEL_EXPORTER_OTLP_ENDPOINT to enable.",
         )
         return False
 
     if not os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
         logger.info(
-            "OTel tracing requested via PHANTOM_OTEL=1 but "
+            "OTel tracing requested via GUARDIAN_OTEL=1 but "
             "OTEL_EXPORTER_OTLP_ENDPOINT is unset — no collector to ship to. "
             "Skipping install."
         )

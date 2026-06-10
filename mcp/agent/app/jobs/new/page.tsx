@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Create Job — phantom-flavored port of spark_ui/ui/app/jobs/new/page.tsx.
+ * Create Job — guardian-flavored port of spark_ui/ui/app/jobs/new/page.tsx.
  *
  * Three sections:
  *
@@ -333,7 +333,7 @@ function CreateJobPage() {
   const [timezone, setTimezone] = useState("UTC");
   const [enabled, setEnabled] = useState(true);
   // v0.1.27: per-job approval bypass. When true, the scheduler sets
-  // `X-Phantom-Approval-Bypass: 1` on every chat dispatch for this job
+  // `X-Guardian-Approval-Bypass: 1` on every chat dispatch for this job
   // so the MCP-side gate auto-approves any humanRequired tools the
   // agent calls. Default false — operator opts in explicitly. Audit
   // rows still record every fired tool with auto_approved=true so

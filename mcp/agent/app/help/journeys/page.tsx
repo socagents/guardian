@@ -9,7 +9,7 @@
  * narrow the list when you want to focus on one workflow.
  *
  * Pattern lifted from spark_ui/app/testing/journeys/page.tsx but
- * restyled for phantom's Ocean Navy + glassmorphism aesthetic — same
+ * restyled for guardian's Ocean Navy + glassmorphism aesthetic — same
  * card pattern as /jobs and /providers. No external UI deps; purely
  * Tailwind classes + inline glass styles.
  */
@@ -120,7 +120,7 @@ export default function HelpPage() {
           </Link>
         </div>
         <p className="text-sm text-on-surface-variant ml-9">
-          Reproducible walkthroughs for every Phantom capability — paste a
+          Reproducible walkthroughs for every Guardian capability — paste a
           prompt, watch what the agent does, verify the outcome. Each journey
           is an end-to-end test you can run today.
         </p>

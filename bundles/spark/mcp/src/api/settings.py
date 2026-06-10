@@ -50,7 +50,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.settings_store import SqliteSettingsStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_settings_routes(mcp: FastMCP, settings: SqliteSettingsStore) -> None:

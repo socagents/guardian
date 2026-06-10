@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/incidents/update_incident/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id`)
 **MCP tool**: `xdr_incidents_update`
-**Phantom connector**: `cortex-xdr`
+**Guardian connector**: `cortex-xdr`
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api/cortex-xdr-apis/incident-management/update-incident
 
@@ -59,4 +59,4 @@ Update one XDR incident's mutable metadata fields — status, severity, assignee
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_incidents_update`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_incidents_update`

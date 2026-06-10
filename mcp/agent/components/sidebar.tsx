@@ -35,11 +35,11 @@ function isGroup(entry: NavEntry): entry is NavGroup {
 
 // ── Navigation Structure (Architecture-Aligned) ──────────────────────────────
 
-// ── Phantom-tailored nav. Mirrors Spark's grouped collapsible sidebar
-//    structure but points at the routes phantom actually ships. The
+// ── Guardian-tailored nav. Mirrors Spark's grouped collapsible sidebar
+//    structure but points at the routes guardian actually ships. The
 //    Spark workspace concepts (Platform, /w/<workspace>) and gateway-
 //    specific surfaces (Identities, Routing, Venus) are dropped because
-//    phantom is a single-tenant standalone agent — no api-gateway,
+//    guardian is a single-tenant standalone agent — no api-gateway,
 //    no multi-workspace, no test-channel proxy.
 const navEntries: NavEntry[] = [
   {
@@ -140,7 +140,7 @@ const navEntries: NavEntry[] = [
     ],
   },
   // Learn — operator-facing reference. Drives the /help journey
-  // catalog: every Phantom capability has a reproducible walkthrough
+  // catalog: every Guardian capability has a reproducible walkthrough
   // here. New journeys land in mcp/agent/lib/journeys.ts and surface
   // automatically without further wiring.
   {
@@ -288,11 +288,11 @@ export function Sidebar() {
       {/* Brand Header */}
       <div className={cn("mb-6 flex items-center", collapsed ? "justify-center" : "px-2 gap-3")}>
         <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
-          <PhantomLogo size={44} />
+          <GuardianLogo size={44} />
         </div>
         {!collapsed && (
           <h1 className="text-2xl font-bold tracking-tighter sidebar-text font-headline">
-            Phantom
+            Guardian
           </h1>
         )}
       </div>
@@ -662,9 +662,9 @@ function FooterLink({
   );
 }
 
-// ── Phantom Logo ────────────────────────────────────────────────────────────
+// ── Guardian Logo ────────────────────────────────────────────────────────────
 //
-// The official Phantom mark lives at logos/phantom.svg in the repo root,
+// The official Guardian mark lives at logos/guardian.svg in the repo root,
 // already shipped to mcp/agent/public/logo.svg. Render it as an <img>
 // rather than re-inlining the SVG — single source of truth, edit the file
 // in /public to update the look across every call site (sidebar header,
@@ -685,12 +685,12 @@ function FooterLink({
 // itself, which is the right place for it.
 
 // eslint-disable-next-line @next/next/no-img-element
-export function PhantomLogo({ size = 32, animate = true }: { size?: number; animate?: boolean }) {
+export function GuardianLogo({ size = 32, animate = true }: { size?: number; animate?: boolean }) {
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
       src="/logo.svg"
-      alt="Phantom logo"
+      alt="Guardian logo"
       width={size}
       height={size}
       data-animate={animate}
@@ -701,11 +701,11 @@ export function PhantomLogo({ size = 32, animate = true }: { size?: number; anim
 
 /**
  * Backwards-compatibility re-export. The verbatim Spark port left
- * `SparkLogo` imported from a few call sites; alias it to PhantomLogo
+ * `SparkLogo` imported from a few call sites; alias it to GuardianLogo
  * so we don't have to chase down every reference. New code should
- * import `PhantomLogo` directly.
+ * import `GuardianLogo` directly.
  */
-export const SparkLogo = PhantomLogo;
+export const SparkLogo = GuardianLogo;
 
 /** Returns the current sidebar width class for layout consumers. */
 export function useSidebarCollapsed(): boolean {

@@ -1,8 +1,8 @@
 # Reference Dockerfile for a v0.2 container-style connector.
 #
 # Pattern (mirror this for your own connector):
-#   1. ARG PHANTOM_RUNTIME_VERSION=latest
-#   2. FROM ghcr.io/kite-production/phantom-connector-runtime:${PHANTOM_RUNTIME_VERSION}
+#   1. ARG GUARDIAN_RUNTIME_VERSION=latest
+#   2. FROM ghcr.io/kite-production/guardian-connector-runtime:${GUARDIAN_RUNTIME_VERSION}
 #   3. (Optional) RUN pip install --no-cache-dir <connector-specific deps>
 #   4. COPY <bundle-path>/src /app/connectors/<id>/src
 #   5. ENV CONNECTOR_ID=<id>
@@ -12,11 +12,11 @@
 # Build context = repo root, so the COPY can reach into bundles/.
 # In release.yml: `docker build -f bundles/spark/connectors/<id>/Dockerfile .`
 
-ARG PHANTOM_RUNTIME_VERSION=latest
-FROM ghcr.io/kite-production/phantom-connector-runtime:${PHANTOM_RUNTIME_VERSION}
+ARG GUARDIAN_RUNTIME_VERSION=latest
+FROM ghcr.io/kite-production/guardian-connector-runtime:${GUARDIAN_RUNTIME_VERSION}
 
-LABEL org.opencontainers.image.source="https://github.com/kite-production/phantom"
-LABEL org.opencontainers.image.description="Phantom reference connector skeleton (NOT a deployable connector — see bundles/spark/connectors/_runtime/README.md)."
+LABEL org.opencontainers.image.source="https://github.com/kite-production/guardian"
+LABEL org.opencontainers.image.description="Guardian reference connector skeleton (NOT a deployable connector — see bundles/spark/connectors/_runtime/README.md)."
 
 # This skeleton has no extra deps. A real connector would add deps
 # here, e.g.:
@@ -27,4 +27,4 @@ COPY bundles/spark/connectors/_runtime/src /app/connectors/_runtime/src
 
 ENV CONNECTOR_ID=_runtime
 
-# ENTRYPOINT inherited from phantom-connector-runtime: python -m runtime.entrypoint
+# ENTRYPOINT inherited from guardian-connector-runtime: python -m runtime.entrypoint

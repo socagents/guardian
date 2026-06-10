@@ -36,7 +36,7 @@ export default function ReleaseHistoryPage() {
     <div className="p-8 max-w-3xl mx-auto space-y-6">
       <header>
         <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">
-          Phantom
+          Guardian
         </p>
         <h1 className="font-headline text-3xl font-bold tracking-tight text-on-surface">
           Release history

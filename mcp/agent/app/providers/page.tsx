@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * Phantom providers page — ported from spark/services/ui's
- * settings/providers, with two phantom-specific shifts:
+ * Guardian providers page — ported from spark/services/ui's
+ * settings/providers, with two guardian-specific shifts:
  *
  *   1. **Endpoints**: Spark's apiRequest helper hits the api-gateway
- *      at /api/v1/config{,/providers}. Phantom doesn't ship those
+ *      at /api/v1/config{,/providers}. Guardian doesn't ship those
  *      routes; this page calls /api/agent/providers/config directly,
  *      which reads/writes the MCP-side ProviderStore.
  *   2. **Scope**: Vertex AI (Gemini) and Anthropic are functional.
@@ -467,7 +467,7 @@ export default function ProvidersSettingsPage() {
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
-      // Phantom doesn't yet ship a /api/agent/providers/{id}/test
+      // Guardian doesn't yet ship a /api/agent/providers/{id}/test
       // backend route. For Vertex specifically the only meaningful
       // probe is the JWT→OAuth2 exchange, which the chat path does
       // implicitly on every request. Until a dedicated probe route
@@ -756,7 +756,7 @@ export default function ProvidersSettingsPage() {
                 />
                 <p className="text-[10px] text-on-surface-variant/60 font-label">
                   Paste the full JSON key from GCP Console → IAM → Service Accounts. Stored encrypted at rest under
-                  {" "}<code className="font-mono">setup.json</code>{" "}with operator-supplied <code className="font-mono">PHANTOM_SECRET_KEK</code>.
+                  {" "}<code className="font-mono">setup.json</code>{" "}with operator-supplied <code className="font-mono">GUARDIAN_SECRET_KEK</code>.
                   To replace a stored value, just type or paste — the masked bullets clear automatically. <em>Reveal</em> shows the redaction sentinel returned by the API (your real key is never sent back to the browser).
                 </p>
               </div>
@@ -881,7 +881,7 @@ export default function ProvidersSettingsPage() {
                   value={form.openaiApiKey}
                   onChange={(v) => updateField("openaiApiKey", v)}
                   placeholder="sk-..."
-                  helpText="Phantom's chat path is currently Vertex/Gemini only. OpenAI integration is on the roadmap."
+                  helpText="Guardian's chat path is currently Vertex/Gemini only. OpenAI integration is on the roadmap."
                   disabled
                 />
                 <MaskedKeyInput

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom External Connectors Anatomy.
+ * Guardian External Connectors Anatomy.
  *
  * Three connector backends shown side-by-side, each as a card with:
  * protocol · port · auth header · tool family · sample call. Below

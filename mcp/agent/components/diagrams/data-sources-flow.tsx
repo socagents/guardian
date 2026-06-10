@@ -86,9 +86,9 @@ export function DataSourcesFlow() {
         <line className="lane-line" x1="60" y1="120" x2="1140" y2="120" />
         <text x="74" y="113" className="lane-label">BROWSER</text>
         <line className="lane-line" x1="60" y1="260" x2="1140" y2="260" />
-        <text x="74" y="253" className="lane-label">PHANTOM-AGENT · Next.js</text>
+        <text x="74" y="253" className="lane-label">GUARDIAN-AGENT · Next.js</text>
         <line className="lane-line" x1="60" y1="430" x2="1140" y2="430" />
-        <text x="74" y="423" className="lane-label">PHANTOM-AGENT · embedded MCP (Python FastMCP)</text>
+        <text x="74" y="423" className="lane-label">GUARDIAN-AGENT · embedded MCP (Python FastMCP)</text>
         <line className="lane-line" x1="60" y1="640" x2="1140" y2="640" />
         <text x="74" y="633" className="lane-label">CONTAINER FILESYSTEM</text>
 

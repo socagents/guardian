@@ -75,7 +75,7 @@ from usecase.marketplace_store import (
     resolved_data_root,
 )
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -580,7 +580,7 @@ def register_marketplace_routes(
           5. spec.id does not collide with an EXISTING user connector
              id (use DELETE first to replace).
           6. spec has an 'image' field (required for user connectors
-             since phantom-updater can't derive an image ref from a
+             since guardian-updater can't derive an image ref from a
              connector_id it doesn't know about).
 
         On success:
@@ -708,7 +708,7 @@ def register_marketplace_routes(
                 status_code=409,
             )
 
-        # Image ref is required for user connectors — phantom-updater
+        # Image ref is required for user connectors — guardian-updater
         # has no way to derive an image from a connector_id it didn't
         # ship with. Schema marks `image` optional (bundle connectors
         # don't need it); we enforce required-for-user here.

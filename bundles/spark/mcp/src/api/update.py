@@ -12,7 +12,7 @@ Endpoints (Authorization: Bearer MCP_TOKEN or active API key):
 
   GET /api/v1/update/info       → {
         "current": {
-          "image": "phantom-agent:local",
+          "image": "guardian-agent:local",
           "commit": "<git sha at build time, or null>",
           "branch": "<git branch at build time, or null>",
           "build_time": "<utc iso8601 from runtime-metadata.json>"
@@ -61,7 +61,7 @@ from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_BUNDLE_ROOT = "/app/bundle"
 DEFAULT_RUNTIME_METADATA = "/app/runtime-metadata.json"
@@ -129,7 +129,7 @@ def register_update_routes(mcp: FastMCP) -> None:
         return JSONResponse(
             {
                 "current": {
-                    "image": os.getenv("PHANTOM_AGENT_IMAGE", "phantom-agent:local"),
+                    "image": os.getenv("GUARDIAN_AGENT_IMAGE", "guardian-agent:local"),
                     "commit": meta.get("source_commit") or None,
                     "branch": meta.get("source_branch") or None,
                     "bundle_name": meta.get("bundle_name") or None,

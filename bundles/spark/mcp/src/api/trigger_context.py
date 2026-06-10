@@ -1,17 +1,17 @@
 """Trigger-context middleware — populates the trigger contextvar from
-the inbound `X-Phantom-Trigger` header for the duration of one HTTP
+the inbound `X-Guardian-Trigger` header for the duration of one HTTP
 request.
 
 The header is set by upstream callers that want their downstream
 audit rows tagged with a stable identifier:
 
-  - The job_scheduler sets `X-Phantom-Trigger: job:<name>` on its
+  - The job_scheduler sets `X-Guardian-Trigger: job:<name>` on its
     POST to /api/chat (see usecase/job_scheduler.py:_dispatch_chat).
   - The agent's chat route forwards the same header to every
     downstream MCP tool call so the trigger flows from "job fires"
     → "agent /api/chat handles" → "MCP tool dispatch" → "audit row".
   - Future per-operator session attribution can add
-    `X-Phantom-Trigger: operator:<id>` here without further wiring.
+    `X-Guardian-Trigger: operator:<id>` here without further wiring.
 
 Without this middleware, every audit row's `trigger` column would
 be NULL and operators couldn't filter the audit feed by source.
@@ -46,14 +46,14 @@ from usecase.audit_log import (
     set_current_trigger,
 )
 
-logger = logging.getLogger("Phantom MCP.trigger")
+logger = logging.getLogger("Guardian MCP.trigger")
 
-HEADER_NAME = "X-Phantom-Trigger"
+HEADER_NAME = "X-Guardian-Trigger"
 
 # v0.1.27: optional bypass header. Same lifetime as the trigger header
 # (per-request contextvar). Truthy values activate bypass; anything
 # else (or absent) leaves the default of False in place.
-BYPASS_HEADER_NAME = "X-Phantom-Approval-Bypass"
+BYPASS_HEADER_NAME = "X-Guardian-Approval-Bypass"
 _BYPASS_TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 # Cap the trigger string so a malformed/oversized header can't bloat
@@ -63,7 +63,7 @@ MAX_TRIGGER_LEN = 128
 
 
 class TriggerContextMiddleware(BaseHTTPMiddleware):
-    """Read X-Phantom-Trigger + X-Phantom-Approval-Bypass from the
+    """Read X-Guardian-Trigger + X-Guardian-Approval-Bypass from the
     request, set the contextvars for the request lifetime, reset on
     exit. Pairs with audit_log's record() (trigger) and
     _approval_gate.gate_and_execute (bypass).

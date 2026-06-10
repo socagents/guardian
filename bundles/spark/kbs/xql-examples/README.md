@@ -44,7 +44,7 @@ tags:
 
 Entries fall into three confidence buckets — the operator's expectation differs per bucket:
 
-1. **Operator-validated** — the query was run against a real XDR/XSIAM tenant by the operator (or by the agent driving the connector) and returned correct results. The `## Source` section names the tenant or scenario (e.g. `Validated 2026-05-17 against tenant=lab-1, scenario=v0.5.57 phantom-killchain`). These are the gold-standard entries; they're "we know this works."
+1. **Operator-validated** — the query was run against a real XDR/XSIAM tenant by the operator (or by the agent driving the connector) and returned correct results. The `## Source` section names the tenant or scenario (e.g. `Validated 2026-05-17 against tenant=lab-1, scenario=v0.5.57 guardian-killchain`). These are the gold-standard entries; they're "we know this works."
 
 2. **Vendor-documented** — the query is a documented pattern from Palo Alto's official Cortex XQL / XDR Public API documentation (e.g. accessed via the `cortex-docs` connector). The `## Source` cites the vendor doc and notes "Validate against your tenant before relying." These cover well-established XQL patterns that any tenant should accept, but tenant-specific schema quirks can still break field names.
 
@@ -60,7 +60,7 @@ To verify locally:
 
 ```bash
 # After saving new entries, restart the agent container:
-docker compose restart phantom-agent
+docker compose restart guardian-agent
 
 # Then check that knowledge_search returns the new entry:
 curl -s -X POST http://localhost:8080/api/v1/knowledge_search \

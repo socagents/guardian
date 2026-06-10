@@ -31,7 +31,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Awaitable, Callable
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[Any]]
 

@@ -125,7 +125,7 @@ celerybeat.pid
 # Environments
 .env
 .env.vm
-.phantom-agent/
+.guardian-agent/
 .venv
 env/
 venv/
@@ -133,7 +133,7 @@ ENV/
 env.bak/
 venv.bak/
 
-# Manual pre-release backups (created when nuking phantom-vm before
+# Manual pre-release backups (created when nuking guardian-vm before
 # a destructive upgrade — e.g. .backup-pre-v0.4.0/). Local-only;
 # never committed.
 .backup-pre-*/
@@ -224,11 +224,11 @@ start_tunnels.sh
 .env.local
 
 # Local tunnel runtime artifacts
-.phantom-tunnels/
+.guardian-tunnels/
 
 # Local guide generation artifacts
-Phantom_XSIAM_Guide.docx
-Phantom_XSIAM_Guide_TOC.docx
+Guardian_XSIAM_Guide.docx
+Guardian_XSIAM_Guide_TOC.docx
 generate_guide.py
 generate_toc_doc.py
 img/copy-agentic-issue-id.jpg
@@ -236,7 +236,7 @@ img/create-agentic-playground-case.jpg
 img/xsiam-http-collector.jpg
 .playwright-mcp/
 spark_ui/
-phantom-*.png
+guardian-*.png
 
 # Local GCP service-account JSON extracted from .env.vm (issue: multi-line JSON
 # parses as shell errors when env.vm is sourced; cleanly stored separately and

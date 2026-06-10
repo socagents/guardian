@@ -1,8 +1,8 @@
 name: Build dev installer
 
-# Builds phantom-installer-dev (the dev flavor of the customer
+# Builds guardian-installer-dev (the dev flavor of the customer
 # installer) with the current `:dev` image digests pinned, stages
-# it on phantom-vm, and publishes the `dev-latest` prerelease that
+# it on guardian-vm, and publishes the `dev-latest` prerelease that
 # grants the operator's customer-style PAT pull access to the
 # `:dev` image versions on GHCR. NO auto-deploy — the operator
 # runs the staged installer manually.
@@ -29,10 +29,10 @@ name: Build dev installer
 # publishes (see release.yml's "Clean up dev-latest prerelease"
 # step).
 #
-# Operator's upgrade flow on phantom-vm (after this workflow
+# Operator's upgrade flow on guardian-vm (after this workflow
 # finishes):
 #
-#   sudo /home/ayman/phantom-installer-dev
+#   sudo /home/ayman/guardian-installer-dev
 #
 # (The workflow drops a fresh copy at that stable path at the end
 # of the build step, so the operator doesn't have to remember the
@@ -50,7 +50,7 @@ name: Build dev installer
 
 on:
   workflow_run:
-    # v0.6.12 — Build updater added so phantom-updater source changes
+    # v0.6.12 — Build updater added so guardian-updater source changes
     # also cascade through to dev installer rebuild. Pre-v0.6.12 the
     # updater was customer-release-only.
     workflows: [Build agent, Build connectors, Build updater]
@@ -66,7 +66,7 @@ on:
 concurrency:
   # One build at a time per ref so concurrent triggers don't race
   # each other writing to the runner workspace's dist/ directory or
-  # to the staged binary at /home/ayman/phantom-installer-dev.
+  # to the staged binary at /home/ayman/guardian-installer-dev.
   group: build-dev-installer-${{ github.ref }}
   cancel-in-progress: false
 
@@ -77,16 +77,16 @@ permissions:
   # version access semantics — versions inherit visibility from
   # the GitHub Release they're associated with). Without the
   # prerelease, only the workflow's GITHUB_TOKEN can pull :dev images,
-  # which fails the moment the operator runs phantom-installer-dev on
-  # phantom-vm with a PAT in /opt/phantom/.env.
+  # which fails the moment the operator runs guardian-installer-dev on
+  # guardian-vm with a PAT in /opt/guardian/.env.
   contents: write
   packages: read
   actions: read
 
 jobs:
   build:
-    name: Build phantom-installer-dev
-    runs-on: [self-hosted, Linux, X64, phantom]
+    name: Build guardian-installer-dev
+    runs-on: [self-hosted, Linux, X64, guardian]
     # workflow_run can fire on conclusion=failure too; only proceed
     # on success. For push + workflow_dispatch the conclusion is null
     # and we always proceed.
@@ -124,16 +124,16 @@ jobs:
           mkdir -p dist/installer-dev
           MANIFEST="dist/installer-dev/release-manifest-dev.env"
           SHORT_SHA="${COMMIT_SHA::7}"
-          echo "PHANTOM_VERSION=dev-$SHORT_SHA" > "$MANIFEST"
+          echo "GUARDIAN_VERSION=dev-$SHORT_SHA" > "$MANIFEST"
 
-          # v0.6.12 — phantom-updater moved into the dev cycle. Its
+          # v0.6.12 — guardian-updater moved into the dev cycle. Its
           # :dev tag is now resolved here alongside the agent
           # rather than fetched from the latest customer release.
-          # This lets updater source changes propagate to phantom-vm
+          # This lets updater source changes propagate to guardian-vm
           # via the dev installer auto-deploy, so operator-mirror
           # testing covers updater changes the same way it covers
           # everything else.
-          for SVC in phantom-agent phantom-updater; do
+          for SVC in guardian-agent guardian-updater; do
             IMG="$REGISTRY/$OWNER/$SVC"
             echo "::group::resolve $SVC:dev"
             docker pull "$IMG:dev"
@@ -143,8 +143,8 @@ jobs:
               echo "ERROR: could not resolve :dev digest for $SVC" >&2
               exit 1
             fi
-            # Manifest uses DIGEST_PHANTOM_<SVC>= (uppercase, underscores).
-            # Match release.yml's convention so build-phantom-installer.sh's
+            # Manifest uses DIGEST_GUARDIAN_<SVC>= (uppercase, underscores).
+            # Match release.yml's convention so build-guardian-installer.sh's
             # placeholder substitution accepts the manifest unchanged.
             KEY=$(echo "DIGEST_${SVC}" | tr 'a-z-' 'A-Z_')
             echo "$KEY=$DIGEST" >> "$MANIFEST"
@@ -153,7 +153,7 @@ jobs:
           done
 
           # Stack services NOT built on dev: browser only (post-v0.6.12).
-          # phantom-updater moved into the dev cycle in v0.6.12; see the
+          # guardian-updater moved into the dev cycle in v0.6.12; see the
           # :dev resolution loop above. Pull browser digest + the
           # per-connector fallback digests from the latest stable release's
           # manifest via the GitHub REST API + curl. We DON'T use
@@ -203,10 +203,10 @@ jobs:
             -H "Accept: application/octet-stream" \
             "$MANIFEST_URL" > "$STABLE_MANIFEST"
 
-          # v0.6.12 — DIGEST_PHANTOM_UPDATER no longer fetched from
+          # v0.6.12 — DIGEST_GUARDIAN_UPDATER no longer fetched from
           # stable; it's resolved from :dev above. Only browser
           # remains in the stable-fetch path.
-          for KEY in DIGEST_PHANTOM_BROWSER; do
+          for KEY in DIGEST_GUARDIAN_BROWSER; do
             LINE=$(grep "^${KEY}=" "$STABLE_MANIFEST" || true)
             if [[ -z "$LINE" ]]; then
               echo "ERROR: $KEY missing from stable manifest" >&2
@@ -221,7 +221,7 @@ jobs:
           # auto-deploy. Pre-v0.6.16 the dev manifest carried forward
           # the LAST CUSTOMER RELEASE's connector digests; this meant
           # build-connectors.yml could push fresh :dev tags but
-          # phantom-updater on phantom-vm would still pull the stable
+          # guardian-updater on guardian-vm would still pull the stable
           # digest — a connector fix landed in the :dev image while
           # the operator-side container kept running the prior
           # release's code indefinitely.
@@ -233,7 +233,7 @@ jobs:
           # whose source has never been pushed.
           declare -A STABLE_DIGESTS
           while IFS='=' read -r KEY VALUE; do
-            if [[ "$KEY" =~ ^DIGEST_PHANTOM_CONNECTOR_ ]]; then
+            if [[ "$KEY" =~ ^DIGEST_GUARDIAN_CONNECTOR_ ]]; then
               STABLE_DIGESTS["$KEY"]="$VALUE"
             fi
           done < "$STABLE_MANIFEST"
@@ -241,30 +241,30 @@ jobs:
           # Pair env-var name → ghcr image name. Ordered same as the
           # release manifest so the manifest reads predictably.
           # v0.6.20 — added cortex-xdr to the resolution loop. Pre-v0.6.20
-          # phantom-connector-cortex-xdr was MISSING from this map even
+          # guardian-connector-cortex-xdr was MISSING from this map even
           # though build-connectors.yml had been pushing the :dev tag
           # since v0.5.61. Surfaced when an operator restart of the
-          # cortex-xdr instance fell to phantom-updater's tag-pinning
+          # cortex-xdr instance fell to guardian-updater's tag-pinning
           # fallback (because /host/connector-digests.env didn't have
-          # DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR), which then tried to
-          # pull `phantom-connector-cortex-xdr:dev-<current-sha>` — a
+          # DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR), which then tried to
+          # pull `guardian-connector-cortex-xdr:dev-<current-sha>` — a
           # tag that only exists when build-connectors fired for that
           # commit. Same fix shape as cortex-content.
           declare -A CONN_IMGS=(
-            ["DIGEST_PHANTOM_CONNECTOR_RUNTIME"]="phantom-connector-runtime"
-            ["DIGEST_PHANTOM_CONNECTOR_XSIAM"]="phantom-connector-xsiam"
-            ["DIGEST_PHANTOM_CONNECTOR_WEB"]="phantom-connector-web"
-            ["DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS"]="phantom-connector-cortex-docs"
-            ["DIGEST_PHANTOM_CONNECTOR_CORTEX_CONTENT"]="phantom-connector-cortex-content"
-            ["DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR"]="phantom-connector-cortex-xdr"
+            ["DIGEST_GUARDIAN_CONNECTOR_RUNTIME"]="guardian-connector-runtime"
+            ["DIGEST_GUARDIAN_CONNECTOR_XSIAM"]="guardian-connector-xsiam"
+            ["DIGEST_GUARDIAN_CONNECTOR_WEB"]="guardian-connector-web"
+            ["DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS"]="guardian-connector-cortex-docs"
+            ["DIGEST_GUARDIAN_CONNECTOR_CORTEX_CONTENT"]="guardian-connector-cortex-content"
+            ["DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR"]="guardian-connector-cortex-xdr"
           )
           for KEY in \
-            DIGEST_PHANTOM_CONNECTOR_RUNTIME \
-            DIGEST_PHANTOM_CONNECTOR_XSIAM \
-            DIGEST_PHANTOM_CONNECTOR_WEB \
-            DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS \
-            DIGEST_PHANTOM_CONNECTOR_CORTEX_CONTENT \
-            DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR; do
+            DIGEST_GUARDIAN_CONNECTOR_RUNTIME \
+            DIGEST_GUARDIAN_CONNECTOR_XSIAM \
+            DIGEST_GUARDIAN_CONNECTOR_WEB \
+            DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS \
+            DIGEST_GUARDIAN_CONNECTOR_CORTEX_CONTENT \
+            DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR; do
             SVC="${CONN_IMGS[$KEY]}"
             IMG="$REGISTRY/$OWNER/$SVC"
             DIGEST=""
@@ -280,7 +280,7 @@ jobs:
               echo "$KEY=${STABLE_DIGESTS[$KEY]}" >> "$MANIFEST"
               echo "  $KEY=${STABLE_DIGESTS[$KEY]}  (fallback to stable $LATEST — :dev tag not present)"
             else
-              echo "::warning::$KEY missing from both :dev and stable manifest $LATEST — dev installer leaves it unset (phantom-updater falls back to tag-pinning, instance create may fail)"
+              echo "::warning::$KEY missing from both :dev and stable manifest $LATEST — dev installer leaves it unset (guardian-updater falls back to tag-pinning, instance create may fail)"
             fi
             echo "::endgroup::"
           done
@@ -292,40 +292,40 @@ jobs:
           echo "manifest=$PWD/$MANIFEST" >> "$GITHUB_OUTPUT"
           echo "version=dev-$SHORT_SHA"  >> "$GITHUB_OUTPUT"
 
-      - name: Build phantom-installer-dev
+      - name: Build guardian-installer-dev
         env:
           VERSION: ${{ steps.digests.outputs.version }}
           MANIFEST_PATH: ${{ steps.digests.outputs.manifest }}
         run: |
-          OUTPUT_NAME=phantom-installer-dev \
+          OUTPUT_NAME=guardian-installer-dev \
           OUTPUT_DIR="$PWD/dist/installer-dev" \
-            ./installer/build-phantom-installer.sh
+            ./installer/build-guardian-installer.sh
           ls -lh "$PWD/dist/installer-dev/"
 
-      - name: Stage dev installer at /home/ayman/phantom-installer-dev
-        # Convenience step: the operator's day-to-day phantom-vm
+      - name: Stage dev installer at /home/ayman/guardian-installer-dev
+        # Convenience step: the operator's day-to-day guardian-vm
         # upgrade flow is
         #
-        #   sudo /home/ayman/phantom-installer-dev
+        #   sudo /home/ayman/guardian-installer-dev
         #
         # rather than having to remember the runner workspace path
-        # (/home/ayman/actions-runner/_work/phantom/phantom/dist/...).
+        # (/home/ayman/actions-runner/_work/guardian/guardian/dist/...).
         # We copy (not symlink) so a runner-workspace cleanup doesn't
         # nullify the operator's installer. Atomic via cp + mv so
         # the operator can never observe a partial binary if they
         # happen to run the script while the workflow is in flight.
         run: |
-          cp "$PWD/dist/installer-dev/phantom-installer-dev" \
-             "/home/ayman/.phantom-installer-dev.new"
-          chmod +x "/home/ayman/.phantom-installer-dev.new"
-          mv "/home/ayman/.phantom-installer-dev.new" \
-             "/home/ayman/phantom-installer-dev"
-          ls -lh /home/ayman/phantom-installer-dev
+          cp "$PWD/dist/installer-dev/guardian-installer-dev" \
+             "/home/ayman/.guardian-installer-dev.new"
+          chmod +x "/home/ayman/.guardian-installer-dev.new"
+          mv "/home/ayman/.guardian-installer-dev.new" \
+             "/home/ayman/guardian-installer-dev"
+          ls -lh /home/ayman/guardian-installer-dev
           echo ""
-          echo "::notice::Dev installer ready at /home/ayman/phantom-installer-dev"
-          echo "::notice::Run 'sudo /home/ayman/phantom-installer-dev' on phantom-vm to upgrade the stack."
+          echo "::notice::Dev installer ready at /home/ayman/guardian-installer-dev"
+          echo "::notice::Run 'sudo /home/ayman/guardian-installer-dev' on guardian-vm to upgrade the stack."
 
-      - name: Auto-deploy on phantom-vm (dev cycle)
+      - name: Auto-deploy on guardian-vm (dev cycle)
         # v0.6.8 — operator-mirror dev cycle. After staging the binary,
         # immediately run the installer to upgrade the running stack to
         # the freshly-built version. Operator requested this to avoid
@@ -333,7 +333,7 @@ jobs:
         # cycle is now tightly coupled.
         #
         # Why this is safe:
-        #   * Self-hosted runner IS phantom-vm, runs as ayman with
+        #   * Self-hosted runner IS guardian-vm, runs as ayman with
         #     NOPASSWD sudo (per docs/CICD.md § Install location). No
         #     SSH, no external credentials, no inter-host transfer.
         #   * The installer is idempotent + non-interactive on upgrade
@@ -351,7 +351,7 @@ jobs:
         #     chat approval, that boundary is unchanged)
         #
         # Customer-mirror property preserved: the installer's
-        # operator-facing path is identical (`sudo phantom-installer-dev`).
+        # operator-facing path is identical (`sudo guardian-installer-dev`).
         # Only the TRIGGER changes (CI vs manual).
         #
         # Per CLAUDE.md § Agent-side headless smoke (v0.6.8 update):
@@ -360,27 +360,27 @@ jobs:
         # actually-installed code, not whatever was running before.
         #
         # NOTE: this step is the ONE place in the dev cycle where CI
-        # writes to phantom-vm's runtime state. Customer releases still
+        # writes to guardian-vm's runtime state. Customer releases still
         # don't auto-install — those wait for the operator's explicit
-        # `phantom-installer` run.
+        # `guardian-installer` run.
         run: |
           set -euo pipefail
-          echo "::group::Running sudo /home/ayman/phantom-installer-dev"
+          echo "::group::Running sudo /home/ayman/guardian-installer-dev"
           # Pipe through tee so the full output lands in the workflow
           # log AND a local file for diagnostics if something goes
           # sideways.
-          sudo /home/ayman/phantom-installer-dev 2>&1 | tee /tmp/phantom-install.log
+          sudo /home/ayman/guardian-installer-dev 2>&1 | tee /tmp/guardian-install.log
           echo "::endgroup::"
-          echo "::notice::Auto-deploy complete on phantom-vm — phantom-agent recreated with new digest. Agent-side smoke runs next (see CLAUDE.md § Agent-side headless smoke)."
+          echo "::notice::Auto-deploy complete on guardian-vm — guardian-agent recreated with new digest. Agent-side smoke runs next (see CLAUDE.md § Agent-side headless smoke)."
 
       - name: Upload dev installer artifact
         # Operator can also pull from GitHub Actions UI or via
         # `gh run download` on any host that has gh CLI. Useful when
-        # upgrading FROM a host that isn't phantom-vm (e.g. a
+        # upgrading FROM a host that isn't guardian-vm (e.g. a
         # workstation, or a CI runner).
         #
         # continue-on-error: the binary is already staged at
-        # /home/ayman/phantom-installer-dev on phantom-vm (the
+        # /home/ayman/guardian-installer-dev on guardian-vm (the
         # primary distribution path for the dev flow); this upload
         # is just a fallback for off-host operators. When the
         # org-shared Actions storage quota is exhausted, uploads
@@ -390,10 +390,10 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: phantom-installer-dev-${{ steps.digests.outputs.version }}
+          name: guardian-installer-dev-${{ steps.digests.outputs.version }}
           path: |
-            dist/installer-dev/phantom-installer-dev
-            dist/installer-dev/phantom-installer-dev.sha256
+            dist/installer-dev/guardian-installer-dev
+            dist/installer-dev/guardian-installer-dev.sha256
             dist/installer-dev/release-manifest-dev.env
           # 3 days instead of 14: this binary is regenerated on
           # every push to main anyway, so a longer retention only
@@ -615,7 +615,7 @@ jobs:
           }
 
           # Services rebuilt by the dev cycle (agent).
-          for entry in "DIGEST_PHANTOM_AGENT:phantom-agent"; do
+          for entry in "DIGEST_GUARDIAN_AGENT:guardian-agent"; do
             KEY="${entry%%:*}"
             SVC="${entry##*:}"
             NEW=$(grep "^${KEY}=" "$MANIFEST_PATH" 2>/dev/null | cut -d= -f2- || true)
@@ -629,8 +629,8 @@ jobs:
 
           # Services pinned to the latest customer stable release
           # (updater, browser — not rebuilt on the dev cycle).
-          for entry in "DIGEST_PHANTOM_UPDATER:phantom-updater" \
-                       "DIGEST_PHANTOM_BROWSER:phantom-browser"; do
+          for entry in "DIGEST_GUARDIAN_UPDATER:guardian-updater" \
+                       "DIGEST_GUARDIAN_BROWSER:guardian-browser"; do
             KEY="${entry%%:*}"
             SVC="${entry##*:}"
             NEW=$(grep "^${KEY}=" "$MANIFEST_PATH" 2>/dev/null | cut -d= -f2- || true)
@@ -675,7 +675,7 @@ jobs:
             echo "**Internal dev build — operator use only.**"
             echo ""
             echo "This prerelease pins the bytes of the current dev"
-            echo "stack on phantom-vm. Customers should NOT install"
+            echo "stack on guardian-vm. Customers should NOT install"
             echo "from dev-latest — customer installs target the"
             echo "latest \`vX.Y.Z\` release."
             echo ""
@@ -698,14 +698,14 @@ jobs:
             echo ""
             echo "## Image digests (built from commit \`${GITHUB_SHA}\`)"
             echo ""
-            grep '^DIGEST_PHANTOM_' "$MANIFEST_PATH" | sed 's/^/- `/; s/$/`/'
+            grep '^DIGEST_GUARDIAN_' "$MANIFEST_PATH" | sed 's/^/- `/; s/$/`/'
             echo ""
             echo "## How operators consume this"
             echo ""
-            echo "On phantom-vm:"
+            echo "On guardian-vm:"
             echo ""
             echo '```bash'
-            echo "sudo /home/ayman/phantom-installer-dev"
+            echo "sudo /home/ayman/guardian-installer-dev"
             echo '```'
             echo ""
             echo "build-dev-installer.yml staged a fresh copy at that"
@@ -777,8 +777,8 @@ jobs:
           # as application/octet-stream with the filename in the
           # ?name= query string.
           for asset in \
-              dist/installer-dev/phantom-installer-dev \
-              dist/installer-dev/phantom-installer-dev.sha256 \
+              dist/installer-dev/guardian-installer-dev \
+              dist/installer-dev/guardian-installer-dev.sha256 \
               dist/installer-dev/release-manifest-dev.env; do
             name="$(basename "$asset")"
             UPLOAD_RESPONSE="$(mktemp)"

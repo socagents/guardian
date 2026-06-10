@@ -12,7 +12,7 @@ paths:
 
 # Adding or modifying a Next.js page
 
-Activates for work in `mcp/agent/app/` or `mcp/agent/components/`. Phantom's agent is Next.js 15 App Router with React 19.
+Activates for work in `mcp/agent/app/` or `mcp/agent/components/`. Guardian's agent is Next.js 15 App Router with React 19.
 
 ## 1. Sidebar entry discipline (v0.5.49 — MANDATORY)
 

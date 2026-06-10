@@ -10,12 +10,12 @@ export interface MCPToolResult {
   isError?: boolean;
 }
 
-export class PhantomMCPClient {
+export class GuardianMCPClient {
   private readonly mcpUrl: string;
   private readonly mcpToken?: string;
   /**
    * Per-instance headers attached to every MCP request. Used today
-   * for `X-Phantom-Trigger` so a scheduled chat's downstream tool
+   * for `X-Guardian-Trigger` so a scheduled chat's downstream tool
    * calls inherit the trigger tag for audit attribution. Reserved
    * names (Content-Type, Accept, Authorization, mcp-session-id,
    * mcp-protocol-version) take precedence over extras to avoid the
@@ -103,7 +103,7 @@ export class PhantomMCPClient {
           params: {
             protocolVersion: "2025-06-18",
             capabilities: {},
-            clientInfo: { name: "phantom-agent", version: "1.0.0" },
+            clientInfo: { name: "guardian-agent", version: "1.0.0" },
           },
         }),
       });

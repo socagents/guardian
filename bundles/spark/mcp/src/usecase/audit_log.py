@@ -27,7 +27,7 @@ adapter over the same interface.
       target        TEXT,                 -- the thing acted on:
                                           --   "connector:xsiam"
                                           --   "tool:xsiam.run_xql_query"
-                                          --   "secret:/agents/phantom/..."
+                                          --   "secret:/agents/guardian/..."
                                           --   "instance:<uuid>"
       status        TEXT,                 -- "success" | "failure" | "skipped"
       duration_ms   INTEGER,              -- nullable; populated for tool_call
@@ -95,7 +95,7 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 
@@ -124,7 +124,7 @@ def reset_current_actor(token: Any) -> None:
 
 # Contextvar for trigger attribution. Set by the api/trigger_context
 # middleware whenever an inbound HTTP request carries the
-# `X-Phantom-Trigger` header. Audit rows pick it up through
+# `X-Guardian-Trigger` header. Audit rows pick it up through
 # `record()` so operators can filter the audit feed by trigger
 # (e.g. `trigger=job:nightly-report` to find all activity driven
 # by a scheduled job vs interactive operator chats).
@@ -157,7 +157,7 @@ def reset_current_trigger(token: Any) -> None:
 
 # v0.1.27: approval-bypass contextvar. Set by the trigger_context
 # middleware when the inbound HTTP request carries
-# `X-Phantom-Approval-Bypass: 1`. Read by `_approval_gate.gate_and_execute`
+# `X-Guardian-Approval-Bypass: 1`. Read by `_approval_gate.gate_and_execute`
 # — when active, gated tools execute immediately with an auto-approval
 # audit row instead of blocking on operator confirmation.
 #
@@ -347,7 +347,7 @@ class SqliteAuditLog:
 
         `trigger` defaults to whatever's in the trigger contextvar
         (set by the trigger_context middleware from the inbound
-        X-Phantom-Trigger header). Direct callers can override by
+        X-Guardian-Trigger header). Direct callers can override by
         passing the keyword explicitly — useful for record-after-the-
         fact paths (boot reconciliation etc.) that aren't inside an
         HTTP request.

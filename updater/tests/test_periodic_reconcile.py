@@ -1,7 +1,7 @@
 """v0.17.128 (#123) — the connector digest-drift reconcile must run on a
 timer, not only at updater startup.
 
-The v0.6.66 reconcile fired once ~30s after boot. But phantom-updater rarely
+The v0.6.66 reconcile fired once ~30s after boot. But guardian-updater rarely
 restarts (its image isn't rebuilt on the dev cycle), so a connector pin that
 changed between restarts never reconciled into the running container — the
 cortex-xdr container went stale twice this way. The periodic loop closes that.

@@ -14,7 +14,7 @@
  *     only one ran. It re-resolves :dev tags into digests + republishes
  *     the dev-installer binary as the `dev-latest` GitHub prerelease.
  *
- *   - phantom-updater + phantom-browser DON'T rebuild on dev. The
+ *   - guardian-updater + guardian-browser DON'T rebuild on dev. The
  *     dev-installer pulls their digests from the latest customer
  *     release manifest ("STABLE-ADVANCED" carve-out). Fixes that touch
  *     updater/main.py only reach customers on a v0.5.x → v0.5.x+1
@@ -79,10 +79,10 @@ export function CicdBuildPipeline() {
 
         {/* 4 per-service workflows */}
         {[
-          { x: 60, name: "build-agent.yml", paths: "mcp/agent/** OR bundles/spark/**", image: "phantom-agent:dev" },
-          { x: 320, name: "build-connectors.yml", paths: "bundles/spark/connectors/**", image: "phantom-connector-*:dev" },
-          { x: 580, name: "build-caldera.yml", paths: "third_party/caldera/**", image: "phantom-caldera:dev" },
-          { x: 840, name: "build-xlog.yml", paths: "xlog/**", image: "phantom-xlog:dev" },
+          { x: 60, name: "build-agent.yml", paths: "mcp/agent/** OR bundles/spark/**", image: "guardian-agent:dev" },
+          { x: 320, name: "build-connectors.yml", paths: "bundles/spark/connectors/**", image: "guardian-connector-*:dev" },
+          { x: 580, name: "build-caldera.yml", paths: "third_party/caldera/**", image: "guardian-caldera:dev" },
+          { x: 840, name: "build-xlog.yml", paths: "xlog/**", image: "guardian-xlog:dev" },
         ].map((s) => (
           <g key={s.name}>
             <rect x={s.x} y="240" width="240" height="110" rx="12" className="pipe-job" />
@@ -104,7 +104,7 @@ export function CicdBuildPipeline() {
         <text x="600" y="478" textAnchor="middle" className="cicd-card-title">build-dev-installer.yml (workflow_run cascade)</text>
         <text x="600" y="500" textAnchor="middle" className="node-subtitle">re-resolves :dev tags into digests + writes manifest.env</text>
         <text x="600" y="520" textAnchor="middle" className="muted" fontSize="11">
-          → publishes `dev-latest` GitHub prerelease · stages /home/$USER/phantom-installer-dev on self-hosted runner
+          → publishes `dev-latest` GitHub prerelease · stages /home/$USER/guardian-installer-dev on self-hosted runner
         </text>
 
         {/* Arrows from each job to dev-installer */}
@@ -115,7 +115,7 @@ export function CicdBuildPipeline() {
 
         {/* STABLE-ADVANCED carve-out — bottom row, dashed boxes */}
         <rect x="60" y="600" width="500" height="120" rx="12" className="pipe-skipped" />
-        <text x="310" y="628" textAnchor="middle" className="cicd-card-title" style={{fontSize: 14}}>phantom-updater + phantom-browser</text>
+        <text x="310" y="628" textAnchor="middle" className="cicd-card-title" style={{fontSize: 14}}>guardian-updater + guardian-browser</text>
         <text x="310" y="650" textAnchor="middle" className="node-subtitle">NOT built on dev cycle</text>
         <text x="310" y="672" textAnchor="middle" className="muted" fontSize="11">dev-installer pulls these digests from the latest</text>
         <text x="310" y="688" textAnchor="middle" className="muted" fontSize="11">customer release manifest (STABLE-ADVANCED)</text>
@@ -127,7 +127,7 @@ export function CicdBuildPipeline() {
         <text x="890" y="628" textAnchor="middle" className="cicd-card-title" style={{fontSize: 14}}>release.yml (on tag push)</text>
         <text x="890" y="650" textAnchor="middle" className="node-subtitle">git tag vX.Y.Z && git push origin vX.Y.Z</text>
         <text x="890" y="672" textAnchor="middle" className="muted" fontSize="11">rebuilds ALL services (or retags unchanged ones)</text>
-        <text x="890" y="688" textAnchor="middle" className="muted" fontSize="11">incl. phantom-updater + phantom-browser</text>
+        <text x="890" y="688" textAnchor="middle" className="muted" fontSize="11">incl. guardian-updater + guardian-browser</text>
         <text x="890" y="708" textAnchor="middle" className="state-success-fill" fontSize="11" fontFamily='"JetBrains Mono", monospace'>
           this is when updater/browser fixes actually ship
         </text>

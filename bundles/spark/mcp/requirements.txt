@@ -31,7 +31,7 @@ pypdf>=5.0.0
 
 # OpenTelemetry — distributed tracing pillar. Auto-instruments the
 # embedded MCP's Starlette app + outbound httpx calls. Active only
-# when PHANTOM_OTEL=1 AND OTEL_EXPORTER_OTLP_ENDPOINT is set; otherwise
+# when GUARDIAN_OTEL=1 AND OTEL_EXPORTER_OTLP_ENDPOINT is set; otherwise
 # the install() function is a no-op and these deps cost nothing at
 # runtime. SDK + HTTP exporter total ~4MB on disk.
 opentelemetry-api>=1.30.0
@@ -41,7 +41,7 @@ opentelemetry-instrumentation-starlette>=0.51b0
 opentelemetry-instrumentation-httpx>=0.51b0
 
 # AES-GCM encryption-at-rest for the SecretStore. Operator supplies a
-# 32-byte KEK via PHANTOM_SECRET_KEK; values are encrypted before
+# 32-byte KEK via GUARDIAN_SECRET_KEK; values are encrypted before
 # touching disk. When the env var is unset the store falls back to
 # the legacy plaintext mode with a loud warning (preserves upgrade
 # compatibility for existing deploys).
@@ -49,7 +49,7 @@ cryptography>=42.0.0
 
 # v0.1.27 — `web` connector (headless browser). Playwright Python
 # library only; the actual Chromium binaries live in the profile-gated
-# `phantom-browser` sidecar (chromedp/headless-shell), so this image
+# `guardian-browser` sidecar (chromedp/headless-shell), so this image
 # stays ~250MB lighter than `playwright install chromium` would make
 # it. The connector uses `connect_over_cdp` to drive the sidecar.
 # Trafilatura provides the readable-content extractor for `get_text`

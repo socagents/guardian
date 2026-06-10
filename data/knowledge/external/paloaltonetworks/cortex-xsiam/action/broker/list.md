@@ -2,7 +2,7 @@
 
 **HTTP**: `POST /public_api/v1/broker/list_brokers/`
 **MCP tool**: `xsiam_broker_list`
-**Phantom connector**: `xsiam`
+**Guardian connector**: `xsiam`
 
 ## Purpose
 

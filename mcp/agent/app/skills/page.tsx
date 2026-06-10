@@ -6,7 +6,7 @@ import { ImportSkillButton } from "./import-button";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-// Phantom skill categories mirror the on-disk layout under
+// Guardian skill categories mirror the on-disk layout under
 // bundles/spark/mcp/skills/ — foundation primitives, scenario
 // runbooks, validation queries, end-to-end workflows, and (v0.1.34+)
 // plugin-contributed skills under plugins/<vendor>/<skill>.md.
@@ -145,7 +145,7 @@ const SUMMARY_CAPTIONS = {
   invocationsDelta: "Tracking not yet implemented",
 } as const;
 
-// Phantom is single-tenant — there are no workspaces. The Workspaces
+// Guardian is single-tenant — there are no workspaces. The Workspaces
 // column on the skill detail panel still exists in the UI but the
 // data is empty. Future work: drop the entire workspace section from
 // the detail panel.
@@ -153,7 +153,7 @@ const DEFAULT_WORKSPACES: { name: string; slug: string; icon: string; enabled: b
 
 // ─── Mock Data ──────────────────────────────────────────────────────────────
 
-// ─── Phantom Skills (sourced from bundles/spark/mcp/skills/*) ─────────────
+// ─── Guardian Skills (sourced from bundles/spark/mcp/skills/*) ─────────────
 //
 // 5 skills shipped with the bundle, organized by the on-disk layout:
 //   foundation/  — Cortex KB search + XQL query-authoring helpers — 4 skills
@@ -184,8 +184,8 @@ const SKILLS: SkillDef[] = [
     charCount: 0,
     tokenCount: 0,
     maxConcurrentAgents: 0,
-    eligibleAgents: "phantom-agent",
-    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "phantom", color: "#1f7bff" }] },
+    eligibleAgents: "guardian-agent",
+    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
   },
   {
     id: "foundation-cortex-kb-search-patterns",
@@ -205,8 +205,8 @@ const SKILLS: SkillDef[] = [
     charCount: 0,
     tokenCount: 0,
     maxConcurrentAgents: 0,
-    eligibleAgents: "phantom-agent",
-    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "phantom", color: "#1f7bff" }] },
+    eligibleAgents: "guardian-agent",
+    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
   },
   {
     id: "foundation-cortex-kb-api-reference",
@@ -226,8 +226,8 @@ const SKILLS: SkillDef[] = [
     charCount: 0,
     tokenCount: 0,
     maxConcurrentAgents: 0,
-    eligibleAgents: "phantom-agent",
-    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "phantom", color: "#1f7bff" }] },
+    eligibleAgents: "guardian-agent",
+    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
   },
   {
     id: "foundation-cortex-xql-query-authoring",
@@ -247,8 +247,8 @@ const SKILLS: SkillDef[] = [
     charCount: 0,
     tokenCount: 0,
     maxConcurrentAgents: 0,
-    eligibleAgents: "phantom-agent",
-    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "phantom", color: "#1f7bff" }] },
+    eligibleAgents: "guardian-agent",
+    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
   },
   // ── Workflows ───────────────────────────────────────────────────────
   {
@@ -269,8 +269,8 @@ const SKILLS: SkillDef[] = [
     charCount: 0,
     tokenCount: 0,
     maxConcurrentAgents: 0,
-    eligibleAgents: "phantom-agent",
-    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "phantom", color: "#6a7cff" }] },
+    eligibleAgents: "guardian-agent",
+    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#6a7cff" }] },
   },
 ];
 
@@ -1031,7 +1031,7 @@ function SkillDetailPanel({
           </section>
 
           {/* v0.5.2 — "Workspace Assignment" + "Workspace Overrides"
-              sections removed. Phantom is a single-tenant operator
+              sections removed. Guardian is a single-tenant operator
               install: there is no workspace concept anywhere in the
               MCP, and the section's only message was a misleading
               "All workspaces using platform defaults" that implied a
@@ -1579,14 +1579,14 @@ function liveRowToSkillDef(row: LiveSkillRow): SkillDef {
     charCount: row.size_bytes || 0,
     tokenCount: Math.ceil((row.size_bytes || 0) / 4),
     maxConcurrentAgents: 0,
-    eligibleAgents: "phantom-agent",
+    eligibleAgents: "guardian-agent",
     analytics: {
       calls24h: 0,
       calls7d: 0,
       calls30d: 0,
       avgContextTokens: 0,
       activeAgents: 1,
-      topAgents: [{ name: "phantom", color: "#1f7bff" }],
+      topAgents: [{ name: "guardian", color: "#1f7bff" }],
     },
   };
 }
@@ -1873,7 +1873,7 @@ export default function SkillsPage() {
           </div>
           {/* v0.1.34+ — dropped the "Production-Cluster-Alpha" workspace
               selector that ported over from the Spark workspace UI.
-              Phantom is a single-tenant agent install; there's no
+              Guardian is a single-tenant agent install; there's no
               workspace concept here, so the selector was decorative
               at best and misleading at worst (suggesting a multi-
               tenant model that doesn't exist). Header now carries

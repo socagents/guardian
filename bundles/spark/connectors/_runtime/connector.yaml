@@ -10,7 +10,7 @@
 #   2. Replace "_runtime" with your id in this file, the Dockerfile,
 #      and the source.
 #   3. Add a toolConnectors[] entry in bundles/spark/manifest.yaml.
-#   4. Add a "Build or retag phantom-connector-<id>" step in
+#   4. Add a "Build or retag guardian-connector-<id>" step in
 #      .github/workflows/release.yml (mirror the existing 4 entries).
 
 id: "_runtime"
@@ -28,9 +28,9 @@ source:
 runtimeMapping:
   style: "container"
   # functionPrefix is unused for style: container, but stays here as
-  # documentation — connector source MAY use the `phantom_<id>_*`
+  # documentation — connector source MAY use the `guardian_<id>_*`
   # convention if the author prefers grep-friendly function names.
-  functionPrefix: "phantom__runtime_"
+  functionPrefix: "guardian__runtime_"
 
 executionMode: "persistent"
 
@@ -47,14 +47,14 @@ configSchema:
 
 # Slot definitions for secret material (API keys, tokens, etc.).
 # When the operator submits the form, values for these slots are
-# encrypted via the SecretStore (using PHANTOM_SECRET_KEK) and only
+# encrypted via the SecretStore (using GUARDIAN_SECRET_KEK) and only
 # resolved at tool-call time inside the connector container.
 secretSlots: []
 
 # Public tool surface. Each entry's `name` is the bare tool name
 # the agent's MCP proxy forwards to. The connector container's
 # FastMCP server registers tools under these exact names (the runtime
-# entrypoint's prefix-stripping logic turns `phantom__runtime_demo_echo`
+# entrypoint's prefix-stripping logic turns `guardian__runtime_demo_echo`
 # in the source into `demo_echo` on the wire).
 spec:
   tools:

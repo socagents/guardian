@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom Chat Turn Lifecycle — sequence diagram of one chat turn.
+ * Guardian Chat Turn Lifecycle — sequence diagram of one chat turn.
  *
  * Visualises the 12 numbered steps the chat-route handler runs for
  * every turn, mapped across 4 swim lanes (browser · agent · MCP ·
@@ -254,14 +254,14 @@ const LANES = [
     ),
   },
   {
-    name: "phantom-agent",
+    name: "guardian-agent",
     sub: "Next.js · :3000",
     iconPath: (
       <polyline points="2,-9 -4,2 1,2 -2,9 4,-2 -1,-2 2,-9" />
     ),
   },
   {
-    name: "phantom-mcp",
+    name: "guardian-mcp",
     sub: "FastMCP · :8080",
     iconPath: (
       <g>

@@ -21,7 +21,7 @@ function mcpPingUrl(mcpUrl: string) {
     url.search = '';
     return url.toString();
   } catch {
-    return 'http://phantom-mcp:8080/ping/';
+    return 'http://guardian-mcp:8080/ping/';
   }
 }
 
@@ -69,15 +69,15 @@ export async function GET() {
   // mode (TLS-by-default since v0.1.11), public 3000 is the HTTPS proxy
   // and Next.js binds the loopback HTTP port 3001 — so an HTTP probe to
   // localhost:3000 fails the TLS handshake. The entrypoint exports
-  // PHANTOM_AGENT_INTERNAL_URL=http://127.0.0.1:3001 specifically for
+  // GUARDIAN_AGENT_INTERNAL_URL=http://127.0.0.1:3001 specifically for
   // in-process round-trips like this; honor it and fall back to the
   // legacy URL for non-TLS deploys.
   const selfBase =
-    process.env.PHANTOM_AGENT_INTERNAL_URL?.trim() ||
+    process.env.GUARDIAN_AGENT_INTERNAL_URL?.trim() ||
     'http://localhost:3000';
   const probes = await Promise.all([
-    probe('phantom-mcp', mcpPingUrl(runtimeConfig.MCP_URL)),
-    probe('phantom-agent', `${selfBase.replace(/\/$/, '')}/api/auth/status`),
+    probe('guardian-mcp', mcpPingUrl(runtimeConfig.MCP_URL)),
+    probe('guardian-agent', `${selfBase.replace(/\/$/, '')}/api/auth/status`),
   ]);
 
   const failed = probes.filter((result) => result.status === 'failed');

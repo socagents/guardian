@@ -9,9 +9,9 @@ import { QueryBar } from "@/components/observability/query-bar";
 import { listJobs } from "@/lib/api/jobs";
 
 /**
- * Logs page — phantom version.
+ * Logs page — guardian version.
  *
- * Phantom doesn't ship Loki. The closest equivalent for "structured
+ * Guardian doesn't ship Loki. The closest equivalent for "structured
  * application logs" is the audit log: every meaningful state change
  * (tool call, scenario started, secret rotated, settings changed,
  * approval resolved) is recorded with a timestamp, actor, action,
@@ -27,7 +27,7 @@ import { listJobs } from "@/lib/api/jobs";
  *
  * For deeper structured-stdout streaming (think: every container
  * stderr line in real time), wire a Loki collector at the agent's
- * stdout — phantom emits structured-JSON via standard logging.
+ * stdout — guardian emits structured-JSON via standard logging.
  * That's an opt-in upgrade; this page works without it.
  */
 
@@ -126,7 +126,7 @@ export default function LogsPage() {
             <h1 className="font-headline text-3xl font-bold tracking-tight text-on-surface">Logs</h1>
           </div>
           <p className="text-sm text-on-surface-variant ml-9">
-            Live tail of phantom&apos;s structured event log (audit stream). Connection is SSE; reconnects with backoff if dropped.
+            Live tail of guardian&apos;s structured event log (audit stream). Connection is SSE; reconnects with backoff if dropped.
           </p>
         </div>
         <span className="glass-panel flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-medium">

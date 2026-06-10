@@ -1,7 +1,7 @@
 """Phase 7 verification — exercise the approvals bus end-to-end.
 
-Run inside the phantom-mcp container with PYTHONPATH=/app/src:
-  docker compose exec -T phantom-mcp python /app/src/../scripts/verify_phase7.py
+Run inside the guardian-mcp container with PYTHONPATH=/app/src:
+  docker compose exec -T guardian-mcp python /app/src/../scripts/verify_phase7.py
 
 What it covers:
   1. request() inserts a pending row

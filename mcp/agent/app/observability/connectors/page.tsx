@@ -279,8 +279,8 @@ export default function ConnectorsHealthPage() {
  * StackImagesSection — v0.3.0+ image-digest panel.
  *
  * Renders two sub-tables:
- *   1. Stack-tier services (3 rows: phantom-agent, phantom-updater,
- *      phantom-browser) with their pinned digest
+ *   1. Stack-tier services (3 rows: guardian-agent, guardian-updater,
+ *      guardian-browser) with their pinned digest
  *      and a "digest" or "tag (legacy)" badge. The badge serves as
  *      a tripwire — on a clean v0.3.0+ install all 3 should show
  *      "digest"; any "tag (legacy)" badge means the operator's .env
@@ -357,7 +357,7 @@ function StackImagesSection({ digests }: { digests: DigestsResponse }) {
               title={
                 row.pinned
                   ? "Image is pinned by content digest"
-                  : "Tag-based pinning (pre-v0.3.0 fallback). Re-run phantom-installer to apply the digest manifest."
+                  : "Tag-based pinning (pre-v0.3.0 fallback). Re-run guardian-installer to apply the digest manifest."
               }
             >
               {row.pinned ? "digest" : "tag (legacy)"}

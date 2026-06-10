@@ -139,7 +139,7 @@ export default function ApiCatalogPage() {
             </button>
             <a
               href="/api/agent/openapi"
-              download="phantom-agent-openapi.json"
+              download="guardian-agent-openapi.json"
               className="w-10 h-10 rounded-lg flex items-center justify-center text-on-primary bg-primary hover:opacity-90 transition-opacity"
               title="Download OpenAPI JSON"
               aria-label="Download OpenAPI JSON"
@@ -371,7 +371,7 @@ function OpenApiModal({ onClose }: { onClose: () => void }) {
           </button>
           <a
             href={`/api/agent/openapi?format=${format}`}
-            download={`phantom-agent-openapi.${format}`}
+            download={`guardian-agent-openapi.${format}`}
             className="px-3 py-2 rounded-lg text-xs font-medium text-on-primary bg-primary hover:opacity-90 transition-opacity"
           >
             <span className="material-symbols-outlined text-base align-middle mr-1">

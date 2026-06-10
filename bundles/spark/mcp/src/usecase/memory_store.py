@@ -14,7 +14,7 @@ value)` and `memory_search(query, limit)` built-in tools call into it.
 
 # Why a brute-force scan is fine here
 
-With the operator-scale workloads Phantom targets (a SOC analyst's
+With the operator-scale workloads Guardian targets (a SOC analyst's
 day-to-day notes, target hostnames, recent IOCs), memory tables will
 sit in the low thousands of rows. Even with 768-dim float32 vectors,
 that's ~3 MB scanned per search — well under 100ms on any modern
@@ -74,7 +74,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Protocol
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 DEFAULT_EMBED_DIMS = 768  # matches manifest.memory.embeddingDims

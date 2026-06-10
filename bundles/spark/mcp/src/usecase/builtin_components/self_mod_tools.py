@@ -51,7 +51,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -593,7 +593,7 @@ def metrics_snapshot(name_prefix: str | None = None) -> dict[str, Any]:
     /api/v1/metrics/snapshot but returns parsed values, not just kinds.
 
     Args:
-        name_prefix: optional filter (e.g. "phantom_embedder_" returns
+        name_prefix: optional filter (e.g. "guardian_embedder_" returns
             just embedder stats).
 
     Returns {metrics: {name: {kind, values}}, count}.
@@ -653,7 +653,7 @@ def health_status() -> dict[str, Any]:
 
     Determines embedder_mode by inspecting the live `get_embedder()`
     singleton FIRST (most reliable — None means TextHash boot path was
-    chosen), then falls back to PHANTOM_EMBEDDER_MODE env var if the
+    chosen), then falls back to GUARDIAN_EMBEDDER_MODE env var if the
     singleton accessor isn't available. The env var alone is unreliable
     for cross-process readers (docker exec, subprocess test runners).
     """
@@ -668,10 +668,10 @@ def health_status() -> dict[str, Any]:
             out["embedder_mode"] = "vertex"
         else:
             out["embedder_mode"] = os.environ.get(
-                "PHANTOM_EMBEDDER_MODE", "stub"
+                "GUARDIAN_EMBEDDER_MODE", "stub"
             )
     except Exception:
-        out["embedder_mode"] = os.environ.get("PHANTOM_EMBEDDER_MODE", "unknown")
+        out["embedder_mode"] = os.environ.get("GUARDIAN_EMBEDDER_MODE", "unknown")
     if out["embedder_mode"] != "vertex":
         out["ok"] = False
         out["embedder_warning"] = (
@@ -935,7 +935,7 @@ async def jobs_update(
             keep current state.
         bypass_approvals: toggle the per-job auto-approval flag.
             When true, every dispatch for this job carries
-            `X-Phantom-Approval-Bypass: 1` so the MCP-side Phase-11
+            `X-Guardian-Approval-Bypass: 1` so the MCP-side Phase-11
             gate skips the operator-confirmation dance for tools in
             manifest.approvals.humanRequired[]. Audit rows still
             record each fired tool with `auto_approved=true` and
@@ -1559,7 +1559,7 @@ async def instances_delete(instance_id: str) -> dict[str, Any]:
     backend until the operator runs setup again.
 
     For container-style connectors (web, cortex-content, etc.), the
-    phantom-updater daemon also stops + removes the per-instance docker
+    guardian-updater daemon also stops + removes the per-instance docker
     container associated with this instance — call this tool, don't
     `docker stop` manually. Other instances of the same connector are
     unaffected.
@@ -2287,14 +2287,14 @@ async def agent_batch_propose(actions: list[dict[str, Any]]) -> dict[str, Any]:
 # manifest pre-registration loop).
 #
 # Metric design:
-#   - phantom_batch_proposals_total{approved="true"|"false"}
+#   - guardian_batch_proposals_total{approved="true"|"false"}
 #       counter — every agent_batch_propose call increments once. Lets
 #       the operator see batch usage AND the deny-rate over time.
-#   - phantom_batch_actions_total{tool="...",result="success"|"fail"}
+#   - guardian_batch_actions_total{tool="...",result="success"|"fail"}
 #       counter — one inc per action inside a batch. The tool label
 #       reveals which tools dominate batch traffic; the result label
 #       splits success vs failure for per-tool reliability dashboards.
-#   - phantom_batch_size (histogram, custom count-buckets 1/2/3/5/10/25)
+#   - guardian_batch_size (histogram, custom count-buckets 1/2/3/5/10/25)
 #       distribution of batch sizes. Bucket choice matches the v0.3.10
 #       25-action cap — a value above the top bucket would mean
 #       validation regressed (the eager check should block it).
@@ -2309,12 +2309,12 @@ def _emit_batch_proposal_metric(*, approved: bool, size: int) -> None:
         if reg is None:
             return
         c = reg.counter(
-            "phantom_batch_proposals_total",
+            "guardian_batch_proposals_total",
             "agent_batch_propose calls broken down by outcome (approved/denied)",
         )
         c.inc(approved=str(approved).lower())
         h = reg.histogram(
-            "phantom_batch_size",
+            "guardian_batch_size",
             "distribution of agent_batch_propose batch sizes",
             buckets=(1.0, 2.0, 3.0, 5.0, 10.0, 25.0),
         )
@@ -2335,7 +2335,7 @@ def _emit_batch_action_metric(tool_name: str, result: str) -> None:
         if reg is None:
             return
         c = reg.counter(
-            "phantom_batch_actions_total",
+            "guardian_batch_actions_total",
             "individual action executions inside batches, labeled by tool + result",
         )
         c.inc(tool=tool_name, result=result)

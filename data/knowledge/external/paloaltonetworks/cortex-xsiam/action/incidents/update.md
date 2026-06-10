@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/incidents/update_incident/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id`)
 **MCP tool**: `xsiam_incidents_update`
-**Phantom connector**: `xsiam`
+**Guardian connector**: `xsiam`
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/xsiam/xsiam-api/xsiam-apis/incident-management/update-incident
 
@@ -59,4 +59,4 @@ Update one XDR incident's mutable metadata fields — status, severity, assignee
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_incidents_update`
+- Guardian tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_incidents_update`

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PhantomMCPClient, MCPTool } from '@/lib/mcp-client';
+import { GuardianMCPClient, MCPTool } from '@/lib/mcp-client';
 import { GoogleAuth } from 'google-auth-library';
 import { callMcpServer } from '@/lib/mcp-proxy';
 import { getEffectiveRuntimeConfig } from '@/lib/runtime-config';
@@ -118,7 +118,7 @@ async function safeAudit(
         duration_ms: args.durationMs,
         metadata: args.metadata ?? {},
       },
-      headers: args.trigger ? { 'X-Phantom-Trigger': args.trigger } : undefined,
+      headers: args.trigger ? { 'X-Guardian-Trigger': args.trigger } : undefined,
     });
   } catch (err) {
     console.warn(
@@ -388,7 +388,7 @@ async function runSubagent(args: {
   parentTools: Array<{ functionDeclarations: unknown }>;
   runtimeConfig: EffectiveRuntimeConfig;
   parentModel: string | undefined;
-  mcpClient: PhantomMCPClient;
+  mcpClient: GuardianMCPClient;
   sendEvent: (kind: string, data: unknown) => void;
 }): Promise<SubagentRunResult> {
   const startedAt = Date.now();
@@ -445,7 +445,7 @@ async function runSubagent(args: {
       {
         method: 'GET',
         headers: args.trigger
-          ? { 'X-Phantom-Trigger': args.trigger }
+          ? { 'X-Guardian-Trigger': args.trigger }
           : undefined,
       },
     );
@@ -513,7 +513,7 @@ async function runSubagent(args: {
         },
       },
       headers: args.trigger
-        ? { 'X-Phantom-Trigger': args.trigger }
+        ? { 'X-Guardian-Trigger': args.trigger }
         : undefined,
     });
     subagentSessionId =
@@ -554,7 +554,7 @@ async function runSubagent(args: {
         },
       },
       headers: args.trigger
-        ? { 'X-Phantom-Trigger': args.trigger }
+        ? { 'X-Guardian-Trigger': args.trigger }
         : undefined,
     });
     taskId = taskResp?.task?.id;
@@ -668,7 +668,7 @@ async function runSubagent(args: {
               progress_label: `turn ${turnsUsed}/${agentDef.max_turns}: ${functionCalls.length} tool(s)`,
             },
             headers: args.trigger
-              ? { 'X-Phantom-Trigger': args.trigger }
+              ? { 'X-Guardian-Trigger': args.trigger }
               : undefined,
           },
         ).catch(() => {});
@@ -847,7 +847,7 @@ async function runSubagent(args: {
           output: errorMessage ?? finalResponse,
         },
         headers: args.trigger
-          ? { 'X-Phantom-Trigger': args.trigger }
+          ? { 'X-Guardian-Trigger': args.trigger }
           : undefined,
       },
     ).catch(() => {});
@@ -968,11 +968,11 @@ async function callGeminiRaw(
  * produced wrong connector_ids for connectors whose function prefix
  * differs from their id:
  *   xdr_get_cases_and_issues  → "xdr"      WRONG (id is "cortex-xdr")
- *   phantom_web_navigate      → "phantom"  WRONG (id is "web")
+ *   guardian_web_navigate      → "guardian"  WRONG (id is "web")
  *   cortex_search             → "cortex"   WRONG (id is "cortex-docs")
  *
  * Resulting bug: connector failures + successes recorded against
- * non-existent connector_ids ("xdr", "phantom", "cortex"); the
+ * non-existent connector_ids ("xdr", "guardian", "cortex"); the
  * connector_auth_required UI event fired with the wrong id; the
  * /observability/connectors state machine missed real failures for
  * cortex-xdr, cortex-docs, cortex-content, and web.
@@ -989,7 +989,7 @@ function deriveConnectorId(toolName: string): string | null {
     return toolName.split('.', 2)[0];
   }
   // Legacy flat aliases — order matters (longer prefixes first).
-  if (toolName.startsWith('phantom_web_')) return 'web';
+  if (toolName.startsWith('guardian_web_')) return 'web';
   if (toolName.startsWith('xdr_')) return 'cortex-xdr';
   if (toolName.startsWith('xsiam_')) return 'xsiam';
   if (toolName.startsWith('cortex_')) {
@@ -1031,7 +1031,7 @@ async function recordConnectorFailure(
         method: 'POST',
         body: { error: args.error, is_auth_error: args.isAuthError },
         headers: args.trigger
-          ? { 'X-Phantom-Trigger': args.trigger }
+          ? { 'X-Guardian-Trigger': args.trigger }
           : undefined,
       },
     );
@@ -1054,7 +1054,7 @@ async function recordConnectorSuccess(
       {
         method: 'POST',
         body: {},
-        headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+        headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
       },
     );
   } catch {
@@ -1165,10 +1165,10 @@ async function safePersist(
       {
         method: 'POST',
         body: payload,
-        // Forward X-Phantom-Trigger so the MCP-side audit row that
+        // Forward X-Guardian-Trigger so the MCP-side audit row that
         // gets written for this message append carries the same
         // trigger tag as the originating chat turn (e.g. `job:foo`).
-        headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+        headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
       },
     );
   } catch (err) {
@@ -1230,7 +1230,7 @@ function renderMessageForReplay(
     //
     // 1 MiB ceiling here is a SAFETY VALVE, not a budget cap: catches
     // pathological "tool returns a 100 MB blob" cases without
-    // affecting any real phantom workload. Phantom's largest known
+    // affecting any real guardian workload. Guardian's largest known
     // tool output (`xsiam_get_dataset_fields` field catalog) is ~17 KB,
     // ~62x under this cap.
     //
@@ -1285,7 +1285,7 @@ function renderMessageForReplay(
 // per-model differences materialize at the rendering layer, not the
 // fetch layer.
 //
-// Note: this is a per-process cache. Phantom runs as a single Next.js
+// Note: this is a per-process cache. Guardian runs as a single Next.js
 // server, so per-process is per-instance. If we ever scale-out the
 // agent (multiple replicas behind a load balancer), this cache will
 // silently de-dup per-replica, not globally — fine for short-TTL data
@@ -1319,7 +1319,7 @@ async function fetchSessionMessagesWithCache(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/messages?limit=300&ascending=false`,
       {
         method: 'GET',
-        headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+        headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
       },
     );
     const newestFirst = Array.isArray(data?.messages) ? data.messages : [];
@@ -1381,7 +1381,7 @@ async function loadSessionPreferredModel(
       session?: { meta?: Record<string, unknown> };
     }>(`/api/v1/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'GET',
-      headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+      headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
     });
     const raw = data?.session?.meta?.['preferred_model'];
     const value =
@@ -1410,7 +1410,7 @@ async function loadSessionPreferredModel(
  * Values:
  *   'manual' (default): every gated tool call shows an inline approval
  *     card and blocks until the operator clicks Approve.
- *   'bypass': the chat handler attaches X-Phantom-Approval-Bypass: 1
+ *   'bypass': the chat handler attaches X-Guardian-Approval-Bypass: 1
  *     to every MCP call, so gated tools auto-approve (still recording
  *     audit rows with auto_approved=true).
  *
@@ -1441,7 +1441,7 @@ async function loadSessionApprovalMode(
       session?: { meta?: Record<string, unknown> };
     }>(`/api/v1/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'GET',
-      headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+      headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
     });
     const raw = data?.session?.meta?.['approval_mode'];
     const value: ApprovalMode = raw === 'bypass' ? 'bypass' : 'manual';
@@ -2224,7 +2224,7 @@ function sanitizeSchema(
 }
 
 async function getGeminiTools(
-  mcpClient: PhantomMCPClient,
+  mcpClient: GuardianMCPClient,
   runtimeConfig: EffectiveRuntimeConfig,
   logDebug: (stage: string, detail: string) => void,
   subagentsEnabled: boolean,
@@ -2290,7 +2290,7 @@ type GeminiCallPayload = {
   // sentence (the v0.1.36 backup/restore plan, the v0.2.2 attack-chain
   // skill executions, etc). The Trevor_-_Bot Slack integration that
   // shares this MCP server doesn't set the cap and handles long
-  // responses fine; bringing Phantom's chat handler onto the same
+  // responses fine; bringing Guardian's chat handler onto the same
   // pattern. Now caller-overridable via an optional explicit
   // maxOutputTokens; default = unset = let Gemini use the model max.
   generationConfig?: {
@@ -2389,7 +2389,7 @@ function detectPlaceholderCredential(
     );
   }
   // Common sample client_email patterns — the `@y.com` style we saw in
-  // the wild on phantom-vm, plus `@example.com`, `@test.com`.
+  // the wild on guardian-vm, plus `@example.com`, `@test.com`.
   const clientEmail = String(credentials.client_email);
   if (
     /^[^@]+@y\.com$/i.test(clientEmail) ||
@@ -2557,7 +2557,7 @@ async function callGeminiWithVertex(
   // system prompt sent on every turn, that's the kind of saving
   // that makes a difference at scale.
   //
-  // OPT-IN VIA ENV: gated behind `PHANTOM_VERTEX_CACHE=1`. The
+  // OPT-IN VIA ENV: gated behind `GUARDIAN_VERTEX_CACHE=1`. The
   // initial deploy of Phase 6 broke the CI smoke-test's manual-job
   // path on gemini-3.1-pro-preview — the model accepts the
   // cachedContents create call but rejects subsequent
@@ -2568,7 +2568,7 @@ async function callGeminiWithVertex(
   // model+region combination supports it. Direct API key path is
   // unaffected either way (Phase 6 only touches Vertex).
   let requestPayload: GeminiCallPayload | (Omit<GeminiCallPayload, 'systemInstruction'> & { cachedContent: string }) = payload;
-  const cacheEnabled = process.env.PHANTOM_VERTEX_CACHE === '1';
+  const cacheEnabled = process.env.GUARDIAN_VERTEX_CACHE === '1';
   const systemPromptText =
     payload.systemInstruction?.parts
       ?.map((p) => ('text' in p && p.text) || '')
@@ -2905,7 +2905,7 @@ async function callGemini(
  *
  * Patterned on SnowAgent's plan-mode instructions
  * (snow-agent-complete/snow-agent/06-tools-permissions/),
- * adapted for Phantom's SOC vocabulary.
+ * adapted for Guardian's SOC vocabulary.
  */
 const PLAN_MODE_INSTRUCTIONS = `You are in PLAN MODE. The operator
 asked you to enumerate the steps you would take WITHOUT actually
@@ -2913,7 +2913,7 @@ calling any tools. Output a numbered plan in plain markdown.
 
 Each step MUST include:
 
-  1. The tool name you'd invoke (use Phantom's actual tool names —
+  1. The tool name you'd invoke (use Guardian's actual tool names —
      xsiam.run_xql_query, xdr.get_cases_and_issues,
      xsiam.get_asset_by_id, xsiam.add_lookup_data, etc).
   2. The key arguments you'd pass (don't paste full schemas; just
@@ -3037,7 +3037,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
             `/api/v1/sessions/${encodeURIComponent(sessionId)}/messages?limit=1000&ascending=true`,
             {
               method: 'GET',
-              headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+              headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
             },
           );
           priorMessages = Array.isArray(data?.messages) ? data.messages : [];
@@ -3219,7 +3219,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           {
             method: 'POST',
             body: {},
-            headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+            headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
           },
         );
       } catch (err) {
@@ -3239,7 +3239,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           {
             method: 'POST',
             body: { user: 'operator', title: null, meta: {} },
-            headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+            headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
           },
         );
         newSessionId = created?.session?.id ?? `s_${crypto.randomUUID()}`;
@@ -3297,7 +3297,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           `/api/v1/audit?action=chat_turn_cost&target=session:${encodeURIComponent(sessionId)}&limit=1000`,
           {
             method: 'GET',
-            headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+            headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
           },
         );
         const todayMidnight = new Date();
@@ -3309,7 +3309,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           `/api/v1/audit?action=chat_turn_cost&since=${encodeURIComponent(todayIso)}&limit=1000`,
           {
             method: 'GET',
-            headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+            headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
           },
         );
         const [sessionData, todayData] = await Promise.all([
@@ -3379,7 +3379,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           `/api/v1/tasks?active_only=1&limit=50`,
           {
             method: 'GET',
-            headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+            headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
           },
         );
         const tasks = data.tasks ?? [];
@@ -3596,7 +3596,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           {
             method: 'PATCH',
             body: { metadata: { preferred_model: newValue } },
-            headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+            headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
           },
         );
         invalidateSessionPreferredModelCache(sessionId);
@@ -3680,7 +3680,7 @@ function stableStringify(value: unknown): string {
     .join(',')}}`;
 }
 
-// v0.17.131 (#129) — detect the {ok:false} failure envelope Phantom MCP tools
+// v0.17.131 (#129) — detect the {ok:false} failure envelope Guardian MCP tools
 // return on a SOFT failure (not an exception). marketplace_install and many
 // others report "not found" / "already exists" / "extraction failed" this way,
 // so a model that retries the identical failing call loops invisibly past the
@@ -3704,7 +3704,7 @@ function resultFailureText(result: unknown): string | null {
 }
 
 // Poll/wait tools legitimately re-issue the SAME (tool, args) call many times
-// (e.g. phantom_web_wait_for) and may transiently report a
+// (e.g. guardian_web_wait_for) and may transiently report a
 // not-yet-ready state — they must never be short-circuited by the failed-call
 // loop-breaker below.
 function isPollTool(toolName: string): boolean {
@@ -3725,14 +3725,14 @@ export async function POST(request: NextRequest) {
   // turns, we default to "chat:<sessionId>" right after sessionId
   // is resolved below — that way the operator typing in the UI
   // also gets a stable origin in audit + approvals tables.
-  let trigger = request.headers.get('x-phantom-trigger') || undefined;
+  let trigger = request.headers.get('x-guardian-trigger') || undefined;
 
   const stream = new ReadableStream({
     async start(controller) {
       // SSE wire format aligned with Spark's parseSSEEvent (lib/api/chat.ts):
       // each frame is a named event with a JSON-encoded `data:` line.
       // Spark's parser returns null if the `event:` line is absent, so the
-      // earlier "data: {type, ...}" shape phantom shipped pre-#5 was being
+      // earlier "data: {type, ...}" shape guardian shipped pre-#5 was being
       // silently dropped by the new chat UI — that's the chat-no-response
       // bug. Send named events here; the hook reads `event.type` to switch.
       let eventCounter = 0;
@@ -3825,7 +3825,7 @@ export async function POST(request: NextRequest) {
             }>('/api/v1/sessions', {
               method: 'POST',
               body: { user: 'operator', title: null, meta: {} },
-              headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+              headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
             });
             const id = created?.session?.id;
             if (id) {
@@ -3855,7 +3855,7 @@ export async function POST(request: NextRequest) {
         sendEvent('meta', {
           run_id: `r_${crypto.randomUUID()}`,
           session_id: sessionId,
-          agent_id: 'phantom-soc-ir',
+          agent_id: 'guardian-soc-ir',
         });
 
         // Round-15 / Phase H — RunStart hook fire-site. Hooks can
@@ -3949,7 +3949,7 @@ export async function POST(request: NextRequest) {
         }
 
         const logDebug = (_stage: string, _detail: string) => {
-          // Debug events were a phantom-specific concept (the old chat
+          // Debug events were a guardian-specific concept (the old chat
           // page rendered them in a "Live telemetry" sidecar). Spark's
           // chat UI has its own thinking-section component; suppress
           // these for now rather than emit them as malformed Spark events.
@@ -3969,7 +3969,7 @@ export async function POST(request: NextRequest) {
 
         // v0.1.27 — resolve approval bypass for this turn. Two sources:
         //   (a) the inbound request already carries
-        //       `X-Phantom-Approval-Bypass` (a job dispatch from the
+        //       `X-Guardian-Approval-Bypass` (a job dispatch from the
         //       scheduler with bypass_approvals=true), OR
         //   (b) session.metadata.approval_mode === 'bypass' (the chat
         //       UI dropdown set it).
@@ -3977,10 +3977,10 @@ export async function POST(request: NextRequest) {
         // downstream MCP call so the trigger_context middleware on the
         // MCP side flips the contextvar gate_and_execute reads.
         const bypassFromInbound =
-          (request.headers.get('x-phantom-approval-bypass') || '')
+          (request.headers.get('x-guardian-approval-bypass') || '')
             .trim()
             .toLowerCase() === '1' ||
-          (request.headers.get('x-phantom-approval-bypass') || '')
+          (request.headers.get('x-guardian-approval-bypass') || '')
             .trim()
             .toLowerCase() === 'true';
         const sessionApprovalMode = isNewSession
@@ -4000,16 +4000,16 @@ export async function POST(request: NextRequest) {
         logDebug('mcp', `Connecting to MCP at ${runtimeConfig.MCP_URL}`);
         // Compose the extraHeaders dict so the MCP client attaches it
         // to every tool dispatch. Reserved-name precedence inside
-        // PhantomMCPClient.headers() ensures Content-Type / Authorization
+        // GuardianMCPClient.headers() ensures Content-Type / Authorization
         // / mcp-* aren't accidentally clobbered if extras collide.
         const mcpExtraHeaders: Record<string, string> = {};
-        if (trigger) mcpExtraHeaders['X-Phantom-Trigger'] = trigger;
-        if (approvalBypass) mcpExtraHeaders['X-Phantom-Approval-Bypass'] = '1';
-        const mcpClient = new PhantomMCPClient(
+        if (trigger) mcpExtraHeaders['X-Guardian-Trigger'] = trigger;
+        if (approvalBypass) mcpExtraHeaders['X-Guardian-Approval-Bypass'] = '1';
+        const mcpClient = new GuardianMCPClient(
           runtimeConfig.MCP_URL,
           runtimeConfig.MCP_TOKEN,
-          // Forward X-Phantom-Trigger + (when active)
-          // X-Phantom-Approval-Bypass to every MCP tool dispatch so
+          // Forward X-Guardian-Trigger + (when active)
+          // X-Guardian-Approval-Bypass to every MCP tool dispatch so
           // audit rows for tools called during this chat inherit the
           // trigger tag AND so the MCP-side gate_and_execute reads the
           // bypass contextvar. The MCP's trigger_context middleware
@@ -4442,7 +4442,7 @@ export async function POST(request: NextRequest) {
         // 20-step evidence-collection sweep with room to spare.
         // Operators can tune via env var.
         const MAX_AGENT_TURNS = (() => {
-          const raw = process.env.PHANTOM_CHAT_MAX_TURNS;
+          const raw = process.env.GUARDIAN_CHAT_MAX_TURNS;
           if (!raw) return 30;
           const n = parseInt(raw, 10);
           return Number.isFinite(n) && n >= 5 && n <= 200 ? n : 30;
@@ -5085,7 +5085,7 @@ export async function POST(request: NextRequest) {
               // v0.6.42 — use the helper. Pre-v0.6.42 inline
               // split('_', 1)[0] returned wrong connector_ids for
               // connectors whose function prefix differs from their
-              // id (xdr_*, phantom_*, phantom_web_*, cortex_*).
+              // id (xdr_*, guardian_*, guardian_web_*, cortex_*).
               const connectorId = deriveConnectorId(toolName);
               if (connectorId) {
                 void recordConnectorFailure(connectorId, {
@@ -5517,7 +5517,7 @@ export async function POST(request: NextRequest) {
                       ? { metadata: { scheduled_by: scheduledBy } }
                       : {}),
                   },
-                  headers: trigger ? { 'X-Phantom-Trigger': trigger } : undefined,
+                  headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
                 },
               );
             } catch (err) {

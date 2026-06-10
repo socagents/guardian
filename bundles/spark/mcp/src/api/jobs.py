@@ -33,7 +33,7 @@ from api.auth import require_bearer
 from usecase.audit_log import reset_current_actor, set_current_actor
 from usecase.job_scheduler import CroniterJobScheduler
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_job_routes(mcp: FastMCP, sched: CroniterJobScheduler) -> None:
@@ -64,7 +64,7 @@ def register_job_routes(mcp: FastMCP, sched: CroniterJobScheduler) -> None:
         The /jobs UI page reads this on every load; when count > 0 it
         shows a banner pointing the operator at the file list. Each
         entry's basename + error reason is enough for the operator to
-        either fix the YAML in place (docker exec phantom_agent vi
+        either fix the YAML in place (docker exec guardian_agent vi
         /app/data/jobs/<basename>) or delete it if it's stale.
 
         Read-only — no auto-quarantine, no auto-delete, no operator-

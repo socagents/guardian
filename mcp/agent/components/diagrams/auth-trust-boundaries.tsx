@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Phantom Auth & Trust Boundaries.
+ * Guardian Auth & Trust Boundaries.
  *
  * Concentric trust zones, outermost to innermost:
- *   Operator → Phantom Agent → MCP server → External connectors / Secret store
+ *   Operator → Guardian Agent → MCP server → External connectors / Secret store
  *
  * Each boundary crossing is labelled with the auth header it requires.
  * The right column shows the 3-tier tool gating ladder, with the
@@ -201,7 +201,7 @@ export function AuthTrustBoundaries() {
           y={cy - agentRy + 26}
           fill="var(--dgm-edge-operator)"
         >
-          PHANTOM-AGENT · :3000
+          GUARDIAN-AGENT · :3000
         </text>
 
         <ellipse className="zone mcp" cx={cx} cy={cy} rx={mcpRx} ry={mcpRy} />
@@ -211,7 +211,7 @@ export function AuthTrustBoundaries() {
           y={cy - mcpRy + 24}
           fill="var(--dgm-edge-shared)"
         >
-          PHANTOM-MCP
+          GUARDIAN-MCP
         </text>
 
         <ellipse className="zone inner" cx={cx} cy={cy} rx={innerRx} ry={innerRy} />
@@ -249,7 +249,7 @@ export function AuthTrustBoundaries() {
           textAnchor="middle"
           className="actor-detail"
         >
-          KEK from $PHANTOM_SECRET_KEK
+          KEK from $GUARDIAN_SECRET_KEK
         </text>
         <text
           x={cx}

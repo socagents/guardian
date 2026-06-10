@@ -2,7 +2,7 @@
  * Model pricing table — Round-15 / Phase $.
  *
  * Per-model dollar-per-million-tokens rates for the Vertex / direct
- * Gemini models Phantom supports today. Used to compute per-turn USD
+ * Gemini models Guardian supports today. Used to compute per-turn USD
  * cost from `usageMetadata.{promptTokenCount, cachedContentTokenCount,
  * candidatesTokenCount}`.
  *

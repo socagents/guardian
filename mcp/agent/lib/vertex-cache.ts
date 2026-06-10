@@ -7,7 +7,7 @@
  * the regular rate, so for a system prompt that ships identically
  * across thousands of turns the savings are real.
  *
- * Phantom's stable system prompt (Phase 1.3 extracted to
+ * Guardian's stable system prompt (Phase 1.3 extracted to
  * `lib/system-prompt.ts`) is ~13k tokens. With `gemini-2.5-flash`'s
  * 1024-token cache minimum, this is well above the floor; with
  * `gemini-2.5-pro`'s 32k minimum (sometimes; varies by region and

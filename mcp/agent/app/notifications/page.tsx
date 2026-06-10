@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
-// Adapter — translate the phantom MCP's notification row shape
+// Adapter — translate the guardian MCP's notification row shape
 // (id/topic/message/created_at/acked_at) into the Spark UI's
 // Notification interface (title/description/icon/iconBg/iconColor/etc.).
 // Topic-prefix conventions:
@@ -130,7 +130,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Live load from the phantom MCP's notification store via the
+  // Live load from the guardian MCP's notification store via the
   // /api/agent/* proxy. Empty store → empty UI ("0 of 0"); no demo
   // fallback so the page reflects real operator state at all times.
   useEffect(() => {

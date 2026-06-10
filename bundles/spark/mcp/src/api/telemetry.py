@@ -28,7 +28,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.telemetry import SqliteTelemetryStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_telemetry_routes(mcp: FastMCP, store: SqliteTelemetryStore) -> None:

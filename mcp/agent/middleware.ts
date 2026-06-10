@@ -15,7 +15,7 @@
  * with NO cookies and get 200/201 back. The deployment relied on the
  * network boundary (IAP tunnel) as the only auth gate. Defense-in-shallow.
  *
- * v0.9.1 adds a session-cookie check at the SERVER tier. Same `phantom_session`
+ * v0.9.1 adds a session-cookie check at the SERVER tier. Same `guardian_session`
  * cookie AuthGate reads on the client; same `validateSession` call the
  * `/api/auth/status` route makes. The cookie's value must validate against
  * the MCP-side session store; absence OR invalid value → 401 JSON.
@@ -93,7 +93,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   // API-key bearer path (v0.17.108) — checked BEFORE the cookie. An
-  // `Authorization: Bearer phantom_ak_*` authenticates programmatic
+  // `Authorization: Bearer guardian_ak_*` authenticates programmatic
   // clients; absence falls through to the session-cookie path below
   // (human UI auth, unchanged → zero regression). Coarse scopes gate
   // read vs write; credential-management routes are denied even with
@@ -121,7 +121,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  if (authz.toLowerCase().startsWith("bearer phantom_ak_")) {
+  if (authz.toLowerCase().startsWith("bearer guardian_ak_")) {
     const apiKey = authz.slice("bearer ".length).trim();
     const keyResult = await validateApiKey(apiKey);
     if (!keyResult.valid) {

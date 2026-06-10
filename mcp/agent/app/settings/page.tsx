@@ -11,7 +11,7 @@ type PanelView = null | string; // service name or null
 interface ServiceDef {
   name: string;
   icon: string;
-  language: string; // free-form for phantom (e.g. "Python 3.12 / FastAPI")
+  language: string; // free-form for guardian (e.g. "Python 3.12 / FastAPI")
   description: string;
   layer: string;
   port: string;
@@ -48,11 +48,11 @@ interface LayerGroup {
   services: ServiceDef[];
 }
 
-// ── Phantom service inventory ──────────────────────────────────────────────
+// ── Guardian service inventory ──────────────────────────────────────────────
 //
-// Phantom is a compact Docker Compose stack — much smaller than the Spark
+// Guardian is a compact Docker Compose stack — much smaller than the Spark
 // workspace. The layer groupings here track the compose topology:
-//   Cognitive    → phantom-agent (Next.js + embedded MCP)
+//   Cognitive    → guardian-agent (Next.js + embedded MCP)
 //   Storage      → sqlite (in-process, embedded in MCP)
 // Connector tools (xsiam, cortex-xdr, cortex-docs, cortex-content, web)
 // run inside the embedded MCP / per-instance containers, not as compose
@@ -66,30 +66,30 @@ const LAYER_GROUPS: LayerGroup[] = [
     textColor: "text-primary-fixed-dim",
     services: [
       {
-        name: "phantom-agent", icon: "smart_toy", language: "TypeScript / Next.js 15",
+        name: "guardian-agent", icon: "smart_toy", language: "TypeScript / Next.js 15",
         description: "Operator UI + chat orchestrator. Routes prompts through Vertex/Gemini, fans tool calls into the embedded MCP.",
         layer: "Cognitive", port: ":3000", healthEndpoint: "/api/auth/status",
         envVars: [
-          { key: "MCP_URL", value: "http://phantom-mcp:8080/api/v1/stream/mcp" },
+          { key: "MCP_URL", value: "http://guardian-mcp:8080/api/v1/stream/mcp" },
           { key: "MCP_TOKEN", value: "(container env)", masked: true },
           { key: "GEMINI_API_KEY", value: "(operator-supplied)", masked: true },
           { key: "GOOGLE_APPLICATION_CREDENTIALS", value: "(Vertex SA JSON)", masked: true },
-          { key: "UI_USER", value: "phantom" },
+          { key: "UI_USER", value: "guardian" },
           { key: "UI_PASSWORD", value: "(operator-supplied)", masked: true },
         ],
         dependencies: [
-          { name: "phantom-mcp", icon: "extension" },
+          { name: "guardian-mcp", icon: "extension" },
         ],
       },
       {
-        name: "phantom-mcp (embedded)", icon: "extension", language: "Python 3.12 / FastMCP",
+        name: "guardian-mcp (embedded)", icon: "extension", language: "Python 3.12 / FastMCP",
         description: "MCP server hosting the connector tool catalog (xsiam, cortex-xdr, cortex-docs, cortex-content, web). Sqlite-backed audit, sessions, secrets, settings.",
         layer: "Cognitive", port: ":8080", healthEndpoint: "/api/v1/health",
         envVars: [
           { key: "MCP_TRANSPORT", value: "streamable-http" },
           { key: "MCP_PATH", value: "/api/v1/stream/mcp" },
           { key: "MCP_TOKEN", value: "(generated at boot if absent)", masked: true },
-          { key: "PHANTOM_SECRET_KEK", value: "(operator-supplied for encryption-at-rest)", masked: true },
+          { key: "GUARDIAN_SECRET_KEK", value: "(operator-supplied for encryption-at-rest)", masked: true },
         ],
         dependencies: [],
       },
@@ -102,11 +102,11 @@ const LAYER_GROUPS: LayerGroup[] = [
     services: [
       {
         name: "sqlite (embedded)", icon: "database", language: "C / sqlite3",
-        description: "In-process sqlite databases under /app/data/ for audit, sessions, memories, jobs, notifications, api_keys, settings, instances. No separate process — lives inside phantom-mcp.",
+        description: "In-process sqlite databases under /app/data/ for audit, sessions, memories, jobs, notifications, api_keys, settings, instances. No separate process — lives inside guardian-mcp.",
         layer: "Storage", port: "(in-process)", healthEndpoint: "n/a",
         envVars: [
-          { key: "PHANTOM_DATA_ROOT", value: "/app/data" },
-          { key: "PHANTOM_SECRET_KEK", value: "(AES-256-GCM KEK for secret encryption-at-rest)", masked: true },
+          { key: "GUARDIAN_DATA_ROOT", value: "/app/data" },
+          { key: "GUARDIAN_SECRET_KEK", value: "(AES-256-GCM KEK for secret encryption-at-rest)", masked: true },
         ],
         dependencies: [],
       },

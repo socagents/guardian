@@ -29,5 +29,5 @@ Disable one or more IoCs — XDR stops alerting/blocking on them. Use when an op
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_ioc_disable`
+- Guardian tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_ioc_disable`
 - Companion: `xsiam_ioc_enable` (re-enables); `xsiam_ioc_insert_json` (initial upload).

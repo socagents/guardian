@@ -18,7 +18,7 @@ a process restart to re-run iter_registrations and pick up new
 instances. The CRUD response includes `requires_mcp_restart: true` so
 clients (the agent) can show the right UX. Live re-advertisement is a
 follow-up — the simplest path is to fire `docker compose restart
-phantom-mcp` after a successful CRUD; fastmcp 2.13+ may support
+guardian-mcp` after a successful CRUD; fastmcp 2.13+ may support
 notifications/tools/list_changed but I haven't validated that path yet.
 """
 
@@ -38,7 +38,7 @@ from usecase.connector_probes import PROBE_IMPLEMENTED, real_probe
 from usecase.connector_state import get_connector_state_store
 from usecase.instance_store import Instance, InstanceStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _instance_to_dict(
@@ -60,7 +60,7 @@ def _instance_to_dict(
     provided, the secrets dict is returned as cleartext via
     ``inst.resolved_secrets(secret_store)`` — used by the backup
     feature so the resulting zip is restore-complete on a different
-    deployment with a different PHANTOM_SECRET_KEK. Without
+    deployment with a different GUARDIAN_SECRET_KEK. Without
     ``secret_store`` (legacy callers), the raw secret_refs (paths,
     not values) are returned for back-compat.
     """
@@ -86,7 +86,7 @@ def _instance_to_dict(
         "enabled": inst.enabled,
         "state": state,
         # v0.6.50 — added container_url to the response shape. Field
-        # exists on the Instance dataclass (set by phantom-updater's
+        # exists on the Instance dataclass (set by guardian-updater's
         # _agent_set_container_url callback for style:container
         # connectors) but this serializer was silently dropping it.
         # Caught during a bug-scan pass: SQLite row had a valid
@@ -142,14 +142,14 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
     # ─── v0.1.31 — connector container lifecycle helpers (Phase 2) ───────
     #
     # When a connector's connector.yaml has runtimeMapping.style: container,
-    # the agent's instance create/delete handlers also call phantom-updater
+    # the agent's instance create/delete handlers also call guardian-updater
     # to start/stop the per-instance container. Without these calls, the
     # connector_loader's container branch (P1.7) finds container-style
     # instances with no container_url set and tool calls error out at the
     # proxy with "container_url not set."
     #
-    # phantom-updater is at PHANTOM_UPDATER_URL (default
-    # http://phantom-updater:8090) and authenticated by the same MCP_TOKEN
+    # guardian-updater is at GUARDIAN_UPDATER_URL (default
+    # http://guardian-updater:8090) and authenticated by the same MCP_TOKEN
     # the agent uses for /api/v1 — both services inherit it from the host
     # .env at startup.
 
@@ -198,8 +198,8 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
     def _connector_image_ref(connector_id: str) -> str | None:
         """Read the optional `image` field from a connector.yaml.
 
-        v0.5.0: bundle connectors leave this empty (phantom-updater
-        derives ghcr.io/<owner>/phantom-connector-<id>:<version>).
+        v0.5.0: bundle connectors leave this empty (guardian-updater
+        derives ghcr.io/<owner>/guardian-connector-<id>:<version>).
         User-uploaded connectors MUST declare an `image` ref (enforced
         at upload time by api/marketplace.py). Returns None when no
         explicit image is declared.
@@ -214,9 +214,9 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
         """Slug an instance name for safe use in URL paths + docker
         container names.
 
-        phantom-updater validates path segments against
+        guardian-updater validates path segments against
         `^[a-zA-Z0-9_-]+$` (updater/src/main.py:_validate_path_segments)
-        and uses the segment verbatim in `phantom-connector-<id>-<name>`
+        and uses the segment verbatim in `guardian-connector-<id>-<name>`
         docker container names. Display names with spaces, slashes, or
         accented characters break BOTH the URL routing AND the docker-
         name constraint.
@@ -252,13 +252,13 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
     async def _updater_start(
         connector_id: str, instance_name: str, instance_id: str,
     ) -> dict[str, Any] | None:
-        """Call phantom-updater to start a connector container. Returns
+        """Call guardian-updater to start a connector container. Returns
         the response body on success; None on failure (logged, not
         re-raised — the instance row is created either way; operators
         can retry the start via UI/API).
 
         v0.5.0: passes an optional `image_ref` body field for
-        user-uploaded connectors. Phantom-updater uses the explicit
+        user-uploaded connectors. Guardian-updater uses the explicit
         image when present (skipping its own derivation), or falls
         back to its derivation for bundle connectors.
 
@@ -272,7 +272,7 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
 
         instance_slug = _slug_instance_name(instance_name)
         updater_url = os.environ.get(
-            "PHANTOM_UPDATER_URL", "http://phantom-updater:8090"
+            "GUARDIAN_UPDATER_URL", "http://guardian-updater:8090"
         ).rstrip("/")
         url = (
             f"{updater_url}/api/v1/connectors/{connector_id}"
@@ -292,7 +292,7 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
                 )
             if resp.status_code >= 300:
                 logger.warning(
-                    "phantom-updater start returned %d for %s/%s "
+                    "guardian-updater start returned %d for %s/%s "
                     "(body=%.300s)",
                     resp.status_code, connector_id, instance_name, resp.text,
                 )
@@ -300,7 +300,7 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
             return resp.json()
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "could not call phantom-updater start for %s/%s: %s",
+                "could not call guardian-updater start for %s/%s: %s",
                 connector_id, instance_name, exc,
             )
             return None
@@ -308,7 +308,7 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
     async def _updater_stop(
         connector_id: str, instance_name: str,
     ) -> bool:
-        """Call phantom-updater to stop a connector container. Returns
+        """Call guardian-updater to stop a connector container. Returns
         True on success or 'not_running' (idempotent), False on actual
         failure. Synchronous so the row delete waits for the container
         to be gone.
@@ -321,7 +321,7 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
 
         instance_slug = _slug_instance_name(instance_name)
         updater_url = os.environ.get(
-            "PHANTOM_UPDATER_URL", "http://phantom-updater:8090"
+            "GUARDIAN_UPDATER_URL", "http://guardian-updater:8090"
         ).rstrip("/")
         url = (
             f"{updater_url}/api/v1/connectors/{connector_id}"
@@ -336,14 +336,14 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
                 )
             if resp.status_code >= 300:
                 logger.warning(
-                    "phantom-updater stop returned %d for %s/%s",
+                    "guardian-updater stop returned %d for %s/%s",
                     resp.status_code, connector_id, instance_name,
                 )
                 return False
             return True
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "could not call phantom-updater stop for %s/%s: %s",
+                "could not call guardian-updater stop for %s/%s: %s",
                 connector_id, instance_name, exc,
             )
             return False
@@ -431,7 +431,7 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
             )
 
             # v0.1.31 (Phase 2): if this connector has style: container,
-            # also start the per-instance container via phantom-updater.
+            # also start the per-instance container via guardian-updater.
             # Returns the updater response (with container_url) on
             # success; None on failure — we still return 201 because
             # the row was created. Operators can retry the start via
@@ -537,7 +537,7 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
         Honored body fields:
           * enabled: bool         — toggles connector_state.disabled
                                     (instance↔connector is 1:1 in
-                                    single-tenant Phantom)
+                                    single-tenant Guardian)
           * name: str             — rename
           * config: dict          — replace the config blob
           * secrets: dict         — rotate one or more secret slots
@@ -678,13 +678,13 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
     async def set_instance_container_url(request: Request) -> JSONResponse:
         """v0.1.30 — set or clear the per-instance container_url for
         connectors with `runtimeMapping.style: container` in their
-        connector.yaml. Called by phantom-updater after each
+        connector.yaml. Called by guardian-updater after each
         start/stop/restart of a connector container (P1.9 endpoints).
 
         Body:
           * container_url: str | null — the URL where the connector
                                         container's MCP listens
-                                        (e.g. http://phantom-connector-
+                                        (e.g. http://guardian-connector-
                                         web-acme:9000). null clears
                                         the routing entry (used by
                                         the stop endpoint).
@@ -693,12 +693,12 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
         {updated: true, instance_id, container_url} on success.
 
         Auth: same MCP_TOKEN bearer the rest of /api/v1 uses.
-        Phantom-updater holds this token via env-var inheritance from
+        Guardian-updater holds this token via env-var inheritance from
         the same .env file.
         """
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("system:phantom-updater")
+        actor_token = set_current_actor("system:guardian-updater")
         try:
             instance_id = request.path_params["instance_id"]
             try:

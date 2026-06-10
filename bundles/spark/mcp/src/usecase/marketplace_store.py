@@ -84,7 +84,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 LEGACY_JSON_FILE = "marketplace_installs.json"

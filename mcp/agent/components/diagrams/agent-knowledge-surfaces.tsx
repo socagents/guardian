@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom Agent Knowledge Surfaces.
+ * Guardian Agent Knowledge Surfaces.
  *
  * Three knowledge surfaces the agent draws on at runtime: Tools (MCP
  * tools registered from connector code), Skills (markdown procedural
@@ -162,7 +162,7 @@ const COLUMNS: KnowledgeColumn[] = [
       {
         tag: "BUNDLE",
         name: "kbs/*/entries/*.md",
-        detail: "phantom-soc · xql-examples (162 entries)",
+        detail: "guardian-soc · xql-examples (162 entries)",
       },
       {
         tag: "LOADER",

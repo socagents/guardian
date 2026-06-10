@@ -64,7 +64,7 @@ The bundle follows the spec's split between two connector kinds:
 | `cortex-xdr` | `xdr_` | Cortex XDR Public API (operator's own tenant) |
 | `cortex-docs` | `cortex_` | Cortex documentation search |
 | `cortex-content` | `cortex_` | Baked content catalog shipped inside the agent image — no backing service |
-| `web` | `phantom_web_` | Headless-Chromium sidecar (CDP), profile-gated in compose |
+| `web` | `guardian_web_` | Headless-Chromium sidecar (CDP), profile-gated in compose |
 
 No connector is required at setup time — tool advertisement is
 instance-gated, so a connector's tools only appear in the agent's

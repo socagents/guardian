@@ -189,7 +189,7 @@
       <rect y="12" width="144" height="10" fill="#0E8A16"/>
       <text x="10" y="16" class="fpill" fill="#FFFFFF">5 · TESTING-DONE</text>
       <text x="10" y="40" class="fns" fill="#166534">Operator verified</text>
-      <text x="10" y="55" class="fc" fill="#166534">phantom-vm install</text>
+      <text x="10" y="55" class="fc" fill="#166534">guardian-vm install</text>
       <text x="10" y="67" class="fc" fill="#166534">+ smoke matrix passed</text>
       <text x="10" y="78" class="fpill" fill="#0E8A16">OPERATOR</text>
     </g>
@@ -298,7 +298,7 @@
         <use href="#i-download" x="10" y="10" width="18" height="18" color="#2563EB"/>
         <text x="34" y="24" class="fcard" fill="#1D4ED8">Install dev binary</text>
         <text x="10" y="44" class="fmono" fill="#1E40AF">sudo /home/ayman/</text>
-        <text x="10" y="56" class="fmono" fill="#1E40AF">phantom-installer-dev</text>
+        <text x="10" y="56" class="fmono" fill="#1E40AF">guardian-installer-dev</text>
       </g>
 
       <!-- Step 4: smoke test -->
@@ -354,7 +354,7 @@
         <use href="#i-package" x="10" y="10" width="18" height="18" color="#6366F1"/>
         <text x="34" y="24" class="fcard" fill="#3730A3">build-dev-installer.yml</text>
         <text x="10" y="42" class="fns" fill="#3730A3">resolve :dev digests · build binary</text>
-        <text x="10" y="56" class="fns" fill="#3730A3">stage at phantom-vm path</text>
+        <text x="10" y="56" class="fns" fill="#3730A3">stage at guardian-vm path</text>
         <text x="10" y="72" class="fc">REBUILT / UNCHANGED diagnostic</text>
       </g>
 
@@ -372,9 +372,9 @@
       <g transform="translate(780, 12)">
         <rect width="200" height="80" rx="8" fill="#DCFCE7" stroke="#86EFAC" stroke-width="1.5"/>
         <use href="#i-server" x="10" y="10" width="18" height="18" color="#22C55E"/>
-        <text x="34" y="24" class="fcard" fill="#166534">Staged on phantom-vm</text>
+        <text x="34" y="24" class="fcard" fill="#166534">Staged on guardian-vm</text>
         <text x="10" y="44" class="fmono" fill="#166534">/home/ayman/</text>
-        <text x="10" y="58" class="fmono" fill="#166534">phantom-installer-dev</text>
+        <text x="10" y="58" class="fmono" fill="#166534">guardian-installer-dev</text>
         <text x="10" y="72" class="fc">ready for operator</text>
       </g>
 
@@ -411,7 +411,7 @@
       <text x="10" y="44" class="fns" fill="#3730A3">• Build OR retag-from-prev per service</text>
       <text x="10" y="58" class="fns" fill="#3730A3">• Tag :vX.Y.Z + :MAJOR.MINOR + :latest</text>
       <text x="10" y="72" class="fns" fill="#3730A3">• Write release-manifest-vX.Y.Z.env</text>
-      <text x="10" y="86" class="fns" fill="#3730A3">• Build customer phantom-installer</text>
+      <text x="10" y="86" class="fns" fill="#3730A3">• Build customer guardian-installer</text>
     </g>
 
     <!-- Step 3: gh release create -->
@@ -419,7 +419,7 @@
       <rect width="210" height="100" rx="8" fill="#FEF3C7" stroke="#FDBA74" stroke-width="1.5"/>
       <use href="#i-cloud" x="10" y="10" width="18" height="18" color="#D97706"/>
       <text x="34" y="24" class="fcard" fill="#78350F">GitHub Release vX.Y.Z</text>
-      <text x="10" y="42" class="fns" fill="#78350F">+ phantom-installer asset</text>
+      <text x="10" y="42" class="fns" fill="#78350F">+ guardian-installer asset</text>
       <text x="10" y="56" class="fns" fill="#78350F">+ release-manifest-vX.Y.Z.env</text>
       <text x="10" y="70" class="fns" fill="#78350F">+ install-kit tarball</text>
       <text x="10" y="86" class="fc" fill="#78350F">delete dev-latest (cleanup)</text>
@@ -436,7 +436,7 @@
         <rect width="195" height="68" rx="6" fill="#DCFCE7" stroke="#86EFAC" stroke-width="1.5"/>
         <text x="10" y="16" class="fns" fill="#166534">A. Minor release · S1</text>
         <text x="10" y="32" class="fc" fill="#166534">re-run EXISTING installer</text>
-        <text x="10" y="46" class="fc" fill="#166534">(already on /opt/phantom/)</text>
+        <text x="10" y="46" class="fc" fill="#166534">(already on /opt/guardian/)</text>
         <text x="10" y="60" class="fc" fill="#166534">→ pulls newer images · same major</text>
       </g>
 
@@ -445,7 +445,7 @@
         <rect width="195" height="68" rx="6" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
         <text x="10" y="16" class="fns" fill="#1D4ED8">B. Major release · S2 / S3</text>
         <text x="10" y="32" class="fc" fill="#1D4ED8">download NEW installer</text>
-        <text x="10" y="46" class="fc" fill="#1D4ED8">sudo ./phantom-installer-v(X+1)</text>
+        <text x="10" y="46" class="fc" fill="#1D4ED8">sudo ./guardian-installer-v(X+1)</text>
         <text x="10" y="60" class="fc" fill="#1D4ED8">→ installer flag: keep/wipe volumes</text>
       </g>
 
@@ -588,13 +588,13 @@
       <!-- Column header: customer release tag -->
       <rect x="400" y="0" width="240" height="30" rx="4" fill="#FEF3C7" stroke="#FDBA74"/>
       <use href="#i-tag" x="408" y="6" width="16" height="16" color="#78350F"/>
-      <text x="430" y="12" class="fns" fill="#78350F">phantom-agent:vX.Y.Z</text>
+      <text x="430" y="12" class="fns" fill="#78350F">guardian-agent:vX.Y.Z</text>
       <text x="408" y="26" class="fc" fill="#78350F">customer release tag</text>
 
       <!-- Column header: dev tag -->
       <rect x="650" y="0" width="240" height="30" rx="4" fill="#EEF2FF" stroke="#A5B4FC"/>
       <use href="#i-package" x="658" y="6" width="16" height="16" color="#3730A3"/>
-      <text x="680" y="12" class="fns" fill="#3730A3">phantom-agent:dev</text>
+      <text x="680" y="12" class="fns" fill="#3730A3">guardian-agent:dev</text>
       <text x="658" y="26" class="fc" fill="#3730A3">dev tag (associated with dev-latest prerelease)</text>
 
       <!-- Row 1: customer PAT -->
@@ -679,8 +679,8 @@
       <text x="32" y="46" class="fns" fill="#166534">Re-run OLDER installer</text>
 
       <text x="10" y="68" class="fc" fill="#166534">1. gh release download vX.Y.Z-prior</text>
-      <text x="10" y="82" class="fc" fill="#166534">2. chmod +x phantom-installer</text>
-      <text x="10" y="96" class="fc" fill="#166534">3. sudo ./phantom-installer</text>
+      <text x="10" y="82" class="fc" fill="#166534">2. chmod +x guardian-installer</text>
+      <text x="10" y="96" class="fc" fill="#166534">3. sudo ./guardian-installer</text>
       <text x="10" y="110" class="fc" fill="#166534">  → "Downgrading vX.Y.Z+1 → vX.Y.Z"</text>
       <text x="10" y="124" class="fc" fill="#166534">  → pulls older digests · recreates</text>
       <text x="10" y="138" class="fc" fill="#166534">     only services with changed digest</text>
@@ -751,11 +751,11 @@
       <use href="#i-trash" x="10" y="34" width="16" height="16" color="#3730A3"/>
       <text x="32" y="46" class="fns" fill="#3730A3">Manual operator choice</text>
 
-      <text x="10" y="68" class="fmono" fill="#3730A3">sudo /opt/phantom/</text>
-      <text x="10" y="82" class="fmono" fill="#3730A3">  phantom-factory-reset</text>
+      <text x="10" y="68" class="fmono" fill="#3730A3">sudo /opt/guardian/</text>
+      <text x="10" y="82" class="fmono" fill="#3730A3">  guardian-factory-reset</text>
 
       <text x="10" y="104" class="fc" fill="#3730A3">• Type FACTORY RESET to confirm</text>
-      <text x="10" y="118" class="fc" fill="#3730A3">• Wipes phantom_* volumes</text>
+      <text x="10" y="118" class="fc" fill="#3730A3">• Wipes guardian_* volumes</text>
       <text x="10" y="132" class="fc" fill="#3730A3">• Preserves .env (KEK + creds)</text>
 
       <g transform="translate(10, 146)">
@@ -797,7 +797,7 @@
 
       <text x="10" y="114" class="fmono" fill="#0F172A">build-connectors.yml</text>
       <text x="240" y="114" class="fmono" fill="#475569">bundles/spark/connectors/**</text>
-      <text x="240" y="128" class="fmono" fill="#475569">phantom-connector-runtime/**</text>
+      <text x="240" y="128" class="fmono" fill="#475569">guardian-connector-runtime/**</text>
 
       <text x="10" y="148" class="fmono" fill="#0F172A">build-dev-installer.yml</text>
       <text x="240" y="148" class="fmono" fill="#475569">installer/**  +  workflow_run fan-in</text>

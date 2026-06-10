@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Phantom Next.js Agent Development Startup Script
+# Guardian Next.js Agent Development Startup Script
 
-echo "🚀 Starting Phantom Next.js Agent (Development Mode)"
+echo "🚀 Starting Guardian Next.js Agent (Development Mode)"
 echo ""
 
 # Check if .env.local exists
@@ -52,7 +52,7 @@ if command -v nc &> /dev/null; then
     else
         echo "   ⚠️  Cannot reach MCP server at $MCP_URL"
         echo "   Make sure the MCP server is running:"
-        echo "   docker-compose up phantom-mcp"
+        echo "   docker-compose up guardian-mcp"
     fi
 else
     echo "   ⚠️  'nc' command not found, skipping connectivity check"

@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/actions/get_action_status/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xsiam_response_get_action_status`
-**Phantom connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
+**Guardian connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/xsiam/xsiam-api/xsiam-apis/response-actions/get-action-status.html
 
@@ -42,5 +42,5 @@ Returns a GetActionStatus object if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_response_get_action_status`
+- Guardian tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_response_get_action_status`
 - Source mapping: `ebarti/cortex_xdr_client/api/actions_api.py` → `get_action_status`

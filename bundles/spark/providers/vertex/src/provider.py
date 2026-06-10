@@ -10,7 +10,7 @@ instance, and uses it to:
   - `chat(model_id, messages, **kwargs)` → run a chat completion
   - `embed(model_id, text)` → generate embeddings
 
-For Phantom's first cut, this class is a thin contract holder. The
+For Guardian's first cut, this class is a thin contract holder. The
 agent's actual Gemini calls still happen in the Next.js layer using
 `@google-cloud/aiplatform` against the same project_id + service
 account JSON the operator supplies at setup. Wiring those Next.js
@@ -25,7 +25,7 @@ import json
 import logging
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 class Provider:

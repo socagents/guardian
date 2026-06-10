@@ -1,5 +1,5 @@
 /**
- * Phantom v0.4.0 — runtime configuration resolution.
+ * Guardian v0.4.0 — runtime configuration resolution.
  *
  * Reads bundle-internal coordination from container env and operator-set
  * provider credentials from the MCP-side ProviderStore. Returns a single
@@ -45,7 +45,7 @@ export type RuntimeConfigValues = {
   GEMINI_MODEL?: string;
   SSL_CERT_PEM?: string;
   SSL_KEY_PEM?: string;
-  PHANTOM_TLS_VERIFY?: string;
+  GUARDIAN_TLS_VERIFY?: string;
   // Bundle-derived fields (connector configs) flow through here. Names
   // come from the bundle's connector.yaml configSchemas; we don't
   // enumerate them — consumers just read by key.
@@ -113,14 +113,14 @@ export async function getEffectiveRuntimeConfig(): Promise<EffectiveRuntimeConfi
     GEMINI_MODEL: get("GEMINI_MODEL", DEFAULT_MODEL),
     SSL_CERT_PEM: get("SSL_CERT_PEM"),
     SSL_KEY_PEM: get("SSL_KEY_PEM"),
-    PHANTOM_TLS_VERIFY: get("PHANTOM_TLS_VERIFY"),
+    GUARDIAN_TLS_VERIFY: get("GUARDIAN_TLS_VERIFY"),
     MCP_TOOL_CACHE_TTL_MS: clean(process.env.MCP_TOOL_CACHE_TTL_MS) || "300000",
   };
 }
 
 /**
  * Derive the MCP's HTTP base URL from a full MCP_URL.
- * E.g. "http://phantom-mcp:8080/api/v1/stream/mcp" → "http://phantom-mcp:8080"
+ * E.g. "http://guardian-mcp:8080/api/v1/stream/mcp" → "http://guardian-mcp:8080"
  *
  * Used by the /api/agent/* proxy routes that need to POST to admin
  * endpoints on the MCP at non-streamable paths.

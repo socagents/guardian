@@ -38,7 +38,7 @@ from api.auth import require_bearer
 from usecase.hook_store import SqliteHookStore
 from usecase.audit_log import SqliteAuditLog, set_current_actor, reset_current_actor
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 # Mirror the agent-side HOOK_EVENTS const so the MCP can reject
 # writes with unknown event names. Kept in sync manually; if the
@@ -351,7 +351,7 @@ def _validate_hook_payload(body: dict[str, Any]) -> str | None:
             return (
                 "'transport.handlerName' is required and must be a "
                 "non-empty string for plugin transport (the name of "
-                "an entry-point in the phantom.hooks group; see "
+                "an entry-point in the guardian.hooks group; see "
                 "/api/v1/plugin-hooks for the discovered list)"
             )
         p_config = transport.get("config")

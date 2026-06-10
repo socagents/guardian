@@ -68,8 +68,8 @@ Full discipline: see docs/CICD.md § Spec-driven workflow.
 
 ## Smoke-test bullets (cumulative)
 
-<!-- What the operator runs on phantom-vm after
-     `sudo phantom-installer-dev` to verify this change works.
+<!-- What the operator runs on guardian-vm after
+     `sudo guardian-installer-dev` to verify this change works.
      5-15 bullets. Each bullet:
        • Names a specific UI action OR shell command
        • Names the surface to verify (UI page / log file / endpoint)

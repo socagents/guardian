@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  * glows. Lifted from spark/services/ui's `app-shell.tsx`. Auth + setup
  * gating live one level up in `components/auth/auth-gate.tsx`; by the
  * time AppShell renders, the operator is authenticated and setup is
- * complete. Workspace-route handling (`/w/...`) is dropped — phantom
+ * complete. Workspace-route handling (`/w/...`) is dropped — guardian
  * is single-tenant.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {

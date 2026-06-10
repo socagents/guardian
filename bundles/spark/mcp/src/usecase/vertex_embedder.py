@@ -50,7 +50,7 @@ import threading
 from collections import OrderedDict
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 # Default model + dims per spec (manifest.memory.embeddingModel == "text-embedding-004").
 DEFAULT_MODEL = "text-embedding-004"

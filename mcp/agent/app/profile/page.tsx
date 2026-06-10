@@ -168,7 +168,7 @@ export default function ProfilePage() {
   }
 
   /**
-   * Sign-out flow: POST /api/auth/logout to clear the phantom_session
+   * Sign-out flow: POST /api/auth/logout to clear the guardian_session
    * cookie server-side, then hard-navigate to "/" (root).
    *
    * Why "/" and NOT "/login": there's no /login route in this app.
@@ -245,7 +245,7 @@ export default function ProfilePage() {
           <p className="text-sm text-on-surface-variant/85 leading-relaxed">
             You&apos;re signed in with the bootstrap default password
             (v0.5.5+: random per-install, sourced from{" "}
-            <code className="font-mono">PHANTOM_DEFAULT_ADMIN_PASSWORD</code>{" "}
+            <code className="font-mono">GUARDIAN_DEFAULT_ADMIN_PASSWORD</code>{" "}
             in your <code className="font-mono">.env</code>).
             Change it below before doing anything else. After you save,
             all current sessions will sign out and you&apos;ll be asked
@@ -472,7 +472,7 @@ export default function ProfilePage() {
             </h2>
             <p className="text-sm text-on-surface-variant/70 mt-2 leading-relaxed">
               End your current session on this device. The
-              <code className="font-mono mx-1">phantom_session</code>
+              <code className="font-mono mx-1">guardian_session</code>
               cookie is cleared and the matching server-side session is
               revoked. Other devices that share this session will sign
               out on their next request. In-flight chat streams and

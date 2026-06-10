@@ -311,7 +311,7 @@ async function runCommandHook(
   timeoutMs: number,
 ): Promise<HookResult | null> {
   // Lazy import — `child_process` isn't available on the Edge
-  // runtime. Phantom's chat route uses Node runtime (default).
+  // runtime. Guardian's chat route uses Node runtime (default).
   const { spawn } = await import("node:child_process");
   return new Promise((resolve, reject) => {
     const env = { ...process.env, ...resolveSecretEnv(transport.env ?? {}) };
@@ -469,7 +469,7 @@ async function runBuiltinHook(
 /**
  * Invoke a plugin-contributed handler via the MCP-side bridge.
  *
- * Plugin handlers live in Python (entry-point `phantom.hooks`). The
+ * Plugin handlers live in Python (entry-point `guardian.hooks`). The
  * hook-runner is TypeScript. We bridge by HTTP: POST the payload + the
  * operator's config to `/api/v1/plugin-hooks/{name}/invoke` on the
  * MCP, get back `{ok, result, duration_ms, ...}`, and translate that
@@ -568,7 +568,7 @@ async function runPluginHook(
 
 /**
  * Resolve `secret:<path>` values in env / headers maps. Secrets
- * are looked up via Phantom's runtime config (which already proxies
+ * are looked up via Guardian's runtime config (which already proxies
  * to MCP secret store / setup.json). Values that don't start with
  * `secret:` are passed through verbatim.
  *

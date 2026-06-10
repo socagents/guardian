@@ -28,7 +28,7 @@
  *     the test stays runnable on a fresh checkout.
  *   - When TS source changes, update the mirror below.
  *
- * Future work (out of Phase-3 scope): set up vitest if Phantom adds
+ * Future work (out of Phase-3 scope): set up vitest if Guardian adds
  * more test cases. For now, one script per testable lib module is
  * fine.
  */

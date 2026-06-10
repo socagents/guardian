@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/xql/start_xql_query/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_xql_start_query`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api/cortex-xdr-apis/xql-apis/start-xql-query.html
 
@@ -47,5 +47,5 @@ String representing the unique ID generate by the response to Start XQL Query AP
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_xql_start_query`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_xql_start_query`
 - Source mapping: `ebarti/cortex_xdr_client/api/xql_api.py` → `start_xql_query`

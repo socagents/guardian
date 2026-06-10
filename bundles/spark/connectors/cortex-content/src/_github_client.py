@@ -40,14 +40,14 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP.cortex-content")
+logger = logging.getLogger("Guardian MCP.cortex-content")
 
 # Default cache root — overridable per-instance via the cacheDir
-# config when phantom-updater spawns per-instance connectors. For the
+# config when guardian-updater spawns per-instance connectors. For the
 # in-process v0.3.7 connector this lives under /app/data which is
 # already a volume mount so the cache survives container restarts.
 DEFAULT_CACHE_ROOT = Path(
-    os.getenv("PHANTOM_DATA_ROOT", "/app/data")
+    os.getenv("GUARDIAN_DATA_ROOT", "/app/data")
 ).resolve() / "cortex-content-cache"
 
 
@@ -164,7 +164,7 @@ class GitHubClient:
     def _headers(self, accept: str = "application/vnd.github+json") -> dict[str, str]:
         h = {
             "Accept": accept,
-            "User-Agent": "phantom-agent-cortex-content/0.3.7",
+            "User-Agent": "guardian-agent-cortex-content/0.3.7",
             "X-GitHub-Api-Version": "2022-11-28",
         }
         if self.github_token:
@@ -198,7 +198,7 @@ class GitHubClient:
         req = urllib.request.Request(
             url,
             headers={
-                "User-Agent": "phantom-agent-cortex-content/0.3.7",
+                "User-Agent": "guardian-agent-cortex-content/0.3.7",
                 **({"Authorization": f"Bearer {self.github_token}"} if self.github_token else {}),
             },
         )

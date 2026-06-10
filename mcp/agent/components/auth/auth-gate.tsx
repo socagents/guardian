@@ -96,13 +96,13 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/logo.svg"
-          alt="Phantom"
+          alt="Guardian"
           width={96}
           height={96}
           className="drop-shadow-[0_0_20px_rgba(45,141,240,0.35)]"
         />
         <div className="text-base font-medium text-slate-200 tracking-wide">
-          Starting up Phantom
+          Starting up Guardian
           <span className="ml-1 inline-block animate-pulse">…</span>
         </div>
       </div>

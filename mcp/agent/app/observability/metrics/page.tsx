@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * Metrics page — phantom version. Parses /api/v1/metrics
+ * Metrics page — guardian version. Parses /api/v1/metrics
  * (Prometheus text format) client-side and lists every emitted
  * series with its labels and value. No PromQL, no Grafana — just a
  * searchable table over what the embedded MCP currently exposes.

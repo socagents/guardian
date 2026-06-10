@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Combined phantom-agent entrypoint.
+# Combined guardian-agent entrypoint.
 #
 # Spawns the bundle's embedded MCP server alongside the Next.js agent
 # UI in the same container — matching the spark-agents v1.2 bundle
@@ -24,7 +24,7 @@ log() { printf '[entrypoint] %s\n' "$*"; }
 #
 # v0.3.2+ — per-release marker-driven merge.
 #
-# Stamps `${SKILLS_DIR}/.seeded_version` with PHANTOM_VERSION on every
+# Stamps `${SKILLS_DIR}/.seeded_version` with GUARDIAN_VERSION on every
 # successful seed/merge. Subsequent boots compare the marker against
 # the running release; if they differ, the new release's image-baked
 # defaults get merged into the volume (cp -r — overwrites same-named
@@ -59,10 +59,10 @@ SKILLS_MARKER="${SKILLS_DIR}/.seeded_version"
 mkdir -p "$SKILLS_DIR"
 
 # Read the running version from env. Falls back to "dev" for local
-# builds with no PHANTOM_VERSION baked in; this is fine because
+# builds with no GUARDIAN_VERSION baked in; this is fine because
 # repeat dev-mode boots will all share the "dev" marker and not
 # re-merge unless explicitly forced.
-RUNNING_VERSION="${PHANTOM_VERSION:-dev}"
+RUNNING_VERSION="${GUARDIAN_VERSION:-dev}"
 SEEDED_VERSION="$(cat "$SKILLS_MARKER" 2>/dev/null || echo "")"
 
 skills_seed() {
@@ -165,20 +165,20 @@ fi
 #      to spec without operator intervention.
 #
 # Mechanism: 2048-bit self-signed cert written to /tls/cert.pem +
-# /tls/key.pem on the phantom_tls volume. The agent reads them via
+# /tls/key.pem on the guardian_tls volume. The agent reads them via
 # SSL_CERT_FILE/SSL_KEY_FILE.
 #
 # When the operator picks "custom" TLS in the setup form, /api/setup
 # overwrites /tls/{cert,key}.pem with their PEM. When they pick
 # "self-signed", /api/setup keeps the auto-generated material. Either
 # way /tls/ is populated, so this entrypoint reuses it on next boot.
-PHANTOM_AUTO_TLS=0
+GUARDIAN_AUTO_TLS=0
 TLS_DIR="/tls"
 TLS_CERT="$TLS_DIR/cert.pem"
 TLS_KEY="$TLS_DIR/key.pem"
 SETUP_JSON="/app/runtime/setup.json"
 
-# The phantom_tls volume is the single source of truth for certs.
+# The guardian_tls volume is the single source of truth for certs.
 # The agent writes /tls/cert.pem + /tls/key.pem and reads them via
 # SSL_CERT_FILE below.
 #
@@ -206,17 +206,17 @@ if [ ! -f "$TLS_CERT" ] || [ ! -f "$TLS_KEY" ]; then
   # boot responsive on weak VMs.
   openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
     -keyout "$TLS_KEY" -out "$TLS_CERT" \
-    -subj "/CN=phantom-setup/O=Phantom/OU=Auto-generated" \
-    -addext "subjectAltName=DNS:localhost,DNS:phantom-agent,IP:127.0.0.1" \
+    -subj "/CN=guardian-setup/O=Guardian/OU=Auto-generated" \
+    -addext "subjectAltName=DNS:localhost,DNS:guardian-agent,IP:127.0.0.1" \
     -addext "extendedKeyUsage=serverAuth" \
     2>/dev/null
   chmod 600 "$TLS_KEY"
   chmod 644 "$TLS_CERT"
-  log "wrote $TLS_CERT + $TLS_KEY (phantom_tls volume)"
-  # PHANTOM_AUTO_TLS=1 means "this boot generated the cert" — logged
+  log "wrote $TLS_CERT + $TLS_KEY (guardian_tls volume)"
+  # GUARDIAN_AUTO_TLS=1 means "this boot generated the cert" — logged
   # below so operators can tell bootstrap material from operator-
   # supplied certs.
-  PHANTOM_AUTO_TLS=1
+  GUARDIAN_AUTO_TLS=1
 else
   log "reusing existing TLS cert at $TLS_CERT (shared volume)"
 fi
@@ -226,19 +226,19 @@ fi
 # auto-gen path and operator-supplied path (the API route writes to
 # the same /tls/cert.pem on submit).
 #
-# IMPORTANT — env name choice: we deliberately use PHANTOM_TLS_CERT_FILE
+# IMPORTANT — env name choice: we deliberately use GUARDIAN_TLS_CERT_FILE
 # (not SSL_CERT_FILE) because OpenSSL and Python's ssl module BOTH read
 # SSL_CERT_FILE as the path to the trust-store PEM bundle for outbound
 # TLS verification. Exporting our single self-signed listener cert as
 # SSL_CERT_FILE replaces Python's CA bundle, which makes every outbound
 # HTTPS call — Vertex AI embeddings, Gemini, XSIAM PAPI — fail with
 # CERTIFICATE_VERIFY_FAILED (since none of those servers are signed by
-# our self-signed cert). PHANTOM_TLS_CERT_FILE is a private name only
+# our self-signed cert). GUARDIAN_TLS_CERT_FILE is a private name only
 # our own tls-proxy.js + MCP config read, so it doesn't pollute the
 # Python ssl module's trust-store discovery.
 if [ -f "$TLS_CERT" ] && [ -f "$TLS_KEY" ]; then
-  export PHANTOM_TLS_CERT_FILE="$TLS_CERT"
-  export PHANTOM_TLS_KEY_FILE="$TLS_KEY"
+  export GUARDIAN_TLS_CERT_FILE="$TLS_CERT"
+  export GUARDIAN_TLS_KEY_FILE="$TLS_KEY"
   # NODE_EXTRA_CA_CERTS tells Node's https/fetch to trust the self-
   # signed cert in addition to the system CA store. Without this, the
   # agent's own outbound calls to https://localhost:8080 (the embedded
@@ -250,14 +250,14 @@ if [ -f "$TLS_CERT" ] && [ -f "$TLS_KEY" ]; then
   # so it's safe to use here.
   export NODE_EXTRA_CA_CERTS="$TLS_CERT"
 fi
-export PHANTOM_AUTO_TLS
+export GUARDIAN_AUTO_TLS
 
 # ─── 2.5. Seed admin auth defaults (idempotent) ─────────────────
 #
 # v0.4.0 — boot-time seeding of /ui/auth/admin/password_hash in the
 # SecretStore. v0.5.5 — the default password moved out of the image
-# into PHANTOM_DEFAULT_ADMIN_PASSWORD (sourced from .env). No credential
-# is baked anywhere in any Phantom image as of v0.5.5.
+# into GUARDIAN_DEFAULT_ADMIN_PASSWORD (sourced from .env). No credential
+# is baked anywhere in any Guardian image as of v0.5.5.
 #
 # Behavior:
 #   - If SecretStore already holds a password hash for the `admin`
@@ -266,10 +266,10 @@ export PHANTOM_AUTO_TLS
 #     upgrades from pre-v0.5.5 installs that don't carry the env
 #     var still work.
 #   - If no hash exists (fresh volume), seeds the PBKDF2 hash of
-#     $PHANTOM_DEFAULT_ADMIN_PASSWORD, and sets the
+#     $GUARDIAN_DEFAULT_ADMIN_PASSWORD, and sets the
 #     `credentials_changed=false` flag so the UI shows the "change
 #     default password" banner on first login.
-#   - If no hash exists AND $PHANTOM_DEFAULT_ADMIN_PASSWORD is unset
+#   - If no hash exists AND $GUARDIAN_DEFAULT_ADMIN_PASSWORD is unset
 #     or empty, the Python seed call raises — the agent refuses to
 #     boot with an empty admin credential. Fail-loud per the v0.4.0
 #     canonical-state discipline; operator must re-run the installer
@@ -290,7 +290,7 @@ SEED_OUTPUT=$(PYTHONPATH=/app/mcp/src python3 -c '
 import os, sys, traceback
 try:
     from usecase.auth_store import auth_store
-    default_pw = os.environ.get("PHANTOM_DEFAULT_ADMIN_PASSWORD", "").strip()
+    default_pw = os.environ.get("GUARDIAN_DEFAULT_ADMIN_PASSWORD", "").strip()
     seeded = auth_store().seed_admin_defaults_if_empty("admin", default_pw)
     print("seeded" if seeded else "already_initialized")
 except Exception as exc:
@@ -300,13 +300,13 @@ except Exception as exc:
 ' 2>&1) || {
   log "FATAL: auth_store seeding failed — refusing to start"
   log "Cause: SecretStore is not initialized or is unreachable, OR"
-  log "       fresh install with PHANTOM_DEFAULT_ADMIN_PASSWORD unset."
+  log "       fresh install with GUARDIAN_DEFAULT_ADMIN_PASSWORD unset."
   log "Inspect the trace above. Common fixes:"
   log "  - Volume mount missing: confirm /app/data is mounted"
-  log "  - KEK mismatch: did the operator restore from a backup with a different PHANTOM_SECRET_KEK?"
-  log "  - Empty PHANTOM_DEFAULT_ADMIN_PASSWORD on a fresh install:"
-  log "      re-run /opt/phantom/phantom-installer — it auto-generates"
-  log "      this value into /opt/phantom/.env."
+  log "  - KEK mismatch: did the operator restore from a backup with a different GUARDIAN_SECRET_KEK?"
+  log "  - Empty GUARDIAN_DEFAULT_ADMIN_PASSWORD on a fresh install:"
+  log "      re-run /opt/guardian/guardian-installer — it auto-generates"
+  log "      this value into /opt/guardian/.env."
   log "  - Disk full / permissions: check container fs"
   printf '%s\n' "$SEED_OUTPUT"
   exit 1
@@ -322,13 +322,13 @@ if [ "$SEED_OUTPUT" = "seeded" ]; then
   log "│  FIRST BOOT — default admin credentials                          │"
   log "│                                                                  │"
   log "│    username:  admin                                              │"
-  log "│    password:  ${PHANTOM_DEFAULT_ADMIN_PASSWORD}"
+  log "│    password:  ${GUARDIAN_DEFAULT_ADMIN_PASSWORD}"
   log "│                                                                  │"
-  log "│  v0.5.5+ — this value is also in /opt/phantom/.env under         │"
-  log "│  PHANTOM_DEFAULT_ADMIN_PASSWORD. After you change the password   │"
+  log "│  v0.5.5+ — this value is also in /opt/guardian/.env under         │"
+  log "│  GUARDIAN_DEFAULT_ADMIN_PASSWORD. After you change the password   │"
   log "│  at /profile on first login, this default is never consulted.    │"
   log "│  If you lose the value, run from the host:                       │"
-  log "│    sudo /opt/phantom/phantom-reset-admin-password                │"
+  log "│    sudo /opt/guardian/guardian-reset-admin-password                │"
   log "╰──────────────────────────────────────────────────────────────────╯"
 elif [ "$SEED_OUTPUT" = "already_initialized" ]; then
   log "auth_store: SecretStore already holds admin credentials (no seed needed)"
@@ -342,8 +342,8 @@ fi
 # for the auth_store seeding step that runs before TLS pre-compute.)
 #
 # Process env is frozen at exec, so every env var that MCP's Python
-# code reads (MCP_URL, PHANTOM_TLS_VERIFY,
-# PHANTOM_AGENT_INTERNAL_URL, PHANTOM_TLS_ENABLED) must be in its
+# code reads (MCP_URL, GUARDIAN_TLS_VERIFY,
+# GUARDIAN_AGENT_INTERNAL_URL, GUARDIAN_TLS_ENABLED) must be in its
 # final shape before `python -u /app/mcp/src/main.py &` is invoked
 # below. The TLS-aware values used to live further down (around the
 # Next.js spawn block) — that worked for tls-proxy.js but not for
@@ -353,14 +353,14 @@ fi
 # Bug caught by this:
 #   * 7638a39 — JobScheduler chat dispatch fell back to localhost:3000
 #               (TLS proxy) and got disconnected.
-PHANTOM_TLS_ENABLED=0
-if [[ -n "${PHANTOM_TLS_CERT_FILE:-}" || -n "${SSL_CERT_FILE:-}" || -n "${SSL_CERT_PEM:-}" ]] \
-   && [[ -n "${PHANTOM_TLS_KEY_FILE:-}"  || -n "${SSL_KEY_FILE:-}"  || -n "${SSL_KEY_PEM:-}"  ]]; then
-  PHANTOM_TLS_ENABLED=1
+GUARDIAN_TLS_ENABLED=0
+if [[ -n "${GUARDIAN_TLS_CERT_FILE:-}" || -n "${SSL_CERT_FILE:-}" || -n "${SSL_CERT_PEM:-}" ]] \
+   && [[ -n "${GUARDIAN_TLS_KEY_FILE:-}"  || -n "${SSL_KEY_FILE:-}"  || -n "${SSL_KEY_PEM:-}"  ]]; then
+  GUARDIAN_TLS_ENABLED=1
 fi
-export PHANTOM_TLS_ENABLED
+export GUARDIAN_TLS_ENABLED
 
-if [[ "$PHANTOM_TLS_ENABLED" == "1" ]]; then
+if [[ "$GUARDIAN_TLS_ENABLED" == "1" ]]; then
   # MCP_URL ALWAYS flips when TLS is on — the embedded MCP shares the
   # same cert/key as the agent's listener, so it serves HTTPS too.
   # This is intra-process and known-correct (same container, same
@@ -372,19 +372,19 @@ if [[ "$PHANTOM_TLS_ENABLED" == "1" ]]; then
   # InstanceStore is the single source of truth for connector URLs.
   # Operators edit baseUrl via /connectors and the next read sees
   # the new value — the MCP's lifespan resolver
-  # (service/phantom_mcp/server.py) reads from the InstanceStore on
+  # (service/guardian_mcp/server.py) reads from the InstanceStore on
   # every invocation. No silent env mutation, no probe-then-flip,
   # no hidden self-healing.
   #
   # If a connector endpoint flips protocol after a TLS rollout,
   # /api/agent/health surfaces the verbatim failure and the operator
   # updates the InstanceStore via /connectors. That's the spec.
-  export PHANTOM_TLS_VERIFY="${PHANTOM_TLS_VERIFY:-0}"
+  export GUARDIAN_TLS_VERIFY="${GUARDIAN_TLS_VERIFY:-0}"
 
   # MCP→Next.js loopback: Next.js binds port 3001 (plain HTTP) when
   # tls-proxy.js owns 3000 (HTTPS). MCP's internal calls (chat
   # dispatcher, etc.) must target 3001 directly, not 3000.
-  export PHANTOM_AGENT_INTERNAL_URL="http://127.0.0.1:3001"
+  export GUARDIAN_AGENT_INTERNAL_URL="http://127.0.0.1:3001"
 fi
 
 # ─── 3. Start the embedded MCP ──────────────────────────────────
@@ -393,11 +393,11 @@ python -u /app/mcp/src/main.py &
 MCP_PID=$!
 
 # Pick the right probe URL/scheme based on whether SSL is configured.
-# When PHANTOM_TLS_CERT_FILE (or legacy SSL_CERT_FILE / inline PEM) is
+# When GUARDIAN_TLS_CERT_FILE (or legacy SSL_CERT_FILE / inline PEM) is
 # set, the MCP terminates TLS on the same port, so http:// would fail
 # TLS handshake. -k is needed because self-signed certs don't validate
 # against the system CA store.
-if [[ -n "${PHANTOM_TLS_CERT_FILE:-}" || -n "${SSL_CERT_FILE:-}" || -n "${SSL_CERT_PEM:-}" ]]; then
+if [[ -n "${GUARDIAN_TLS_CERT_FILE:-}" || -n "${SSL_CERT_FILE:-}" || -n "${SSL_CERT_PEM:-}" ]]; then
   MCP_PROBE_URL="https://127.0.0.1:${MCP_PORT:-8080}/ping/"
   MCP_PROBE_OPTS="-k"
 else
@@ -444,7 +444,7 @@ fi
 # When TLS is on:
 #   * The internal MCP URL flips to https:// (MCP_URL) — the embedded
 #     MCP terminates its own TLS using the same cert/key material.
-#   * PHANTOM_TLS_VERIFY defaults to "0" — agent's HTTP clients skip
+#   * GUARDIAN_TLS_VERIFY defaults to "0" — agent's HTTP clients skip
 #     cert verification on internal calls. Acceptable for self-signed
 #     mode; flip to "1" when operators install certs from a real CA.
 
@@ -452,21 +452,21 @@ cd /app
 
 PROXY_PID=""
 
-if [[ "$PHANTOM_TLS_ENABLED" == "1" ]]; then
-  # PHANTOM_TLS_ENABLED + URL flips were set in section 2.4 (BEFORE
+if [[ "$GUARDIAN_TLS_ENABLED" == "1" ]]; then
+  # GUARDIAN_TLS_ENABLED + URL flips were set in section 2.4 (BEFORE
   # MCP boot) so MCP inherits the right values. Just log the resolved
   # state here so operators can confirm via `docker compose logs`.
   log "TLS enabled — internal URLs already flipped (see env block above)"
   log "  MCP_URL=$MCP_URL"
-  log "  PHANTOM_TLS_VERIFY=$PHANTOM_TLS_VERIFY (0 = skip verify, 1 = enforce)"
-  log "  PHANTOM_AUTO_TLS=$PHANTOM_AUTO_TLS"
+  log "  GUARDIAN_TLS_VERIFY=$GUARDIAN_TLS_VERIFY (0 = skip verify, 1 = enforce)"
+  log "  GUARDIAN_AUTO_TLS=$GUARDIAN_AUTO_TLS"
 
   # Next.js on internal HTTP port (loopback).
   log "starting Next.js on internal HTTP port 3001..."
   PORT=3001 HOSTNAME=127.0.0.1 node server.js &
   NODE_PID=$!
 
-  # PHANTOM_AGENT_INTERNAL_URL is exported earlier (before MCP boot)
+  # GUARDIAN_AGENT_INTERNAL_URL is exported earlier (before MCP boot)
   # so MCP's JobScheduler picks it up at startup. Re-asserting it here
   # would be a no-op; documenting the dependency is sufficient.
   # ──── Why we need it (kept here for searchability) ────
@@ -475,7 +475,7 @@ if [[ "$PHANTOM_TLS_ENABLED" == "1" ]]; then
   # relative paths. The default fallback is http://localhost:3000 —
   # which is wrong in TLS mode (3000 is the tls-proxy, HTTPS-only;
   # SSR fetch with http:// hits TLS handshake, hangs ~60s, fails as
-  # ERR_SSL_HTTP_REQUEST). Pointing PHANTOM_AGENT_INTERNAL_URL at the
+  # ERR_SSL_HTTP_REQUEST). Pointing GUARDIAN_AGENT_INTERNAL_URL at the
   # internal Next.js port (3001, plain HTTP) bypasses the proxy
   # entirely for in-process round-trips. External browser traffic
   # still goes through tls-proxy and is unaffected.
@@ -495,9 +495,9 @@ if [[ "$PHANTOM_TLS_ENABLED" == "1" ]]; then
   done
 
   log "starting tls-proxy.js on public HTTPS port ${PORT:-3000}..."
-  PHANTOM_TLS_PORT="${PORT:-3000}" \
-  PHANTOM_TLS_BACKEND_PORT=3001 \
-  PHANTOM_TLS_BACKEND_HOST=127.0.0.1 \
+  GUARDIAN_TLS_PORT="${PORT:-3000}" \
+  GUARDIAN_TLS_BACKEND_PORT=3001 \
+  GUARDIAN_TLS_BACKEND_HOST=127.0.0.1 \
     node /app/tls-proxy.js &
   PROXY_PID=$!
 else

@@ -146,7 +146,7 @@ export async function createInstance(data: {
   /**
    * v0.5.73 (issue #46): per-instance secret slots — separate from
    * `config` because the backend writes these into SecretStore
-   * (encrypted at rest under PHANTOM_SECRET_KEK) rather than the
+   * (encrypted at rest under GUARDIAN_SECRET_KEK) rather than the
    * instances row's plaintext config_json column.
    *
    * Pre-v0.5.73 this field didn't exist on the API client; callers
@@ -182,7 +182,7 @@ export async function listInstances(params?: {
   if (params?.workspace_id) qs.set("workspace_id", params.workspace_id);
   const path = qs.toString() ? `/api/v1/instances?${qs}` : "/api/v1/instances";
 
-  // The phantom MCP returns `{instances: [...]}` (named-envelope shape),
+  // The guardian MCP returns `{instances: [...]}` (named-envelope shape),
   // not the Spark gateway's `{data: [...]}`. listRequest() handles all
   // three shapes correctly — bare array, generic envelope, and named
   // envelope — so the /connectors Instances tab actually renders the
@@ -210,7 +210,7 @@ export async function updateInstance(
     disabled_tools: string[];
   }>,
 ) {
-  // Phantom's instance route uses PATCH (partial-update semantics) —
+  // Guardian's instance route uses PATCH (partial-update semantics) —
   // the older Spark-gateway shape was PUT. Switching to PATCH lets us
   // send a single field (e.g. {enabled: true}) without re-asserting
   // every other field.

@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/scripts/run_snippet_code_script/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xsiam_scripts_run_snippet`
-**Phantom connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
+**Guardian connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/xsiam/xsiam-api/xsiam-apis/script-execution/run-snippet-code-script.html
 
@@ -45,5 +45,5 @@ A dict containing action_id and endpoints_count.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_scripts_run_snippet`
+- Guardian tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_scripts_run_snippet`
 - Source mapping: `ebarti/cortex_xdr_client/api/scripts_api.py` → `run_snippet_code_script`

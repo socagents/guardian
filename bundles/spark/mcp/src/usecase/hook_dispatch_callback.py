@@ -16,7 +16,7 @@ Constraints:
     Fire the callback in a background thread so the caller returns
     immediately.
   - Loopback only: the agent's internal endpoint lives at
-    `PHANTOM_AGENT_INTERNAL_URL` (default `https://phantom-agent:8080`
+    `GUARDIAN_AGENT_INTERNAL_URL` (default `https://guardian-agent:8080`
     inside the compose network), gated by `MCP_TOKEN` bearer.
 
 Recursion caveat: if an operator installs a Notification hook whose
@@ -36,7 +36,7 @@ import os
 import threading
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 # Sentinel for the agent's internal URL. Read at call time (not at
@@ -44,7 +44,7 @@ logger = logging.getLogger("Phantom MCP")
 # respected.
 def _agent_internal_url() -> str:
     return os.environ.get(
-        "PHANTOM_AGENT_INTERNAL_URL", "https://phantom-agent:8080"
+        "GUARDIAN_AGENT_INTERNAL_URL", "https://guardian-agent:8080"
     ).rstrip("/")
 
 

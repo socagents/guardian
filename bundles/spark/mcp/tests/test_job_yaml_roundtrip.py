@@ -79,7 +79,7 @@ def test_add_job_creates_yaml_with_definition_only(tmp_path: Path) -> None:
 
     body = yaml_path.read_text(encoding="utf-8")
     # Banner present
-    assert "Phantom runtime job definition" in body
+    assert "Guardian runtime job definition" in body
     # The actual payload parses cleanly (skip the banner — yaml.safe_load
     # tolerates the leading comment lines as blanks).
     doc = yaml.safe_load(body)
@@ -102,7 +102,7 @@ def test_add_job_run_once_persists_in_yaml(tmp_path: Path) -> None:
     s.add_job(
         name="oneshot",
         cron="0 0 1 1 *",
-        action={"type": "tool_call", "name": "phantom_get_field_info", "args": {}},
+        action={"type": "tool_call", "name": "guardian_get_field_info", "args": {}},
         run_once=True,
     )
     doc = yaml.safe_load((tmp_path / "jobs" / "oneshot.yaml").read_text())
@@ -167,7 +167,7 @@ def test_manifest_job_does_not_create_yaml(tmp_path: Path) -> None:
 
 def test_load_yaml_jobs_reconciles_into_fresh_db(tmp_path: Path) -> None:
     """Simulate a deploy where SQLite was wiped but the YAML directory
-    survived (e.g. the operator nuked phantom_mcp_data volume but kept
+    survived (e.g. the operator nuked guardian_mcp_data volume but kept
     /app/data/jobs/). The boot loader should re-create every YAML row
     in SQLite."""
     # First scheduler — write some jobs
@@ -180,7 +180,7 @@ def test_load_yaml_jobs_reconciles_into_fresh_db(tmp_path: Path) -> None:
     s1.add_job(
         name="beta",
         cron="0 17 * * *",
-        action={"type": "tool_call", "name": "phantom_get_field_info", "args": {}},
+        action={"type": "tool_call", "name": "guardian_get_field_info", "args": {}},
         enabled=False,
     )
 
@@ -196,7 +196,7 @@ def test_load_yaml_jobs_reconciles_into_fresh_db(tmp_path: Path) -> None:
     assert beta is not None and beta.enabled is False
     assert beta.action == {
         "type": "tool_call",
-        "name": "phantom_get_field_info",
+        "name": "guardian_get_field_info",
         "args": {},
     }
 

@@ -90,7 +90,7 @@ try:
 except ImportError:  # pragma: no cover — Python < 3.9
     ZoneInfo = None  # type: ignore[assignment]
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 
@@ -116,10 +116,10 @@ WARN_AFTER_SECONDS = 600
 MAX_CONSECUTIVE_FAILURES = 10
 
 # Where the embedded MCP can reach the agent's /api/chat endpoint when
-# firing action_type="chat" jobs. In phantom-standalone deploys agent
+# firing action_type="chat" jobs. In guardian-standalone deploys agent
 # and MCP share the container, so localhost:3000 is correct. Operators
 # in split-deploy modes (agent and MCP in different pods) can override
-# via the PHANTOM_AGENT_INTERNAL_URL env var — same convention the
+# via the GUARDIAN_AGENT_INTERNAL_URL env var — same convention the
 # agent's lib/api/client.ts uses for SSR calls.
 DEFAULT_AGENT_INTERNAL_URL = "http://localhost:3000"
 
@@ -211,7 +211,7 @@ class JobRow:
     # Defaults to 0 for in-memory construction (e.g. fresh inserts).
     run_count: int = 0
     # v0.1.27: when true, _dispatch_chat sends
-    # `X-Phantom-Approval-Bypass: 1` so the MCP-side gate auto-
+    # `X-Guardian-Approval-Bypass: 1` so the MCP-side gate auto-
     # approves any gated tools the agent calls during this job.
     # Operator opts in per-job via the job edit form's bypass slider.
     # Audit rows still record each tool call with auto_approved=true.
@@ -411,7 +411,7 @@ class CroniterJobScheduler:
                     "ALTER TABLE jobs ADD COLUMN run_once INTEGER NOT NULL DEFAULT 0"
                 )
             # v0.1.27: per-job approval bypass. When true, the scheduler
-            # sets `X-Phantom-Approval-Bypass: 1` on every chat dispatch
+            # sets `X-Guardian-Approval-Bypass: 1` on every chat dispatch
             # for this job, which causes the MCP-side gate to auto-
             # approve gated tools (recording an audit row) instead of
             # blocking on operator confirmation. Default 0 — operators
@@ -937,7 +937,7 @@ class CroniterJobScheduler:
         # OR failure — both count). The cron column stays as-is so an
         # operator who re-enables can see what schedule was used. We
         # also clear next_due_at so the disabled job doesn't show a
-        # phantom "next run" in the UI. The READ side filters disabled
+        # guardian "next run" in the UI. The READ side filters disabled
         # jobs from the tick loop already (see _read_due_jobs WHERE
         # enabled = 1) so this is the only mutation needed.
         new_enabled = 0 if row.run_once else (1 if row.enabled else 0)
@@ -1114,7 +1114,7 @@ class CroniterJobScheduler:
     ) -> dict[str, Any]:
         """Fire a scheduled chat prompt through the agent's /api/chat
         endpoint. Since v0.9.1 the agent middleware gates /api/chat
-        (session cookie OR `phantom_ak_` API key); this server-side
+        (session cookie OR `guardian_ak_` API key); this server-side
         scheduler call carries neither, so it authenticates with the
         container's MCP_TOKEN as an internal-service bearer (v0.17.126) —
         the same loopback trust the /api/agent/internal/* routes use. The
@@ -1138,18 +1138,18 @@ class CroniterJobScheduler:
         op on flash variants, honored on pro variants).
 
         v0.1.27: when `bypass_approvals=True`, the request carries
-        `X-Phantom-Approval-Bypass: 1` so the MCP-side gate auto-
+        `X-Guardian-Approval-Bypass: 1` so the MCP-side gate auto-
         approves any humanRequired[] tools the agent calls during the
         job. Operators set this per-job via the job edit form. The
         chat route forwards the header onto every downstream MCP
-        call (see PhantomMCPClient's extraHeaders) so the contextvar
+        call (see GuardianMCPClient's extraHeaders) so the contextvar
         is set when gate_and_execute runs.
         """
         import os
         import httpx
 
         agent_url = os.environ.get(
-            "PHANTOM_AGENT_INTERNAL_URL", DEFAULT_AGENT_INTERNAL_URL,
+            "GUARDIAN_AGENT_INTERNAL_URL", DEFAULT_AGENT_INTERNAL_URL,
         ).rstrip("/")
         chat_endpoint = f"{agent_url}/api/chat"
 
@@ -1174,7 +1174,7 @@ class CroniterJobScheduler:
             "Accept": "text/event-stream",
             # Tag the request so audit can identify scheduler-driven
             # turns vs. operator-driven.
-            "X-Phantom-Trigger": f"job:{job_name}",
+            "X-Guardian-Trigger": f"job:{job_name}",
         }
         # v0.17.126 — present MCP_TOKEN so the v0.9.1+ middleware gate on
         # /api/chat accepts this internal call. Without it every scheduled
@@ -1187,7 +1187,7 @@ class CroniterJobScheduler:
                 "under the v0.9.1+ middleware gate", job_name,
             )
         if bypass_approvals:
-            request_headers["X-Phantom-Approval-Bypass"] = "1"
+            request_headers["X-Guardian-Approval-Bypass"] = "1"
             logger.info(
                 "JobScheduler %s: dispatching with approval bypass ON",
                 job_name,
@@ -1597,7 +1597,7 @@ class CroniterJobScheduler:
         run history visible. Operators can re-enable to fire again.
 
         When `bypass_approvals=True` (v0.1.27), every chat dispatch
-        for this job carries `X-Phantom-Approval-Bypass: 1` so the
+        for this job carries `X-Guardian-Approval-Bypass: 1` so the
         MCP-side gate auto-approves any tools listed in
         manifest.approvals.humanRequired[]. Audit rows still record
         each tool call with `auto_approved=true` so post-hoc review
@@ -1731,7 +1731,7 @@ class CroniterJobScheduler:
         Runtime jobs survive untouched.
 
         v0.1.27: `bypass_approvals` toggles whether this job's chat
-        dispatches set `X-Phantom-Approval-Bypass: 1`. Only takes
+        dispatches set `X-Guardian-Approval-Bypass: 1`. Only takes
         effect on the NEXT scheduled fire, not anything currently in
         flight.
         """
@@ -1926,8 +1926,8 @@ class CroniterJobScheduler:
         )
         # Banner so an operator reading the file knows what it is.
         banner = (
-            "# Phantom runtime job definition (source='runtime').\n"
-            "# Edit + restart phantom-agent to apply. SQLite holds runtime\n"
+            "# Guardian runtime job definition (source='runtime').\n"
+            "# Edit + restart guardian-agent to apply. SQLite holds runtime\n"
             "# state (last_fired_at, next_due_at) which is computed from\n"
             "# this file at boot. Per spark-agents spec §7.1.\n"
         )

@@ -484,7 +484,7 @@ function Reference({ endpoint }: { endpoint: ApiEndpoint }) {
           : { description: r.description },
       ]),
     );
-    if (endpoint.riskTier) op["x-phantom-risk-tier"] = endpoint.riskTier;
+    if (endpoint.riskTier) op["x-guardian-risk-tier"] = endpoint.riskTier;
     return JSON.stringify(
       {
         [endpoint.path.split("?")[0]]: { [endpoint.method.toLowerCase()]: op },

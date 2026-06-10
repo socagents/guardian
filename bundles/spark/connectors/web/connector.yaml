@@ -7,17 +7,17 @@
 # CVE/advisory lookups, threat-intel portal scraping, and "go read this
 # vendor doc and summarize" requests.
 #
-# Implementation: Playwright Python in the phantom-agent process speaks
+# Implementation: Playwright Python in the guardian-agent process speaks
 # the Chrome DevTools Protocol over a WebSocket to a headless-shell
-# sidecar (`phantom-browser` in docker-compose.yml). This keeps the
-# ~250MB Chromium binaries OUT of the phantom-agent image while letting
+# sidecar (`guardian-browser` in docker-compose.yml). This keeps the
+# ~250MB Chromium binaries OUT of the guardian-agent image while letting
 # the connector use Playwright's auto-waiting + accessibility-tree
 # helpers (which are far easier for an LLM to drive than raw CDP
 # selectors). See bundles/spark/connectors/web/src/browser.py.
 #
 # # Why a sidecar instead of inline Playwright?
 #
-#   - Image size: phantom-agent stays at ~600MB instead of ballooning
+#   - Image size: guardian-agent stays at ~600MB instead of ballooning
 #     to ~900MB. Sidecar is ~150MB image (chromedp/headless-shell).
 #   - Crash isolation: a wedged page or runaway JS doesn't take down
 #     the agent or MCP — only the browser sidecar restarts.
@@ -31,7 +31,7 @@
 # It would also work — drop-in container, same accessibility-tree
 # snapshot. The reason this connector exists instead is per-instance
 # config + secrets management (allowed_domains, optional proxy creds),
-# audit trail attribution via the existing X-Phantom-Trigger contextvar,
+# audit trail attribution via the existing X-Guardian-Trigger contextvar,
 # and approval-gate composition (high-risk navigations can be wrapped
 # in gate_and_execute later without touching a third-party MCP server).
 # A future operator can disable this connector and add the Microsoft
@@ -52,14 +52,14 @@ source:
 #
 # Web is the first connector to migrate to v0.2's per-instance
 # container architecture. Each web instance now runs as its own
-# `phantom-connector-web-<instance-name>` container; the agent's
+# `guardian-connector-web-<instance-name>` container; the agent's
 # MCP routes web/* tool calls over MCP-over-HTTP to that container's
 # own MCP server. See docs/spec-per-instance-connector-containers.md.
 #
 # Why web first (per Phase 2 spec):
 #   - Newest connector (introduced v0.1.27); zero production-instance
 #     dependence yet.
-#   - Already has a sidecar (phantom-browser via CDP); the per-
+#   - Already has a sidecar (guardian-browser via CDP); the per-
 #     instance container model is the natural fit for the per-
 #     session BrowserContext state web maintains.
 #   - Smallest blast radius if the v0.2 path has issues — operators
@@ -67,12 +67,12 @@ source:
 #
 # functionPrefix is ignored when style: container — the connector
 # container exposes tools by their bare names per the runtime
-# contract (the runtime entrypoint strips `phantom_web_` to `navigate`,
+# contract (the runtime entrypoint strips `guardian_web_` to `navigate`,
 # `get_text`, etc.). The field stays here as documentation for
 # future maintainers tracing how function names became tool names.
 runtimeMapping:
   style: "container"
-  functionPrefix: "phantom_web_"
+  functionPrefix: "guardian_web_"
 
 # `executionMode: persistent` matches xsiam/cortex-xdr — the connector
 # functions are imported once at process start and called many times.
@@ -94,16 +94,16 @@ configSchema:
       type: "string"
       description: |
         WebSocket or HTTP URL of the Chromium CDP endpoint. In the
-        default Phantom topology this is `http://phantom-browser:9222`
+        default Guardian topology this is `http://guardian-browser:9222`
         (the chromedp/headless-shell sidecar — see docker-compose.yml,
         profile=`browser`). Playwright auto-discovers the WebSocket
         URL from /json/version when given an HTTP URL.
 
         The browser sidecar is profile-gated in compose so it doesn't
         auto-start with `docker compose up`; bring it up explicitly via
-        `docker compose --profile browser up -d phantom-browser` before
+        `docker compose --profile browser up -d guardian-browser` before
         creating an instance of this connector.
-      default: "http://phantom-browser:9222"
+      default: "http://guardian-browser:9222"
     default_timeout_ms:
       type: "integer"
       description: "Default per-action timeout (navigate, click, wait_for, fill). Default 30s."

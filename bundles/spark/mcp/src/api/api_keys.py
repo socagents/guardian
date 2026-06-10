@@ -29,7 +29,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.api_keys import SqliteApiKeyStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _is_mcp_token_principal(request: Request) -> bool:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a file manifest and optional HMAC signature for a Phantom bundle directory."""
+"""Create a file manifest and optional HMAC signature for a Guardian bundle directory."""
 
 from __future__ import annotations
 
@@ -52,10 +52,10 @@ def main() -> int:
         files.append({"path": rel, "size": path.stat().st_size, "sha256": sha256_file(path)})
 
     manifest = {
-        "apiVersion": "phantom.agentic/v1alpha1",
+        "apiVersion": "guardian.agentic/v1alpha1",
         "kind": "AgentBundleManifest",
         "metadata": {
-            "agentId": "phantom-soc-simulation-agent",
+            "agentId": "guardian-soc-simulation-agent",
             "generatedAt": utc_now(),
         },
         "integrity": {
@@ -71,10 +71,10 @@ def main() -> int:
 
     key, key_ref = read_signing_key()
     signature = {
-        "apiVersion": "phantom.agentic/v1alpha1",
+        "apiVersion": "guardian.agentic/v1alpha1",
         "kind": "AgentBundleSignature",
         "metadata": {
-            "agentId": "phantom-soc-simulation-agent",
+            "agentId": "guardian-soc-simulation-agent",
             "generatedAt": utc_now(),
         },
         "manifest": {

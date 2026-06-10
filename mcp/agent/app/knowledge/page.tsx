@@ -10,7 +10,7 @@
  * add Create / Add entry / Import / Settings tabs.
  *
  * UI ports the spark_ui `/w/{ws}/knowledge/page.tsx` grid layout but
- * drops the workspace prefix (phantom is single-tenant) and the
+ * drops the workspace prefix (guardian is single-tenant) and the
  * Create/Settings affordances.
  */
 

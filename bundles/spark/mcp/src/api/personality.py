@@ -31,7 +31,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.personality_store import SqlitePersonalityStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_personality_routes(

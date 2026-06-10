@@ -1,7 +1,7 @@
 /**
  * Per-model context-window caps for budget math.
  *
- * Round-13 / Phase 2.2. Phantom previously had no awareness of the
+ * Round-13 / Phase 2.2. Guardian previously had no awareness of the
  * model's context cap — `MAX_HISTORY_TURNS = 20` was the only knob,
  * applied uniformly to every model, message-count not token-count.
  * This module is the data layer for token-aware budgeting.
@@ -28,7 +28,7 @@
  * provider-prefixed: `vertex/gemini-2.5-pro`).
  */
 
-/** Phantom-default cap if nothing matches. Set high enough to not
+/** Guardian-default cap if nothing matches. Set high enough to not
  *  over-restrict modern models, low enough that older models don't
  *  blow up. 200k is roughly the Claude 3.5 Sonnet GA window — a
  *  reasonable midpoint. */
@@ -48,7 +48,7 @@ const MODEL_CAP: Record<string, number> = {
   'gemini-1.5-flash': 1_000_000,
   'gemini-1.5-flash-8b': 1_000_000,
 
-  // Gemini 3.x preview chain — Phantom's bundle defaults to one of
+  // Gemini 3.x preview chain — Guardian's bundle defaults to one of
   // these via runtimeConfig.GEMINI_MODEL ?? 'gemini-3.1-pro-preview'.
   'gemini-3.1-pro-preview': 1_000_000,
   'gemini-3-pro-preview': 1_000_000,
@@ -64,7 +64,7 @@ const MODEL_CAP: Record<string, number> = {
   'claude-opus-4.7': 1_048_576,
   'claude-opus-4-7': 1_048_576,
 
-  // OpenAI family (in case Phantom adds an OpenAI provider later)
+  // OpenAI family (in case Guardian adds an OpenAI provider later)
   'gpt-4o': 128_000,
   'gpt-4o-mini': 128_000,
   'gpt-4-turbo': 128_000,

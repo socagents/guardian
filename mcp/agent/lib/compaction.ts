@@ -93,12 +93,12 @@ function renderTranscript(messages: CompactionInputMessage[]): string {
  * The summarization instructions sent to the model. Modeled after
  * OpenClaw's `MERGE_SUMMARIES_INSTRUCTIONS` +
  * `IDENTIFIER_PRESERVATION_INSTRUCTIONS` (see src/agents/compaction.ts
- * lines ~56–74), adapted for Phantom's vocabulary.
+ * lines ~56–74), adapted for Guardian's vocabulary.
  *
  * Exported so callers (and a future test) can inspect / override.
  */
 export const SUMMARIZE_INSTRUCTIONS = `You are summarizing a chat session
-between a human operator and the Phantom MCP agent so the conversation
+between a human operator and the Guardian MCP agent so the conversation
 can continue with less context budget.
 
 Produce a SINGLE compact summary covering:

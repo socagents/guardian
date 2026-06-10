@@ -11,7 +11,7 @@
  * first, pre-compact-context-warning the second): Octagon's
  * `inject_memory_context()` fires deterministically at the start of
  * Recon — the agent doesn't have to remember to call memory_search.
- * Phantom's chat agent today DOES have to remember, and in practice
+ * Guardian's chat agent today DOES have to remember, and in practice
  * only does it ~30% of the time. This builtin makes the recall
  * deterministic for operators who install it.
  *

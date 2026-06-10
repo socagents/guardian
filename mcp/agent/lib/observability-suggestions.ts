@@ -20,7 +20,7 @@
  *
  *   2. Known value enums (static)      — when the token is `key:partial`
  *      and the key has a known value list, suggest matching values:
- *        * action: → 46 known phantom audit actions
+ *        * action: → 46 known guardian audit actions
  *        * actor:  → agent / user:operator / system / scheduler:*
  *
  *   3. Dynamic resource names          — when the token is
@@ -115,7 +115,7 @@ const KNOWN_ACTIONS: string[] = [
 ];
 
 const KNOWN_ACTORS: { value: string; hint?: string }[] = [
-  { value: "agent", hint: "phantom agent's own actions" },
+  { value: "agent", hint: "guardian agent's own actions" },
   { value: "user:operator", hint: "operator-clicked actions in the UI" },
   { value: "system", hint: "boot-time + scheduler-internal" },
   { value: "scheduler:continuous-coverage-cycle", hint: "manifest job" },

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Phantom are documented here.
+All notable changes to Guardian are documented here.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Pre-1.0 releases bump the patch on every tagged release; minor bumps will resume after the v1.0.0 cut.
 
@@ -81,7 +81,7 @@ The data-source audit flagged the highest-value vendors missing from the bundle.
 
 Each ships with 23–49 documented fields, accurate descriptions + examples, and a `how_to_use` that names the routing literal and the XSIAM content pack to install. They are marked **not yet validated** (the green pill stays off) because XDM saturation has not been proven on a live tenant — each `how_to_use` states the prerequisite.
 
-The adversarial review earned its keep: it caught and corrected fabricated fields before they shipped (PingFederate's invented CEF keys, ESET's non-existent `object_uri_url`, Veeam's eight phantom fields with wrong numeric-vs-string types, Rapid7's bogus status value). A 14th candidate — Cisco AnyConnect/Secure Client — was **dropped** because its VPN events route into the existing `cisco_asa_raw` dataset, not a new one.
+The adversarial review earned its keep: it caught and corrected fabricated fields before they shipped (PingFederate's invented CEF keys, ESET's non-existent `object_uri_url`, Veeam's eight guardian fields with wrong numeric-vs-string types, Rapid7's bogus status value). A 14th candidate — Cisco AnyConnect/Secure Client — was **dropped** because its VPN events route into the existing `cisco_asa_raw` dataset, not a new one.
 
 Also in this release: fixed a typo in the Apple macOS source description and refreshed the catalog-size figure in the user guide. Brand logos for the nine brand-new vendors land in a follow-up (six aren't on the Simple Icons source and need careful per-vendor sourcing).
 
@@ -143,7 +143,7 @@ Scenario 1 upgrade (bundled content, installer unchanged) — re-run your existi
 
 ## [v0.17.136] — 2026-06-07 — *Data sources: add Palo Alto Networks NGFW (PAN-OS) firewall — 6 datasets*
 
-Phantom's bundle had no Palo Alto PAN-OS firewall data source (only Prisma SaaS Security), which is why the chat agent fabricated a non-existent `palo_alto_networks_pan_os_raw` dataset when asked where PAN-OS logs land. This release adds the real thing: six PAN-OS NGFW data sources — Traffic, Threat, URL, File Data, GlobalProtect, and HIP Match — with their authoritative Cortex dataset names (`panw_ngfw_traffic_raw`, `panw_ngfw_threat_raw`, `panw_ngfw_url_raw`, `panw_ngfw_filedata_raw`, `panw_ngfw_globalprotect_raw`, `panw_ngfw_hipmatch_raw`) and full CEF-key field schemas (17–49 fields each) derived from the demisto/content PAN-OS modeling rules.
+Guardian's bundle had no Palo Alto PAN-OS firewall data source (only Prisma SaaS Security), which is why the chat agent fabricated a non-existent `palo_alto_networks_pan_os_raw` dataset when asked where PAN-OS logs land. This release adds the real thing: six PAN-OS NGFW data sources — Traffic, Threat, URL, File Data, GlobalProtect, and HIP Match — with their authoritative Cortex dataset names (`panw_ngfw_traffic_raw`, `panw_ngfw_threat_raw`, `panw_ngfw_url_raw`, `panw_ngfw_filedata_raw`, `panw_ngfw_globalprotect_raw`, `panw_ngfw_hipmatch_raw`) and full CEF-key field schemas (17–49 fields each) derived from the demisto/content PAN-OS modeling rules.
 
 Each source documents its routing in `how_to_use`: simulate as CEF to your XSIAM Broker with header vendor=`panw`, product=`ngfw_cef`; the `log_type` extension splits events into the per-type dataset (with the Cortex PAN-OS content pack installed) or the catch-all `panw_ngfw_cef_raw` without it. They ship as **not-yet-validated** (`validated: false`) — promoting them to the green "Validated" pill requires a live-tenant XDM saturation run, which is gated on the tenant's PAN-OS pack + available XQL quota.
 
@@ -201,7 +201,7 @@ Scenario 1 upgrade (agent system prompt only, installer unchanged) — re-run yo
 
 A deep chat smoke caught the agent re-firing an *identical failing* tool call — most starkly, `data_sources_install` **seven times** while answering a read-only "list this source's fields" question, because the install kept returning a soft "not found" each time and the agent kept retrying it rather than switching tactics.
 
-The turn-cache shipped earlier only remembers *successes*, so it couldn't catch this. This release adds the matching backstop: within one turn, once the **same tool with the same arguments** has failed twice, any further identical call is short-circuited with a "don't retry — change approach" answer instead of hitting the backend again. A failure here means either a thrown error or the explicit `{ok:false}` result envelope Phantom tools return on a soft failure.
+The turn-cache shipped earlier only remembers *successes*, so it couldn't catch this. This release adds the matching backstop: within one turn, once the **same tool with the same arguments** has failed twice, any further identical call is short-circuited with a "don't retry — change approach" answer instead of hitting the backend again. A failure here means either a thrown error or the explicit `{ok:false}` result envelope Guardian tools return on a soft failure.
 
 It stays precise: poll/wait tools (which re-issue the same call by design) are exempt, a retry with *different* arguments still runs, and a soft-failed read is no longer mistakenly cached as a success. Net effect: pathological retry loops are capped at two attempts, and the agent is nudged to try a different tool or report the blocker.
 
@@ -237,11 +237,11 @@ Scenario 1 upgrade (agent chat route + system prompt, installer unchanged) — r
 
 ---
 
-## [v0.17.128] — 2026-06-07 — *phantom-updater reconciles connector containers to their pins on a timer, not just at startup*
+## [v0.17.128] — 2026-06-07 — *guardian-updater reconciles connector containers to their pins on a timer, not just at startup*
 
-Per-instance connector containers are recreated by phantom-updater when their pinned image digest changes — but until now only at updater **startup** (a one-shot ~30s after boot). Because phantom-updater rarely restarts (its own image isn't rebuilt on the dev cycle), a connector whose pin changed *between* restarts kept running its old image until the next restart. In practice this left connector containers stale: a connector recently pinned to a newer image could still be running an older one, with the newer tools unreachable from chat until someone manually recreated the container.
+Per-instance connector containers are recreated by guardian-updater when their pinned image digest changes — but until now only at updater **startup** (a one-shot ~30s after boot). Because guardian-updater rarely restarts (its own image isn't rebuilt on the dev cycle), a connector whose pin changed *between* restarts kept running its old image until the next restart. In practice this left connector containers stale: a connector recently pinned to a newer image could still be running an older one, with the newer tools unreachable from chat until someone manually recreated the container.
 
-phantom-updater now also reconciles **on a periodic loop** (default every 5 minutes; override with `PHANTOM_UPDATER_RECONCILE_INTERVAL_S`). Each pass compares every `phantom-connector-*` container's running digest to its pin and recreates only the divergent ones — sequential, with per-container error isolation, exactly as the startup and manual `POST /api/v1/connectors/reconcile/digests` paths already did. Connector containers now track their pinned digest without needing an updater restart.
+guardian-updater now also reconciles **on a periodic loop** (default every 5 minutes; override with `GUARDIAN_UPDATER_RECONCILE_INTERVAL_S`). Each pass compares every `guardian-connector-*` container's running digest to its pin and recreates only the divergent ones — sequential, with per-container error isolation, exactly as the startup and manual `POST /api/v1/connectors/reconcile/digests` paths already did. Connector containers now track their pinned digest without needing an updater restart.
 
 Scenario 1 upgrade (updater code, installer unchanged) — re-run your existing installer.
 
@@ -389,13 +389,13 @@ Refs #115.
 
 ## [v0.17.118] — 2026-06-01 — *Simulated logs now reliably populate XDM — gate-seeding is mandatory in the simulate skill*
 
-End-to-end testing surfaced that simulated logs landed in their raw dataset but **did not populate the XDM data model** for several validated sources. Root cause (operator-corrected — it is **not** a CEF-vs-JSON transport issue): every XSIAM modeling rule opens with a `filter <field> = "<value>"` **gate**. If the simulated event does not carry that exact value, the rule never fires and `xdm.*` stays empty even though raw landing succeeds. Phantom's content already carried the gate guidance (each `data_source.yaml`'s gate field is flagged; the skill's L21 lesson named the classifier) — but seeding it was **advisory**, so the agent skipped it under load and XDM came back 0.
+End-to-end testing surfaced that simulated logs landed in their raw dataset but **did not populate the XDM data model** for several validated sources. Root cause (operator-corrected — it is **not** a CEF-vs-JSON transport issue): every XSIAM modeling rule opens with a `filter <field> = "<value>"` **gate**. If the simulated event does not carry that exact value, the rule never fires and `xdm.*` stays empty even though raw landing succeeds. Guardian's content already carried the gate guidance (each `data_source.yaml`'s gate field is flagged; the skill's L21 lesson named the classifier) — but seeding it was **advisory**, so the agent skipped it under load and XDM came back 0.
 
 Proven live: Azure FlowLogs over the same CEF/syslog path went from **0 → 25+ `xdm.*` fields** the instant the agent seeded `observables_dict={"category":["NetworkSecurityGroupFlowEvent"]}`.
 
 ### What ships
 
-- **Gate-seeding is now MANDATORY in `stream_simulate_to_xsiam`.** Step 4 carries a hard "⚠️ MANDATORY for XDM" directive: before firing `phantom_create_data_worker` for a verification run, the agent MUST seed the modeling-rule gate field — the schema field whose `description` begins *"Modeling-rule GATE — must equal …"* (or the `how_to_use` classifier) — via `observables_dict`. The previously-advisory `observables_dict` comment is now marked mandatory. Sources that gate on a `_`-prefixed META field (e.g. CloudTrail's `_log_type`, stamped by the broker at onboarding, not the payload) are documented as the exception.
+- **Gate-seeding is now MANDATORY in `stream_simulate_to_xsiam`.** Step 4 carries a hard "⚠️ MANDATORY for XDM" directive: before firing `guardian_create_data_worker` for a verification run, the agent MUST seed the modeling-rule gate field — the schema field whose `description` begins *"Modeling-rule GATE — must equal …"* (or the `how_to_use` classifier) — via `observables_dict`. The previously-advisory `observables_dict` comment is now marked mandatory. Sources that gate on a `_`-prefixed META field (e.g. CloudTrail's `_log_type`, stamped by the broker at onboarding, not the payload) are documented as the exception.
 - **New maintainer tool `scripts/maintainer/reverse_engineer_gate.py`** — extracts any data source's modeling-rule gate from its live `.xif` (reads the rule each run; no static mapping).
 
 Net effect: "simulate `<vendor>` into XSIAM and verify XDM" now seeds the gate so the modeling rule fires — turning "raw lands, 0 XDM" into real XDM saturation. Agent-baked skill change; re-run your existing installer (Scenario 1). Part of the XDM-gate arc (#115).
@@ -404,13 +404,13 @@ Refs #115.
 
 ## [v0.17.117] — 2026-06-01 — *The agent reliably creates data workers even with large field schemas (Gemini tool-call recovery)*
 
-End-to-end UI testing surfaced a silent failure on the chat path: ask the agent to *"simulate ServiceNow logs into XSIAM, confirm the fields landed, then stop the worker"* and it would correctly plan the run — read the data source, its full schema, the log destination — then **its `phantom_create_data_worker` call would vanish.** The agent printed the call as text inside its thinking block and the turn just ended. No worker, no events, no error — a plan that never executed.
+End-to-end UI testing surfaced a silent failure on the chat path: ask the agent to *"simulate ServiceNow logs into XSIAM, confirm the fields landed, then stop the worker"* and it would correctly plan the run — read the data source, its full schema, the log destination — then **its `guardian_create_data_worker` call would vanish.** The agent printed the call as text inside its thinking block and the turn just ended. No worker, no events, no error — a plan that never executed.
 
-Root cause is a quirk of Gemini's "thinking" models (which power the chat). When a tool call carries a very large argument — here the full ~70-field ServiceNow schema passed as `schema_override`, roughly 3,900 tokens — the model sometimes serializes the call as reasoning *text* instead of emitting it as a structured function call. Phantom's chat loop only dispatches structured calls, so the call was dropped and the turn ended silently. Small calls (and the very same tool with a small argument) were never affected — which is why 16 other tool calls in the same test session, including five worker-creations inside an attack-scenario run, all dispatched cleanly.
+Root cause is a quirk of Gemini's "thinking" models (which power the chat). When a tool call carries a very large argument — here the full ~70-field ServiceNow schema passed as `schema_override`, roughly 3,900 tokens — the model sometimes serializes the call as reasoning *text* instead of emitting it as a structured function call. Guardian's chat loop only dispatches structured calls, so the call was dropped and the turn ended silently. Small calls (and the very same tool with a small argument) were never affected — which is why 16 other tool calls in the same test session, including five worker-creations inside an attack-scenario run, all dispatched cleanly.
 
 ### What ships
 
-- **Automatic tool-call recovery on the chat path** — when a turn returns no structured function call but the model's own reasoning shows it tried to make one (Gemini's `default_api` call marker leaked into the thinking text), Phantom retries that turn once with **forced function-calling** so the model re-emits a clean structured call, which then dispatches normally. The recovery is bounded (at most 2 retries per turn) and only fires on the leak condition — every normal turn is untouched, and extended-reasoning is left at full budget. `mcp/agent/app/api/chat/route.ts`.
+- **Automatic tool-call recovery on the chat path** — when a turn returns no structured function call but the model's own reasoning shows it tried to make one (Gemini's `default_api` call marker leaked into the thinking text), Guardian retries that turn once with **forced function-calling** so the model re-emits a clean structured call, which then dispatches normally. The recovery is bounded (at most 2 retries per turn) and only fires on the leak condition — every normal turn is untouched, and extended-reasoning is left at full budget. `mcp/agent/app/api/chat/route.ts`.
 
 Net effect: *"simulate ServiceNow into XSIAM, verify the fields landed, then stop the worker"* now runs end-to-end from the chat UI instead of stalling at the plan, even when the agent attaches a large vendor field schema.
 
@@ -420,14 +420,14 @@ Refs #114.
 
 ## [v0.17.116] — 2026-06-01 — *The agent routes simulated logs to the right dataset first try — and fires without re-asking*
 
-End-to-end agent testing surfaced two skill-adherence gaps when the chat agent drives `phantom_create_data_worker`:
+End-to-end agent testing surfaced two skill-adherence gaps when the chat agent drives `guardian_create_data_worker`:
 
 - **It invented prettified CEF product names.** For the "Okta — SSO" data source the agent passed `product="Okta SSO"` (the UI label) instead of the exact literal `product="Okta"`. The broker normalizes `<vendor>_<product>_raw`, so events routed to `okta_okta_sso_raw` (a dataset nothing parses) → 0 in `okta_sso_raw`.
-- **It re-asked before firing.** Even on "send N Okta events to XSIAM **right now**", the agent paused with "— fire it?" and waited for a second confirmation before calling the tool (`phantom_create_data_worker` isn't gated, so this was its own over-caution).
+- **It re-asked before firing.** Even on "send N Okta events to XSIAM **right now**", the agent paused with "— fire it?" and waited for a second confirmation before calling the tool (`guardian_create_data_worker` isn't gated, so this was its own over-caution).
 
 ### What ships
 
-- **CEF-literal guardrail at the call site** — `phantom_create_data_worker`'s `vendor`/`product` arg descriptions (in `connector.yaml` + the Pydantic model) now state plainly: pass the EXACT `vendor`/`product` literal from `data_sources_get_schema`, never a prettified or display name. The Okta trap is called out explicitly (product is `Okta`, NOT `Okta SSO`; the SSO split is driven by the `eventType` discriminator, not the product). `observables_dict` now documents its parsing-rule-discriminator role with routing examples.
+- **CEF-literal guardrail at the call site** — `guardian_create_data_worker`'s `vendor`/`product` arg descriptions (in `connector.yaml` + the Pydantic model) now state plainly: pass the EXACT `vendor`/`product` literal from `data_sources_get_schema`, never a prettified or display name. The Okta trap is called out explicitly (product is `Okta`, NOT `Okta SSO`; the SSO split is driven by the `eventType` discriminator, not the product). `observables_dict` now documents its parsing-rule-discriminator role with routing examples.
 - **Skill: fire directly, don't re-confirm** — `stream_simulate_to_xsiam` Step 4 now states that an explicit send/stream/fire/simulate request IS the go-ahead: call the tool immediately, never pause to ask "shall I fire it?". It reinforces the never-invent-the-product rule with the Okta example.
 
 Net effect: ask the agent to "send Okta SSO logs to XSIAM" and it fires once, with `product=Okta` + the right discriminator, landing in `okta_sso_raw`.
@@ -436,15 +436,15 @@ Connector + agent-baked skill change; re-run your existing installer (Scenario 1
 
 Refs #113.
 
-## [v0.17.115] — 2026-06-01 — *Hot-fix: `phantom_kill_worker` cleanup error (v0.17.114 flatten regression)*
+## [v0.17.115] — 2026-06-01 — *Hot-fix: `guardian_kill_worker` cleanup error (v0.17.114 flatten regression)*
 
-End-to-end agent testing through the chat API surfaced a regression introduced by v0.17.114's connector-tool flatten: **`phantom_kill_worker` returned `NameError: name 'request' is not defined` on every call.** The worker *did* stop (the GraphQL kill executed), but the tool reported an error — so an agent cleaning up after a simulation run (the `stream_simulate_to_xsiam` skill's "stop the worker" step) saw a failure and could leave workers emitting to the broker.
+End-to-end agent testing through the chat API surfaced a regression introduced by v0.17.114's connector-tool flatten: **`guardian_kill_worker` returned `NameError: name 'request' is not defined` on every call.** The worker *did* stop (the GraphQL kill executed), but the tool reported an error — so an agent cleaning up after a simulation run (the `stream_simulate_to_xsiam` skill's "stop the worker" step) saw a failure and could leave workers emitting to the broker.
 
 Root cause: v0.17.114 flattened the signature from `request: KillWorkerRequest` to a bare `worker_id` and rewrote the GraphQL variables, but missed the return's `payload.get("worker", request.worker_id)`. Python evaluates a `.get()` default eagerly, so the dropped `request` name raised on every call regardless of the GraphQL result.
 
 ### What ships
 
-- **`phantom_kill_worker` cleanup is clean again** — the return uses the flat `worker_id` param instead of the dropped `request.worker_id`. Agent-driven worker cleanup now reports success, so no more "kill failed" confusion or leaked workers after a simulation.
+- **`guardian_kill_worker` cleanup is clean again** — the return uses the flat `worker_id` param instead of the dropped `request.worker_id`. Agent-driven worker cleanup now reports success, so no more "kill failed" confusion or leaked workers after a simulation.
 - **CI guard hardened** — the connector flat-args validator (`tooling/validate/validate_all.py`) now also fails the build if any connector tool's **body** references a `request` its flattened signature no longer provides (nested-scope-aware, so a legitimate inner-function `request` param — e.g. a Playwright route handler — doesn't false-positive). This closes the exact gap that let the regression ship in v0.17.114: the check verified the *signature* matched `connector.yaml` but never scanned the body for leftover `request` references.
 - **Bug-family audit** — this was the only incomplete-flatten instance across all connectors.
 
@@ -478,7 +478,7 @@ Refs #111.
 
 ## [v0.17.113] — 2026-05-31 — *Store-driven log destinations — the agent resolves where logs go (no hardcoded destinations)*
 
-When you ask Phantom to generate logs, the agent now resolves the **destination** from your configured **Log Destinations** instead of inventing a hardcoded `udp:host:port` or silently falling back to a single env webhook. End-to-end:
+When you ask Guardian to generate logs, the agent now resolves the **destination** from your configured **Log Destinations** instead of inventing a hardcoded `udp:host:port` or silently falling back to a single env webhook. End-to-end:
 
 - **Selection (the agent's job):** it works out the transport you asked for (syslog, or an XSIAM webhook) — or infers it from the data source's "How to simulate" notes — then lists your destinations. **Exactly one** match → used without asking. **Two or more** → the agent asks which (unless you named one by name or IP). **None** → the agent offers to create a *secretless* syslog destination for you, or guides you to add a credentialed one on `/log-destinations`.
 - **Resolution (the platform's job):** the agent passes an opaque `logdest:<id>` handle. The MCP resolves it to the concrete address — and, for an XSIAM HTTP destination, injects the endpoint + auth key — **server-side**, before the worker starts. The auth key travels only MCP → connector → xlog; it never crosses the agent's tool surface, so the credential boundary holds.
@@ -490,10 +490,10 @@ So "send 50 FortiGate logs to syslog" just works when you have one syslog destin
 - **New agent tool** `log_destinations_create(name, host, port, protocol)` — the agent can create **secretless syslog** destinations on your behalf; credentialed types stay operator-only (REST + UI).
 - **MCP resolver** at the connector-proxy chokepoint resolves `logdest:<id>` (syslog → `<proto>:<host>:<port>`; xsiam_http → `XSIAM_WEBHOOK` + injected url/key) before forwarding to the xlog connector.
 - **xlog** `createDataWorker` + `createScenarioWorkerFromQuery` accept a per-destination `webhookUrl`/`webhookKey` (raw `Authorization`, never `Bearer`; env default preserved when absent).
-- **Skills + system prompt** teach the resolution rule; `phantom_create_data_worker`'s destination docstring teaches the `logdest:<id>` reference (replacing the old "format the string yourself" guidance, which could never work for credentialed destinations).
+- **Skills + system prompt** teach the resolution rule; `guardian_create_data_worker`'s destination docstring teaches the `logdest:<id>` reference (replacing the old "format the string yourself" guidance, which could never work for credentialed destinations).
 - **Help docs:** `/help/architecture#log-destinations` gains a "Store-driven log generation (the resolution chokepoint)" section and corrects the dead `send()` drift; `/help/user#log-destinations-ux` rewrites "Asking the agent to send logs to a destination"; new `simulate-to-log-destination` journey.
 
-Scope: covers `phantom_create_data_worker` (both its `createDataWorker` and `createScenarioWorkerFromQuery` routes). The file-scenario tool and the `webhook`/`splunk_hec` destination types are not yet wired into generation.
+Scope: covers `guardian_create_data_worker` (both its `createDataWorker` and `createScenarioWorkerFromQuery` routes). The file-scenario tool and the `webhook`/`splunk_hec` destination types are not yet wired into generation.
 
 ### Files
 
@@ -522,7 +522,7 @@ Refs #109.
 
 The chat agent no longer narrates read-only tool calls. Previously it announced every call ("I'll call `log_destinations_list`", "Let me check…") — but those calls and their results are already streamed into the **live telemetry / Tools panel**, so the chat duplicated what you could already see.
 
-Now read-only / non-gated tools (`*_list`, `*_get`, `run_xql_query`, `data_sources_*`, `phantom_get_*`, …) are called **silently** and only the outcome is reported. Approval-gated actions still get a short plain-language intent line (the *why*) before their approval card — not the mechanical tool name.
+Now read-only / non-gated tools (`*_list`, `*_get`, `run_xql_query`, `data_sources_*`, `guardian_get_*`, …) are called **silently** and only the outcome is reported. Approval-gated actions still get a short plain-language intent line (the *why*) before their approval card — not the mechanical tool name.
 
 ### What ships
 
@@ -572,9 +572,9 @@ Refs #108.
 
 ## [v0.17.108] — 2026-05-30 — *Auth: API-key bearer access to the agent API*
 
-You can now authenticate to the agent's API surface (`/api/chat` + `/api/agent/*` + `/api/skills/*`) with an **API key** instead of the username/password session cookie. Mint a scoped, revocable key in **/api-keys**, then send `Authorization: Bearer phantom_ak_…` — useful for scripts, schedulers, CI, and any programmatic integration that drives the agent.
+You can now authenticate to the agent's API surface (`/api/chat` + `/api/agent/*` + `/api/skills/*`) with an **API key** instead of the username/password session cookie. Mint a scoped, revocable key in **/api-keys**, then send `Authorization: Bearer guardian_ak_…` — useful for scripts, schedulers, CI, and any programmatic integration that drives the agent.
 
-Phantom already had the API-key system (mint/revoke UI, hashed storage, per-key scopes) for the MCP REST surface; this release extends it to the Next.js agent surface.
+Guardian already had the API-key system (mint/revoke UI, hashed storage, per-key scopes) for the MCP REST surface; this release extends it to the Next.js agent surface.
 
 ### What ships
 
@@ -611,7 +611,7 @@ Refs #106.
 
 ## [v0.17.106] — 2026-05-29 — *Simulation: the xlog connector forwards `observables_dict` on the vendor-faithful path*
 
-Connector fix that completes the v0.17.105 wiring. The xlog **connector** (`phantom_create_data_worker`) builds the GraphQL mutation it sends to the xlog service. When a `schema_override` is supplied (the vendor-faithful streaming path the simulation UI + skill use), the connector built the mutation variables with `type/count/interval/destination/vendor/product/schemaOverride` but **omitted `observablesDict` entirely** — so the forced-field overrides never left the connector, regardless of the v0.17.105 service-side fix.
+Connector fix that completes the v0.17.105 wiring. The xlog **connector** (`guardian_create_data_worker`) builds the GraphQL mutation it sends to the xlog service. When a `schema_override` is supplied (the vendor-faithful streaming path the simulation UI + skill use), the connector built the mutation variables with `type/count/interval/destination/vendor/product/schemaOverride` but **omitted `observablesDict` entirely** — so the forced-field overrides never left the connector, regardless of the v0.17.105 service-side fix.
 
 The two fixes compose into one working path:
 - **v0.17.105** (xlog service): the `createDataWorker` resolver reads `observables_dict` and threads it into `OverrideSender`.
@@ -628,7 +628,7 @@ Refs #106.
 
 ## [v0.17.105] — 2026-05-29 — *Simulation: streaming workers honor forced-field overrides (`observables_dict`)*
 
-Generator fix in `xlog`. When you stream a simulated source, `observables_dict` lets you pin specific field values — a threat-intel IP, a username, or a **classifier value** that a parsing/modeling rule keys on. The *inline* generator already honored these; the *streaming* worker path (`phantom_create_data_worker`) silently dropped them. Two consequences fixed here:
+Generator fix in `xlog`. When you stream a simulated source, `observables_dict` lets you pin specific field values — a threat-intel IP, a username, or a **classifier value** that a parsing/modeling rule keys on. The *inline* generator already honored these; the *streaming* worker path (`guardian_create_data_worker`) silently dropped them. Two consequences fixed here:
 
 - **Sibling datasets that share one CEF header now route.** Okta's System-Log and SSO streams both carry the `Okta`→`Okta` header, so the parsing rule splits them by reading `eventType`. Without the override reaching the event, every Okta event fell to the System-Log dataset and SSO never landed. (Most multi-dataset packs — the O365 workloads, Entra audit vs sign-in — carry *distinct* CEF product literals and already routed by header; this fixes the shared-header case.)
 - **Modeling rules that gate on a classifier value now fire.** Many MRs open with `filter <field> in (<allow-list>)`. A randomly-generated value misses the list and the rule emits zero XDM. Seeding a valid value via `observables_dict` lets the rule classify and map.
@@ -784,7 +784,7 @@ Refs #101.
 
 ## [v0.17.98] — 2026-05-29 — *Login: tighten the animated capability cycle copy*
 
-The login screen's animated capability cycle ("Phantom can simulate logs · create workers · … · orchestrate workflows") had one entry noticeably longer than its siblings. Shortened `orchestrate workflows` → `run workflows` so the rotating text reads at an even length.
+The login screen's animated capability cycle ("Guardian can simulate logs · create workers · … · orchestrate workflows") had one entry noticeably longer than its siblings. Shortened `orchestrate workflows` → `run workflows` so the rotating text reads at an even length.
 
 ### Files
 
@@ -911,9 +911,9 @@ v0.17.88 added the same disambiguation to `stream_simulate_to_xsiam.md`. v0.17.9
 
 ---
 
-## [v0.17.92] — 2026-05-28 — *xlog hot-fix: `phantom_kill_worker` flattens its signature — same bug-family as v0.17.76's `phantom_create_data_worker`*
+## [v0.17.92] — 2026-05-28 — *xlog hot-fix: `guardian_kill_worker` flattens its signature — same bug-family as v0.17.76's `guardian_create_data_worker`*
 
-Discovered live during a chat-driven ServiceNow smoke (session `8b67819e`, tool call 39 of 39): the agent ran the full discover → fire → verify cycle correctly, then tried to call `phantom_kill_worker(worker_id="worker_20260528164730")` to clean up — and got back:
+Discovered live during a chat-driven ServiceNow smoke (session `8b67819e`, tool call 39 of 39): the agent ran the full discover → fire → verify cycle correctly, then tried to call `guardian_kill_worker(worker_id="worker_20260528164730")` to clean up — and got back:
 
 ```
 Missing required argument: request
@@ -924,7 +924,7 @@ The worker continued running indefinitely. The agent surfaced the diagnosis clea
 
 ### Why this is the same bug-family as v0.17.76
 
-v0.17.76 + v0.17.77 fixed `phantom_create_data_worker` by flattening its `request: CreateDataWorkerRequest` envelope to bare keyword args. The agent's MCP-tool dispatch operates on the flat arg schema (`connector.yaml`'s `args[]` list), which doesn't know how to compose a Pydantic wrapper. `phantom_kill_worker` had the same wrapped-Pydantic pattern — but only fired in cleanup, so the gap was invisible until an end-to-end smoke actually ran cleanup.
+v0.17.76 + v0.17.77 fixed `guardian_create_data_worker` by flattening its `request: CreateDataWorkerRequest` envelope to bare keyword args. The agent's MCP-tool dispatch operates on the flat arg schema (`connector.yaml`'s `args[]` list), which doesn't know how to compose a Pydantic wrapper. `guardian_kill_worker` had the same wrapped-Pydantic pattern — but only fired in cleanup, so the gap was invisible until an end-to-end smoke actually ran cleanup.
 
 ### Fix
 
@@ -932,12 +932,12 @@ Mirror the v0.17.77 pattern:
 
 ```python
 # pre-v0.17.92
-async def phantom_kill_worker(request: KillWorkerRequest, ctx: Context) -> Dict:
+async def guardian_kill_worker(request: KillWorkerRequest, ctx: Context) -> Dict:
     ...
     variables = {"worker": request.worker_id}
 
 # v0.17.92
-async def phantom_kill_worker(worker_id: str, ctx: Context) -> Dict:
+async def guardian_kill_worker(worker_id: str, ctx: Context) -> Dict:
     ...
     variables = {"worker": worker_id}
 ```
@@ -947,7 +947,7 @@ The `KillWorkerRequest` Pydantic model is now unused at the MCP-tool boundary; i
 The docstring's example payload is updated to the flat shape:
 
 ```json
-{ "name": "phantom_kill_worker", "arguments": { "worker_id": "<uuid>" } }
+{ "name": "guardian_kill_worker", "arguments": { "worker_id": "<uuid>" } }
 ```
 
 ### Files
@@ -958,14 +958,14 @@ The docstring's example payload is updated to the flat shape:
 
 After fixing kill_worker, audited the rest of the xlog connector for the same `request: <Model>` pattern still in tool-callable code paths:
 
-- `phantom_create_data_worker` — already flattened in v0.17.77 ✓
-- `phantom_list_workers` — takes no args (no envelope, no risk) ✓
-- `phantom_kill_worker` — flattened here ✓
-- `phantom_create_scenario_worker` — has its own envelope; needs same flatten when next smoke exercises scenarios. Tracked separately if/when it surfaces.
+- `guardian_create_data_worker` — already flattened in v0.17.77 ✓
+- `guardian_list_workers` — takes no args (no envelope, no risk) ✓
+- `guardian_kill_worker` — flattened here ✓
+- `guardian_create_scenario_worker` — has its own envelope; needs same flatten when next smoke exercises scenarios. Tracked separately if/when it surfaces.
 
 ### Verify
 
-- Re-run the stream_simulate_to_xsiam skill end-to-end (chat). The cleanup `phantom_kill_worker` call at the end of the skill should now succeed with `{worker_id, status: "stopped"}` rather than failing on the signature mismatch.
+- Re-run the stream_simulate_to_xsiam skill end-to-end (chat). The cleanup `guardian_kill_worker` call at the end of the skill should now succeed with `{worker_id, status: "stopped"}` rather than failing on the signature mismatch.
 
 ---
 
@@ -1162,7 +1162,7 @@ This was the only step in the v0.17.79 → v0.17.87 arc the live smoke (#161) co
 
 ## [v0.17.87] — 2026-05-28 — *Chat: split reasoning from the final answer; collapsible "Thinking..." section above each assistant turn*
 
-Operator-surfaced after the Gemini 3.5 Flash smoke (v0.17.86): the model's extended-thinking content streams together with the final answer, so a simple "hi" produces a multi-paragraph dump that BEGINS with the model's reasoning ("My Thought Process as Phantom MCP Agent. Okay, the user has initiated contact…") before any actual reply.
+Operator-surfaced after the Gemini 3.5 Flash smoke (v0.17.86): the model's extended-thinking content streams together with the final answer, so a simple "hi" produces a multi-paragraph dump that BEGINS with the model's reasoning ("My Thought Process as Guardian MCP Agent. Okay, the user has initiated contact…") before any actual reply.
 
 ### What was wrong
 
@@ -1315,12 +1315,12 @@ The catalog discipline (per repo CLAUDE.md): "When you encounter a NEW failure m
 
 ### Why this matters for the broader arc
 
-v0.17.83's IS_SANDBOX fix is on `main` but never landed on phantom-vm because Build dev installer kept failing before the auto-deploy step. v0.17.84's workflow patch is on the SAME `main`, so the next workflow run uses the new retry logic — v0.17.84 self-survives the same flakiness window. Once v0.17.84 lands on phantom-vm, BOTH the v0.17.83 IS_SANDBOX fix AND the v0.17.84 CI hardening go live in the same auto-deploy.
+v0.17.83's IS_SANDBOX fix is on `main` but never landed on guardian-vm because Build dev installer kept failing before the auto-deploy step. v0.17.84's workflow patch is on the SAME `main`, so the next workflow run uses the new retry logic — v0.17.84 self-survives the same flakiness window. Once v0.17.84 lands on guardian-vm, BOTH the v0.17.83 IS_SANDBOX fix AND the v0.17.84 CI hardening go live in the same auto-deploy.
 
 ### Verify
 
 - `gh run watch <Build dev installer for v0.17.84 HEAD>` completes with `success`
-- phantom-vm `PHANTOM_VERSION` advances from `dev-8314865` (v0.17.82, last successful deploy) past v0.17.83 + v0.17.84
+- guardian-vm `GUARDIAN_VERSION` advances from `dev-8314865` (v0.17.82, last successful deploy) past v0.17.83 + v0.17.84
 - Chat header → pick `claude-code` provider → send message → response streams (v0.17.83 CLI fix verified live)
 
 ---
@@ -1333,7 +1333,7 @@ Operator surfaced via live chat smoke immediately after the v0.17.81 + v0.17.82 
 
 The Claude Code CLI (`@anthropic-ai/claude-code`) checks `process.getuid()` at startup. When the CLI is invoked with `--permission-mode bypassPermissions` (same flag as the older `--dangerously-skip-permissions`) AND the process is running as root (UID 0), the CLI hard-exits with that message. The check is documented in upstream issues [#9184](https://github.com/anthropics/claude-code/issues/9184) and [#58150](https://github.com/anthropics/claude-code/issues/58150).
 
-The guard's premise: *"We can't tell whether you're sandboxed. If you're root on the host AND you've waived all permission prompts, you can damage anything; refuse to start."* That premise is sound on a developer laptop but wrong for the phantom_agent container — bind-mount volumes only, ephemeral FS otherwise, no host filesystem access, fully replaceable by phantom-updater.
+The guard's premise: *"We can't tell whether you're sandboxed. If you're root on the host AND you've waived all permission prompts, you can damage anything; refuse to start."* That premise is sound on a developer laptop but wrong for the guardian_agent container — bind-mount volumes only, ephemeral FS otherwise, no host filesystem access, fully replaceable by guardian-updater.
 
 ### Fix
 
@@ -1341,12 +1341,12 @@ Set `IS_SANDBOX=1` in the envVars block of `mcp/agent/app/api/chat/cli/route.ts`
 
 The v0.17.72 code-comment block in `chat/cli/route.ts` (which originally documented points 1-3 from porting Kite's pattern) gets a new point 4 explaining the reasoning + linking the upstream issues, so the next agent who lands here doesn't have to re-discover.
 
-### Why `IS_SANDBOX=1` is appropriate for Phantom
+### Why `IS_SANDBOX=1` is appropriate for Guardian
 
-Phantom's agent container IS a sandbox by design:
+Guardian's agent container IS a sandbox by design:
 - Docker namespace isolation — no host-FS access path
-- Bind-mounts limited to `/app/data`, `/app/skills`, `/tls` (all customer-side, all phantom-managed)
-- Ephemeral FS otherwise — `phantom-updater` recreates the container on every version bump
+- Bind-mounts limited to `/app/data`, `/app/skills`, `/tls` (all customer-side, all guardian-managed)
+- Ephemeral FS otherwise — `guardian-updater` recreates the container on every version bump
 - The skills volume merge is image-default + operator-write — Claude Code can write to `/app/skills` but that's the operator's intended surface
 
 The damage radius of a bypassPermissions write inside the container is bounded by the container. The IS_SANDBOX assertion is true by inspection.
@@ -1431,7 +1431,7 @@ The v0.17.80 `stream_simulate_to_xsiam` skill smoke test couldn't proceed via th
 
 ## [v0.17.80] — 2026-05-28 — *New skill: `stream_simulate_to_xsiam` — end-to-end pipeline with L1–L20 baked in*
 
-Operator's ask: "test using a Chrome tab — chat with phantom agent, ask phantom to simulate some of the resources we've been working on, review responses and fix issues along the way. Update the skill that we use to simulate logs so it has all the lessons learned and helps Phantom avoid the issues we faced."
+Operator's ask: "test using a Chrome tab — chat with guardian agent, ask guardian to simulate some of the resources we've been working on, review responses and fix issues along the way. Update the skill that we use to simulate logs so it has all the lessons learned and helps Guardian avoid the issues we faced."
 
 ### Fix
 
@@ -1440,11 +1440,11 @@ New workflow skill `bundles/spark/mcp/skills/workflows/stream_simulate_to_xsiam.
 1. **Discover** — `data_sources_list` filtered to operator's vendor + `data_sources_get_schema`
 2. **Parse `how_to_use`** for the CEF routing values + multi-dataset discriminator (the v0.17.79 guidance the agent now reads, not the YAML display name)
 3. **Resolve destination** via `log_destinations_list` or default broker
-4. **Fire `phantom_create_data_worker`** with the right vendor/product literals + `observables_dict` discriminator + `schema_override` from the YAML
+4. **Fire `guardian_create_data_worker`** with the right vendor/product literals + `observables_dict` discriminator + `schema_override` from the YAML
 5. **Wait** ≥90s for ingest (≥30s minimum — L13/L17 lessons)
 6. **Verify raw landing** via `dataset = X | sort desc _time` (L13)
 7. **Verify XDM** via `datamodel dataset = X | fields xdm.*` (L13)
-8. **Cleanup** via `phantom_kill_worker`
+8. **Cleanup** via `guardian_kill_worker`
 
 Bakes in 20 specific lessons learned (L1–L20) across the R5 v0.17.75-79 smoke runs so the agent doesn't re-discover them per session — including the broker-route mismatch pattern (v0.17.79), the multi-dataset discriminator field requirements (Okta SSO/O365/Entra/AKS), the UDP MTU 1500 ceiling (L18), the CEF JSON-string-stored-as-column pattern (L19), and the nested-JSON XDM saturation ceiling at ~10 (L20).
 
@@ -1472,9 +1472,9 @@ Every `how_to_use:` field on the 22 validated vendors now carries a **"Sending t
 
 - The literal CEF **vendor** + **product** values that produce the YAML's expected `dataset_name` after broker normalization
 - For multi-dataset packs, the **raw-field discriminator** the operator's PR needs (e.g. Okta SSO: `eventType=user.authentication.sso`; O365 Exchange: `Workload=Exchange`; Azure AKS: `category=kube-audit`; Entra ID audit/sign-in: `category=AuditLogs` / `SignInLogs`)
-- A leading "destination-neutral" framing: Phantom isn't locked to XSIAM; the values here are the XSIAM-specific routing guidance. Other destinations get the same wire format with their own routing.
+- A leading "destination-neutral" framing: Guardian isn't locked to XSIAM; the values here are the XSIAM-specific routing guidance. Other destinations get the same wire format with their own routing.
 
-This makes the agent's chat path actionable for every vendor: the chat reads the data-source `how_to_use:` (already surfaced in the drawer via v0.17.75 and in the agent's tool catalog), sees the precise CEF vendor/product values, and emits them via `phantom_create_data_worker`. The schema itself stays vendor-neutral — no `broker_vendor:` or `xsiam_routing:` field added.
+This makes the agent's chat path actionable for every vendor: the chat reads the data-source `how_to_use:` (already surfaced in the drawer via v0.17.75 and in the agent's tool catalog), sees the precise CEF vendor/product values, and emits them via `guardian_create_data_worker`. The schema itself stays vendor-neutral — no `broker_vendor:` or `xsiam_routing:` field added.
 
 ### What ships
 
@@ -1504,7 +1504,7 @@ Three broker-routing categories surfaced:
 
 ## [v0.17.78] — 2026-05-28 — *xlog: resolve xlog URL in both runtimes (agent + per-instance container)*
 
-Sequel to v0.17.77. With the flattened signature, the agent's chat path now reaches the per-instance xlog connector container — but the next error surfaced: `'get_xlog_url'` KeyError. The xlog tool functions were copy-pasted from agent-runtime code that reads the xlog URL via `lifespan_context["get_xlog_url"]()` — a key the **agent's** lifespan sets up (`bundles/spark/mcp/src/service/phantom_mcp/server.py` line 79), but the **per-instance connector runtime** never populates (it's connector-agnostic).
+Sequel to v0.17.77. With the flattened signature, the agent's chat path now reaches the per-instance xlog connector container — but the next error surfaced: `'get_xlog_url'` KeyError. The xlog tool functions were copy-pasted from agent-runtime code that reads the xlog URL via `lifespan_context["get_xlog_url"]()` — a key the **agent's** lifespan sets up (`bundles/spark/mcp/src/service/guardian_mcp/server.py` line 79), but the **per-instance connector runtime** never populates (it's connector-agnostic).
 
 ### Fix
 
@@ -1512,14 +1512,14 @@ New helper `bundles/spark/connectors/xlog/src/_xlog_url_resolver.py` with `resol
 
 All 14 `lifespan_context["get_xlog_url"]()` call sites across the xlog connector converted in one bug-family pass:
 
-- `workers.py` — 3 call sites (`phantom_create_data_worker`, `phantom_list_workers`, `phantom_kill_worker`)
+- `workers.py` — 3 call sites (`guardian_create_data_worker`, `guardian_list_workers`, `guardian_kill_worker`)
 - `field_info.py` — 1 call site
 - `data_faker.py` — 2 call sites
 - `scenarios.py` — 2 call sites
 - `simulation_runs.py` — 3 call sites
 - `observables_catalog.py` — 3 call sites
 
-Each `client = PhantomGraphQLClient(lifespan_context["get_xlog_url"]())` rewritten to `client = PhantomGraphQLClient(resolve_xlog_url(ctx))`. Helper module imported via `from ._xlog_url_resolver import resolve_xlog_url`.
+Each `client = GuardianGraphQLClient(lifespan_context["get_xlog_url"]())` rewritten to `client = GuardianGraphQLClient(resolve_xlog_url(ctx))`. Helper module imported via `from ._xlog_url_resolver import resolve_xlog_url`.
 
 ### Files
 
@@ -1536,9 +1536,9 @@ xsiam, cortex-xdr, and other connectors with the same lifespan-context-key patte
 
 ---
 
-## [v0.17.77] — 2026-05-28 — *xlog: flatten `phantom_create_data_worker` signature for agent chat path*
+## [v0.17.77] — 2026-05-28 — *xlog: flatten `guardian_create_data_worker` signature for agent chat path*
 
-Sequel to v0.17.76. The agent's MCP proxy is fixed at the `connector.yaml` boundary (v0.17.76), but the connector container's tool was still rejecting the flat args with 11 Pydantic validation errors — because the Python signature `phantom_create_data_worker(request: CreateDataWorkerRequest, ctx: Context)` advertises a single parameter named `request` to FastMCP, and the agent's flat args have no outer `request` wrapper.
+Sequel to v0.17.76. The agent's MCP proxy is fixed at the `connector.yaml` boundary (v0.17.76), but the connector container's tool was still rejecting the flat args with 11 Pydantic validation errors — because the Python signature `guardian_create_data_worker(request: CreateDataWorkerRequest, ctx: Context)` advertises a single parameter named `request` to FastMCP, and the agent's flat args have no outer `request` wrapper.
 
 ### Fix
 
@@ -1553,24 +1553,24 @@ This matches the caldera tool pattern (`caldera_get_abilities_by_tactic(tactic: 
 ### Bug-family audit (deferred)
 
 Every other xlog tool using `request: XxxRequest, ctx: Context` carries the same gap:
-- `phantom_kill_worker(request: KillWorkerRequest, ctx)`
-- `phantom_create_scenario_worker(request: CreateScenarioWorkerRequest, ctx)`
-- `phantom_generate_scenario_fake_data(request: GenerateScenarioFakeDataRequest, ctx)`
-- `phantom_generate_fake_data_v2(request: FakeDataRequest, schema_override: ..., ctx)`
-- `phantom_get_field_info(request: FieldInfoRequest, ctx)`
-- `phantom_generate_observables(request: ObservablesRequest, ctx)`
-- `phantom_get_technology_stack(request: TechStackRequest, ctx)` / `phantom_update_technology_stack(...)`
-- `phantom_run_detection_validation` + `phantom_get_simulation_result` + `phantom_generate_coverage_report`
+- `guardian_kill_worker(request: KillWorkerRequest, ctx)`
+- `guardian_create_scenario_worker(request: CreateScenarioWorkerRequest, ctx)`
+- `guardian_generate_scenario_fake_data(request: GenerateScenarioFakeDataRequest, ctx)`
+- `guardian_generate_fake_data_v2(request: FakeDataRequest, schema_override: ..., ctx)`
+- `guardian_get_field_info(request: FieldInfoRequest, ctx)`
+- `guardian_generate_observables(request: ObservablesRequest, ctx)`
+- `guardian_get_technology_stack(request: TechStackRequest, ctx)` / `guardian_update_technology_stack(...)`
+- `guardian_run_detection_validation` + `guardian_get_simulation_result` + `guardian_generate_coverage_report`
 
-Same gap likely exists in xsiam, cortex-xdr, and other Python-MCP connectors. Cataloged here as an open follow-on; this release ships only the `phantom_create_data_worker` fix because it's the one driving the v0.17.75 simulation guidance smoke harness.
+Same gap likely exists in xsiam, cortex-xdr, and other Python-MCP connectors. Cataloged here as an open follow-on; this release ships only the `guardian_create_data_worker` fix because it's the one driving the v0.17.75 simulation guidance smoke harness.
 
 ---
 
 ## [v0.17.76] — 2026-05-28 — *xlog: fix `create_data_worker` arg schema in connector.yaml*
 
-The agent's proxy for `phantom_create_data_worker` was rejecting valid calls with "Unexpected keyword argument" errors on every meaningful field (`type`, `count`, `interval`, `vendor`, `product`, `schema_override`, etc.). Root cause: the agent synthesizes its proxy function from `connector.yaml`'s `spec.tools[].args` list — and the xlog `create_data_worker` args list was a stale legacy shape (`format`, `rate_per_second`, `duration_seconds`, `observables`, `destination`) that didn't match the actual Python `CreateDataWorkerRequest` Pydantic model.
+The agent's proxy for `guardian_create_data_worker` was rejecting valid calls with "Unexpected keyword argument" errors on every meaningful field (`type`, `count`, `interval`, `vendor`, `product`, `schema_override`, etc.). Root cause: the agent synthesizes its proxy function from `connector.yaml`'s `spec.tools[].args` list — and the xlog `create_data_worker` args list was a stale legacy shape (`format`, `rate_per_second`, `duration_seconds`, `observables`, `destination`) that didn't match the actual Python `CreateDataWorkerRequest` Pydantic model.
 
-Surfaced during the v0.17.75 MCP-tool smoke pass: trying to drive vendor-faithful streaming via the agent's `phantom_create_data_worker` tool errored at the proxy boundary before reaching the connector container. Direct UDP smoke (the path we've been using through v0.17.75) bypasses this proxy, which is why the bug wasn't caught earlier.
+Surfaced during the v0.17.75 MCP-tool smoke pass: trying to drive vendor-faithful streaming via the agent's `guardian_create_data_worker` tool errored at the proxy boundary before reaching the connector container. Direct UDP smoke (the path we've been using through v0.17.75) bypasses this proxy, which is why the bug wasn't caught earlier.
 
 ### What ships
 
@@ -1579,7 +1579,7 @@ Surfaced during the v0.17.75 MCP-tool smoke pass: trying to drive vendor-faithfu
 
 ### Why this matters
 
-- The "switch to MCP-tool path" the v0.17.75 release-notes promised actually works now — the agent can drive `phantom_create_data_worker(vendor=..., product=..., schema_override=[...])` end-to-end.
+- The "switch to MCP-tool path" the v0.17.75 release-notes promised actually works now — the agent can drive `guardian_create_data_worker(vendor=..., product=..., schema_override=[...])` end-to-end.
 - Existing direct-UDP smoke harnesses keep working unchanged (they bypass the proxy).
 
 ### Files
@@ -1685,7 +1685,7 @@ Dataset names are globally unique by xsiam convention, so they make a clean file
 - AWS_WAF spot-check: `arn` fields show real ARN, `uri` shows `/api/v1/path?q=1`, `useragent` shows real Mozilla UA
 - Pre-deploy gate: tsc + lint + build + pytest
 
-### Smoke matrix (post-deploy on phantom-vm)
+### Smoke matrix (post-deploy on guardian-vm)
 
 - ✓ agent-verified — every pack still installs through `/api/agent/data-sources/install`; drawer renders fields with no XDM section
 - ✓ agent-verified — Export button on a Browse-tab AWS_WAF row downloads as `aws_waf_raw.yaml` (not the triple-repeating shape)
@@ -1744,11 +1744,11 @@ Without this flag, Claude Code shows an interactive permission prompt on first t
 
 ### Bug 3 — `npx @anthropic-ai/claude-code` instead of `claude` binary
 
-The phantom-agent image already ships `/usr/bin/claude` (Claude Code 1.0.128). `npx @anthropic-ai/claude-code` per call triggered an npm-install on first run and could resolve a different version than what's baked. Kite's `DEFAULT_CLAUDE_BACKEND.command = "claude"` — invoke the binary directly.
+The guardian-agent image already ships `/usr/bin/claude` (Claude Code 1.0.128). `npx @anthropic-ai/claude-code` per call triggered an npm-install on first run and could resolve a different version than what's baked. Kite's `DEFAULT_CLAUDE_BACKEND.command = "claude"` — invoke the binary directly.
 
 ### Changes
 
-**`mcp/agent/lib/cli-wrapper.ts`**: added `clearEnv?: string[]` field to `CliWrapperConfig` (matches Kite's pattern). After overlaying `envVars` on `process.env`, deletes every key in `clearEnv` — so even if the inherited env had a stale `ANTHROPIC_API_KEY` from `/opt/phantom/.env`, the child Claude process won't see it.
+**`mcp/agent/lib/cli-wrapper.ts`**: added `clearEnv?: string[]` field to `CliWrapperConfig` (matches Kite's pattern). After overlaying `envVars` on `process.env`, deletes every key in `clearEnv` — so even if the inherited env had a stale `ANTHROPIC_API_KEY` from `/opt/guardian/.env`, the child Claude process won't see it.
 
 **`mcp/agent/app/api/chat/cli/route.ts`**:
 - Command changed from `npx @anthropic-ai/claude-code` → `claude`.
@@ -1759,11 +1759,11 @@ The phantom-agent image already ships `/usr/bin/claude` (Claude Code 1.0.128). `
 ### Validation
 
 - tsc clean, ESLint clean (4 pre-existing warnings unchanged), Next.js build clean, pytest 509/509.
-- End-to-end test on phantom-vm: operator sends prompt via /chat with Claude Code toggle on → see streamed JSON output.
+- End-to-end test on guardian-vm: operator sends prompt via /chat with Claude Code toggle on → see streamed JSON output.
 
 ### What still uses the API-key path
 
-The future chat-route `callAnthropic` (direct Anthropic API, no CLI shell-out) will continue to use `resolveAnthropicApiKey()` and the `secrets.api_key` field — separate from the CLI flow. The `/providers` page already exposes both fields (`anthropicApiKey` + `anthropicCliKey`); operators populating only the CLI key get only the CLI path working, which matches the current Phantom v0.17.x scope.
+The future chat-route `callAnthropic` (direct Anthropic API, no CLI shell-out) will continue to use `resolveAnthropicApiKey()` and the `secrets.api_key` field — separate from the CLI flow. The `/providers` page already exposes both fields (`anthropicApiKey` + `anthropicCliKey`); operators populating only the CLI key get only the CLI path working, which matches the current Guardian v0.17.x scope.
 
 ---
 
@@ -1805,7 +1805,7 @@ Operators looking at the drawer now see vendor-realistic samples in every row of
 Closes operator-spotted UX issue Q1: the single combined journey `install-data-source-simulate-vendor-logs` conflated two distinct operator paths — managing data-source schemas (browse / install / preview / uninstall) vs. using an installed schema to simulate logs. Split into two:
 
 - **`install-data-source`** (new, category `data-sources`, difficulty `starter`, 2 min) — covers the *workflow*: browse the marketplace, click into a vendor card, preview the schema in the drawer (Name / Type / Description / Example columns visible), install from the drawer, verify Installed tab populates, optional uninstall. New API row documenting the DELETE endpoint.
-- **`simulate-from-installed-data-source`** (new, category `simulation`, difficulty `intermediate`, 2 min) — assumes the prerequisite (install completed) and walks the *generation* path: ask the agent to simulate N logs, watch the `data_sources_list → data_sources_get_schema → phantom_generate_fake_data_v2` chain, optionally route to UDP via `phantom_create_data_worker`. Two prompts now (one for in-chat preview, one for UDP destination).
+- **`simulate-from-installed-data-source`** (new, category `simulation`, difficulty `intermediate`, 2 min) — assumes the prerequisite (install completed) and walks the *generation* path: ask the agent to simulate N logs, watch the `data_sources_list → data_sources_get_schema → guardian_generate_fake_data_v2` chain, optionally route to UDP via `guardian_create_data_worker`. Two prompts now (one for in-chat preview, one for UDP destination).
 
 New top-level category `data-sources` in `JourneyCategory` + `CATEGORY_META` — distinct from `connectors` (external integrations) and `simulation` (using a schema to emit logs). The Journeys index page now surfaces it as its own first-class tab.
 
@@ -1962,7 +1962,7 @@ Every field in every bundled pack now follows the same 2-sentence description sh
 <vendor concept (semantic role)>. <wire-shape constraint per type>.
 ```
 
-The wire-shape sentence is what teaches Phantom — and any downstream modeling rule (Cortex, Splunk, Elastic) — what form the value must take so parsers succeed. The data_source.yaml describes the wire format the vendor emits, neutral to whichever SIEM consumes it. **No mention of `xdm.*`, "Drives xdm", "XDM_CONST.*", or modeling-rule jargon survives anywhere in the corpus.**
+The wire-shape sentence is what teaches Guardian — and any downstream modeling rule (Cortex, Splunk, Elastic) — what form the value must take so parsers succeed. The data_source.yaml describes the wire format the vendor emits, neutral to whichever SIEM consumes it. **No mention of `xdm.*`, "Drives xdm", "XDM_CONST.*", or modeling-rule jargon survives anywhere in the corpus.**
 
 Examples (FortiGate):
 
@@ -2037,7 +2037,7 @@ These are flagged for the per-pack manual review pass that begins next session. 
 
 ### Tracking
 
-Workstream tracked in issue [#97](https://github.com/kite-production/phantom/issues/97). Refs #97.
+Workstream tracked in issue [#97](https://github.com/kite-production/guardian/issues/97). Refs #97.
 
 ---
 
@@ -2077,7 +2077,7 @@ With v0.17.66's forced-type rule, the script restores `type: enum` automatically
 
 ### Tracking
 
-Workstream tracked in issue [#97](https://github.com/kite-production/phantom/issues/97). Progress: tooling iteration 2 of N; manual-review pass next.
+Workstream tracked in issue [#97](https://github.com/kite-production/guardian/issues/97). Progress: tooling iteration 2 of N; manual-review pass next.
 
 ---
 
@@ -2174,7 +2174,7 @@ python3 scripts/draft_composite_corrections.py --no-preserve
 
 ### Tracking
 
-Workstream tracked in issue [#97](https://github.com/kite-production/phantom/issues/97). Progress: tooling complete; manual review pending across 341 packs (Proofpoint = 1/342 done).
+Workstream tracked in issue [#97](https://github.com/kite-production/guardian/issues/97). Progress: tooling complete; manual review pending across 341 packs (Proofpoint = 1/342 done).
 
 ---
 
@@ -2225,7 +2225,7 @@ The generator side picks up the TOP-LEVEL entries (composites generated as JSON 
 
 ### Tracking
 
-Workstream tracked in issue [#97](https://github.com/kite-production/phantom/issues/97). Progress: 2 / 342 (Proofpoint revised, AMP revision next).
+Workstream tracked in issue [#97](https://github.com/kite-production/guardian/issues/97). Progress: 2 / 342 (Proofpoint revised, AMP revision next).
 
 ---
 
@@ -2263,7 +2263,7 @@ Pack description also updated from the terse "Uses CISCO AMP Endpoint" to a comp
 
 ### Tracking
 
-Workstream tracked in issue [#97](https://github.com/kite-production/phantom/issues/97). Progress: 2 / 342.
+Workstream tracked in issue [#97](https://github.com/kite-production/guardian/issues/97). Progress: 2 / 342.
 
 ---
 
@@ -2311,7 +2311,7 @@ ProofpointEmailSecurity comparison (analyzed in the prior turn): 11 of 15 fields
 - `metadata` — audit-event observer metadata (`customerId`, `origin.type / .schemaVersion / .data.{agent,version,cid}`)
 - `parsed_fields` — pre-parsed audit details (`eventSubCategory`, `eventDetails`)
 
-Every composite field's `example` is a JSON-stringified shape demonstrating the nested paths the modeling rule's `->` derefs require. Wire-faithful simulation depends on this — if Phantom emits a flat string for `msg`, the downstream `msg -> normalizedHeader.from[]` returns null and every email-attribute mapping drops.
+Every composite field's `example` is a JSON-stringified shape demonstrating the nested paths the modeling rule's `->` derefs require. Wire-faithful simulation depends on this — if Guardian emits a flat string for `msg`, the downstream `msg -> normalizedHeader.from[]` returns null and every email-attribute mapping drops.
 
 ### What does NOT ship
 
@@ -2336,7 +2336,7 @@ Every composite field's `example` is a JSON-stringified shape demonstrating the 
 
 ### Tracking
 
-Workstream tracked in issue [#97](https://github.com/kite-production/phantom/issues/97). Progress: 1 / 342.
+Workstream tracked in issue [#97](https://github.com/kite-production/guardian/issues/97). Progress: 1 / 342.
 
 ---
 
@@ -2350,7 +2350,7 @@ Two adjacent UI cleanups on `/data-sources` flagged during operator UI review.
 
 1. **Removed the "Include rawlog-only" checkbox.** Its underlying filter (`?include_rawlog=` query param) sat on a niche concept — rawlog-only sources lack structured field schemas and so can't drive vendor-faithful simulation. The default behavior (hide them) was correct; the operator-facing toggle added clutter without practical value. Backend support for the query param remains for power users who need to hit `?include_rawlog=true` directly via curl. Removed the `useState` hook, the `loadCatalog` query-param branch, the `useCallback` dependency, the prop passing into `BrowseSection`, the prop destructure + type, and the toolbar JSX label.
 
-2. **Removed the "XDM mappings populate in a future release" fallback text.** Surfaced when a data source's drawer had no XDM mappings; integration-locked Phantom to Cortex/XDM terminology in operator-facing UI for no value. The whole XDM-mappings section is going away in R2.2 (schema migration) anyway. For now, the conditional just silently omits the section when no mappings exist.
+2. **Removed the "XDM mappings populate in a future release" fallback text.** Surfaced when a data source's drawer had no XDM mappings; integration-locked Guardian to Cortex/XDM terminology in operator-facing UI for no value. The whole XDM-mappings section is going away in R2.2 (schema migration) anyway. For now, the conditional just silently omits the section when no mappings exist.
 
 ### What does NOT ship
 
@@ -2423,9 +2423,9 @@ Third slice of the docs arc. Adds a typed **`prerequisites`** field to journey d
 
 ### Design
 
-Operator feedback after R2.0b shipped: journeys still position Phantom as integration-locked to Cortex (specific example: the install-data-source journey summary still mentioned "Cortex's stock modeling rules" before R2.0; remnant API descriptions in the same journey mentioned "XDM mappings"). Also: the install-data-source journey jumped straight to a simulate-prompt without an explicit chat-driven install step.
+Operator feedback after R2.0b shipped: journeys still position Guardian as integration-locked to Cortex (specific example: the install-data-source journey summary still mentioned "Cortex's stock modeling rules" before R2.0; remnant API descriptions in the same journey mentioned "XDM mappings"). Also: the install-data-source journey jumped straight to a simulate-prompt without an explicit chat-driven install step.
 
-The third operator ask — a journey-dependency mechanism — is **guidance-only, not a hard gate**. Phantom doesn't block the operator from running a journey whose prerequisites aren't completed; the field exists so operators landing on a journey cold see what setup is likely missing. Directional (prerequisites are upstream), unlike `related` which is bidirectional.
+The third operator ask — a journey-dependency mechanism — is **guidance-only, not a hard gate**. Guardian doesn't block the operator from running a journey whose prerequisites aren't completed; the field exists so operators landing on a journey cold see what setup is likely missing. Directional (prerequisites are upstream), unlike `related` which is bidirectional.
 
 ### What ships
 
@@ -2448,7 +2448,7 @@ The third operator ask — a journey-dependency mechanism — is **guidance-only
 - Renders between the journey-metadata header and the numbered "01 Chat prompts" section.
 - Tertiary-tinted callout box (matches the Implementation gap callouts on the architecture page for visual consistency).
 - Lists each prerequisite as a clickable Link card (icon + title + category/difficulty/duration) — same shape as the Related journeys cards at the bottom of the page.
-- Section header explicitly states "Not a hard requirement — Phantom won't block you" so operators understand it's guidance.
+- Section header explicitly states "Not a hard requirement — Guardian won't block you" so operators understand it's guidance.
 - Only renders when `prerequisites.length > 0`; journeys without prerequisites show nothing (no empty callout).
 
 ### What does NOT ship
@@ -2483,9 +2483,9 @@ Second slice of the docs arc — adds an SVG flow diagram to the `/help/architec
 **`mcp/agent/components/diagrams/log-destinations-flow.tsx`** (new) — `LogDestinationsFlow` React component. 1200×900 SVG, theme-aware via `DIAGRAM_THEME_CSS` (no hardcoded colors; auto-switches between light + dark themes). Four lanes:
 
 1. **Browser** — `/log-destinations` page card showing the operator-visible action set (Create / Edit / Probe / Delete / Set default).
-2. **Phantom-agent · Next.js** — `/api/agent/log-destinations/*` proxy routes grouped into READ / CRUD / PROBE+DEFAULT columns.
-3. **Phantom-agent · embedded MCP** — three boxes side-by-side: `destination_types_loader` (boot-time spec.yaml scan), `log_destinations_store` (hero, CRUD + the one-shot `WEBHOOK_ENDPOINT` migration), `destination_handler_registry` (file-path handler import + probe/send dispatch). MCP tools row below shows the two agent-callable read-only tools that return `"***"` sentinels for every secret slot.
-4. **Container filesystem + external** — four boxes: type manifests (blue, `bundles/spark/destinations/<id>/`), `log_destinations.db` SQLite store (sink), SecretStore overlay (warn yellow — credential-boundary callout, `/agents/phantom/log_destinations/<id>/<slot>`), and external destinations (orange — XSIAM HTTPS, syslog UDP/TCP/TLS, Splunk HEC, webhook).
+2. **Guardian-agent · Next.js** — `/api/agent/log-destinations/*` proxy routes grouped into READ / CRUD / PROBE+DEFAULT columns.
+3. **Guardian-agent · embedded MCP** — three boxes side-by-side: `destination_types_loader` (boot-time spec.yaml scan), `log_destinations_store` (hero, CRUD + the one-shot `WEBHOOK_ENDPOINT` migration), `destination_handler_registry` (file-path handler import + probe/send dispatch). MCP tools row below shows the two agent-callable read-only tools that return `"***"` sentinels for every secret slot.
+4. **Container filesystem + external** — four boxes: type manifests (blue, `bundles/spark/destinations/<id>/`), `log_destinations.db` SQLite store (sink), SecretStore overlay (warn yellow — credential-boundary callout, `/agents/guardian/log_destinations/<id>/<slot>`), and external destinations (orange — XSIAM HTTPS, syslog UDP/TCP/TLS, Splunk HEC, webhook).
 
 **Visual emphases**:
 - **Credential boundary** — dashed warn-yellow pill labeled "CREDENTIAL BOUNDARY" sits inline with the MCP lane near the `handler_registry` + SecretStore so the reader immediately sees the line.
@@ -2609,12 +2609,12 @@ The state lives inside `useChat()` because it drives the **fetch URL** — that'
 - **Per-session persistence** — A6 will likely promote `chat-route-mode` from localStorage to `operator_state.db` so the preference follows the operator across devices. For A1.2 the device-local choice matches the debug-panel pattern.
 - **Mid-turn streaming progress** — Claude Code's `--output-format json` emits ONE JSON object at the end (30-90s wait). A future enhancement could switch to `--output-format stream-json` for incremental rendering. The CLI handler is already shaped to accept multiple `output` events.
 - **Test Connection button on `/providers`** for the Anthropic card — still deferred to A2 (`callAnthropic` in the chat-route).
-- **MCP-bridged Claude Code** — Claude Code does NOT see Phantom's MCP tools today (it has its own built-in tools). Wiring Phantom's MCP via `--mcp-config` is a separate enhancement.
+- **MCP-bridged Claude Code** — Claude Code does NOT see Guardian's MCP tools today (it has its own built-in tools). Wiring Guardian's MCP via `--mcp-config` is a separate enhancement.
 - **Audit row for CLI turns** — the `done` event carries metadata; persistence to `chat_turn_cli` audit rows is a future enhancement.
 
 ### Smoke test (operator)
 
-1. Log into the deployed phantom-vm install.
+1. Log into the deployed guardian-vm install.
 2. Navigate to `/providers` and confirm the Anthropic API key (or Claude Code CLI key) is configured (saved in v0.17.55).
 3. Open the chat page. In the header's right-side toolbar (between Approvals and the subagent button) a new "Claude Code" button should appear.
 4. Click it. It tints primary (the active state).
@@ -2672,11 +2672,11 @@ Second sub-release of the multi-provider chat arc. The `/providers` page now per
 
 ### Smoke test (operator)
 
-1. Log into the deployed phantom-vm install.
+1. Log into the deployed guardian-vm install.
 2. Navigate to `/providers`. The Anthropic card should now look identical to Vertex: bordered, non-greyed, two MaskedKeyInput fields, Save button enabled when fields are dirty.
 3. Enter an `ANTHROPIC_API_KEY=sk-ant-...` value, click Save. Expect a green toast `Anthropic credentials saved`.
 4. Reload the page. The masked field should show `set ✓` instead of empty.
-5. From the host: `curl -N https://localhost:3001/api/chat/cli ...` (v0.17.54 smoke) — should now succeed without any `ANTHROPIC_API_KEY` in `/opt/phantom/.env`.
+5. From the host: `curl -N https://localhost:3001/api/chat/cli ...` (v0.17.54 smoke) — should now succeed without any `ANTHROPIC_API_KEY` in `/opt/guardian/.env`.
 
 ### Next in arc
 
@@ -2699,15 +2699,15 @@ Second sub-release of the multi-provider chat arc. The `/providers` page now per
 
 ## [v0.17.54] — 2026-05-25 — *Multi-provider arc · A1 first slice: Claude Code CLI shell-out endpoint*
 
-First sub-release of the multi-provider chat arc. Phantom-agent now ships the Claude Code CLI pre-baked in the image and exposes `POST /api/chat/cli` — operators can drive a chat turn through Anthropic's Claude Code as a second model option alongside the default Gemini chat-route.
+First sub-release of the multi-provider chat arc. Guardian-agent now ships the Claude Code CLI pre-baked in the image and exposes `POST /api/chat/cli` — operators can drive a chat turn through Anthropic's Claude Code as a second model option alongside the default Gemini chat-route.
 
 ### Design
 
 **Two integration patterns** were chosen for the broader arc:
-- **Pattern A — API providers** (Anthropic API, OpenAI API, Ollama API) plug into Phantom's existing tool-call loop alongside `callGemini()`.
+- **Pattern A — API providers** (Anthropic API, OpenAI API, Ollama API) plug into Guardian's existing tool-call loop alongside `callGemini()`.
 - **Pattern B — CLI providers** (Claude Code, Codex) are one-shot shell-outs. They run their own tool-call loops internally and don't fit the chat-route's 20-step pipeline.
 
-A1 ships Pattern B for Claude Code, ported from Spark's plugin-runner pattern but simplified for Phantom's single-container model — `child_process.spawn` inline instead of Docker-in-Docker. Container-level isolation (Spark's `--cap-drop=ALL` story) can be layered in later via the per-instance-connector-container pattern.
+A1 ships Pattern B for Claude Code, ported from Spark's plugin-runner pattern but simplified for Guardian's single-container model — `child_process.spawn` inline instead of Docker-in-Docker. Container-level isolation (Spark's `--cap-drop=ALL` story) can be layered in later via the per-instance-connector-container pattern.
 
 ### What ships
 
@@ -2725,18 +2725,18 @@ A1 ships Pattern B for Claude Code, ported from Spark's plugin-runner pattern bu
 
 ### What does NOT ship (deferred)
 
-- **`/providers` ProviderStore persistence for `anthropicCliKey`** — the existing PUT route accepts the field but discards it. A1.1 wires the persist+read path. For A1 first slice, operators set `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` in `/opt/phantom/.env` and the resolver picks it up.
+- **`/providers` ProviderStore persistence for `anthropicCliKey`** — the existing PUT route accepts the field but discards it. A1.1 wires the persist+read path. For A1 first slice, operators set `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` in `/opt/guardian/.env` and the resolver picks it up.
 - **Chat-header UI toggle** — A1.2. For A1, operators hit `/api/chat/cli` directly via curl to validate.
-- **MCP bridge to Claude Code** — Claude Code can be given access to external MCP servers via `--mcp-config`. Wiring Phantom's MCP through that flag is a separate enhancement, not part of A1.
+- **MCP bridge to Claude Code** — Claude Code can be given access to external MCP servers via `--mcp-config`. Wiring Guardian's MCP through that flag is a separate enhancement, not part of A1.
 - **Audit row** — the SSE `done` event carries the run metadata. A future enhancement persists it as a `chat_turn_cli` audit row via the same path `chat_turn_cost` uses.
 
 ### Smoke test (manual)
 
 ```bash
 # From a logged-in browser session (cookie present):
-curl -N https://<phantom-host>/api/chat/cli \
+curl -N https://<guardian-host>/api/chat/cli \
   -H "Content-Type: application/json" \
-  --cookie "phantom_session=<token>" \
+  --cookie "guardian_session=<token>" \
   -d '{"prompt":"List the files in /tmp"}'
 
 # Should see SSE events: meta → output (or output_raw) → done.
@@ -2757,19 +2757,19 @@ curl -N https://<phantom-host>/api/chat/cli \
 
 - `npm run build` clean (verified)
 - `npx tsc --noEmit` clean (verified)
-- Set `ANTHROPIC_API_KEY=sk-ant-...` in `/opt/phantom/.env` on phantom-vm after the image rebuilds, then curl the smoke command above
+- Set `ANTHROPIC_API_KEY=sk-ant-...` in `/opt/guardian/.env` on guardian-vm after the image rebuilds, then curl the smoke command above
 - SSE response includes a final `done` event with `exit_code: 0` and Claude Code's response JSON in an earlier `output` event
 
 ---
 
 ## [v0.17.53] — 2026-05-25 — *Help docs: integration-neutral language pass (round 1)*
 
-First sub-release of the integration-neutral language arc. The docs were reading like Phantom is a Cortex XSIAM accessory — every positioning paragraph framed XSIAM/XDM as the destination. That's wrong: Phantom produces wire-faithful events that any downstream system parses (XSIAM, Splunk, Sentinel, Elastic, custom Logstash, etc.). XSIAM is one (well-supported) integration, not the product's identity.
+First sub-release of the integration-neutral language arc. The docs were reading like Guardian is a Cortex XSIAM accessory — every positioning paragraph framed XSIAM/XDM as the destination. That's wrong: Guardian produces wire-faithful events that any downstream system parses (XSIAM, Splunk, Sentinel, Elastic, custom Logstash, etc.). XSIAM is one (well-supported) integration, not the product's identity.
 
 ### What ships — high-impact framing rewrites
 
 **Architecture page** (`mcp/agent/app/help/architecture/page.tsx`):
-- **Data Sources Section opener** — rewrote the 3-paragraph intro. Schemas now described as "structured descriptions of what a vendor's product emits on the wire". Cortex content packs called out as ONE source for canonical schemas (alongside other publicly-available vendor catalogues). Downstream parsing described as integration-neutral with XSIAM listed as one example among Splunk TAs, Sentinel parsers, Elastic ingest, custom Logstash. Phantom positioned as destination-neutral.
+- **Data Sources Section opener** — rewrote the 3-paragraph intro. Schemas now described as "structured descriptions of what a vendor's product emits on the wire". Cortex content packs called out as ONE source for canonical schemas (alongside other publicly-available vendor catalogues). Downstream parsing described as integration-neutral with XSIAM listed as one example among Splunk TAs, Sentinel parsers, Elastic ingest, custom Logstash. Guardian positioned as destination-neutral.
 - **`data_sources_install` MCP tool description** — "typical Cortex modeling rules emit 1–3 datasets" → "the bundled vendor schemas typically declare 1–3 datasets per rule".
 
 **User guide** (`mcp/agent/app/help/user/page.tsx`):
@@ -2942,12 +2942,12 @@ Second sub-release of Phase 2. The CLAUDE.md mandate for a `#setup-wiring` ancho
 
 `mcp/agent/app/help/architecture/page.tsx` — new `Setup & First-Run Wiring` Section (Foundation group, right after Authentication), with six subsections:
 
-1. **Installer-side: generate the `.env`** — describes the per-install random secrets the installer writes to `/opt/phantom/.env` (admin password, KEK, MCP_TOKEN, image digests).
+1. **Installer-side: generate the `.env`** — describes the per-install random secrets the installer writes to `/opt/guardian/.env` (admin password, KEK, MCP_TOKEN, image digests).
 2. **First boot: entrypoint seeds the stores** — 6-step idempotent seed sequence (TLS proxy → skills merge → SecretStore seed → KB reconcile → MCP subprocess → Next.js).
 3. **First operator login** — `admin` + auto-generated password → forced redirect to `/profile` until `credentials_changed=true`.
 4. **Provider configuration** — `/providers` UI surface + REST endpoint summary + secret redaction contract.
 5. **Connector + instance configuration** — manifest-declared field schema rendered into create/edit forms.
-6. **Factory reset path** — host-side `phantom-factory-reset` utility behavior.
+6. **Factory reset path** — host-side `guardian-factory-reset` utility behavior.
 
 Closes a documentation gap CLAUDE.md has tracked since the v0.4.0 `/setup` page deletion. The first-run flow now has one authoritative explanation instead of being scattered across boot-lifecycle, authentication, and secret-store.
 
@@ -3009,7 +3009,7 @@ tsc clean, Next.js production build clean.
 
 ## [v0.17.46] — 2026-05-25 — *Help docs: resolve duplicate password-change subsections + auth model conflict*
 
-Closes Phase 1 of the doc audit arc. Phantom's documentation now has a single authoritative source for each customer-facing concept.
+Closes Phase 1 of the doc audit arc. Guardian's documentation now has a single authoritative source for each customer-facing concept.
 
 ### What ships
 
@@ -3017,7 +3017,7 @@ Closes Phase 1 of the doc audit arc. Phantom's documentation now has a single au
 
 - `auth-identity` § "Operator → UI" rewrote from "HTTP Basic with UI_USER + UI_PASSWORD" (stale; reflected a pre-cookie-session implementation) to "session cookie, see `#authentication` for the full flow." The authoritative spec lives in the dedicated `#authentication` section; `#auth-identity` now provides a one-paragraph cross-link.
 - Removed `auth-identity` § "VM access (IAP tunnel)" subsection — this described internal dev-environment access (gcloud IAP tunnel + sshpass + password SSH on the developer VM), not customer-facing product behavior.
-- `rest-api` § intro and "Agent passthroughs" subsections rewrote "HTTP Basic auth" claim to "`phantom_session` cookie" — same conflict, corrected in both places.
+- `rest-api` § intro and "Agent passthroughs" subsections rewrote "HTTP Basic auth" claim to "`guardian_session` cookie" — same conflict, corrected in both places.
 
 **User guide** (`mcp/agent/app/help/user/page.tsx`):
 
@@ -3064,7 +3064,7 @@ Fifth sub-release of the doc audit arc. Sections that rendered in the page body 
 |---|---|
 | `image-pinning` | Foundation |
 | `tls-proxy` | Foundation |
-| `phantom-updater` | Foundation |
+| `guardian-updater` | Foundation |
 | `connector-containers` | Connectors & Extensions |
 | `data-sources` | Connectors & Extensions |
 | `log-destinations` | Connectors & Extensions |
@@ -3086,7 +3086,7 @@ Pre-deploy gate: tsc clean, Next.js production build clean.
 
 ### Operator review checklist
 
-- `/help/architecture` left rail — `image-pinning`, `tls-proxy`, `phantom-updater`, `connector-containers`, `data-sources`, `log-destinations`, `operator-state` all visible
+- `/help/architecture` left rail — `image-pinning`, `tls-proxy`, `guardian-updater`, `connector-containers`, `data-sources`, `log-destinations`, `operator-state` all visible
 - `/help/architecture` "Service Stack" no longer reads "3-Service Stack"
 - `/help/user` left rail — `profile`, `upgrades` under Welcome; `data-sources`, `log-destinations-ux` under Integration; `detection-inventory` under Observability
 - Active-section highlight works as the operator scrolls through each newly-added section
@@ -3128,7 +3128,7 @@ tsc clean.
 
 ### Next in arc
 
-- v0.17.45 — add ghost sections to SECTIONS[] nav (architecture: `image-pinning`, `tls-proxy`, `phantom-updater`, `connector-containers`, `log-destinations`; user guide: `upgrades`, `detection-inventory`, `data-sources`, `log-destinations-ux`, `profile`)
+- v0.17.45 — add ghost sections to SECTIONS[] nav (architecture: `image-pinning`, `tls-proxy`, `guardian-updater`, `connector-containers`, `log-destinations`; user guide: `upgrades`, `detection-inventory`, `data-sources`, `log-destinations-ux`, `profile`)
 - v0.17.46 — resolve duplicate password-change subsections + `auth-identity` (HTTP Basic) vs `authentication` (PBKDF2 cookie) content conflict
 
 ---
@@ -3155,7 +3155,7 @@ Pre-deploy gate: tsc clean.
 
 - `/help/journeys` filter chip strip: no "v0.5.0 test" or "v0.5.1 test" component chips
 - Journey list: no "v0.5.0 test 01 — Fresh boot…" or similar engineering-test titles
-- Search "Upgrade Phantom from v0.2.x" → no results
+- Search "Upgrade Guardian from v0.2.x" → no results
 - All remaining ~100 journeys describe operator workflows, not QA matrices
 
 ### Next in arc
@@ -3200,7 +3200,7 @@ Inline body annotation: "Built-in (v0.5.21+)" → "Built-in"; "v0.7.0 expanded f
 
 ## [v0.17.41] — 2026-05-25 — *Architecture page: strip release annotations + change-history framing (customer-doc cleanup)*
 
-First sub-release of the comprehensive doc audit arc. Architecture page (`/help/architecture`) now describes Phantom as it is today, not as it evolved.
+First sub-release of the comprehensive doc audit arc. Architecture page (`/help/architecture`) now describes Guardian as it is today, not as it evolved.
 
 ### What ships
 
@@ -3237,7 +3237,7 @@ Pre-deploy gate: tsc clean, Next.js production build clean.
 
 ---
 
-## [v0.17.39] — 2026-05-25 — *Login page: "Phantom can …" capabilities + Phantom logo in the bottom orb row*
+## [v0.17.39] — 2026-05-25 — *Login page: "Guardian can …" capabilities + Guardian logo in the bottom orb row*
 
 Operator-flagged visual polish on the login page (`mcp/agent/components/auth/login-screen.tsx` + `mcp/agent/components/ui/tools-stack-card.tsx`). Two targeted swaps; animations, sizes, colors, and timing all preserved.
 
@@ -3247,20 +3247,20 @@ Operator-flagged visual polish on the login page (`mcp/agent/components/auth/log
 
 | Before (through v0.17.38) | After (v0.17.39+) |
 |---|---|
-| `Powered by Cortex XSIAM` | `Phantom can simulate logs` |
-| `Powered by MITRE ATT&CK` | `Phantom can simulate attacks` |
-| `Powered by CALDERA` | `Phantom can create workers` |
-| `Powered by Vertex AI` | `Phantom can send logs` |
-| `Powered by Gemini` | `Phantom can validate detections` |
-| `Powered by MCP` | `Phantom can orchestrate workflows` |
+| `Powered by Cortex XSIAM` | `Guardian can simulate logs` |
+| `Powered by MITRE ATT&CK` | `Guardian can simulate attacks` |
+| `Powered by CALDERA` | `Guardian can create workers` |
+| `Powered by Vertex AI` | `Guardian can send logs` |
+| `Powered by Gemini` | `Guardian can validate detections` |
+| `Powered by MCP` | `Guardian can orchestrate workflows` |
 
 Same 6-item cycle (timing unchanged: 45 ms type, 45 ms delete, 900 ms pause), same cyan color (`text-cyan-300`), same cursor blink behavior (blue while typing, red while deleting). Only the static prefix word + the words array changed.
 
-The framing shift matters: the brand-name cycle ("Powered by Cortex XSIAM …") suggested Phantom was a thin shim over third-party products. The capability cycle ("Phantom can simulate logs …") tells the operator what Phantom actually does for them.
+The framing shift matters: the brand-name cycle ("Powered by Cortex XSIAM …") suggested Guardian was a thin shim over third-party products. The capability cycle ("Guardian can simulate logs …") tells the operator what Guardian actually does for them.
 
-**`mcp/agent/components/ui/tools-stack-card.tsx`** — replaced the middle orb's content with the Phantom logo:
+**`mcp/agent/components/ui/tools-stack-card.tsx`** — replaced the middle orb's content with the Guardian logo:
 
-The 5-orb row at the bottom of the login card runs a sequential-bounce + sweeping-cyan-beam + sparkle animation. The middle orb is the largest (64 px diameter with a fuchsia ring) and used to render a gold `bolt` material-symbol glyph (operator described it as a "spark"). v0.17.39 swaps the glyph for the actual Phantom logo (`/logo.svg`, same asset the sidebar uses at `size=44`).
+The 5-orb row at the bottom of the login card runs a sequential-bounce + sweeping-cyan-beam + sparkle animation. The middle orb is the largest (64 px diameter with a fuchsia ring) and used to render a gold `bolt` material-symbol glyph (operator described it as a "spark"). v0.17.39 swaps the glyph for the actual Guardian logo (`/logo.svg`, same asset the sidebar uses at `size=44`).
 
 The 4 outer orbs are untouched: `agents (smart_toy)` and `memory (memory)` on the left, `observe (monitoring)` and `mcp (api)` on the right. Sizes, colors, ring, sequential-bounce animation, sweeping cyan beam, sparkles — all preserved.
 
@@ -3272,11 +3272,11 @@ The 4 outer orbs are untouched: `agents (smart_toy)` and `memory (memory)` on th
 
 ### Operator review checklist
 
-- Open `/login` (sign out first if logged in) → top-right of the card reads "Phantom can simulate logs ▎" with the typewriter cycling through the new 6 phrases
-- The bottom orb row's middle orb shows the Phantom logo (not the gold bolt/spark)
+- Open `/login` (sign out first if logged in) → top-right of the card reads "Guardian can simulate logs ▎" with the typewriter cycling through the new 6 phrases
+- The bottom orb row's middle orb shows the Guardian logo (not the gold bolt/spark)
 - Sequential bounce animation still works (orbs rise + settle in order, left-to-right)
 - Sweeping cyan beam still sweeps across the row, sparkles still emit
-- Sidebar, startup page, and About modal still render the same Phantom logo (same asset — `/logo.svg` — re-used)
+- Sidebar, startup page, and About modal still render the same Guardian logo (same asset — `/logo.svg` — re-used)
 
 ---
 
@@ -3609,7 +3609,7 @@ Operator-reported issues with the data-sources drawer + install buttons:
 
 1. **Dropped "Tag" column from the fields table.** The vendor/meta distinction was already conveyed by the two surrounding section containers; the per-row `vendor`/`meta` badge was redundant + added blue-on-blue contrast noise. Remaining columns redistributed: Name 3→4, Type stays at 2, Description 5→6, summing to 12.
 
-2. **Hid "Supported Modules" row in the drawer.** The backend hardcoded `["xsiam"]` for every YAML-loader row (XSIAM is the only deployment target Phantom ships against today), so the pill carried no operator-visible meaning. The slot is reserved for v0.17.34's use-case-tag pills.
+2. **Hid "Supported Modules" row in the drawer.** The backend hardcoded `["xsiam"]` for every YAML-loader row (XSIAM is the only deployment target Guardian ships against today), so the pill carried no operator-visible meaning. The slot is reserved for v0.17.34's use-case-tag pills.
 
 3. **Fixed table column headers blue-on-blue in dark theme.** Header text switched from `text-primary` to `text-on-surface` (theme-aware: white-ish in dark, near-black in light). Header border switched from `border-primary/20` to `border-outline-variant/30` to soften the divider.
 
@@ -3761,7 +3761,7 @@ These need an operator to download the SVG from each vendor's official media kit
 
 ## [v0.17.30] — 2026-05-25 — *Data sources catalog/logo cache: 3,400 ms → <1 ms per request (operator-reported slowness fix)*
 
-**Operator reported the /data-sources page is "very slow"** to load after v0.17.27-29. Server-side timing on phantom-vm confirmed it's backend, not network:
+**Operator reported the /data-sources page is "very slow"** to load after v0.17.27-29. Server-side timing on guardian-vm confirmed it's backend, not network:
 
 ```
 === Catalog API timing (v0.17.29) ===
@@ -3805,7 +3805,7 @@ Worse, `get_by_id()` was a linear scan — it called `list_all()` then iterated.
 | 100 `get_by_id()` calls | ~107 s (107 ms × 100 full scans) | **0.03 ms total** |
 | 125 vendor-card page load (backend time) | ~135 s | **< 10 ms** |
 
-phantom-vm cold call is slower (3.3 s, due to container CPU + disk profile) but the WARM cost is the same — sub-millisecond. First /data-sources load: ~3 s. Every subsequent load: instant.
+guardian-vm cold call is slower (3.3 s, due to container CPU + disk profile) but the WARM cost is the same — sub-millisecond. First /data-sources load: ~3 s. Every subsequent load: instant.
 
 ### Cache invariants
 
@@ -4031,7 +4031,7 @@ Same migration set `is_rawlog_only: true` on packs that had no upstream modeling
 
 ### Operator-visible
 
-After installing v0.17.27 on phantom-vm:
+After installing v0.17.27 on guardian-vm:
 - `/data-sources` Browse → F5 card now lists F5ASM, F5APM, F5LTM, F5BigIPAWAF together. Same for Cisco, Microsoft, Apache, Symantec, VMware, BeyondTrust, etc.
 - 67 new packs (BeyondTrust*, Apache*, Arista, Brocade, Auditd, CitrixADC, BarracudaWAF, etc.) become visible in the default Browse view.
 - All card logo panels render the `inventory_2` placeholder icon (light gray on near-white) instead of an empty box when the vendor SVG is missing.
@@ -4095,7 +4095,7 @@ XSIAM brokers (syslog Collectors) route incoming data to `<vendor>_<product>_raw
 
 ### Operator-visible
 
-- After re-installing v0.17.26 on phantom-vm, any worker created via the UI's "Generate fake data → Send to destination" path (or via `createDataWorker` MCP tool) with `type=CEF`/`SYSLOG`/`LEEF` and a `udp:` or `tcp:` destination will now produce broker-parseable output. Logs sent to the operator's XSIAM broker will land in `<vendor>_<product>_raw` datasets as expected.
+- After re-installing v0.17.26 on guardian-vm, any worker created via the UI's "Generate fake data → Send to destination" path (or via `createDataWorker` MCP tool) with `type=CEF`/`SYSLOG`/`LEEF` and a `udp:` or `tcp:` destination will now produce broker-parseable output. Logs sent to the operator's XSIAM broker will land in `<vendor>_<product>_raw` datasets as expected.
 
 ### Files
 
@@ -4885,7 +4885,7 @@ Example: `AWS-SecurityHub` 0 → 10 fields (Id, ProductName, Region, AwsAccountI
 ### Operator impact
 
 - Browse catalog field counts now match the drawer preview for all 259 vendors
-- Agent simulation paths through `phantom_create_data_worker` with `schema_override` can now pull real vendor field names for any of the 259 packs (not just the 32 v0.16.x curated)
+- Agent simulation paths through `guardian_create_data_worker` with `schema_override` can now pull real vendor field names for any of the 259 packs (not just the 32 v0.16.x curated)
 - The 32 v0.16.x curated vendors stay richer than the extraction (curated entries have product-doc-sourced types like `ipv4`, `port`, `mac_address` that the cortex `string` extraction can't recover) — the extraction respects existing fields[] and only touches empty entries
 
 ### Pre-deploy gate
@@ -4899,24 +4899,24 @@ Example: `AWS-SecurityHub` 0 → 10 fields (Id, ProductName, Region, AwsAccountI
 **Knowledge bake-in from real-world XSIAM operator smoke (post-v0.17.4):**
 
 Two stable conventions confirmed:
-- **xsiam_http** destinations → ALWAYS land in dataset `phantom_logs_raw` (XSIAM-side hardcoded for the 'phantom' brand on the collector; one outer row per batch with an `events` JSON-array column)
-- **syslog + CEF + XSIAM broker** → records land in `<vendor>_<product>_raw` (e.g. `fortinet_fortigate_raw`, `phantom_smoke_test_raw`), fully parsed into typed columns by the broker
+- **xsiam_http** destinations → ALWAYS land in dataset `guardian_logs_raw` (XSIAM-side hardcoded for the 'guardian' brand on the collector; one outer row per batch with an `events` JSON-array column)
+- **syslog + CEF + XSIAM broker** → records land in `<vendor>_<product>_raw` (e.g. `fortinet_fortigate_raw`, `guardian_smoke_test_raw`), fully parsed into typed columns by the broker
 
 Without these baked in, the agent guesses wrong dataset names when verifying ingestion, the operator has to spell it out every time, and the docs gap costs minutes per smoke cycle.
 
 ### What ships
 
-- **`bundles/spark/destinations/xsiam_http/handler.py`** — module docstring extended with the `phantom_logs_raw` fact + canonical XQL verify template + cross-reference to the syslog handler for contrast.
+- **`bundles/spark/destinations/xsiam_http/handler.py`** — module docstring extended with the `guardian_logs_raw` fact + canonical XQL verify template + cross-reference to the syslog handler for contrast.
 
-- **`bundles/spark/destinations/syslog/handler.py`** — module docstring extended with the XSIAM-broker dataset-routing convention (`<vendor>_<product>_raw`), explains why this handler's JSON-encoded `send()` won't trigger it (broker expects CEF), and points operators at `phantom_create_data_worker(type=CEF, vendor=..., product=...)` for production CEF traffic.
+- **`bundles/spark/destinations/syslog/handler.py`** — module docstring extended with the XSIAM-broker dataset-routing convention (`<vendor>_<product>_raw`), explains why this handler's JSON-encoded `send()` won't trigger it (broker expects CEF), and points operators at `guardian_create_data_worker(type=CEF, vendor=..., product=...)` for production CEF traffic.
 
 - **`bundles/spark/destinations/xsiam_http/spec.yaml`** + **`syslog/spec.yaml`** — top-level `description:` fields updated so operators see the dataset-naming hint in the UI's type picker and the destination card subtitle.
 
-- **`bundles/spark/connectors/xlog/src/workers.py`** — `CreateDataWorkerRequest.destination` Field description gains a "Where records LAND in XSIAM" section. Teaches the agent: HTTP webhook → `phantom_logs_raw`, broker+CEF → `<vendor>_<product>_raw`, other syslog → ask the operator. Includes ready-to-run XQL verify templates so the agent can answer "did the records arrive?" without prompting the operator for the dataset name.
+- **`bundles/spark/connectors/xlog/src/workers.py`** — `CreateDataWorkerRequest.destination` Field description gains a "Where records LAND in XSIAM" section. Teaches the agent: HTTP webhook → `guardian_logs_raw`, broker+CEF → `<vendor>_<product>_raw`, other syslog → ask the operator. Includes ready-to-run XQL verify templates so the agent can answer "did the records arrive?" without prompting the operator for the dataset name.
 
 - **`mcp/agent/app/help/architecture/page.tsx`** — new `XSIAM dataset routing` subsection under `#log-destinations` with the routing table + the agent-workflow note.
 
-- **`mcp/agent/app/help/user/page.tsx`** — new `Where do my records land in XSIAM?` subsection under `#log-destinations-ux` covering HTTP Collector (always `phantom_logs_raw`), syslog+CEF+broker (`<vendor>_<product>_raw`), vendor-faithful simulation (e.g. `fortinet_fortigate_raw` for Cortex's stock ModelingRule), and non-XSIAM syslog targets (no convention).
+- **`mcp/agent/app/help/user/page.tsx`** — new `Where do my records land in XSIAM?` subsection under `#log-destinations-ux` covering HTTP Collector (always `guardian_logs_raw`), syslog+CEF+broker (`<vendor>_<product>_raw`), vendor-faithful simulation (e.g. `fortinet_fortigate_raw` for Cortex's stock ModelingRule), and non-XSIAM syslog targets (no convention).
 
 ### Pre-deploy gate
 
@@ -4926,8 +4926,8 @@ Without these baked in, the agent guesses wrong dataset names when verifying ing
 ### Operator impact
 
 - The deployed UI's destination type picker shows the dataset hint inline (no need to remember).
-- The agent's `phantom_create_data_worker` invocations will land records in the expected dataset by default + auto-verify via XQL against the right name.
-- The operator no longer has to spell out "the dataset is `phantom_logs_raw`" or "the broker lands it in `<vendor>_<product>_raw`" every time.
+- The agent's `guardian_create_data_worker` invocations will land records in the expected dataset by default + auto-verify via XQL against the right name.
+- The operator no longer has to spell out "the dataset is `guardian_logs_raw`" or "the broker lands it in `<vendor>_<product>_raw`" every time.
 
 ---
 
@@ -4977,7 +4977,7 @@ Without these baked in, the agent guesses wrong dataset names when verifying ing
   9. WEBHOOK_ENDPOINT migration (best-effort, skip if env unset)
   10. visible_when round-trip via webhook auth modes
   
-  **Verified result on the deployed install**: **34/34 PASS** after the script's RFC5424 regex tightened (the actual probe sends a valid `<PRI>1 <ts> phantom phantom - - - phantom test message` datagram).
+  **Verified result on the deployed install**: **34/34 PASS** after the script's RFC5424 regex tightened (the actual probe sends a valid `<PRI>1 <ts> guardian guardian - - - guardian test message` datagram).
 
 - **`/help/architecture#log-destinations`** — new full section with subsections: schema-driven type manifests, storage + secret boundary, credential boundary, per-type probe + send, WEBHOOK_ENDPOINT migration, files-of-record.
 
@@ -4998,7 +4998,7 @@ Without these baked in, the agent guesses wrong dataset names when verifying ing
 - [x] Agent's `log_destinations_list` + `_get` return redacted rows
 - [x] Agent has NO write tools (CRUD+probe REST-only)
 - [x] WEBHOOK_ENDPOINT env → auto-creates XSIAM Default on first boot
-- [x] e2e battery: 34/34 PASS on phantom-vm
+- [x] e2e battery: 34/34 PASS on guardian-vm
 
 ### v0.17.x arc summary
 
@@ -5012,7 +5012,7 @@ Without these baked in, the agent guesses wrong dataset names when verifying ing
 ### What's deferred to v0.18.0
 
 - Full `CreateDataWorkerRequest.destination_id: str` Pydantic field — requires per-connector→MCP HTTP callback infrastructure (MCP_URL + MCP_TOKEN env vars in every connector container)
-- xlog-side webhook + splunk_hec forwarding (today xlog only handles syslog + XSIAM_WEBHOOK; the destination types exist but xlog doesn't dispatch to them via `phantom_create_data_worker`)
+- xlog-side webhook + splunk_hec forwarding (today xlog only handles syslog + XSIAM_WEBHOOK; the destination types exist but xlog doesn't dispatch to them via `guardian_create_data_worker`)
 - Drop the legacy `destination: str` field from `CreateDataWorkerRequest`
 
 ### Smoke-test bullets (post-deploy)
@@ -5026,7 +5026,7 @@ Without these baked in, the agent guesses wrong dataset names when verifying ing
 
 ## [v0.17.2] — 2026-05-24 — *xlog bridge: WEBHOOK_ENDPOINT migration + agent docstring*
 
-The pragmatic xlog bridge: rather than rewiring the per-instance connector container to call MCP back for destination resolution (heavy cross-container plumbing), v0.17.2 teaches **the agent** the destination workflow via the `phantom_create_data_worker` docstring. The agent now: (1) calls `log_destinations_get(name)` to fetch the destination's config, (2) formats the destination string per type, (3) passes it to xlog. The legacy `destination: str` field is preserved for backwards compat.
+The pragmatic xlog bridge: rather than rewiring the per-instance connector container to call MCP back for destination resolution (heavy cross-container plumbing), v0.17.2 teaches **the agent** the destination workflow via the `guardian_create_data_worker` docstring. The agent now: (1) calls `log_destinations_get(name)` to fetch the destination's config, (2) formats the destination string per type, (3) passes it to xlog. The legacy `destination: str` field is preserved for backwards compat.
 
 ### What ships
 
@@ -5037,12 +5037,12 @@ The pragmatic xlog bridge: rather than rewiring the per-instance connector conta
   - Idempotent (skips on second boot)
   - Description: *"Auto-migrated from WEBHOOK_ENDPOINT / WEBHOOK_KEY env vars at first boot of v0.17.x"*
 
-- **`phantom_create_data_worker` docstring rewrite** (`bundles/spark/connectors/xlog/src/workers.py`):
+- **`guardian_create_data_worker` docstring rewrite** (`bundles/spark/connectors/xlog/src/workers.py`):
   - Old: just lists valid destination strings (`udp:...`, `tcp:...`, `XSIAM_WEBHOOK`)
   - New: explicit 3-step workflow when the operator references a destination by name:
     1. Call `log_destinations_get(name)` to fetch config
     2. Format the destination string per `type_id` (syslog → `udp:host:port`, xsiam_http → `XSIAM_WEBHOOK`)
-    3. Pass to `phantom_create_data_worker`
+    3. Pass to `guardian_create_data_worker`
   - Webhook + Splunk HEC explicitly flagged as not-yet-wired in xlog (deferred to v0.18.0); agent should ask the operator to pick a different destination for those workflows
 
 - **3 new migration tests** in `test_log_destinations_store.py`:
@@ -5059,13 +5059,13 @@ The brainstorm picked "Replace: only named destinations from now on", but the pe
 - [x] First boot with `WEBHOOK_ENDPOINT` env var set → "XSIAM Default" destination appears in `/log-destinations` automatically
 - [x] Second boot is a no-op (idempotent)
 - [x] Boot without `WEBHOOK_ENDPOINT` → migration silently skips
-- [x] `phantom_create_data_worker` docstring teaches the new workflow
+- [x] `guardian_create_data_worker` docstring teaches the new workflow
 
 ### Smoke-test bullets
 
 1. After deploy, `GET /api/v1/log-destinations?type_id=xsiam_http` returns a row named "XSIAM Default" (assuming WEBHOOK_ENDPOINT is set in `.env`)
 2. The row's `is_default` is true; `last_probe_at` is null until probed
-3. Agent's `phantom_create_data_worker` docstring includes the destination workflow text
+3. Agent's `guardian_create_data_worker` docstring includes the destination workflow text
 4. 498 pytest pass (3 new migration tests)
 
 ---
@@ -5150,7 +5150,7 @@ Brainstormed live with the operator earlier today. Full design spec: `docs/super
 
 - **`bundles/spark/mcp/src/usecase/log_destinations_store.py`** — SQLite store at `/app/data/log_destinations.db`. Schema carries non-secret config in `config_json`, secret REFS (slot → SecretStore path) in `secret_refs_json`, plus `enabled`, `is_default`, probe-outcome columns (`last_probe_at`, `last_probe_ok`, `last_probe_error`, `consecutive_failures`). `merged_config()` resolves secrets to plaintext server-side only (xlog + `/probe` REST handler).
 
-- **`bundles/spark/mcp/src/usecase/secret_store.py`** — adds `log_destination_secret_path()` + `log_destination_prefix()` path helpers (`/agents/phantom/log_destinations/<id>/<slot>`). Cascade-delete via `delete_under()` on row delete.
+- **`bundles/spark/mcp/src/usecase/secret_store.py`** — adds `log_destination_secret_path()` + `log_destination_prefix()` path helpers (`/agents/guardian/log_destinations/<id>/<slot>`). Cascade-delete via `delete_under()` on row delete.
 
 - **`bundles/spark/mcp/src/api/log_destinations.py`** — REST surface:
   - `GET /api/v1/destination-types` + `/destination-types/{id}` — manifest catalog
@@ -5218,7 +5218,7 @@ Small consolidation release closing out v0.16.x:
 
 - **`scripts/e2e_v0161_multi_instance_and_fields.py` schema-lookup fix** — pre-v0.16.2 my Section 2 read `resp["fields"]` (returns `None` → empty list), reporting v0.16.1's install-path fix as still broken. Real shape is `{"data_source": {... "fields": [...]}}`. Fix is in the e2e script only; v0.16.1 backend code was correct all along.
 
-  Post-fix battery: **23/23 PASS** on phantom-vm (was 21/23 due to the script bug).
+  Post-fix battery: **23/23 PASS** on guardian-vm (was 21/23 due to the script bug).
 
 ### Capability acceptance criteria — MET on dev install
 
@@ -5348,7 +5348,7 @@ v0.16.0 ships a hand-curated `fields[]` for the **top 23 enterprise-relevant ven
 - [ ] Browse view shows **49 fields** for FortiGate (was 0)
 - [ ] Browse view shows **28 fields** for AWS WAF (operator's "4-5 fields" complaint resolved)
 - [ ] Schema preview drawer renders the full per-vendor field set with `type`, `description`, `enum_values` / `regex_pattern` where applicable
-- [ ] `phantom_create_data_worker` with `schema_override` for one of these datasets generates records using the curated fields
+- [ ] `guardian_create_data_worker` with `schema_override` for one of these datasets generates records using the curated fields
 
 ### Why not all 260 sources
 
@@ -5370,7 +5370,7 @@ Future v0.16.x sub-releases extend coverage incrementally; the codegen script ac
 1. `curl /api/v1/data-sources/catalog | jq '.data[] | select(.pack_name == "Okta") | .field_count'` returns 34
 2. `curl /api/v1/data-sources/catalog | jq '.data[] | select(.dataset_name == "aws_waf_raw") | .field_count'` returns 28
 3. Schema preview drawer on the /data-sources/Okta page renders 34 rows
-4. `phantom_create_data_worker` with `data_source_id` pointing at the updated Okta YAML generates records carrying the `eventType`, `actor.id`, `outcome.result`, etc. fields
+4. `guardian_create_data_worker` with `data_source_id` pointing at the updated Okta YAML generates records carrying the `eventType`, `actor.id`, `outcome.result`, etc. fields
 
 ---
 
@@ -5892,9 +5892,9 @@ End-to-end on the deployed install with a configured Cortex_XDR instance:
 
 **Arc closure release.** v0.13.0/.1/.2 shipped the schema + loader + REST + UI. v0.13.3 lands the end-to-end test that proves the full chain works against a deployed install. The capability acceptance criterion declared at arc-open (in v0.13.0's CHANGELOG) is **met**:
 
-> Upload AcmeCorp YAML → install via existing flow → generate via `phantom_create_data_worker` with `schema_override` + UDP destination → validate received UDP records match the uploaded YAML's field declarations.
+> Upload AcmeCorp YAML → install via existing flow → generate via `guardian_create_data_worker` with `schema_override` + UDP destination → validate received UDP records match the uploaded YAML's field declarations.
 
-**E2E result against phantom-vm (PHANTOM_VERSION=dev-b84e6c4, v0.13.1 deployed):**
+**E2E result against guardian-vm (GUARDIAN_VERSION=dev-b84e6c4, v0.13.1 deployed):**
 
 ```
 [step 1] /user/preview      ok=true accept_token=d9124f33...
@@ -5934,16 +5934,16 @@ Per CLAUDE.md § Release-readiness gate: the customer release tag is appropriate
 
 All R3.C bullets (1-18 from prior CHANGELOG sections) PLUS:
 
-19. ✓ E2E test PASSES end-to-end on deployed phantom-vm (v0.13.1+)
+19. ✓ E2E test PASSES end-to-end on deployed guardian-vm (v0.13.1+)
 20. ✓ Captured UDP records contain exactly the 5 AcmeCorp fields declared in the uploaded YAML — no extras, no missing
 21. ✓ Cleanup: worker stops, install uninstalls, user YAML deletes — every step returns success
 
 ### Capability acceptance — MET
 
 The operator's explicit request from autonomous directive:
-> "test and validate everything and run e2e test generating new logs after those updates and validate logs generated maybe create a temp syslog server to point xlog to and see what you receive aligns with phantom request or not"
+> "test and validate everything and run e2e test generating new logs after those updates and validate logs generated maybe create a temp syslog server to point xlog to and see what you receive aligns with guardian request or not"
 
-Satisfied — UDP listener captures records, fields match Phantom's request (the uploaded YAML's declarations).
+Satisfied — UDP listener captures records, fields match Guardian's request (the uploaded YAML's declarations).
 
 ---
 
@@ -6113,7 +6113,7 @@ Refs new issue.
 **Closes the two gaps the v0.11.5 E2E test surfaced.** The marketplace UX overhaul (v0.10.0 → v0.11.5) made the data-sources catalog browsable, installable, and vendor-grouped. But the E2E pipeline test then exposed two gaps:
 
 1. **`createDataWorker` (UDP/TCP streaming) ignored schema_override** — workers emitted generic Rosetta SYSLOG, not vendor-faithful records. Only `generate_fake_data_v2` (inline) honored overrides. The realistic SOC-simulation use case ("stream FortiGate logs to udp:host:port for 60 seconds") didn't work end-to-end.
-2. **Tech stack and marketplace install state were disjoint** — `phantom_get_technology_stack` returned an operator-configured static list with no automatic sync from what's installed. So installing F5ASM didn't surface F5 as a WAF to the agent's reasoning.
+2. **Tech stack and marketplace install state were disjoint** — `guardian_get_technology_stack` returned an operator-configured static list with no automatic sync from what's installed. So installing F5ASM didn't surface F5 as a WAF to the agent's reasoning.
 
 v0.12.0 closes both.
 
@@ -6130,7 +6130,7 @@ v0.12.0 closes both.
 
 **`xlog/app/schema.py` `create_data_worker`**: schema-override short-circuit BEFORE the legacy destination branches. When override is supplied AND destination is `udp:`/`tcp:`, routes through `OverrideSender`. Backward-compat: workers without override flow through `Sender` / `WebhookSender` verbatim.
 
-**`bundles/spark/connectors/xlog/src/workers.py` `phantom_create_data_worker`**: gains `schema_override: Optional[List[Dict[str, Any]]]` parameter. When supplied, the MCP tool uses the simpler `createDataWorker` GraphQL mutation (with the new schemaOverride field) instead of the legacy `createScenarioWorkerFromQuery`. Docstring includes a vendor-faithful streaming example.
+**`bundles/spark/connectors/xlog/src/workers.py` `guardian_create_data_worker`**: gains `schema_override: Optional[List[Dict[str, Any]]]` parameter. When supplied, the MCP tool uses the simpler `createDataWorker` GraphQL mutation (with the new schemaOverride field) instead of the legacy `createScenarioWorkerFromQuery`. Docstring includes a vendor-faithful streaming example.
 
 ### R3.B — `data_sources_installed_as_vendors` MCP tool
 
@@ -6143,7 +6143,7 @@ v0.12.0 closes both.
 - Registered in `main.py` as MCP tool
 
 **Agent reasoning contract**: the chat agent now has BOTH:
-- `phantom_get_technology_stack` (xlog connector — operator-configured)
+- `guardian_get_technology_stack` (xlog connector — operator-configured)
 - `data_sources_installed_as_vendors` (agent MCP — marketplace-derived)
 
 When asked "what vendors do I have?" / "stream WAF logs", the agent consults BOTH and merges in reasoning (operator-configured wins on overlap). System-prompt update lands separately if needed.
@@ -6165,7 +6165,7 @@ When asked "what vendors do I have?" / "stream WAF logs", the agent consults BOT
 ### CI/CD edges encountered
 
 - Build connectors hit one ghcr.io network timeout; rerun succeeded in 12s
-- Build dev installer hit HTTP 401 on cold-start `dev-latest` tag delete (workflow_run permission cascade quirk) — patched in [`e550a6c`](https://github.com/kite-production/phantom/commit/e550a6c) to accept 401 same as 404/422
+- Build dev installer hit HTTP 401 on cold-start `dev-latest` tag delete (workflow_run permission cascade quirk) — patched in [`e550a6c`](https://github.com/kite-production/guardian/commit/e550a6c) to accept 401 same as 404/422
 
 ### Forbidden going forward
 
@@ -6388,7 +6388,7 @@ Refs #83.
 
 1. ✓ `agent-verified` Pre-deploy gate: validator 17/17, pytest 421/421, Next.js build clean
 2. ✓ `agent-verified` Sampled wordmark fills pass WCAG AA against `#F7F8FA` (10 of 11 user-mentioned vendors pass; Oracle 4.22 is borderline, branded gilbarbara SVG not adjusted)
-3. ✓ `agent-verified` Visual smoke: [screenshot](https://github.com/kite-production/phantom/releases/download/dev-latest/_v112_smoke_wcag.png) shows wordmarks at higher contrast in both light + dark theme rows
+3. ✓ `agent-verified` Visual smoke: [screenshot](https://github.com/kite-production/guardian/releases/download/dev-latest/_v112_smoke_wcag.png) shows wordmarks at higher contrast in both light + dark theme rows
 
 ### Forbidden going forward
 
@@ -6428,7 +6428,7 @@ Refs #83.
 
 ### Smoke-test bullets
 
-1. ✓ `agent-verified` — 14 vendors (3 reference branded + 6 user-reported "missing" + 5 user-reported "invisible-in-light") all render visibly on constant near-white panel in both themes — see [screenshot](https://github.com/kite-production/phantom/releases/download/dev-latest/_v111_smoke_neutralpanel.png).
+1. ✓ `agent-verified` — 14 vendors (3 reference branded + 6 user-reported "missing" + 5 user-reported "invisible-in-light") all render visibly on constant near-white panel in both themes — see [screenshot](https://github.com/kite-production/guardian/releases/download/dev-latest/_v111_smoke_neutralpanel.png).
 2. ✓ `agent-verified` — Deployed sha matches HEAD (`dev-b93ff18`).
 3. ✓ `agent-verified` — Pre-deploy gate green (tsc / lint / build).
 
@@ -6486,7 +6486,7 @@ Refs #83.
 4. Category badges visible on outer cards (SIEM / Network / Cloud / etc.) — derived from inner pack categories.
 5. No `agentix` pill renders anywhere — visual scan + grep test in DOM.
 6. Pre-deploy gate green (tsc / lint / build / pytest 421/421).
-7. Auto-deploy lands on phantom-vm; visual smoke in both themes.
+7. Auto-deploy lands on guardian-vm; visual smoke in both themes.
 
 ### Capability acceptance
 
@@ -6599,7 +6599,7 @@ Refs #82.
 - ✓ `agent-verified` Negative: dropped a stray PNG into `cortex-content/baked/` without `git add` → validator FAILED with `1 file(s) on disk but not tracked (e.g. ['bundles/spark/connectors/cortex-content/baked/_drift_smoke.png']) — likely .gitignore silent drop, add exception`. After cleanup, validator green.
 - ✓ `agent-verified` Pre-deploy gate: tsc clean, eslint warnings-only (pre-existing), Next.js build clean, pytest 421/421.
 - ✓ `agent-verified` Validator total: 16/16 green (was 15/15 in v0.9.4).
-- `?` `agent-skipped` Operator review: pull the v0.9.5 image on phantom-vm, SSH in, run `python3 tooling/validate/validate_all.py` from `$VM_REMOTE_REPO`, confirm new check appears in output with the expected text.
+- `?` `agent-skipped` Operator review: pull the v0.9.5 image on guardian-vm, SSH in, run `python3 tooling/validate/validate_all.py` from `$VM_REMOTE_REPO`, confirm new check appears in output with the expected text.
 
 ### Capability acceptance
 
@@ -6747,7 +6747,7 @@ mcp/agent/lib/release-notes.ts                                                  
 
 ## [v0.9.2] — 2026-05-22 — *Spec-drift cleanup after v0.9.1 — restores YAML-issues banner + 6 cookie-name updates*
 
-**One real regression fix + spec-drift consolidation.** v0.9.1 added server-side `phantom_session` enforcement; the second-round review found that a server-side fetch in `mcp/agent/app/jobs/page.tsx` was still using the pre-v0.4.0 cookie name `phantom_auth`, which v0.9.1's middleware rejects. The YAML-issues banner on `/jobs` silently failed to render until you log in fresh — and even then, the next render fetched with the wrong cookie name. Bug exposed by v0.9.1 (pre-v0.9.1 the endpoint was unauthenticated so the wrong name didn't matter); fixed here.
+**One real regression fix + spec-drift consolidation.** v0.9.1 added server-side `guardian_session` enforcement; the second-round review found that a server-side fetch in `mcp/agent/app/jobs/page.tsx` was still using the pre-v0.4.0 cookie name `guardian_auth`, which v0.9.1's middleware rejects. The YAML-issues banner on `/jobs` silently failed to render until you log in fresh — and even then, the next render fetched with the wrong cookie name. Bug exposed by v0.9.1 (pre-v0.9.1 the endpoint was unauthenticated so the wrong name didn't matter); fixed here.
 
 Also: 6 doc-drift locations across `CLAUDE.md`, `docs/CICD.md`, two JSDoc blocks, and two journey descriptions still referenced the pre-v0.4.0 cookie name. The v0.9.1 sweep updated the architecture page but missed these. All caught by the second-round review's grep + the explorer subagent's independent audit. Cleaned up in one contained release per the canonical-state discipline (Rule 5 — retire stale docs in the same release that retires the code; v0.9.1 retired the cookie name but didn't retire the references).
 
@@ -6755,40 +6755,40 @@ Also: 6 doc-drift locations across `CLAUDE.md`, `docs/CICD.md`, two JSDoc blocks
 
 **One regression fix (load-bearing):**
 
-- [`mcp/agent/app/jobs/page.tsx:58`](mcp/agent/app/jobs/page.tsx:58) — server-side `fetch("/api/agent/jobs/yaml-issues", { headers: { cookie: \`phantom_auth=${"\${token}"}\` } })` → `phantom_session=${"\${token}"}`. Restores the YAML-issues banner on `/jobs` that v0.9.1 inadvertently broke when it added server-side enforcement of the renamed cookie.
+- [`mcp/agent/app/jobs/page.tsx:58`](mcp/agent/app/jobs/page.tsx:58) — server-side `fetch("/api/agent/jobs/yaml-issues", { headers: { cookie: \`guardian_auth=${"\${token}"}\` } })` → `guardian_session=${"\${token}"}`. Restores the YAML-issues banner on `/jobs` that v0.9.1 inadvertently broke when it added server-side enforcement of the renamed cookie.
 
 **Six doc-drift cleanups:**
 
-- [`mcp/agent/CLAUDE.md:49`](mcp/agent/CLAUDE.md:49) — UI session description now correctly names `phantom_session` + describes the v0.9.1 middleware gate.
-- [`docs/CICD.md:1529`](docs/CICD.md:1529) — smoke procedure now says "Log in via the existing `phantom_session` cookie flow." Misdirected operators running hands-on smoke pre-cleanup.
-- [`docs/CICD.md:1595`](docs/CICD.md:1595) — `area:auth` label description now references `phantom_session` + middleware.ts gate.
-- [`mcp/agent/app/settings/backup-restore/page.tsx:15`](mcp/agent/app/settings/backup-restore/page.tsx:15) — JSDoc now says auth-gating via `phantom_session` at `middleware.ts (v0.9.1+)`.
+- [`mcp/agent/CLAUDE.md:49`](mcp/agent/CLAUDE.md:49) — UI session description now correctly names `guardian_session` + describes the v0.9.1 middleware gate.
+- [`docs/CICD.md:1529`](docs/CICD.md:1529) — smoke procedure now says "Log in via the existing `guardian_session` cookie flow." Misdirected operators running hands-on smoke pre-cleanup.
+- [`docs/CICD.md:1595`](docs/CICD.md:1595) — `area:auth` label description now references `guardian_session` + middleware.ts gate.
+- [`mcp/agent/app/settings/backup-restore/page.tsx:15`](mcp/agent/app/settings/backup-restore/page.tsx:15) — JSDoc now says auth-gating via `guardian_session` at `middleware.ts (v0.9.1+)`.
 - [`mcp/agent/app/profile/page.tsx:171`](mcp/agent/app/profile/page.tsx:171) — sign-out flow JSDoc now references the correct cookie name.
 - [`mcp/agent/lib/journeys.ts`](mcp/agent/lib/journeys.ts) lines 5768 + 5796 — Backup/Restore journey description + negative-test description now reference the correct cookie + the middleware gate.
 
 **Two minor cleanups:**
 
-- [`AI-LAYER.md`](AI-LAYER.md) — Phase 3 row of the phase-tracking table now carries the `(closed)` annotation next to [#79](https://github.com/kite-production/phantom/issues/79), matching Phase 1 + 2 rows.
+- [`AI-LAYER.md`](AI-LAYER.md) — Phase 3 row of the phase-tracking table now carries the `(closed)` annotation next to [#79](https://github.com/kite-production/guardian/issues/79), matching Phase 1 + 2 rows.
 - [`mcp/agent/middleware.ts`](mcp/agent/middleware.ts) — doc-comment now documents `/api/marketplace/connectors` + `/api/marketplace/connectors/[id]` as INTENTIONAL read-only exclusions, with a warning that the silent exclusion becomes dangerous the moment those routes grow write handlers.
 
 ### What's NOT changed (intentionally)
 
-References to `phantom_auth` in HISTORICAL CONTEXT are preserved exactly:
+References to `guardian_auth` in HISTORICAL CONTEXT are preserved exactly:
 
 - `CHANGELOG.md` entries describing past releases — immutable record.
-- `mcp/agent/app/help/architecture/page.tsx:4345` — past-tense explanation of the v0.9.1 fix (the line literally says *"both hardcoded the pre-v0.4.0 cookie name `phantom_auth`"*).
+- `mcp/agent/app/help/architecture/page.tsx:4345` — past-tense explanation of the v0.9.1 fix (the line literally says *"both hardcoded the pre-v0.4.0 cookie name `guardian_auth`"*).
 - `mcp/agent/app/api/agent/backup/route.ts:130` + `restore/route.ts:117` — past-tense comments explaining why the route-level checks were deleted in v0.9.1.
-- `mcp/agent/app/api/auth/login/route.ts:14` — comment noting the rename from the pre-v0.4.0 cookie ("not the flat `phantom_auth=1` of pre-v0.4.0").
+- `mcp/agent/app/api/auth/login/route.ts:14` — comment noting the rename from the pre-v0.4.0 cookie ("not the flat `guardian_auth=1` of pre-v0.4.0").
 - `mcp/agent/lib/auth-defaults.ts:62` — the explainer for why the cookie was renamed.
 - `mcp/agent/lib/release-notes.ts` — v0.9.1 release notes + v0.4.0 release notes describing the original rename.
 
 ### Smoke-test bullets
 
 - ✓ \`agent-verified\` Pre-deploy gate: tsc clean, lint warnings-only, pytest 421/421, `npm run build` green
-- ✓ \`agent-verified\` `grep "phantom_auth" mcp/agent/app/*/page.tsx mcp/agent/app/api/agent/*/route.ts | grep -v "comment\\|past-tense\\|legacy"` returns no LIVE-code hits
+- ✓ \`agent-verified\` `grep "guardian_auth" mcp/agent/app/*/page.tsx mcp/agent/app/api/agent/*/route.ts | grep -v "comment\\|past-tense\\|legacy"` returns no LIVE-code hits
 - \`agent-skipped\` Post-deploy: open `/jobs` after login → YAML-issues banner renders correctly (operator-verifiable by introducing a YAML issue to trigger the banner)
 - \`agent-skipped\` Post-deploy: open `/settings/backup-restore` → Backup downloads (regression-protect from v0.9.1)
-- \`agent-skipped\` Post-deploy: open `/help/journeys` → search "backup-restore" → journey description references `phantom_session` (cosmetic verification)
+- \`agent-skipped\` Post-deploy: open `/help/journeys` → search "backup-restore" → journey description references `guardian_session` (cosmetic verification)
 
 ### Forbidden going forward
 
@@ -6810,24 +6810,24 @@ CHANGELOG.md                                     (this entry)
 mcp/agent/lib/release-notes.ts                   (matching v0.9.2 entry)
 ```
 
-Closes the v0.9.1 → v0.9.2 spec-drift arc opened by [#70](https://github.com/kite-production/phantom/issues/70). v0.9.1 fixed the security gap; v0.9.2 retires the cookie-name leftovers per the canonical-state discipline.
+Closes the v0.9.1 → v0.9.2 spec-drift arc opened by [#70](https://github.com/kite-production/guardian/issues/70). v0.9.1 fixed the security gap; v0.9.2 retires the cookie-name leftovers per the canonical-state discipline.
 
 ---
 
 ## [v0.9.1] — 2026-05-22 — *Security: close the API auth gate (#70) + restore Backup/Restore*
 
-**SECURITY FIX**: closes [#70](https://github.com/kite-production/phantom/issues/70) — pre-v0.9.1 every operator-control API endpoint was reachable without a session cookie. AuthGate (`components/auth/auth-gate.tsx`) decided what the browser RENDERED but imposed zero protection on the server-side API. A caller that reached port 3000 by any path — VM lateral movement, misconfigured firewall, accidentally-exposed cloud LB, container escape — could `POST /api/agent/memory`, `/api/agent/jobs`, `/api/chat`, `/api/skills`, etc. with NO cookies and get 200/201 back.
+**SECURITY FIX**: closes [#70](https://github.com/kite-production/guardian/issues/70) — pre-v0.9.1 every operator-control API endpoint was reachable without a session cookie. AuthGate (`components/auth/auth-gate.tsx`) decided what the browser RENDERED but imposed zero protection on the server-side API. A caller that reached port 3000 by any path — VM lateral movement, misconfigured firewall, accidentally-exposed cloud LB, container escape — could `POST /api/agent/memory`, `/api/agent/jobs`, `/api/chat`, `/api/skills`, etc. with NO cookies and get 200/201 back.
 
-v0.9.1 adds a Next.js [`middleware.ts`](mcp/agent/middleware.ts) running at the SERVER tier. It validates the `phantom_session` cookie via `validateSession` against the MCP-side session store. Absence OR invalid value → 401 JSON. Same cookie AuthGate reads on the client; same validation `/api/auth/status` does. Defense-in-depth at the right layer.
+v0.9.1 adds a Next.js [`middleware.ts`](mcp/agent/middleware.ts) running at the SERVER tier. It validates the `guardian_session` cookie via `validateSession` against the MCP-side session store. Absence OR invalid value → 401 JSON. Same cookie AuthGate reads on the client; same validation `/api/auth/status` does. Defense-in-depth at the right layer.
 
-**Companion fix**: Backup/Restore have been completely broken for every operator since v0.4.0. Both routes hardcoded `const COOKIE_NAME = "phantom_auth"` — the pre-v0.4.0 cookie name. The current cookie is `phantom_session`. Every operator click on Backup → 401. Discovered by the `phantom-explorer` subagent during the auth-surface map for #70. Fixed in the same release by deleting the broken route-level check and trusting the new middleware (canonical-state discipline, Rule 1: one auth gate, one home).
+**Companion fix**: Backup/Restore have been completely broken for every operator since v0.4.0. Both routes hardcoded `const COOKIE_NAME = "guardian_auth"` — the pre-v0.4.0 cookie name. The current cookie is `guardian_session`. Every operator click on Backup → 401. Discovered by the `guardian-explorer` subagent during the auth-surface map for #70. Fixed in the same release by deleting the broken route-level check and trusting the new middleware (canonical-state discipline, Rule 1: one auth gate, one home).
 
 ### What ships
 
 - **`mcp/agent/middleware.ts`** (NEW) — server-side session-cookie enforcement. Edge runtime (Next.js 15.1.6). Matcher covers `/api/agent/:path*` + `/api/chat` + `/api/skills/:path*`. Exemptions for `/api/agent/health` (Docker compose healthcheck) and `/api/agent/internal/fire-hook` (uses `MCP_TOKEN` bearer, not the session cookie — called by the embedded MCP subprocess). `/api/auth/*` is excluded from the matcher entirely (login can't require login).
-- **`mcp/agent/app/api/agent/backup/route.ts`** — deletes the broken `phantom_auth` cookie check + the `cookies` import + the `COOKIE_NAME` constant. Auth now enforced by middleware exclusively.
+- **`mcp/agent/app/api/agent/backup/route.ts`** — deletes the broken `guardian_auth` cookie check + the `cookies` import + the `COOKIE_NAME` constant. Auth now enforced by middleware exclusively.
 - **`mcp/agent/app/api/agent/restore/route.ts`** — same cleanup.
-- **`mcp/agent/app/help/architecture/page.tsx`** — `#authentication` section updated to reflect the middleware layer; stale `phantom_auth` references in the Backup/Restore subsection rewritten to `phantom_session`.
+- **`mcp/agent/app/help/architecture/page.tsx`** — `#authentication` section updated to reflect the middleware layer; stale `guardian_auth` references in the Backup/Restore subsection rewritten to `guardian_session`.
 - **Help docs**: `/help/user#authentication` notes that the API surface is now session-gated server-side (operator-visible only if scripting against the API).
 
 ### Threat model (before vs after)
@@ -6836,21 +6836,21 @@ v0.9.1 adds a Next.js [`middleware.ts`](mcp/agent/middleware.ts) running at the 
 |---|---|---|
 | Attacker reaches port 3000 with NO cookies | full agent control (memory, jobs, hooks, tool dispatch, LLM turns) | 401 on every endpoint except `/api/agent/health` |
 | Attacker has a random non-empty cookie value | full agent control (no validation) | 401 — `validateSession` rejects unknown tokens against the MCP-side session store |
-| Operator with valid `phantom_session` cookie | works | works (cached 30s per token; ~10ms first-request overhead) |
+| Operator with valid `guardian_session` cookie | works | works (cached 30s per token; ~10ms first-request overhead) |
 | Embedded MCP calling `/api/agent/internal/fire-hook` with `MCP_TOKEN` | works | works (exempted from middleware; route's own bearer check unchanged) |
 | Docker compose healthcheck hitting `/api/agent/health` | works | works (exempted) |
 
 ### Coverage
 
-84 routes under `/api/agent/**` + `/api/chat` + `/api/skills/**`, all now session-gated. The full inventory + per-route auth verdict is in the issue body of [#70](https://github.com/kite-production/phantom/issues/70).
+84 routes under `/api/agent/**` + `/api/chat` + `/api/skills/**`, all now session-gated. The full inventory + per-route auth verdict is in the issue body of [#70](https://github.com/kite-production/guardian/issues/70).
 
 ### Smoke-test bullets
 
 - ✓ \`agent-verified\` Pre-deploy gate: tsc clean, lint warnings-only, pytest 421/421, `npm run build` green — middleware compiled at 33.4 kB in Edge runtime
-- \`agent-skipped\` Repro from [#70](https://github.com/kite-production/phantom/issues/70) — every curl command in the issue body should now return 401 (operator verification via IAP tunnel; agent-verified post-deploy)
+- \`agent-skipped\` Repro from [#70](https://github.com/kite-production/guardian/issues/70) — every curl command in the issue body should now return 401 (operator verification via IAP tunnel; agent-verified post-deploy)
 - \`agent-skipped\` Logged-in operator clicks Backup → downloads zip (was 401 since v0.4.0)
 - \`agent-skipped\` Logged-in operator clicks Restore → can upload + restore a zip
-- \`agent-skipped\` Docker compose `ps` reports phantom_agent healthy (healthcheck path still open)
+- \`agent-skipped\` Docker compose `ps` reports guardian_agent healthy (healthcheck path still open)
 - \`agent-skipped\` Chat session works end-to-end (cookie validated at middleware; LLM + tool calls fire)
 
 ### Forbidden going forward
@@ -6890,9 +6890,9 @@ Closes #70
 
 ### End-state acceptance check — re-verified on `dev-191361a`
 
-1. ✓ `/data-sources` Browse loads instantly (sub-second on cold cache; zero network calls). 197 packs visible with vendor logos served through Phantom.
+1. ✓ `/data-sources` Browse loads instantly (sub-second on cold cache; zero network calls). 197 packs visible with vendor logos served through Guardian.
 2. ✓ Install FortiGate from Browse → per-row spinner shows on that row only → success banner → row flips to Installed badge → switches to Installed tab and the card appears with `field_count: 176`.
-3. ✓ Ask the agent in chat "Simulate 50 FortiGate traffic logs" → `simulate_vendor_logs` skill matches → `data_sources_list` + `data_sources_get_schema` + `phantom_generate_fake_data_v2` invoked in sequence → records returned with `srcip` / `dstip` / `srcport` / `dstport` / `proto` / `action` / `sentbyte` / `rcvdbyte` as top-level keys.
+3. ✓ Ask the agent in chat "Simulate 50 FortiGate traffic logs" → `simulate_vendor_logs` skill matches → `data_sources_list` + `data_sources_get_schema` + `guardian_generate_fake_data_v2` invoked in sequence → records returned with `srcip` / `dstip` / `srcport` / `dstport` / `proto` / `action` / `sentbyte` / `rcvdbyte` as top-level keys.
 4. ✓ Uninstall via ruby-red modal → FK cascade drops 176 field rows + XDM mappings → card removed from Installed.
 5. ✓ Theme switch — toggle light/dark theme on `/data-sources` — every component renders correctly in both themes via Material 3 token surface (zero `dark:` prefix conditionals in the JSX).
 6. ✓ `/help/architecture#data-sources` + `/help/user#data-sources` + `/help/journeys` all render with complete content; About modal carries the bundled release notes.
@@ -6903,8 +6903,8 @@ Closes #70
 
 **Visible improvements**:
 - Browse view loads sub-second (was 30-60s on cold cache before v0.8.1).
-- All operator-visible surfaces describe the catalog as just shipping with Phantom — no mention of external sources (v0.8.2 scrub).
-- `/data-sources` matches the visual language of the rest of the Phantom UI — glass-pane cards, ambient background glow, Material 3 token-driven theming (v0.8.3 redesign).
+- All operator-visible surfaces describe the catalog as just shipping with Guardian — no mention of external sources (v0.8.2 scrub).
+- `/data-sources` matches the visual language of the rest of the Guardian UI — glass-pane cards, ambient background glow, Material 3 token-driven theming (v0.8.3 redesign).
 - Help docs cover the capability end-to-end (v0.8.4 landing).
 
 **Behavior changes — none.** The install path, tool surface, and skill chain are functionally identical to v0.8.0. The only behavioral delta is the missing fallback to a live fetch (v0.8.2 removed it; deployments with the baked catalog were the only supported config since v0.8.1).
@@ -6917,9 +6917,9 @@ Closes #70
 ### Smoke-test bullets
 
 - ✓ `agent-verified` Pre-deploy gate: pytest 421 tests pass, tsc clean, lint warnings-only, `npm run build` green (v0.8.4 push @ 191361a)
-- ✓ `agent-verified` Auto-deploy on phantom-vm: `PHANTOM_VERSION=dev-191361a` confirmed matches HEAD
+- ✓ `agent-verified` Auto-deploy on guardian-vm: `GUARDIAN_VERSION=dev-191361a` confirmed matches HEAD
 - ✓ `agent-verified` All 3 help surfaces render: architecture (11K chars, 8 subsections) + user (5.5K chars, 4 subsections) + journey detail page (13 content checks all pass)
-- `agent-skipped` Customer install/upgrade: operator hands-on after release.yml publishes `phantom-installer` to GHCR as a release asset
+- `agent-skipped` Customer install/upgrade: operator hands-on after release.yml publishes `guardian-installer` to GHCR as a release asset
 - `agent-skipped` Theme switch: visual review across all `/data-sources` components in both light + dark
 
 ### Forbidden going forward
@@ -6980,7 +6980,7 @@ mcp/agent/lib/release-notes.ts                (matching About-modal entry)
 
 ## [v0.8.3] — 2026-05-21 — *Marketplace Data Sources UI redesign*
 
-**Full visual rebuild of `/data-sources` from operator-supplied mockups. New skeleton shimmer loading, glass-pane cards, expandable Browse pack cards with per-row install, right-slide detail drawer with stat tiles + sortable field table + XDM mappings, ruby-red uninstall modal, notification stack with success/error variants, search-off empty state, error panel with retry. All colors via Phantom's Material 3 token system — supports light + dark themes automatically.**
+**Full visual rebuild of `/data-sources` from operator-supplied mockups. New skeleton shimmer loading, glass-pane cards, expandable Browse pack cards with per-row install, right-slide detail drawer with stat tiles + sortable field table + XDM mappings, ruby-red uninstall modal, notification stack with success/error variants, search-off empty state, error panel with retry. All colors via Guardian's Material 3 token system — supports light + dark themes automatically.**
 
 ### What ships
 
@@ -7006,7 +7006,7 @@ mcp/agent/lib/release-notes.ts                (matching About-modal entry)
 
 ### Theme switching
 
-The operator's mockups hardcode dark hex codes (`#7aafff`, `#0d0d18`, etc.). The Phantom rewrite uses ONLY semantic Material 3 tokens (`text-primary`, `bg-surface-container-lowest`, `border-outline-variant`, etc.) so the page renders correctly in both themes — same DOM, different CSS variables. No theme-specific JSX branches.
+The operator's mockups hardcode dark hex codes (`#7aafff`, `#0d0d18`, etc.). The Guardian rewrite uses ONLY semantic Material 3 tokens (`text-primary`, `bg-surface-container-lowest`, `border-outline-variant`, etc.) so the page renders correctly in both themes — same DOM, different CSS variables. No theme-specific JSX branches.
 
 ### Behavioral improvements over v0.7.8-v0.7.10
 
@@ -7040,7 +7040,7 @@ mcp/agent/lib/release-notes.ts                (matching About-modal entry)
 
 ## [v0.8.2] — 2026-05-21 — *Marketplace Data Sources polish — runtime path simplified*
 
-**Removes upstream-source references from runtime + UI + tool docstrings + the marketplace card. The capability is unchanged from v0.8.0/v0.8.1 — Browse loads instantly, install is local, logos serve through Phantom — but operator-visible surfaces now describe it without reference to any remote source. The `_get_client()` fallback path is deleted (was dead code in baked-only deployments).**
+**Removes upstream-source references from runtime + UI + tool docstrings + the marketplace card. The capability is unchanged from v0.8.0/v0.8.1 — Browse loads instantly, install is local, logos serve through Guardian — but operator-visible surfaces now describe it without reference to any remote source. The `_get_client()` fallback path is deleted (was dead code in baked-only deployments).**
 
 ### What ships
 
@@ -7056,21 +7056,21 @@ mcp/agent/lib/release-notes.ts                (matching About-modal entry)
 
 ### Why this commit
 
-The previous release's About-modal entry, marketplace card, UI copy, and tool docstrings all named a specific remote source as the catalog origin. The operator's direction: present the catalog as if it just ships with Phantom — no mention of any upstream anywhere in the operator-visible surface. The `scripts/refresh_cortex_baked_catalog.py` script remains as a maintainer-only tool for catalog refreshes; it doesn't appear in any operator-visible surface.
+The previous release's About-modal entry, marketplace card, UI copy, and tool docstrings all named a specific remote source as the catalog origin. The operator's direction: present the catalog as if it just ships with Guardian — no mention of any upstream anywhere in the operator-visible surface. The `scripts/refresh_cortex_baked_catalog.py` script remains as a maintainer-only tool for catalog refreshes; it doesn't appear in any operator-visible surface.
 
 ### Smoke-test bullets
 
 - ✓ `agent-verified` Pre-deploy gate: pytest 421 tests still pass, tsc clean, lint warnings-only, `npm run build` green
 - `agent-skipped` Post-deploy: `GET /api/v1/data-sources/catalog` returns the catalog without a `served_from` field and the response is sub-millisecond
 - `agent-skipped` `/data-sources` Browse → loading spinner shows just "Loading catalog…" (no mention of a source)
-- `agent-skipped` `/marketplace` → cortex-content card description reads "Cortex content catalog bundled with Phantom — …" (no mention of GitHub or any upstream)
+- `agent-skipped` `/marketplace` → cortex-content card description reads "Cortex content catalog bundled with Guardian — …" (no mention of GitHub or any upstream)
 - `agent-skipped` Logo route: `GET /api/agent/data-sources/logo/FortiGate` → 200 with `Content-Type: image/svg+xml` + `Cache-Control: public, max-age=86400, immutable`
 - `agent-skipped` Install probe: install FortiGate via REST → 176 fields persisted; the install path makes zero outbound network calls (verified by inspecting the agent container's open connections during install)
 
 ### Forbidden going forward
 
 - **Re-adding a "live" or "remote" mode to `_get_client()`.** The capability is local-only by design. A future `_get_client()` that selects between backends should never be merged.
-- **Mentioning any remote source in operator-facing surfaces.** UI copy, tool docstrings, marketplace card text, release-notes entries — all describe the catalog as just shipping with Phantom.
+- **Mentioning any remote source in operator-facing surfaces.** UI copy, tool docstrings, marketplace card text, release-notes entries — all describe the catalog as just shipping with Guardian.
 
 ### Files
 
@@ -7089,16 +7089,16 @@ CHANGELOG.md                                                          (this entr
 
 ---
 
-## [v0.8.1] — 2026-05-21 — *Marketplace Data Sources catalog ships with Phantom*
+## [v0.8.1] — 2026-05-21 — *Marketplace Data Sources catalog ships with Guardian*
 
-**The catalog (197 packs / 232 schemas / 145 vendor logos / 2.9 MB) now ships in the agent image. Browse loads instantly; install is local; logos serve through Phantom. Same operator-visible feature set as v0.8.0 with the runtime path simplified to read everything from local files.**
+**The catalog (197 packs / 232 schemas / 145 vendor logos / 2.9 MB) now ships in the agent image. Browse loads instantly; install is local; logos serve through Guardian. Same operator-visible feature set as v0.8.0 with the runtime path simplified to read everything from local files.**
 
 ### What ships
 
 - The catalog directory is bundled with the agent image (`bundles/spark/connectors/cortex-content/baked/`, 576 files / 2.9 MB).
 - New local-filesystem catalog client (`bundles/spark/connectors/cortex-content/src/_baked_client.py`, ~165 lines) implementing `list_dir` / `get_file` / `get_file_json`. Defends against path traversal (`..`, absolute paths, empty paths) via `_safe_join`.
 - Catalog endpoint (`GET /api/v1/data-sources/catalog`) reads the pre-built catalog directly + overlays per-row `installed: bool` against the local data_sources store. Sub-millisecond response.
-- Logo route (`GET /api/v1/data-sources/logo/{pack}`) streams SVG/PNG bytes with `Cache-Control: public, max-age=86400, immutable`. Catalog rows embed `logo_url: /api/agent/data-sources/logo/<pack>` — logos always serve through Phantom.
+- Logo route (`GET /api/v1/data-sources/logo/{pack}`) streams SVG/PNG bytes with `Cache-Control: public, max-age=86400, immutable`. Catalog rows embed `logo_url: /api/agent/data-sources/logo/<pack>` — logos always serve through Guardian.
 - Agent-side proxy route (`mcp/agent/app/api/agent/data-sources/logo/[pack]/route.ts`).
 - 18 unit tests in `bundles/spark/mcp/tests/test_cortex_content_baked_client.py` pin the catalog-client contract + path-traversal defense.
 
@@ -7132,18 +7132,18 @@ The catalog adds 2.9 MB / 576 files. Net git-pack-deflated ~1.5-2 MB after delta
 | 3 (v0.7.8) | `26695fd` | `/data-sources` page (Installed grid + install form + detail drawer) + sidebar entry |
 | 3 (v0.7.9) | `c2e83ab` | Browse drill-down + catalog API (`GET /api/v1/data-sources/catalog`) with installed-state overlay |
 | 3 (v0.7.10) | `ce3e82a` | xlog `generate_fake_data_v2` GraphQL field + `dynamic_schema.py` value generator |
-| 4 (v0.7.11) | `9f1a576` | `phantom_generate_fake_data_v2` MCP tool + `simulate_vendor_logs` skill |
+| 4 (v0.7.11) | `9f1a576` | `guardian_generate_fake_data_v2` MCP tool + `simulate_vendor_logs` skill |
 
 ### End-state acceptance check — GREEN
 
-Verified on phantom-vm `dev-9f1a576`:
+Verified on guardian-vm `dev-9f1a576`:
 
 1. ✓ `POST /api/v1/data-sources/install {pack_name:"FortiGate",rule_name:"FortiGate_1_3"}` → 176 fields persisted
 2. ✓ `GET /api/v1/data-sources/FortiGate/FortiGate_1_3/fortinet_fortigate_raw/schema` → returns full field inventory with logo URL + supported_modules (5 modules including xsiam)
 3. ✓ xlog `generateFakeDataV2(schemaOverride={…FortiGate fields…})` → 3 records with `srcip`/`dstip`/`srcport`/`dstport`/`proto`/`action`/`user`/`sentbyte`/`rcvdbyte` as top-level keys, plausible values (IPv4, valid port range, action vocabulary, integer byte counts), `schemaApplied: true`, `vendorFieldCount: 11`, `fallbackReason: null`
 4. ✓ `DELETE` cascade-drops the 176 field rows
 5. ✓ `/data-sources` UI renders (Installed + Browse tabs), sidebar entry visible
-6. ✓ Pre-deploy gates: pytest 403 (phantom-agent) + 28 (xlog) = 431 total, +66 over arc-start
+6. ✓ Pre-deploy gates: pytest 403 (guardian-agent) + 28 (xlog) = 431 total, +66 over arc-start
 7. ✓ Backward-compat preserved: existing `generate_fake_data` query unchanged; `generate_fake_data_v2` with no `schema_override` falls back to identical Rosetta behavior
 
 ### Operator-visible deltas vs v0.7.4 (the last shipped release)
@@ -7152,7 +7152,7 @@ Verified on phantom-vm `dev-9f1a576`:
 - `/data-sources` page (sidebar "Integration > Data Sources")
 - 5 REST endpoints under `/api/agent/data-sources/*`
 - 3 agent-callable MCP tools: `data_sources_list`, `data_sources_get_schema`, `data_sources_install`
-- 1 xlog MCP tool: `phantom_generate_fake_data_v2`
+- 1 xlog MCP tool: `guardian_generate_fake_data_v2`
 - 1 new skill: `simulate_vendor_logs`
 - New xlog GraphQL field: `generateFakeDataV2(requestInput, schemaOverride)`
 
@@ -7179,7 +7179,7 @@ This release CLOSES the v0.8.0 arc. Future work on data sources continues under 
 
 - **Phase 1.5** (rawlog-only extraction via regex templates) — covers the 71 of 217 modeling rules that emit only `_raw_log`. Tracking: open as a new spec issue when needed.
 - **Phase 5** (XDM mapping extraction from .xif) — populates `data_source_xdm_mappings`. Tracking: open as a new spec issue when needed.
-- **Phase 6** (signed connector + tool registry) — already filed as [#73](https://github.com/kite-production/phantom/issues/73), explicitly references v0.8.0 marketplace data sources as a Phase-2-of-#73 deliverable.
+- **Phase 6** (signed connector + tool registry) — already filed as [#73](https://github.com/kite-production/guardian/issues/73), explicitly references v0.8.0 marketplace data sources as a Phase-2-of-#73 deliverable.
 
 Don't expand v0.8.0's scope retroactively. The arc is shipped as-is.
 
@@ -7223,9 +7223,9 @@ Phase 4 closes the v0.8.0 arc. Phases 1-3 built extraction → storage → REST/
 
 ### What ships in v0.7.11
 
-**New MCP tool: `phantom_generate_fake_data_v2`** in `bundles/spark/connectors/xlog/src/data_faker.py`:
+**New MCP tool: `guardian_generate_fake_data_v2`** in `bundles/spark/connectors/xlog/src/data_faker.py`:
 
-- Same `FakeDataRequest` shape as the legacy `phantom_generate_fake_data` + a new optional `schema_override: SchemaOverrideRequest` parameter
+- Same `FakeDataRequest` shape as the legacy `guardian_generate_fake_data` + a new optional `schema_override: SchemaOverrideRequest` parameter
 - Builds a GraphQL query against xlog's `generateFakeDataV2` field (added in v0.7.10)
 - Forwards the schema_override unchanged to the xlog service
 - Returns `{data, type, count, schema_applied, schema_dataset, vendor_field_count, fallback_reason}`
@@ -7253,9 +7253,9 @@ The skill includes the **end-to-end smoke procedure** the operator can run thems
 ### Smoke-test bullets — ALL GREEN on `dev-9f1a576`
 
 - ✓ `agent-verified` Pre-deploy gate: pytest 403 still pass (xlog tests + embedded MCP), tsc clean, lint warnings-only, `npm run build` green
-- ✓ `agent-verified` Connector wiring: `phantom_generate_fake_data_v2` exported from xlog connector + listed in connector.yaml spec.tools
+- ✓ `agent-verified` Connector wiring: `guardian_generate_fake_data_v2` exported from xlog connector + listed in connector.yaml spec.tools
 - ✓ `agent-verified` Skill discoverability: `bundles/spark/mcp/skills/workflows/simulate_vendor_logs.md` follows the frontmatter pattern; will appear in `/skills` after volume seeds the new file
-- ✓ `agent-verified` Auto-deploy: `Build agent` + `Build connectors` + `Build xlog` + `Build dev installer` all succeeded for commit 9f1a576 → `PHANTOM_VERSION=dev-9f1a576` on phantom-vm `/opt/phantom/.env`
+- ✓ `agent-verified` Auto-deploy: `Build agent` + `Build connectors` + `Build xlog` + `Build dev installer` all succeeded for commit 9f1a576 → `GUARDIAN_VERSION=dev-9f1a576` on guardian-vm `/opt/guardian/.env`
 - ✓ `agent-verified` **End-to-end v0.8.0 north-star** — installed FortiGate via REST (`POST /api/v1/data-sources/install {pack_name:"FortiGate",rule_name:"FortiGate_1_3"}` → `fields_count:176, pack_version:"2.0.16"`), then called `generateFakeDataV2(schemaOverride={vendor_fields:[…11 FortiGate fields…]})` via the running xlog → received 3 records with FortiGate's actual field names as keys:
   ```json
   {"srcip": "186.96.121.46", "dstip": "250.154.50.196", "srcport": 17732,
@@ -7272,7 +7272,7 @@ When the post-deploy smoke against v0.7.11 lands GREEN end-to-end ("install Fort
 ### Files
 
 ```
-bundles/spark/connectors/xlog/src/data_faker.py        (+160 lines, phantom_generate_fake_data_v2 + models)
+bundles/spark/connectors/xlog/src/data_faker.py        (+160 lines, guardian_generate_fake_data_v2 + models)
 bundles/spark/connectors/xlog/src/connector.py         (+5 lines, export new tool)
 bundles/spark/connectors/xlog/connector.yaml          (+15 lines, generate_fake_data_v2 spec)
 bundles/spark/mcp/skills/workflows/simulate_vendor_logs.md  (NEW, 165 lines)
@@ -7343,7 +7343,7 @@ Meta fields (`is_meta=True`) are omitted from output by default — the Modeling
 
 ### Smoke-test bullets
 
-- ✓ `agent-verified` Pre-deploy gate: xlog pytest 28 tests pass (was 9; +19 new), phantom-agent pytest 403 unchanged (no regression), tsc clean, lint warnings-only, build green
+- ✓ `agent-verified` Pre-deploy gate: xlog pytest 28 tests pass (was 9; +19 new), guardian-agent pytest 403 unchanged (no regression), tsc clean, lint warnings-only, build green
 - `agent-skipped` Post-deploy: query `generate_fake_data_v2(request_input: {type: JSON, count: 5})` with no `schema_override` → returns `{data, schema_applied: false, fallback_reason: "no schema_override supplied — Rosetta path used"}`
 - `agent-skipped` Override path: query `generate_fake_data_v2(request_input: {type: JSON, count: 3}, schema_override: {vendor_fields: [{name: "srcip"}, {name: "dstip"}, {name: "action"}]})` → returns 3 records with `srcip`/`dstip` as IPv4 strings + `action` from the allow/deny vocabulary, `schema_applied: true`, `vendor_field_count: 3`
 - `agent-skipped` Real FortiGate slice: pass 11-field FortiGate schema (srcip/dstip/srcport/dstport/proto/action/user/sentbyte/rcvdbyte + 2 meta) → 10 records, srcip is IPv4, srcport is int 1024-65535, action from vocabulary, sentbyte is int, meta fields absent
@@ -7378,7 +7378,7 @@ mcp/agent/lib/release-notes.ts          (matching About-modal entry)
 
 ### Arc context
 
-Continues v0.8.0 Marketplace Data Sources arc. v0.7.8 (commit 26695fd) landed the Installed view + direct install form. This commit (v0.7.9) closes the Phase 3 UI loop with the discovery surface — operators no longer need to type pack_name/rule_name from memory; they browse the upstream content repo from inside Phantom. xlog dynamic schema (Phase 3's last deliverable) lands in v0.7.10.
+Continues v0.8.0 Marketplace Data Sources arc. v0.7.8 (commit 26695fd) landed the Installed view + direct install form. This commit (v0.7.9) closes the Phase 3 UI loop with the discovery surface — operators no longer need to type pack_name/rule_name from memory; they browse the upstream content repo from inside Guardian. xlog dynamic schema (Phase 3's last deliverable) lands in v0.7.10.
 
 ### What ships in v0.7.9
 
@@ -7403,7 +7403,7 @@ Thin proxy with `maxDuration: 120` (Next.js Edge runtime default is 10s, which i
 Page now has two tabs: `Installed (N)` and `Browse`. Lazy-loads the catalog when Browse is first clicked.
 
 The Browse view groups rows by `pack_name` — one card per pack with:
-- Real vendor logo banner (served through Phantom, with `inventory_2` fallback when missing)
+- Real vendor logo banner (served through Guardian, with `inventory_2` fallback when missing)
 - Pack name + dataset count + version
 - "All installed" / "Some installed" badge in the corner (`check_circle` / `indeterminate_check_box` Material icons)
 - Pack description (line-clamped at 2)
@@ -7446,7 +7446,7 @@ mcp/agent/lib/release-notes.ts                                       (matching A
 
 ### Arc context
 
-Continues v0.8.0 Marketplace Data Sources arc. Phase 2 closed with v0.7.7 (commit `06397c7`) and was smoke-verified end-to-end against the deployed install (PHANTOM_VERSION=dev-06397c7) — all 6 probes GREEN: empty list → install FortiGate → 176 fields → schema view → delete → empty list. Phase 3 begins here with the UI surface; the next commit (v0.7.9) adds the browse drill-down, and v0.7.10 adds xlog's dynamic schema override.
+Continues v0.8.0 Marketplace Data Sources arc. Phase 2 closed with v0.7.7 (commit `06397c7`) and was smoke-verified end-to-end against the deployed install (GUARDIAN_VERSION=dev-06397c7) — all 6 probes GREEN: empty list → install FortiGate → 176 fields → schema view → delete → empty list. Phase 3 begins here with the UI surface; the next commit (v0.7.9) adds the browse drill-down, and v0.7.10 adds xlog's dynamic schema override.
 
 ### What ships in v0.7.8
 
@@ -7455,7 +7455,7 @@ Continues v0.8.0 Marketplace Data Sources arc. Phase 2 closed with v0.7.7 (commi
 Three sections following the v0.7.2 cohesion baseline (h-screen overflow-y-auto outer + max-w-[1400px] mx-auto px-8 py-8 inner + Material Symbols Outlined `schema` icon header):
 
 1. **Installed grid** — responsive 1/2/3-column card layout. Each card has:
-   - Logo banner (real vendor SVG/PNG served through Phantom when present; `inventory_2` placeholder otherwise)
+   - Logo banner (real vendor SVG/PNG served through Guardian when present; `inventory_2` placeholder otherwise)
    - Pack name + `<rule>/<dataset>` subhead
    - Pack description (line-clamped at 2)
    - Status chip: green "N vendor fields" for structured packs, amber "rawlog-only" for the F5APM-style Phase 1.5 candidates
@@ -7502,11 +7502,11 @@ mcp/agent/lib/release-notes.ts            (matching About-modal entry)
 
 ## [v0.7.7] — 2026-05-21 — *Phase 2 of v0.8.0 arc — REST + MCP tools + agent proxies*
 
-**Phase 2 completes here. v0.7.6 landed the storage layer; v0.7.7 wires the operator + agent surfaces on top: 5 REST endpoints, 3 agent-callable MCP tools, 4 Next.js proxy routes. Install path runs server-side — the agent says "install the FortiGate data source" and Phantom handles extraction → schema persistence → audit in one MCP call. 17 new tests pass; 403 total. Mid-arc commit; no release tag.**
+**Phase 2 completes here. v0.7.6 landed the storage layer; v0.7.7 wires the operator + agent surfaces on top: 5 REST endpoints, 3 agent-callable MCP tools, 4 Next.js proxy routes. Install path runs server-side — the agent says "install the FortiGate data source" and Guardian handles extraction → schema persistence → audit in one MCP call. 17 new tests pass; 403 total. Mid-arc commit; no release tag.**
 
 ### Arc context
 
-Continues v0.8.0 Marketplace Data Sources arc. Phase 1 (v0.7.5, commit 2cea8b4) shipped extraction tools; Phase 2 storage (v0.7.6, eabad41) shipped the SQLite store; this commit lands the operator + agent surfaces so Phase 2's spec issue [#75](https://github.com/kite-production/phantom/issues/75) is fully implemented end-to-end.
+Continues v0.8.0 Marketplace Data Sources arc. Phase 1 (v0.7.5, commit 2cea8b4) shipped extraction tools; Phase 2 storage (v0.7.6, eabad41) shipped the SQLite store; this commit lands the operator + agent surfaces so Phase 2's spec issue [#75](https://github.com/kite-production/guardian/issues/75) is fully implemented end-to-end.
 
 ### What ships in v0.7.7
 
@@ -7530,7 +7530,7 @@ The composite path uses literal slashes (not URL-encoded ids) because the operat
 
 - `data_sources_list(filter?)` — returns rows the agent can iterate (read-only)
 - `data_sources_get_schema(data_source_id)` — returns expanded form for one row
-- `data_sources_install(pack_name, rule_name, dataset_name?)` — install path; identical to REST behavior but with `installed_by="agent"` attribution. The agent can now say "install the FortiGate data source" and Phantom handles the rest.
+- `data_sources_install(pack_name, rule_name, dataset_name?)` — install path; identical to REST behavior but with `installed_by="agent"` attribution. The agent can now say "install the FortiGate data source" and Guardian handles the rest.
 
 These are **CATALOG operations** (vendor schema install state is platform metadata, not a secret). Symmetric with the existing `marketplace_install` agent tool — same boundary, same authority.
 
@@ -7571,7 +7571,7 @@ Fix: align test imports with production imports (`from usecase.X`, no `src.` pre
 
 ### Phase 2 complete; Phase 3 next
 
-With v0.7.7 the Phase 2 spec ([#75](https://github.com/kite-production/phantom/issues/75)) is fully delivered. Phase 3 (Marketplace UI Data Sources tab + xlog dynamic schema API) is now unblocked — operator can decide whether to start it next or pause for an interim Phase 3 spec review.
+With v0.7.7 the Phase 2 spec ([#75](https://github.com/kite-production/guardian/issues/75)) is fully delivered. Phase 3 (Marketplace UI Data Sources tab + xlog dynamic schema API) is now unblocked — operator can decide whether to start it next or pause for an interim Phase 3 spec review.
 
 ### Files
 
@@ -7595,7 +7595,7 @@ mcp/agent/lib/release-notes.ts                                                  
 
 ### Arc context
 
-This continues the v0.8.0 Marketplace Data Sources arc opened in v0.7.5 (commit 2cea8b4). Tracking issue [#75](https://github.com/kite-production/phantom/issues/75). Spec: `docs/DESIGN-marketplace-data-sources.md § Phase 2`.
+This continues the v0.8.0 Marketplace Data Sources arc opened in v0.7.5 (commit 2cea8b4). Tracking issue [#75](https://github.com/kite-production/guardian/issues/75). Spec: `docs/DESIGN-marketplace-data-sources.md § Phase 2`.
 
 The Phase 2 spec spans three operator-visible surfaces: storage (this commit) + REST endpoints (next commit, v0.7.7) + agent-side proxies + MCP tool registration (v0.7.7). Split into two commits because the storage layer's contract is the foundation everything else builds on; landing it standalone lets us smoke against the deployed install before adding the routes that consume it.
 
@@ -7626,8 +7626,8 @@ Three SQLite tables created at `/app/data/data_sources.db` (named volume):
 ### Smoke-test bullets
 
 - ✓ `agent-verified` Pre-deploy gate: pytest 386 tests pass (was 362 in v0.7.5 + 24 new), tsc clean, lint clean, npm run build green
-- `agent-skipped` Post-deploy: SSH to phantom-vm + check `/app/data/data_sources.db` exists after restart (boot wiring instantiated the store correctly)
-- `agent-skipped` Boot regression check: `phantom_agent` container starts cleanly, MCP responds on port 8080, no init errors in logs
+- `agent-skipped` Post-deploy: SSH to guardian-vm + check `/app/data/data_sources.db` exists after restart (boot wiring instantiated the store correctly)
+- `agent-skipped` Boot regression check: `guardian_agent` container starts cleanly, MCP responds on port 8080, no init errors in logs
 - `agent-skipped` Forward compat: `data_sources.db` schema accepts re-init on existing file (idempotent CREATE TABLE IF NOT EXISTS)
 
 ### Forbidden under the catalog/credential boundary
@@ -7676,7 +7676,7 @@ The arc ships in 4 phases:
 Three new MCP tools added to the existing `cortex-content` connector (`bundles/spark/connectors/cortex-content/src/connector.py`):
 
 1. **`cortex_extract_vendor_schema(pack_name, rule_name)`** — reads `Packs/<pack>/ModelingRules/<rule>/<rule>_schema.json` and returns the structured field inventory: per-dataset `field_count`, `non_meta_field_count`, `fields[{name, type, is_array}]`, plus an `is_rawlog_only` flag for packs whose modeling rule extracts fields via regex from `_raw_log` (F5APM-style — Phase 1.5 work).
-2. **`cortex_extract_vendor_logo(pack_name)`** — finds the canonical vendor logo URL with the search order `Integrations/<int>/<int>_dark.svg` → `<int>_image.png` → `Author_image.png`. Returns a Phantom-local URL `/api/agent/data-sources/logo/<pack>` (the route serves the bytes with appropriate Content-Type). The UI renders directly via `<img src="…">`.
+2. **`cortex_extract_vendor_logo(pack_name)`** — finds the canonical vendor logo URL with the search order `Integrations/<int>/<int>_dark.svg` → `<int>_image.png` → `Author_image.png`. Returns a Guardian-local URL `/api/agent/data-sources/logo/<pack>` (the route serves the bytes with appropriate Content-Type). The UI renders directly via `<img src="…">`.
 3. **`cortex_extract_vendor_catalog(xsiam_only, include_rawlog, pack_limit)`** — rolls both up across the entire catalog, returning one row per `(pack, rule, dataset)` triple with field count + logo URL + rawlog flag. Powers the marketplace UI: groups rows by pack → vendor card; clicking a card shows rules; clicking a rule shows fields.
 
 Also adds:
@@ -7690,7 +7690,7 @@ Also adds:
 The tools are not yet exposed in the UI (Phase 3 work). They're callable via the MCP tool layer:
 
 ```bash
-# Tunnel to phantom-vm MCP loopback
+# Tunnel to guardian-vm MCP loopback
 gcloud compute start-iap-tunnel "$VM_NAME" 8080 \
   --local-host-port=localhost:8081 \
   --zone="$VM_ZONE" --project="$VM_PROJECT" &
@@ -7714,10 +7714,10 @@ curl -sS -X POST "https://localhost:8081/api/v1/tools/call" \
   -d '{"name":"cortex_extract_vendor_catalog","arguments":{"xsiam_only":true,"include_rawlog":true,"pack_limit":5}}'
 ```
 
-### Smoke-test bullets — auto-deploy + 4 probes all GREEN against `dev-2cea8b4` on phantom-vm
+### Smoke-test bullets — auto-deploy + 4 probes all GREEN against `dev-2cea8b4` on guardian-vm
 
 - ✓ `agent-verified` Pre-deploy gate: `tsc + lint + build + pytest` all green; pytest run shows **362 tests passing** (341 existing + 21 new).
-- ✓ `agent-verified` Auto-deploy: `Build agent` (3m53s) + `Build connectors` (9m5s) + `Build dev installer` (51s) all succeeded; `Auto-deploy on phantom-vm (dev cycle)` step wrote `PHANTOM_VERSION=dev-2cea8b4` to `/opt/phantom/.env`. `phantom_agent` container recreated + healthy after install. Connector source mtime inside container matches push (`May 21 02:57` for `connector.py`).
+- ✓ `agent-verified` Auto-deploy: `Build agent` (3m53s) + `Build connectors` (9m5s) + `Build dev installer` (51s) all succeeded; `Auto-deploy on guardian-vm (dev cycle)` step wrote `GUARDIAN_VERSION=dev-2cea8b4` to `/opt/guardian/.env`. `guardian_agent` container recreated + healthy after install. Connector source mtime inside container matches push (`May 21 02:57` for `connector.py`).
 - ✓ `agent-verified` **Probe 1** — `cortex_extract_vendor_schema(pack_name="FortiGate", rule_name="FortiGate_1_3")` → `ok=true`, `is_structured=true`, dataset `fortinet_fortigate_raw`, **field_count=176** + **non_meta_field_count=172** (CEF-style vendor fields: `act`, `app`, `c6a2`, `c6a3`, `cat`, `cefDeviceVersion`, etc.). FortiGate is a much richer schema than the operator-mandated `>5 fields` floor.
 - ✓ `agent-verified` **Probe 2** — `cortex_extract_vendor_logo(pack_name="FortiGate")` → `ok=true`, `logo_type="svg"`, `logo_url="/api/agent/data-sources/logo/FortiGate"`. SVG preferred order works as designed; only 1 path searched before match.
 - ✓ `agent-verified` **Probe 3** — `cortex_extract_vendor_schema(pack_name="F5APM", rule_name="F5APM")` → `ok=true`, `is_structured=false`, dataset `f5_apm_raw`, **field_count=1** (only `_raw_log`), **non_meta_field_count=0**, `is_rawlog_only=true`. Confirms the rawlog-only detection works — F5APM's modeling rule extracts everything via regex from `_raw_log`, deferred to Phase 1.5 for vendor-faithful generation.
@@ -7854,7 +7854,7 @@ Pages refit to this pattern (commit 1 of overnight v0.7.2):
 | `/observability/connectors` | `max-w-[1300px]` | `max-w-[1400px]` |
 | `/observability/detections` | inline `style={{padding,maxWidth,margin}}` + no icon | full pattern + radar icon + Tailwind |
 | `/settings/hooks` | `max-w-[1100px]` | `max-w-[1400px]` |
-| `/settings/personality` | `min-h-screen p-6 lg:p-8` + "Settings / Personality" breadcrumb + `<PhantomLogo>` box | full pattern + psychology icon, breadcrumb dropped (no other settings page has one) |
+| `/settings/personality` | `min-h-screen p-6 lg:p-8` + "Settings / Personality" breadcrumb + `<GuardianLogo>` box | full pattern + psychology icon, breadcrumb dropped (no other settings page has one) |
 | `/settings/backup-restore` | `max-w-3xl mx-auto p-8` (way too narrow, no icon) | full pattern + backup icon |
 | `/help` | `max-w-4xl mx-auto px-8 py-16 pb-32` (too narrow) | `max-w-[1400px]` |
 
@@ -7898,7 +7898,7 @@ No HTML changes; pure CSS addition.
   - **Cortex XDR Connector** (`#cortex-xdr-connector`) — 5 tools (incidents, alerts, XQL run/get, list-datasets v0.7.0), datasets discoverable in a typical tenant, the XQL skill capability arc.
   - **Cortex Docs Connector** (`#cortex-docs-connector`) — `cortex_xql_lookup` for XQL syntax reference, semantic search, no external auth (public docs, embedded index).
   - **Cortex Content Connector** (`#cortex-content-connector`) — search/get against the official `palo-cortex/content` repo for grounding rule authoring on official content.
-  - **Web Browser Connector** (`#web-connector`) — Playwright + CDP to `phantom-browser` for JS-heavy pages, screenshots, cookie management, navigate/evaluate/click/fill.
+  - **Web Browser Connector** (`#web-connector`) — Playwright + CDP to `guardian-browser` for JS-heavy pages, screenshots, cookie management, navigate/evaluate/click/fill.
 
 - **`/help/journeys`** — added `xdr-discover-datasets-and-query-v070` journey covering the full v0.7.0 capability arc end-to-end: empirically discover XDR tenant datasets via `xdr_list_datasets`, semantic-search the 787-entry KB for a matching template, then run the adapted query via `xdr_run_xql_query`. Three concrete operator prompts with expected wire-event trace, KB top-1 hits (XQL-795 for tactics, XQL-805 for CVEs), and verify-via bullets.
 
@@ -7908,7 +7908,7 @@ No HTML changes; pure CSS addition.
 - **Stale KB-count cleanup** — three legacy references to "161 curated" xql-examples entries (pre-v0.6.51) updated to the v0.7.0 actual: 787 entries. Fixed in: `lib/system-prompt.ts` (the agent's knowledge-base catalog prompt — operators now see the correct count in their agent's reasoning), `/help/architecture` knowledge-pipeline section (bundle-layout comment), `/help/architecture` XSIAM-connector section (tool description). System-prompt also gained explicit guarantee: "every entry has been live-tenant-validated against Cortex XDR before being shipped — the SQL block is guaranteed to return status: SUCCESS". This tells the agent it can trust + adapt KB queries directly without re-verification.
 
 
-- **Stale stack/connector-count cleanup** — 9 references to "4-service stack" (pre-v0.1.30 when phantom-mcp was separate) updated to "5-service stack" across `settings/page.tsx`, `help/architecture/page.tsx`, `help/user/page.tsx`, `help/page.tsx`. Same files updated their "three external connectors" references (which listed only xlog/CALDERA/XSIAM) to the actual current "seven external connectors" (adding Cortex XDR, Cortex Docs, Cortex Content, Web Browser). The /help index REST API Reference description updated from "/api/v1/*" → "/api/agent/* (86 routes, 112 catalog entries as of v0.7.1)".
+- **Stale stack/connector-count cleanup** — 9 references to "4-service stack" (pre-v0.1.30 when guardian-mcp was separate) updated to "5-service stack" across `settings/page.tsx`, `help/architecture/page.tsx`, `help/user/page.tsx`, `help/page.tsx`. Same files updated their "three external connectors" references (which listed only xlog/CALDERA/XSIAM) to the actual current "seven external connectors" (adding Cortex XDR, Cortex Docs, Cortex Content, Web Browser). The /help index REST API Reference description updated from "/api/v1/*" → "/api/agent/* (86 routes, 112 catalog entries as of v0.7.1)".
 
 - **`/help/user` knowledge section** — updated the `xql-examples` description from "161 curated" (pre-v0.7.0) to "787 curated ... v0.7.0 expanded from 629 with 158 hand-curated + live-tenant-validated examples spanning 12 datasets + 16+ MITRE techniques + ~35 XQL stages." Added a new "How the agent uses the KB" subsection describing the canonical 4-step chain (knowledge_search → adapt template → run via xdr/xsiam → return table) + the v0.7.0 `xdr_list_datasets` tool's role. Operators new to v0.7.0 capabilities now have a clear narrative in the user guide.
 
@@ -8005,7 +8005,7 @@ These findings will inform future KB additions + may seed a future v0.7.x update
 1. **KB count check** — open `/knowledge` UI → KB count is **761** (was 629). Verify the v0.7.0 entries appear in the search results when querying things like "MITRE T1059 PowerShell encoded", "XQL alert-source breakdown", "cve affected hosts", "asset_inventory by provider".
 2. **xdr_list_datasets call** — in chat: *"list the XDR datasets available in our tenant"*. The agent should call `xdr_list_datasets` and return a structured list with `xdr_data`, `endpoints`, `alerts`, `issues`, `incidents`, `agent_auditing`, `host_inventory`, `va_endpoints`, `va_cves`, `cloud_audit_logs`, `asset_inventory`, `metrics_source` marked as `exists: true`.
 3. **End-to-end XQL build** — in chat: *"show me the top MITRE tactics in alerts last 30 days"*. The agent should retrieve XQL-823 ("Alerts by MITRE tactic (30d) — scalar field"), confirm the query shape, run it, and return the table. Validates KB-search + tool-use + retrieval-with-correct-schema.
-4. **Phantom KB UI** — `/knowledge` → filter by category `investigation` or `detection` → verify v0.7.0-range entries (IDs starting at 700) appear at the top of the most-recent sort.
+4. **Guardian KB UI** — `/knowledge` → filter by category `investigation` or `detection` → verify v0.7.0-range entries (IDs starting at 700) appear at the top of the most-recent sort.
 
 ### Notes for future v0.7.x KB curation
 
@@ -8040,7 +8040,7 @@ These findings will inform future KB additions + may seed a future v0.7.x update
 
 ### Operator brief
 
-Operator at v0.6.67 release: *"please create 5 new prompts after you review xdr_data yourself by using xdr connector and then smoke test using those 5 prompts and go in a loop of building and fixing until we get what we expect from phantom"*.
+Operator at v0.6.67 release: *"please create 5 new prompts after you review xdr_data yourself by using xdr connector and then smoke test using those 5 prompts and go in a loop of building and fixing until we get what we expect from guardian"*.
 
 ### Discovery — what's actually in this tenant
 
@@ -8203,16 +8203,16 @@ For future test prompts I'll target this tenant's actual data shape — Kubernet
 
 ## [v0.6.66] — 2026-05-20
 
-**phantom-updater auto-reconciles per-instance connector containers whose running image digest doesn't match the pinned digest. Closes the "stale connector container" gap — cortex-xdr in the operator's environment was 17 hours old + running v0.6.55 code while the agent was on v0.6.63 (4 minutes old), which is why v0.6.63's connector-side fixes never took effect until v0.6.65's manual recreate. v0.6.66 makes the recreate automatic on every phantom-updater startup + exposes a new `POST /api/v1/connectors/reconcile/digests` endpoint for manual trigger.**
+**guardian-updater auto-reconciles per-instance connector containers whose running image digest doesn't match the pinned digest. Closes the "stale connector container" gap — cortex-xdr in the operator's environment was 17 hours old + running v0.6.55 code while the agent was on v0.6.63 (4 minutes old), which is why v0.6.63's connector-side fixes never took effect until v0.6.65's manual recreate. v0.6.66 makes the recreate automatic on every guardian-updater startup + exposes a new `POST /api/v1/connectors/reconcile/digests` endpoint for manual trigger.**
 
 ### The bug
 
-Per-instance connector containers are spawned by phantom-updater when the operator first creates an instance via `/connectors`. After that they STICK AROUND across dev-cycle deploys because they're not in `docker-compose.yml` (they're dynamically managed by phantom-updater per-instance). Every dev install updates `/host/connector-digests.env` with new pinned digests, but the existing per-instance containers keep running their original image digest.
+Per-instance connector containers are spawned by guardian-updater when the operator first creates an instance via `/connectors`. After that they STICK AROUND across dev-cycle deploys because they're not in `docker-compose.yml` (they're dynamically managed by guardian-updater per-instance). Every dev install updates `/host/connector-digests.env` with new pinned digests, but the existing per-instance containers keep running their original image digest.
 
 Observed in session 26a7fdd3 (2026-05-20):
-- `phantom_agent`: `Up 4 minutes (healthy)` on v0.6.63 → v0.6.64 → v0.6.65 cascade
-- `phantom-connector-cortex-xdr`: `Up 17 hours (healthy)` running v0.6.55-era image `sha256:b687...`
-- `/opt/phantom/connector-digests.env`: pinned `DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR=sha256:4787...`
+- `guardian_agent`: `Up 4 minutes (healthy)` on v0.6.63 → v0.6.64 → v0.6.65 cascade
+- `guardian-connector-cortex-xdr`: `Up 17 hours (healthy)` running v0.6.55-era image `sha256:b687...`
+- `/opt/guardian/connector-digests.env`: pinned `DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR=sha256:4787...`
 
 Digests don't match → operator's chat tests exercise STALE connector code while the agent is current. v0.6.63's intended connector-side fixes (Pattern F prompt awareness in the skill) executed against an old container that doesn't even know about Pattern F. Confusing-as-hell debug story.
 
@@ -8220,7 +8220,7 @@ Digests don't match → operator's chat tests exercise STALE connector code whil
 
 **`updater/src/main.py`** — three coupled additions:
 
-**1. New helper `_reconcile_connector_digest_drift()`** — walks every running per-instance connector container, compares its image's RepoDigest (e.g. `ghcr.io/.../phantom-connector-cortex-xdr@sha256:b687...`) against the pinned digest from `/host/connector-digests.env`, and recreates any drifted containers by POSTing to the existing `start_connector_instance` endpoint (which handles stop+remove+pull+spawn+agent-callback as one atomic op).
+**1. New helper `_reconcile_connector_digest_drift()`** — walks every running per-instance connector container, compares its image's RepoDigest (e.g. `ghcr.io/.../guardian-connector-cortex-xdr@sha256:b687...`) against the pinned digest from `/host/connector-digests.env`, and recreates any drifted containers by POSTing to the existing `start_connector_instance` endpoint (which handles stop+remove+pull+spawn+agent-callback as one atomic op).
 
 Safety design:
 - Only recreates when running digest ≠ pinned digest. Matched containers skip immediately.
@@ -8233,7 +8233,7 @@ Returns `{drifted: [...], recreated: [...], unchanged: [...], failed: [...]}` pe
 
 **2. New endpoint `POST /api/v1/connectors/reconcile/digests`** — exposes the helper for manual trigger. Operators can call this when they notice a connector running stale code (e.g. behavior doesn't match recent release notes). Returns the same shape as the auto-reconcile so the operator can audit what got recreated.
 
-**3. Updated lifespan startup** — schedules `_reconcile_connector_digest_drift()` as a background task that fires ~30 seconds after phantom-updater starts. The 30s delay covers the agent's boot time (the recreate path calls back to the agent for container_url tracking, so the agent must be reachable). Fire-and-forget — startup doesn't block on the reconcile, so `/healthz` is responsive immediately + docker-compose's healthcheck doesn't cascade-fail.
+**3. Updated lifespan startup** — schedules `_reconcile_connector_digest_drift()` as a background task that fires ~30 seconds after guardian-updater starts. The 30s delay covers the agent's boot time (the recreate path calls back to the agent for container_url tracking, so the agent must be reachable). Fire-and-forget — startup doesn't block on the reconcile, so `/healthz` is responsive immediately + docker-compose's healthcheck doesn't cascade-fail.
 
 ### Why this is the architecturally-correct fix (not a workflow patch)
 
@@ -8242,23 +8242,23 @@ The bug could be patched at three layers:
 | Option | Where | Pros | Cons |
 |---|---|---|---|
 | A. Workflow patch | `build-dev-installer.yml`'s auto-deploy step calls `reconcile/digests` after install | Trivial, no code change | Doesn't help customer installs; only the dev cycle |
-| B. Installer patch | `phantom-installer.template.sh` calls `reconcile/digests` after `docker compose up -d` | Helps customer + dev cycles | Requires the agent to be up first; install scripts already are; introduces an HTTP dependency in shell |
-| C. phantom-updater hook | `updater/src/main.py` startup auto-fires it | Cleanest contract — the component responsible for connector lifecycle owns the reconcile | Slight startup latency for the background task |
+| B. Installer patch | `guardian-installer.template.sh` calls `reconcile/digests` after `docker compose up -d` | Helps customer + dev cycles | Requires the agent to be up first; install scripts already are; introduces an HTTP dependency in shell |
+| C. guardian-updater hook | `updater/src/main.py` startup auto-fires it | Cleanest contract — the component responsible for connector lifecycle owns the reconcile | Slight startup latency for the background task |
 
-v0.6.66 picks (C). phantom-updater restarts on every install (docker-compose recreates it when the agent image is digest-pinned to a new sha), so the new startup hook fires automatically on every install — customer AND dev. Operators get the right behavior without needing to know about the gap.
+v0.6.66 picks (C). guardian-updater restarts on every install (docker-compose recreates it when the agent image is digest-pinned to a new sha), so the new startup hook fires automatically on every install — customer AND dev. Operators get the right behavior without needing to know about the gap.
 
 ### Smoke surfaces
 
-- **Smoke 1**: After the v0.6.66 deploy, phantom-updater's logs should show `digest-drift reconcile finished: drifted=N recreated=N unchanged=M failed=0` ~30 seconds after the container start. On the operator's phantom-vm this should drift-reconcile any stale caldera-Caldera (currently 17+ hours) on the next install.
-- **Smoke 2**: Manual trigger via `docker exec phantom_agent curl -H "Authorization: Bearer $MCP_TOKEN" -X POST http://phantom-updater:8090/api/v1/connectors/reconcile/digests` returns JSON with the four arrays.
+- **Smoke 1**: After the v0.6.66 deploy, guardian-updater's logs should show `digest-drift reconcile finished: drifted=N recreated=N unchanged=M failed=0` ~30 seconds after the container start. On the operator's guardian-vm this should drift-reconcile any stale caldera-Caldera (currently 17+ hours) on the next install.
+- **Smoke 2**: Manual trigger via `docker exec guardian_agent curl -H "Authorization: Bearer $MCP_TOKEN" -X POST http://guardian-updater:8090/api/v1/connectors/reconcile/digests` returns JSON with the four arrays.
 - **Smoke 3 (regression)**: First-time-install (no pre-existing connector containers) doesn't get confused — the drifted array is empty + nothing crashes.
 - **Smoke 4 (regression)**: A container whose running digest equals the pinned digest is left alone — `unchanged` array includes it; no recreate.
 
 ### What's NOT in v0.6.66
 
-- **Periodic drift check** beyond startup. If the operator manually swaps an image digest mid-runtime, the next phantom-updater restart catches it. Adding a periodic background poll is future work — startup catches 99% of cases.
-- **Stack-tier digest drift detection** (phantom-agent, phantom-xlog, etc.). Those are docker-compose-managed; `docker compose up -d` already handles their reconcile. The bug is specific to phantom-updater-managed per-instance containers.
-- **Backfilling for the operator's tenant on this release** — once v0.6.66 deploys, phantom-updater will catch the drift on its next start. Until then the operator can manually call the new endpoint to refresh on demand.
+- **Periodic drift check** beyond startup. If the operator manually swaps an image digest mid-runtime, the next guardian-updater restart catches it. Adding a periodic background poll is future work — startup catches 99% of cases.
+- **Stack-tier digest drift detection** (guardian-agent, guardian-xlog, etc.). Those are docker-compose-managed; `docker compose up -d` already handles their reconcile. The bug is specific to guardian-updater-managed per-instance containers.
+- **Backfilling for the operator's tenant on this release** — once v0.6.66 deploys, guardian-updater will catch the drift on its next start. Until then the operator can manually call the new endpoint to refresh on demand.
 
 ---
 
@@ -8700,7 +8700,7 @@ Closes two carry-over items from v0.6.58: (1) syntax highlighting in KB code blo
 
 Component contract:
 - All v0.6.58 ReactMarkdown overrides centralized (h1/h2/h3, p, strong/em, lists, links, hr, blockquote, tables, inline code, fenced code).
-- Fenced code blocks get **syntax highlighting** via `react-syntax-highlighter`'s `PrismLight` bundle. The light bundle only loads the languages we explicitly import (no full Prism — keeps the JS payload small). v0.6.59 ships: `sql`, `xql` (alias to sql — XQL is a SQL dialect), `python` + `py`, `bash` + `sh` + `shell`, `json`, `typescript` + `ts`, `javascript` + `js`. Theme: `vscDarkPlus` with phantom's surface-container-lowest as the code background.
+- Fenced code blocks get **syntax highlighting** via `react-syntax-highlighter`'s `PrismLight` bundle. The light bundle only loads the languages we explicitly import (no full Prism — keeps the JS payload small). v0.6.59 ships: `sql`, `xql` (alias to sql — XQL is a SQL dialect), `python` + `py`, `bash` + `sh` + `shell`, `json`, `typescript` + `ts`, `javascript` + `js`. Theme: `vscDarkPlus` with guardian's surface-container-lowest as the code background.
 - Inline `` `code` `` tokens get the tertiary-tint pill from v0.6.58 (function/field names visible in prose).
 - Optional `compact` prop tightens vertical rhythm for dense chat bubbles vs. spacious KB drawers. KB calls without `compact`; chat calls with `compact`.
 
@@ -8921,7 +8921,7 @@ This release is pure prompt engineering. Every tool the skill calls already exis
 - `cortex_xql_lookup` / `cortex_search` — already in cortex-docs connector v0.3.2
 - `xdr_run_xql_query` / `xdr_get_xql_results` — already in cortex-xdr connector
 
-The skill MD file gets bundled into `phantom-agent`'s image via the existing `COPY bundles/spark/mcp/skills /app/mcp/skills-default` line in the Dockerfile. The per-release skills marker convention (v0.3.2+) auto-merges this new skill into the running volume on first boot after upgrade. No manual operator action required.
+The skill MD file gets bundled into `guardian-agent`'s image via the existing `COPY bundles/spark/mcp/skills /app/mcp/skills-default` line in the Dockerfile. The per-release skills marker convention (v0.3.2+) auto-merges this new skill into the running volume on first boot after upgrade. No manual operator action required.
 
 ### Smoke surfaces
 
@@ -9014,7 +9014,7 @@ This release is part of the multi-release **XQL skill capability arc** (v0.6.51 
 | `_tools/operator_dataset_2026-05-20` | The v0.6.51 importer's source JSON sitting in the KB root's `_tools/` dir | none | Upserted with empty metadata |
 | `XQL-001-bbfbd1c9` through `XQL-629-...` | `entries/*.md` (proper frontmatter) | all three | Upserted correctly |
 
-The two spurious docs were a long-standing leak for `README` and a v0.6.51-introduced leak for `operator_dataset_2026-05-20.json`. The phantom_agent boot log showed 6 "missing required field" WARNING lines per boot (3 per leaked doc) and `doc_count=631`.
+The two spurious docs were a long-standing leak for `README` and a v0.6.51-introduced leak for `operator_dataset_2026-05-20.json`. The guardian_agent boot log showed 6 "missing required field" WARNING lines per boot (3 per leaked doc) and `doc_count=631`.
 
 ### What v0.6.53 changes
 
@@ -9045,7 +9045,7 @@ Total pytest count: 337 → 341.
 
 ### Smoke surfaces
 
-- **Smoke 1**: After deploy + agent restart, phantom_agent boot log shows `kb_loader: xql-examples — insert=... update=... unchanged=... removed=2 skipped=0 invalid=2`. Pre-v0.6.53: 6 "missing required field" WARNING lines + no `invalid` counter. Post-v0.6.53: 2 "skipping doc (missing required: id, title, category)" WARNING lines + `invalid=2` in the summary.
+- **Smoke 1**: After deploy + agent restart, guardian_agent boot log shows `kb_loader: xql-examples — insert=... update=... unchanged=... removed=2 skipped=0 invalid=2`. Pre-v0.6.53: 6 "missing required field" WARNING lines + no `invalid` counter. Post-v0.6.53: 2 "skipping doc (missing required: id, title, category)" WARNING lines + `invalid=2` in the summary.
 - **Smoke 2**: `curl -k -H "Authorization: Bearer $MCP_TOKEN" https://localhost:8081/api/v1/kbs | jq '.kbs[] | select(.name=="xql-examples") | .doc_count'` returns `629`. Pre-v0.6.53: `631`.
 - **Smoke 3**: `curl -k -H "Authorization: Bearer $MCP_TOKEN" https://localhost:8081/api/v1/kbs/xql-examples/docs/README` returns `404`. Pre-v0.6.53: returned the broken doc with empty metadata.
 - **Smoke 4 (regression check)**: a known-valid entry like `XQL-001-bbfbd1c9` still fetches successfully + has all three required-field metadata values populated. Required-field enforcement should NOT break any valid doc.
@@ -9140,7 +9140,7 @@ Each entry's `## Source` section declares where its `## When to use` description
 
 ## [v0.6.50] — 2026-05-20
 
-**`/api/v1/instances` + the `instances_list` / `instances_get` MCP tools now surface `container_url`. The field exists on the Instance dataclass (set by phantom-updater's callback for style:container connectors) but three serializers were silently dropping it. SQLite row had the right value for cortex-xdr, cortex-docs, caldera — API consumers got nothing.**
+**`/api/v1/instances` + the `instances_list` / `instances_get` MCP tools now surface `container_url`. The field exists on the Instance dataclass (set by guardian-updater's callback for style:container connectors) but three serializers were silently dropping it. SQLite row had the right value for cortex-xdr, cortex-docs, caldera — API consumers got nothing.**
 
 ### What was wrong
 
@@ -9164,7 +9164,7 @@ Three coupled edits:
 - `self_mod_tools.py:instances_list` — adds `container_url` + `enabled` to the per-instance dict; drops dead `updated_at` (was always None — the dataclass has no such field). Docstring updated to match.
 - `self_mod_tools.py:instances_get` — same pair of fixes. Docstring updated.
 
-The phantom-updater callback path (`_agent_set_container_url`) is unchanged — it was already POSTing the URL correctly. Only the read paths were broken.
+The guardian-updater callback path (`_agent_set_container_url`) is unchanged — it was already POSTing the URL correctly. Only the read paths were broken.
 
 ### Bug-family audit (CLAUDE.md §7)
 
@@ -9244,7 +9244,7 @@ Picked option 2. The test files import their CODE, not their tests; the import s
 
 ## [v0.6.48] — 2026-05-19
 
-**Removed stale `phantom-mcp:8080` fallback URL from `mcp-proxy.ts`. The `phantom-mcp` service was collapsed into `phantom-agent` in v0.1.30 (~5 releases ago); the fallback default pointed at a service that no longer exists. Production wasn't affected because compose env always sets `MCP_URL`, but if both env sources ever returned empty the agent would DNS-fail on a non-existent host.**
+**Removed stale `guardian-mcp:8080` fallback URL from `mcp-proxy.ts`. The `guardian-mcp` service was collapsed into `guardian-agent` in v0.1.30 (~5 releases ago); the fallback default pointed at a service that no longer exists. Production wasn't affected because compose env always sets `MCP_URL`, but if both env sources ever returned empty the agent would DNS-fail on a non-existent host.**
 
 ### What was wrong
 
@@ -9254,32 +9254,32 @@ Picked option 2. The test files import their CODE, not their tests; the import s
 const mcpUrl =
   (config.MCP_URL || '').trim() ||
   process.env.MCP_URL?.trim() ||
-  'http://phantom-mcp:8080/api/v1/stream/mcp';
+  'http://guardian-mcp:8080/api/v1/stream/mcp';
 ```
 
-Pre-v0.1.30 there was a separate `phantom-mcp` container in the compose network. v0.1.30 collapsed it into a subprocess inside `phantom-agent`. The `phantom-mcp` service was REMOVED from the compose file. Any code path falling through to that literal would try to resolve a hostname that doesn't exist (`EAI_AGAIN: phantom-mcp`).
+Pre-v0.1.30 there was a separate `guardian-mcp` container in the compose network. v0.1.30 collapsed it into a subprocess inside `guardian-agent`. The `guardian-mcp` service was REMOVED from the compose file. Any code path falling through to that literal would try to resolve a hostname that doesn't exist (`EAI_AGAIN: guardian-mcp`).
 
 ### How likely was the fallback to fire
 
 Low. In production:
-- `installer/docker-compose.yml` sets `MCP_URL=http://localhost:8080/api/v1/stream/mcp` in the phantom-agent service env block
+- `installer/docker-compose.yml` sets `MCP_URL=http://localhost:8080/api/v1/stream/mcp` in the guardian-agent service env block
 - `docker-compose.yml` (dev) does the same
 - entrypoint.sh flips http: → https: when TLS_CERT_PEM is set (v0.4.0+)
 
 So the fallback only fires if:
-- Operator manually unset `MCP_URL` in `/opt/phantom/.env` (rare)
+- Operator manually unset `MCP_URL` in `/opt/guardian/.env` (rare)
 - AND `getEffectiveRuntimeConfig()` returns config without MCP_URL (rare — the agent reads from /app/runtime/setup.json + .env)
 
 But fallback URLs that point to retired services are still dead code with operator-confusing failure modes if they ever do fire.
 
 ### What v0.6.48 changes
 
-`mcp/agent/lib/mcp-proxy.ts:36` — fallback changed to `http://localhost:8080/api/v1/stream/mcp` to match the current architecture (embedded MCP subprocess in phantom-agent). Inline comment cross-references v0.1.30 (the collapse) and v0.4.0 (the TLS rollout that may flip the scheme).
+`mcp/agent/lib/mcp-proxy.ts:36` — fallback changed to `http://localhost:8080/api/v1/stream/mcp` to match the current architecture (embedded MCP subprocess in guardian-agent). Inline comment cross-references v0.1.30 (the collapse) and v0.4.0 (the TLS rollout that may flip the scheme).
 
 ### Bug-family audit (CLAUDE.md §7)
 
-`grep -rn 'phantom-mcp' mcp/agent/ bundles/spark/` — remaining hits are:
-- `bundles/phantom-agent.bundle.yaml`, `bundles/observability.contract.yaml` — observability probe URLs referencing the retired `phantom-mcp` service (not load-bearing for the chat path; can be cleaned up in a future bundle modernization pass — out of scope for this contained release)
+`grep -rn 'guardian-mcp' mcp/agent/ bundles/spark/` — remaining hits are:
+- `bundles/guardian-agent.bundle.yaml`, `bundles/observability.contract.yaml` — observability probe URLs referencing the retired `guardian-mcp` service (not load-bearing for the chat path; can be cleaned up in a future bundle modernization pass — out of scope for this contained release)
 - `mcp/agent/lib/release-notes.ts`, `mcp/agent/lib/journeys.ts` — historical references (intentionally preserved as operator-facing history)
 - Various code comments — intentional documentation of the architectural history
 
@@ -9367,19 +9367,19 @@ Bug-family audit: `grep -rn "http://localhost:8000" bundles/spark/mcp/tests/` �
 
 ## [v0.6.45] — 2026-05-19
 
-**xlog URL default schemes swept from `http://` to `https://` across 5 files. v0.4.0 made xlog HTTPS-only (TLS via shared phantom_tls volume); v0.6.22 fixed the marketplace synthetic card's default but missed the bundle manifest, observability contract, connector.yaml schema default, pydantic-settings fallback, and the connector_probes.py fallback. Operators who created new xlog instances via path-of-least-resistance defaults got "Empty reply from server" indefinitely.**
+**xlog URL default schemes swept from `http://` to `https://` across 5 files. v0.4.0 made xlog HTTPS-only (TLS via shared guardian_tls volume); v0.6.22 fixed the marketplace synthetic card's default but missed the bundle manifest, observability contract, connector.yaml schema default, pydantic-settings fallback, and the connector_probes.py fallback. Operators who created new xlog instances via path-of-least-resistance defaults got "Empty reply from server" indefinitely.**
 
 ### What was wrong
 
-Sweep of `grep -rn 'http://xlog\|http://localhost:8000' bundles/ mcp/ updater/ phantom-connector-runtime/`:
+Sweep of `grep -rn 'http://xlog\|http://localhost:8000' bundles/ mcp/ updater/ guardian-connector-runtime/`:
 
 | File | Line | Context |
 |---|---|---|
 | `bundles/spark/connectors/xlog/connector.yaml` | 67-68 | configSchema `baseUrl` description + default |
-| `bundles/phantom-agent.bundle.yaml` | 201 | `rest.baseUrl` for the xlog REST surface |
-| `bundles/phantom-agent.bundle.yaml` | 218 | `graphql.url` for the xlog GraphQL surface |
-| `bundles/phantom-agent.bundle.yaml` | 393 | observability healthcheck URL |
-| `bundles/observability.contract.yaml` | 10 | `phantom-api` health probe URL |
+| `bundles/guardian-agent.bundle.yaml` | 201 | `rest.baseUrl` for the xlog REST surface |
+| `bundles/guardian-agent.bundle.yaml` | 218 | `graphql.url` for the xlog GraphQL surface |
+| `bundles/guardian-agent.bundle.yaml` | 393 | observability healthcheck URL |
+| `bundles/observability.contract.yaml` | 10 | `guardian-api` health probe URL |
 | `bundles/spark/mcp/src/config/config.py` | 37 | pydantic-settings default for `XLOG_URL` env |
 | `bundles/spark/mcp/src/usecase/connector_probes.py` | 81 | final fallback when no cfg/env XLOG_URL is set |
 
@@ -9399,7 +9399,7 @@ The probe fallback DID misbehave during the connector "test" probe in setups whe
 5 surgical edits, all conservatively scoped:
 
 - `bundles/spark/connectors/xlog/connector.yaml`: default + description
-- `bundles/phantom-agent.bundle.yaml`: 3 internal URLs (REST, GraphQL, healthcheck) — external URLs (localhost:8999 via IAP tunnel) stay http since the tunnel terminates the TLS
+- `bundles/guardian-agent.bundle.yaml`: 3 internal URLs (REST, GraphQL, healthcheck) — external URLs (localhost:8999 via IAP tunnel) stay http since the tunnel terminates the TLS
 - `bundles/observability.contract.yaml`: health probe URL
 - `bundles/spark/mcp/src/config/config.py`: pydantic-settings default
 - `bundles/spark/mcp/src/usecase/connector_probes.py`: probe fallback
@@ -9408,7 +9408,7 @@ Each change carries an inline comment referencing v0.4.0 (when xlog became HTTPS
 
 ### Bug-family audit (CLAUDE.md §7)
 
-After fix: `grep -rn 'http://xlog' bundles/ mcp/ updater/ phantom-connector-runtime/ 2>/dev/null | grep -v "\.next\|node_modules"` returns only:
+After fix: `grep -rn 'http://xlog' bundles/ mcp/ updater/ guardian-connector-runtime/ 2>/dev/null | grep -v "\.next\|node_modules"` returns only:
 - `bundles/spark/connectors/xlog/Dockerfile:15` — a comment explaining what xlog is. Not load-bearing. Left as-is to avoid Dockerfile rebuild churn.
 - Various release-notes.ts entries describing historical state. Left as-is (operator-facing release history).
 
@@ -9424,7 +9424,7 @@ After fix: `grep -rn 'http://xlog' bundles/ mcp/ updater/ phantom-connector-runt
 ### What changed (files)
 
 - `bundles/spark/connectors/xlog/connector.yaml` — 2 lines
-- `bundles/phantom-agent.bundle.yaml` — 3 url lines + 3 inline comments
+- `bundles/guardian-agent.bundle.yaml` — 3 url lines + 3 inline comments
 - `bundles/observability.contract.yaml` — 1 url line + 1 inline comment
 - `bundles/spark/mcp/src/config/config.py` — 1 default + 4 comment lines
 - `bundles/spark/mcp/src/usecase/connector_probes.py` — 1 fallback URL + 8 comment lines
@@ -9488,7 +9488,7 @@ Even structural-review verification (cross-referencing connector code against do
 
 ## [v0.6.43] — 2026-05-19
 
-**phantom-updater can now manage per-instance connector containers whose names contain spaces (e.g. "Cortex XDR", "Cortex Docs Search"). Pre-v0.6.43 the reconcile / start / stop / restart endpoints rejected those names with `HTTP 400: invalid path segment 'Cortex XDR'`, so any existing instance with a space-bearing name couldn't be re-image-pulled or recreated — including all the cortex-* instances the operator created via the UI.**
+**guardian-updater can now manage per-instance connector containers whose names contain spaces (e.g. "Cortex XDR", "Cortex Docs Search"). Pre-v0.6.43 the reconcile / start / stop / restart endpoints rejected those names with `HTTP 400: invalid path segment 'Cortex XDR'`, so any existing instance with a space-bearing name couldn't be re-image-pulled or recreated — including all the cortex-* instances the operator created via the UI.**
 
 ### What was wrong
 
@@ -9566,8 +9566,8 @@ The flat-alias path produces wrong answers because connectors' function prefixes
 | Tool name | `split('_', 1)[0]` | Correct connector_id |
 |---|---|---|
 | `xdr_get_cases_and_issues` | `xdr` | `cortex-xdr` |
-| `phantom_create_data_worker` | `phantom` | `xlog` |
-| `phantom_web_navigate` | `phantom` | `web` |
+| `guardian_create_data_worker` | `guardian` | `xlog` |
+| `guardian_web_navigate` | `guardian` | `web` |
 | `cortex_search` | `cortex` | `cortex-docs` |
 | `cortex_list_packs` | `cortex` | `cortex-content` |
 
@@ -9592,8 +9592,8 @@ function deriveConnectorId(toolName: string): string | null {
     return toolName.split('.', 2)[0];  // dotted form — direct
   }
   // Legacy flat aliases — order matters (longer prefixes first)
-  if (toolName.startsWith('phantom_web_')) return 'web';
-  if (toolName.startsWith('phantom_')) return 'xlog';
+  if (toolName.startsWith('guardian_web_')) return 'web';
+  if (toolName.startsWith('guardian_')) return 'xlog';
   if (toolName.startsWith('xdr_')) return 'cortex-xdr';
   if (toolName.startsWith('caldera_')) return 'caldera';
   if (toolName.startsWith('xsiam_')) return 'xsiam';
@@ -9618,7 +9618,7 @@ The mapping table is hardcoded against `bundles/spark/connectors/*/connector.yam
 
 ### Smoke surfaces
 
-- **Smoke 1**: Cause a cortex-xdr tool call to fail (e.g. rotate the api_key on phantom-vm temporarily, call `xdr_get_alerts`). Pre-v0.6.42: `/observability/connectors` shows cortex-xdr unchanged (failure recorded against "xdr" 404). Post-v0.6.42: cortex-xdr transitions to `failing`, needs-auth chip appears.
+- **Smoke 1**: Cause a cortex-xdr tool call to fail (e.g. rotate the api_key on guardian-vm temporarily, call `xdr_get_alerts`). Pre-v0.6.42: `/observability/connectors` shows cortex-xdr unchanged (failure recorded against "xdr" 404). Post-v0.6.42: cortex-xdr transitions to `failing`, needs-auth chip appears.
 - **Smoke 2**: Same for cortex-docs — call `cortex_search` with revoked auth. Pre-v0.6.42: no state update (failure recorded against "cortex"). Post-v0.6.42: cortex-docs transitions correctly.
 - **Smoke 3 (regression check)**: caldera and xsiam connectors — their function prefixes match their ids — behavior unchanged. Verifiable by inspecting the helper's branches.
 - **Smoke 4 (built-in tools)**: `instances_list`, `audit_recent`, `jobs_create` calls — `deriveConnectorId` returns null — connector state machine correctly skipped.
@@ -9716,7 +9716,7 @@ While building the v0.6.39 modification_time fix, smoke-testing the connector ag
 - `preset = xdr_alerts | filter alert_id in (40119, 40265) | limit 5` → 500
 - Variants with string-quoted IDs, single equality, etc. → 500
 
-But `dataset = xdr_data` XQL works fine (8,855 process events returned). And the XDR Console UI itself shows alerts. The XQL alerts preset is just broken in this tenant — possibly tenant-config, possibly a backend bug, but not something Phantom can fix server-side.
+But `dataset = xdr_data` XQL works fine (8,855 process events returned). And the XDR Console UI itself shows alerts. The XQL alerts preset is just broken in this tenant — possibly tenant-config, possibly a backend bug, but not something Guardian can fix server-side.
 
 ### What v0.6.40 changes
 
@@ -9848,14 +9848,14 @@ No caller silently loses results. Some callers may see MORE results than before.
 
 ## [v0.6.38] — 2026-05-19
 
-**Per-instance connector containers no longer show as `(unhealthy)` in `docker ps`. The HEALTHCHECK CMD in `phantom-connector-runtime/Dockerfile` was calling `wget`, which doesn't exist in the Debian trixie slim base image — every connector container has been reporting unhealthy since v0.5.x while the underlying `/health` endpoint was always responsive.**
+**Per-instance connector containers no longer show as `(unhealthy)` in `docker ps`. The HEALTHCHECK CMD in `guardian-connector-runtime/Dockerfile` was calling `wget`, which doesn't exist in the Debian trixie slim base image — every connector container has been reporting unhealthy since v0.5.x while the underlying `/health` endpoint was always responsive.**
 
 ### What was wrong
 
-Every connector container (cortex-xdr, cortex-docs, caldera, web, xsiam, etc.) is built `FROM ghcr.io/kite-production/phantom-connector-runtime`, whose Dockerfile had:
+Every connector container (cortex-xdr, cortex-docs, caldera, web, xsiam, etc.) is built `FROM ghcr.io/kite-production/guardian-connector-runtime`, whose Dockerfile had:
 
 ```dockerfile
-# HEALTHCHECK — agent's MCP proxy + phantom-updater both poll
+# HEALTHCHECK — agent's MCP proxy + guardian-updater both poll
 # /health to determine readiness. wget is in the slim base image.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
     CMD wget -qO- --timeout=3 http://127.0.0.1:9000/health >/dev/null 2>&1 || exit 1
@@ -9882,7 +9882,7 @@ Cortex-docs: 1645 failing streak. Caldera: 507. The healthcheck runs every 15s, 
 
 ### Why operators didn't notice it as broken
 
-Because the connectors themselves work fine. `phantom-updater` routes MCP tool calls based on `Container.Up`, not on the `(unhealthy)` label. The agent's MCP proxy hits the connector's `:9000/mcp` endpoint directly — which works. So all the cortex_search, xdr_get_cases_and_issues, caldera_get_operations etc. calls succeed without anyone noticing the docker status was a lie.
+Because the connectors themselves work fine. `guardian-updater` routes MCP tool calls based on `Container.Up`, not on the `(unhealthy)` label. The agent's MCP proxy hits the connector's `:9000/mcp` endpoint directly — which works. So all the cortex_search, xdr_get_cases_and_issues, caldera_get_operations etc. calls succeed without anyone noticing the docker status was a lie.
 
 The operator only caught it during the v0.6.34 demo prep, when scanning `docker ps` to verify the simulation stack was healthy. The `(unhealthy)` labels on three connector containers prompted a quick side-channel verification — at which point the misleading label revealed itself.
 
@@ -9899,17 +9899,17 @@ Python is already in the container (it IS a Python container — the runtime IS 
 
 ### Bug-family audit (CLAUDE.md §7)
 
-`grep -rn HEALTHCHECK --include="Dockerfile"` across the repo. Only one HEALTHCHECK used wget: `phantom-connector-runtime/Dockerfile`. All others either don't have a HEALTHCHECK (`mcp/agent/Dockerfile`) or explicitly document why they don't (`phantom-browser/Dockerfile`: *"chromedp/headless-shell:latest is a minimal image without wget, curl, sh, python, or even nc — there's no healthcheck primitive available"*). The browser comment literally says the lesson; the connector-runtime didn't apply it.
+`grep -rn HEALTHCHECK --include="Dockerfile"` across the repo. Only one HEALTHCHECK used wget: `guardian-connector-runtime/Dockerfile`. All others either don't have a HEALTHCHECK (`mcp/agent/Dockerfile`) or explicitly document why they don't (`guardian-browser/Dockerfile`: *"chromedp/headless-shell:latest is a minimal image without wget, curl, sh, python, or even nc — there's no healthcheck primitive available"*). The browser comment literally says the lesson; the connector-runtime didn't apply it.
 
 ### Smoke surfaces
 
 - **Smoke 1**: After auto-deploy lands v0.6.38, `docker inspect <connector_container> --format '{{.State.Health.Status}}'` returns `healthy` for cortex-xdr, cortex-docs, caldera, and any other connector containers running. Pre-v0.6.38: `unhealthy`.
-- **Smoke 2**: `docker ps --format "{{.Names}}|{{.Status}}"` no longer shows `(unhealthy)` next to any `phantom-connector-*` container.
+- **Smoke 2**: `docker ps --format "{{.Names}}|{{.Status}}"` no longer shows `(unhealthy)` next to any `guardian-connector-*` container.
 - **Smoke 3 (negative test)**: Stop a connector container's MCP server (e.g. send SIGTERM to the python process). Within ~75s (5 retries × 15s interval), the container should transition to `unhealthy` — confirming the new healthcheck actually catches REAL failures (not just the wget-not-found false negative).
 
 ### Why this slipped through smoke for so many releases
 
-The healthcheck never gated anything operationally — the MCP proxy + phantom-updater both use Container.Up, not Container.Health. So the false-unhealthy labels were purely cosmetic. None of our automated smoke runs check docker health status; they check tool-call success. A `docker ps | grep unhealthy` check in the release-day smoke matrix would catch it next time — adding that to the smoke-test discipline for any release touching connector image builds.
+The healthcheck never gated anything operationally — the MCP proxy + guardian-updater both use Container.Up, not Container.Health. So the false-unhealthy labels were purely cosmetic. None of our automated smoke runs check docker health status; they check tool-call success. A `docker ps | grep unhealthy` check in the release-day smoke matrix would catch it next time — adding that to the smoke-test discipline for any release touching connector image builds.
 
 ---
 
@@ -9945,7 +9945,7 @@ Agent ignored the error and continued (the tool wasn't critical to the workflow)
 
 ### Bug-family audit (CLAUDE.md §7)
 
-`grep -rn '\.recent\|\.search' bundles/spark/mcp/src/` to find any other caller expecting these phantom methods on `SqliteAuditLog`: **zero hits.** The `audit_recent` tool was the only victim. Clean fix, no sibling code to update.
+`grep -rn '\.recent\|\.search' bundles/spark/mcp/src/` to find any other caller expecting these guardian methods on `SqliteAuditLog`: **zero hits.** The `audit_recent` tool was the only victim. Clean fix, no sibling code to update.
 
 ### Smoke surfaces
 
@@ -9956,24 +9956,24 @@ Agent ignored the error and continued (the tool wasn't critical to the workflow)
 
 ## [v0.6.36] — 2026-05-19
 
-**`PHANTOM_CHAT_MAX_TURNS` is now actually operator-tunable. v0.6.32 added the read site in the chat-route code but forgot the compose plumbing; setting it in `.env` had no effect because docker-compose only passes through variables explicitly listed in each service's `environment:` block.**
+**`GUARDIAN_CHAT_MAX_TURNS` is now actually operator-tunable. v0.6.32 added the read site in the chat-route code but forgot the compose plumbing; setting it in `.env` had no effect because docker-compose only passes through variables explicitly listed in each service's `environment:` block.**
 
 ### What was wrong
 
-[v0.6.32's release notes](https://github.com/kite-production/phantom/releases/tag/v0.6.32) said *"Operators can tune via PHANTOM_CHAT_MAX_TURNS."* The code in `mcp/agent/app/api/chat/route.ts` (line 4190) does read the env var:
+[v0.6.32's release notes](https://github.com/kite-production/guardian/releases/tag/v0.6.32) said *"Operators can tune via GUARDIAN_CHAT_MAX_TURNS."* The code in `mcp/agent/app/api/chat/route.ts` (line 4190) does read the env var:
 
 ```typescript
 const MAX_AGENT_TURNS = (() => {
-  const raw = process.env.PHANTOM_CHAT_MAX_TURNS;
+  const raw = process.env.GUARDIAN_CHAT_MAX_TURNS;
   if (!raw) return 30;
   const n = parseInt(raw, 10);
   return Number.isFinite(n) && n >= 5 && n <= 200 ? n : 30;
 })();
 ```
 
-But the `phantom-agent` service in `installer/docker-compose.yml` (and the dev `docker-compose.yml` at repo root) did NOT list `PHANTOM_CHAT_MAX_TURNS` in its `environment:` block. docker-compose's bare-name forwarding (`- VARNAME`) is opt-in per-service. Anything not listed is invisible to the container.
+But the `guardian-agent` service in `installer/docker-compose.yml` (and the dev `docker-compose.yml` at repo root) did NOT list `GUARDIAN_CHAT_MAX_TURNS` in its `environment:` block. docker-compose's bare-name forwarding (`- VARNAME`) is opt-in per-service. Anything not listed is invisible to the container.
 
-Discovered during v0.6.35's smoke testing — tried to set `PHANTOM_CHAT_MAX_TURNS=2` to deterministically reproduce the dropped-final-response bug; the container kept using the default of 30.
+Discovered during v0.6.35's smoke testing — tried to set `GUARDIAN_CHAT_MAX_TURNS=2` to deterministically reproduce the dropped-final-response bug; the container kept using the default of 30.
 
 ### What v0.6.36 changes
 
@@ -9981,21 +9981,21 @@ Two lines added — one in each compose file:
 
 ```yaml
 # installer/docker-compose.yml + docker-compose.yml
-# phantom-agent service, environment: block
-- PHANTOM_CHAT_MAX_TURNS
+# guardian-agent service, environment: block
+- GUARDIAN_CHAT_MAX_TURNS
 ```
 
-That's it. Bare-name forwarding lets the operator set `PHANTOM_CHAT_MAX_TURNS=N` in `/opt/phantom/.env`; if unset, docker-compose passes through nothing and the route.ts default-30 path triggers.
+That's it. Bare-name forwarding lets the operator set `GUARDIAN_CHAT_MAX_TURNS=N` in `/opt/guardian/.env`; if unset, docker-compose passes through nothing and the route.ts default-30 path triggers.
 
 ### Smoke surfaces
 
-- **Smoke 1 (pre-condition unchanged)**: With `PHANTOM_CHAT_MAX_TURNS` unset in `.env`, the chat route uses default of 30. No regression.
-- **Smoke 2 (the actual fix)**: Add `PHANTOM_CHAT_MAX_TURNS=2` to `/opt/phantom/.env`, restart `phantom_agent` via `docker compose up -d --force-recreate phantom-agent`. Run a chat query that needs 3+ tool calls + a summary. **Pre-v0.6.36**: cap defaults to 30, query runs normally with full response. **Post-v0.6.36**: cap is 2, v0.6.35's recovery block (chat-route's `if (exhaustedBudget) { drain last response }`) fires, summary text appears as a `text_delta` with the `logDebug` line *"Recovered N chars of post-budget text from final unprocessed response"* visible in `docker logs phantom_agent`.
+- **Smoke 1 (pre-condition unchanged)**: With `GUARDIAN_CHAT_MAX_TURNS` unset in `.env`, the chat route uses default of 30. No regression.
+- **Smoke 2 (the actual fix)**: Add `GUARDIAN_CHAT_MAX_TURNS=2` to `/opt/guardian/.env`, restart `guardian_agent` via `docker compose up -d --force-recreate guardian-agent`. Run a chat query that needs 3+ tool calls + a summary. **Pre-v0.6.36**: cap defaults to 30, query runs normally with full response. **Post-v0.6.36**: cap is 2, v0.6.35's recovery block (chat-route's `if (exhaustedBudget) { drain last response }`) fires, summary text appears as a `text_delta` with the `logDebug` line *"Recovered N chars of post-budget text from final unprocessed response"* visible in `docker logs guardian_agent`.
 - **Smoke 3 (interaction with v0.6.35)**: This release pairs operationally with v0.6.35 — the latter is the fix for what happens when the cap is hit; this is the plumbing that lets operators verify it. Together they close out issue #56 (the chat-route drop) and issue #57 (the plumbing miss).
 
 ### Why it took two releases to close one capability
 
-v0.6.32 introduced the env-var read site as part of bumping the cap 20→30. The compose plumbing was an audit-miss at that time. v0.6.35 caught the drop-on-cap bug by structural code review + a live session capture, and the smoke-test attempt then surfaced the missing plumbing. Per CLAUDE.md contained-release discipline, the two fixes ship as separate releases (one concept each): v0.6.35 is "chat-route flushes final response," v0.6.36 is "PHANTOM_CHAT_MAX_TURNS env var actually plumbed through compose." Together they form the complete capability v0.6.32 said it shipped.
+v0.6.32 introduced the env-var read site as part of bumping the cap 20→30. The compose plumbing was an audit-miss at that time. v0.6.35 caught the drop-on-cap bug by structural code review + a live session capture, and the smoke-test attempt then surfaced the missing plumbing. Per CLAUDE.md contained-release discipline, the two fixes ship as separate releases (one concept each): v0.6.35 is "chat-route flushes final response," v0.6.36 is "GUARDIAN_CHAT_MAX_TURNS env var actually plumbed through compose." Together they form the complete capability v0.6.32 said it shipped.
 
 ### What changed (files)
 
@@ -10062,7 +10062,7 @@ Same loop pattern, same potential drop site, same fix — applied to one of two 
 
 ### Smoke surfaces
 
-- `https://localhost:3001/` — any chat session that hits `MAX_AGENT_TURNS` (default 30, configurable via `PHANTOM_CHAT_MAX_TURNS`). The model's final post-tool text now appears in the chat bubble instead of being silently dropped. Deterministic repro: temporarily set `PHANTOM_CHAT_MAX_TURNS=2` and ask the agent something that needs 3+ tool calls plus a summary.
+- `https://localhost:3001/` — any chat session that hits `MAX_AGENT_TURNS` (default 30, configurable via `GUARDIAN_CHAT_MAX_TURNS`). The model's final post-tool text now appears in the chat bubble instead of being silently dropped. Deterministic repro: temporarily set `GUARDIAN_CHAT_MAX_TURNS=2` and ask the agent something that needs 3+ tool calls plus a summary.
 - Behavior when budget is NOT exhausted is unchanged — the loop still exits cleanly when the model returns 0 function calls and the existing path handles that response.
 - Behavior when the recovered response has no text (function-calls only) is unchanged — `exhaustedBudget` stays `true`, `finalResponse` stays empty, and the existing budget-summary fallback (or `synthesizeFallbackText`) fires as before.
 
@@ -10259,9 +10259,9 @@ The fundamental problem: **LLMs don't sleep**. Even with a strongly-worded skill
    - 20-step chain finishes in 10-15 tool calls instead of the 30+ a naive poll loop needs
    - Files: `bundles/spark/connectors/caldera/src/connector.py` (new async function + `__all__` export); `bundles/spark/connectors/caldera/connector.yaml` (new tool entry in spec.tools)
 
-2. **`PHANTOM_CHAT_MAX_TURNS` env var + default bump 20→30** in the primary chat handler.
+2. **`GUARDIAN_CHAT_MAX_TURNS` env var + default bump 20→30** in the primary chat handler.
    - File: `mcp/agent/app/api/chat/route.ts` line 4179 — hardcoded `for step < 20` replaced with `for step < MAX_AGENT_TURNS`
-   - `MAX_AGENT_TURNS = parseInt(process.env.PHANTOM_CHAT_MAX_TURNS, 10) || 30`, clamped to [5, 200]
+   - `MAX_AGENT_TURNS = parseInt(process.env.GUARDIAN_CHAT_MAX_TURNS, 10) || 30`, clamped to [5, 200]
    - Pre-v0.6.32: hardcoded 20; kill-chain hit it. Bumping to 30 gives headroom for the wait-tool pattern (5-10 prereq/setup turns + 10-15 wait-tool calls + 5-10 sweep/summary turns).
    - Operators on tighter contexts can drop the env to 20 or lower if needed.
 
@@ -10402,7 +10402,7 @@ Unit-tested locally with 9 input cases. All resolve correctly:
 
 **reset-admin CLI gains non-interactive `--password-stdin --skip-confirm` mode. Pre-v0.6.29 the documented `docker exec -i ...` flow silently broke under piped stdin, leaving locked-out operators with no working CLI recovery path.**
 
-Surfaced when the operator was locked out of the UI (couldn't remember the custom password they'd set via /profile on May 13). The documented recovery path is `docker exec -it phantom_agent node /app/cli/reset-admin.mjs`. In SSH/remote contexts where the `-it` TTY allocation isn't available, the recommended workaround is `printf "RESET\\n<pw>\\n<pw>\\n" | docker exec -i phantom_agent node /app/cli/reset-admin.mjs`.
+Surfaced when the operator was locked out of the UI (couldn't remember the custom password they'd set via /profile on May 13). The documented recovery path is `docker exec -it guardian_agent node /app/cli/reset-admin.mjs`. In SSH/remote contexts where the `-it` TTY allocation isn't available, the recommended workaround is `printf "RESET\\n<pw>\\n<pw>\\n" | docker exec -i guardian_agent node /app/cli/reset-admin.mjs`.
 
 Pre-v0.6.29 that workaround silently failed. The CLI's first prompt ("Type RESET...") was consumed correctly, but readline.question() with piped stdin reads the ENTIRE buffer at once on its first call — leaving the password + confirm prompts empty. The validation branch *"password must be at least 8 characters"* or *"passwords did not match"* fired, the CLI exited 1 with no reset performed, and the operator had no working escape hatch.
 
@@ -10426,7 +10426,7 @@ The actual recovery in this lockout incident: directly curl `POST /api/v1/ui/aut
 
 ```bash
 # From the host (any non-TTY context — SSH session, CI, ansible task, etc.)
-echo -n 'NewPassword' | docker exec -i phantom_agent \
+echo -n 'NewPassword' | docker exec -i guardian_agent \
   node /app/cli/reset-admin.mjs --password-stdin --skip-confirm
 ```
 
@@ -10535,7 +10535,7 @@ XDR detection rules can take 30s-5min to fire after the underlying telemetry lan
 
 ### What deploys
 
-The next dev-installer cycle bakes both skill MDs into the agent image's `/app/mcp/skills-default/workflows/` directory. Per v0.3.2's per-release marker-driven auto-merge (entrypoint.sh §1), the new + updated MDs propagate to the persistent `phantom_mcp_skills` volume on first boot of v0.6.27. New installs see the new skill out-of-the-box; existing installs get the merge on upgrade.
+The next dev-installer cycle bakes both skill MDs into the agent image's `/app/mcp/skills-default/workflows/` directory. Per v0.3.2's per-release marker-driven auto-merge (entrypoint.sh §1), the new + updated MDs propagate to the persistent `guardian_mcp_skills` volume on first boot of v0.6.27. New installs see the new skill out-of-the-box; existing installs get the merge on upgrade.
 
 ### Operator-facing surface
 
@@ -10557,7 +10557,7 @@ When the operator types *"Run the phishing kill chain"* in chat after v0.6.27:
 
 ### Smoke matrix
 
-After v0.6.27 auto-deploys to phantom-vm:
+After v0.6.27 auto-deploys to guardian-vm:
 
 - [ ] `/skills` page shows `xdr_verify_simulation_telemetry` in the workflows category
 - [ ] Type *"check XDR for incidents in the last hour"* in chat → LLM picks the new skill, runs `xdr_get_cases_and_issues`, returns a sweep-mode markdown table
@@ -10703,7 +10703,7 @@ v0.6.20 fixed the latent gap that hid cortex-xdr from the digest manifest + dev-
 
 - Renamed from "nine required edits" → "eleven required edits" (added #10, #11)
 - **Edit #10** — `.github/workflows/release.yml`. Six sites: `IMAGES` array, first-release defaults, changed-detection, runtime-rebuild force, outputs, build-or-retag step, rebuild-decisions summary table row.
-- **Edit #11** — `.github/workflows/build-dev-installer.yml`. Two changes: `CONN_IMGS` map + the `for KEY in DIGEST_PHANTOM_CONNECTOR_*` resolution loop.
+- **Edit #11** — `.github/workflows/build-dev-installer.yml`. Two changes: `CONN_IMGS` map + the `for KEY in DIGEST_GUARDIAN_CONNECTOR_*` resolution loop.
 - Quick-check command expanded from two grep-based comparisons (manifest.yaml + KNOWN_CONNECTORS) to **four** (adds release.yml IMAGES + build-dev-installer.yml CONN_IMGS). One-liner that fails loudly when any of the four registration sites is out of sync.
 - New retrospective subsection — narrates the v0.6.20 cortex-xdr discovery for future maintainers: how a v0.5.61-era omission stayed latent for ~16 releases, surfaced when v0.6.18 forced a connector restart, and got closed retroactively.
 
@@ -10723,7 +10723,7 @@ Running the new four-check quick-check against the post-v0.6.20 codebase returns
 
 **`/api/agent/reports` returned 502 because the fallback URL hardcoded `http://xlog:8000` — xlog has served HTTPS unconditionally since v0.4.0.**
 
-xlog's `_resolve_ssl_args()` priority 1 is the shared phantom_tls volume (mounted from phantom-agent's auto-generated `/tls/cert.pem`). Since v0.4.0's TLS rollout, every Phantom deployment has TLS-on by default — including xlog. But the agent's code still had `http://xlog:8000` baked in three places:
+xlog's `_resolve_ssl_args()` priority 1 is the shared guardian_tls volume (mounted from guardian-agent's auto-generated `/tls/cert.pem`). Since v0.4.0's TLS rollout, every Guardian deployment has TLS-on by default — including xlog. But the agent's code still had `http://xlog:8000` baked in three places:
 
 | Location | Pre-fix | Effect |
 |---|---|---|
@@ -10739,9 +10739,9 @@ Why the chain worked partially:
 
 ### Why TLS verification works with the URL flip
 
-Node's `fetch()` in the Next.js process trusts the self-signed cert because the agent's entrypoint exports `NODE_EXTRA_CA_CERTS=/tls/cert.pem` before starting Next.js (`mcp/agent/entrypoint.sh:257`). The cert's SAN includes `DNS:xlog`, `DNS:caldera`, `DNS:phantom-agent`, `DNS:localhost` so hostname verification passes too.
+Node's `fetch()` in the Next.js process trusts the self-signed cert because the agent's entrypoint exports `NODE_EXTRA_CA_CERTS=/tls/cert.pem` before starting Next.js (`mcp/agent/entrypoint.sh:257`). The cert's SAN includes `DNS:xlog`, `DNS:caldera`, `DNS:guardian-agent`, `DNS:localhost` so hostname verification passes too.
 
-Verified empirically on phantom-vm: with `NODE_EXTRA_CA_CERTS=/tls/cert.pem` set, `node -e 'fetch("https://xlog:8000/health")'` returns status 200; without it, fails with `DEPTH_ZERO_SELF_SIGNED_CERT`. The entrypoint sets it; the v0.6.22 URL flip lets the existing trust path do its job.
+Verified empirically on guardian-vm: with `NODE_EXTRA_CA_CERTS=/tls/cert.pem` set, `node -e 'fetch("https://xlog:8000/health")'` returns status 200; without it, fails with `DEPTH_ZERO_SELF_SIGNED_CERT`. The entrypoint sets it; the v0.6.22 URL flip lets the existing trust path do its job.
 
 ### What v0.6.22 changes
 
@@ -10812,20 +10812,20 @@ GET /api/v1/jobs/yaml-issues  → 200 {"issues": [], "count": 0}
 
 ## [v0.6.20] — 2026-05-19
 
-**`phantom-connector-cortex-xdr` was missing from the release manifest + dev-installer digest loop — surfaced as a "image not found" failure when phantom-updater tried to restart a cortex-xdr instance.**
+**`guardian-connector-cortex-xdr` was missing from the release manifest + dev-installer digest loop — surfaced as a "image not found" failure when guardian-updater tried to restart a cortex-xdr instance.**
 
-cortex-xdr was added in v0.5.61. `build-connectors.yml` was extended to build it (lines 260-279), and the image has been pushed to `ghcr.io/kite-production/phantom-connector-cortex-xdr` at every `:dev` + `:vX.Y.Z` tag since. But TWO downstream CI/CD plumbing files were never updated:
+cortex-xdr was added in v0.5.61. `build-connectors.yml` was extended to build it (lines 260-279), and the image has been pushed to `ghcr.io/kite-production/guardian-connector-cortex-xdr` at every `:dev` + `:vX.Y.Z` tag since. But TWO downstream CI/CD plumbing files were never updated:
 
-- `.github/workflows/release.yml` — never added cortex-xdr to its IMAGES array, its changed-detection step, its first-release defaults, its runtime-rebuild force list, its outputs, or its rebuild-decisions summary table. Customer release manifests since v0.5.61 have shipped without `DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR`.
-- `.github/workflows/build-dev-installer.yml` — never added cortex-xdr to its `CONN_IMGS` map or its `for KEY in ...` loop. Dev manifests since v0.5.61 have shipped without `DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR`.
+- `.github/workflows/release.yml` — never added cortex-xdr to its IMAGES array, its changed-detection step, its first-release defaults, its runtime-rebuild force list, its outputs, or its rebuild-decisions summary table. Customer release manifests since v0.5.61 have shipped without `DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR`.
+- `.github/workflows/build-dev-installer.yml` — never added cortex-xdr to its `CONN_IMGS` map or its `for KEY in ...` loop. Dev manifests since v0.5.61 have shipped without `DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR`.
 
-So `/opt/phantom/connector-digests.env` on every customer install (and every dev install) has been missing `DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR` for the entire lifetime of the connector.
+So `/opt/guardian/connector-digests.env` on every customer install (and every dev install) has been missing `DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR` for the entire lifetime of the connector.
 
 ### Why it didn't surface immediately
 
-The cortex-xdr connector's instance container was first created at some past point in time. On creation, phantom-updater resolved the image via `_connector_image_ref()`, hit the tag-pinning fallback (because `_connector_digest("cortex-xdr")` returned None), and pulled `phantom-connector-cortex-xdr:<then-running-PHANTOM_VERSION>`. That tag DID exist at that moment because `build-connectors.yml` had just pushed it for that release. The container started and ran for ~34 hours.
+The cortex-xdr connector's instance container was first created at some past point in time. On creation, guardian-updater resolved the image via `_connector_image_ref()`, hit the tag-pinning fallback (because `_connector_digest("cortex-xdr")` returned None), and pulled `guardian-connector-cortex-xdr:<then-running-GUARDIAN_VERSION>`. That tag DID exist at that moment because `build-connectors.yml` had just pushed it for that release. The container started and ran for ~34 hours.
 
-When v0.6.17's KEK fix landed and the operator restarted cortex-xdr to pick up the corrected `PHANTOM_SECRET_KEK`, phantom-updater re-ran `_connector_image_ref()`. This time the running `PHANTOM_VERSION` was `dev-321d002` (a dev build sha). `_connector_digest("cortex-xdr")` STILL returned None (the manifest plumbing gap is independent of release). The tag-pinning fallback tried `phantom-connector-cortex-xdr:dev-321d002`. That tag doesn't exist — `build-connectors.yml` only fires when `bundles/spark/connectors/cortex-xdr/` changed, and v0.6.18 didn't change connector source. So the pull failed with `manifest unknown` and the restart returned HTTP 502.
+When v0.6.17's KEK fix landed and the operator restarted cortex-xdr to pick up the corrected `GUARDIAN_SECRET_KEK`, guardian-updater re-ran `_connector_image_ref()`. This time the running `GUARDIAN_VERSION` was `dev-321d002` (a dev build sha). `_connector_digest("cortex-xdr")` STILL returned None (the manifest plumbing gap is independent of release). The tag-pinning fallback tried `guardian-connector-cortex-xdr:dev-321d002`. That tag doesn't exist — `build-connectors.yml` only fires when `bundles/spark/connectors/cortex-xdr/` changed, and v0.6.18 didn't change connector source. So the pull failed with `manifest unknown` and the restart returned HTTP 502.
 
 This was the canary that exposed the entire plumbing gap.
 
@@ -10837,28 +10837,28 @@ This was the canary that exposed the entire plumbing gap.
 - Runtime-rebuild force list (line ~273): add `CONNECTOR_CORTEX_XDR=1` (was a 6-item list, now 7)
 - Outputs (line ~290): add `echo "connector_cortex_xdr=$CONNECTOR_CORTEX_XDR"`
 - Rebuild-decisions table summary (after the cortex-docs row): add cortex-xdr row. Also fixed a pre-existing gap — `cortex-content` was missing from the summary table too (the rebuild decision still happened, but operators couldn't see it in the workflow summary). Both rows added together.
-- IMAGES array (line ~830): add `phantom-connector-cortex-xdr`
-- New "Build or retag phantom-connector-cortex-xdr" step (after the cortex-content step): rebuilds on source change, retags from PREV_V otherwise — with a first-release fallback that builds from source if `:$PREV_V` doesn't exist (because pre-v0.6.20 customer releases didn't push cortex-xdr at versioned tags). The first release after v0.6.20 will build from source; subsequent releases retag normally.
+- IMAGES array (line ~830): add `guardian-connector-cortex-xdr`
+- New "Build or retag guardian-connector-cortex-xdr" step (after the cortex-content step): rebuilds on source change, retags from PREV_V otherwise — with a first-release fallback that builds from source if `:$PREV_V` doesn't exist (because pre-v0.6.20 customer releases didn't push cortex-xdr at versioned tags). The first release after v0.6.20 will build from source; subsequent releases retag normally.
 
 `.github/workflows/build-dev-installer.yml`:
 - `CONN_IMGS` map (line ~242): add the cortex-xdr entry
-- `for KEY in ...` resolution loop (line ~251): add `DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR`
+- `for KEY in ...` resolution loop (line ~251): add `DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR`
 
-No installer template changes needed — `phantom-installer.template.sh` is data-driven; it iterates over whatever `DIGEST_PHANTOM_CONNECTOR_*` values are in the embedded manifest. Adding cortex-xdr to release.yml's IMAGES array is enough.
+No installer template changes needed — `guardian-installer.template.sh` is data-driven; it iterates over whatever `DIGEST_GUARDIAN_CONNECTOR_*` values are in the embedded manifest. Adding cortex-xdr to release.yml's IMAGES array is enough.
 
 ### What deploys
 
 The first dev-installer cycle after v0.6.20 will:
-1. Pull `phantom-connector-cortex-xdr:dev` from GHCR (build-connectors.yml has pushed this continuously since v0.5.61)
+1. Pull `guardian-connector-cortex-xdr:dev` from GHCR (build-connectors.yml has pushed this continuously since v0.5.61)
 2. Resolve its digest into the dev manifest
-3. Auto-deploy to phantom-vm → `/opt/phantom/connector-digests.env` now has `DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR=sha256:...`
-4. Operator-triggered restart of the cortex-xdr instance via phantom-updater now resolves to the pinned digest — no more `dev-<sha>` tag-fallback path
+3. Auto-deploy to guardian-vm → `/opt/guardian/connector-digests.env` now has `DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR=sha256:...`
+4. Operator-triggered restart of the cortex-xdr instance via guardian-updater now resolves to the pinned digest — no more `dev-<sha>` tag-fallback path
 
 The first customer release after v0.6.20 will:
-1. Run the new "Build or retag phantom-connector-cortex-xdr" step
+1. Run the new "Build or retag guardian-connector-cortex-xdr" step
 2. PREV_V tag doesn't exist for cortex-xdr (pre-v0.6.20 releases didn't push it at customer tags) → fallback builds from source
 3. Pushes cortex-xdr at the new customer tag
-4. Manifest now includes cortex-xdr → customer install writes it to `/opt/phantom/connector-digests.env`
+4. Manifest now includes cortex-xdr → customer install writes it to `/opt/guardian/connector-digests.env`
 
 ### Files touched
 
@@ -10911,34 +10911,34 @@ The other four call sites are intentionally write-style; they're not asymmetric 
 
 ## [v0.6.18] — 2026-05-19
 
-**Bug-family audit completion for v0.6.17's KEK fix — `PHANTOM_AGENT_INTERNAL_URL` and `PHANTOM_TLS_VERIFY` were reading from `os.environ` too, so the operator's `.env` overrides were silently ignored.**
+**Bug-family audit completion for v0.6.17's KEK fix — `GUARDIAN_AGENT_INTERNAL_URL` and `GUARDIAN_TLS_VERIFY` were reading from `os.environ` too, so the operator's `.env` overrides were silently ignored.**
 
-v0.6.17 fixed `PHANTOM_SECRET_KEK` by switching its read site in `updater/src/main.py` from `os.environ.get()` to `_host_env_get()` (the `/host/.env` cached helper). CLAUDE.md § "Bug-family audit (v0.5.80)" mandates that when fixing a bug in a connector-system file, sibling instances of the same pattern get audited in the same release-discipline window — or one of them gets fixed and the others get a documented justification for being left alone.
+v0.6.17 fixed `GUARDIAN_SECRET_KEK` by switching its read site in `updater/src/main.py` from `os.environ.get()` to `_host_env_get()` (the `/host/.env` cached helper). CLAUDE.md § "Bug-family audit (v0.5.80)" mandates that when fixing a bug in a connector-system file, sibling instances of the same pattern get audited in the same release-discipline window — or one of them gets fixed and the others get a documented justification for being left alone.
 
-The audit ran `grep -nE 'os\.environ\.(get\(|\[)"(PHANTOM_|DIGEST_)' updater/src/main.py` and found two hits beyond the KEK that landed last release:
+The audit ran `grep -nE 'os\.environ\.(get\(|\[)"(GUARDIAN_|DIGEST_)' updater/src/main.py` and found two hits beyond the KEK that landed last release:
 
 ```
-305: override = os.environ.get("PHANTOM_AGENT_INTERNAL_URL", "").strip()  # _agent_tls_verify
-308: return os.environ.get("PHANTOM_TLS_VERIFY", "1").strip() not in ...
-345: override = os.environ.get("PHANTOM_AGENT_INTERNAL_URL", "").strip()  # _resolve_agent_internal_url
+305: override = os.environ.get("GUARDIAN_AGENT_INTERNAL_URL", "").strip()  # _agent_tls_verify
+308: return os.environ.get("GUARDIAN_TLS_VERIFY", "1").strip() not in ...
+345: override = os.environ.get("GUARDIAN_AGENT_INTERNAL_URL", "").strip()  # _resolve_agent_internal_url
 ```
 
-These are operator escape-hatch overrides — the **defaults always work**, so the bug was dormant rather than active (no customer impact today). But the override paths were silently broken: an operator pasting `PHANTOM_AGENT_INTERNAL_URL=https://corp-proxy/agent` into `/opt/phantom/.env` and restarting would see no behavior change, because `os.environ.get("PHANTOM_AGENT_INTERNAL_URL")` returns `""` — the compose `phantom-updater.environment` block intentionally doesn't pass it through (per v0.5.51's docker-compose env-stability invariant).
+These are operator escape-hatch overrides — the **defaults always work**, so the bug was dormant rather than active (no customer impact today). But the override paths were silently broken: an operator pasting `GUARDIAN_AGENT_INTERNAL_URL=https://corp-proxy/agent` into `/opt/guardian/.env` and restarting would see no behavior change, because `os.environ.get("GUARDIAN_AGENT_INTERNAL_URL")` returns `""` — the compose `guardian-updater.environment` block intentionally doesn't pass it through (per v0.5.51's docker-compose env-stability invariant).
 
 ### What v0.6.18 changes
 
 `updater/src/main.py`:
-- `_agent_tls_verify()` line 305: `os.environ.get("PHANTOM_AGENT_INTERNAL_URL", "")` → `_host_env_get("PHANTOM_AGENT_INTERNAL_URL", "")`
-- `_agent_tls_verify()` line 308: `os.environ.get("PHANTOM_TLS_VERIFY", "1")` → `_host_env_get("PHANTOM_TLS_VERIFY", "1")`
+- `_agent_tls_verify()` line 305: `os.environ.get("GUARDIAN_AGENT_INTERNAL_URL", "")` → `_host_env_get("GUARDIAN_AGENT_INTERNAL_URL", "")`
+- `_agent_tls_verify()` line 308: `os.environ.get("GUARDIAN_TLS_VERIFY", "1")` → `_host_env_get("GUARDIAN_TLS_VERIFY", "1")`
 - `_resolve_agent_internal_url()` line 345: same swap
 
-Three call sites, all using the same `_host_env_get` helper already established for `PHANTOM_VERSION`, `PHANTOM_SECRET_KEK`, and the per-service `DIGEST_PHANTOM_*` reads.
+Three call sites, all using the same `_host_env_get` helper already established for `GUARDIAN_VERSION`, `GUARDIAN_SECRET_KEK`, and the per-service `DIGEST_GUARDIAN_*` reads.
 
 ### Audit closure
 
-After v0.6.18, `grep -nE 'os\.environ\.(get\(|\[)"(PHANTOM_(AGENT_INTERNAL_URL|TLS_VERIFY|SECRET_KEK|VERSION)|DIGEST_)' updater/src/main.py` returns **zero matches**. The bug-family is fully resolved.
+After v0.6.18, `grep -nE 'os\.environ\.(get\(|\[)"(GUARDIAN_(AGENT_INTERNAL_URL|TLS_VERIFY|SECRET_KEK|VERSION)|DIGEST_)' updater/src/main.py` returns **zero matches**. The bug-family is fully resolved.
 
-`PHANTOM_REGISTRY*` keys at lines 61–64 remain `os.environ.get()` reads — these are passed through the compose env block intentionally (for `docker login` at boot), and they predate the v0.5.51 stability invariant. They're left alone consciously, and this entry is the documented justification per CLAUDE.md § "Bug-family audit (added v0.5.80)" rule 7.
+`GUARDIAN_REGISTRY*` keys at lines 61–64 remain `os.environ.get()` reads — these are passed through the compose env block intentionally (for `docker login` at boot), and they predate the v0.5.51 stability invariant. They're left alone consciously, and this entry is the documented justification per CLAUDE.md § "Bug-family audit (added v0.5.80)" rule 7.
 
 ### Files touched
 
@@ -10950,12 +10950,12 @@ After v0.6.18, `grep -nE 'os\.environ\.(get\(|\[)"(PHANTOM_(AGENT_INTERNAL_URL|T
 
 ## [v0.6.17] — 2026-05-19
 
-**phantom-updater was passing an EMPTY `PHANTOM_SECRET_KEK` to connector containers, so all instance secrets resolved to empty strings.**
+**guardian-updater was passing an EMPTY `GUARDIAN_SECRET_KEK` to connector containers, so all instance secrets resolved to empty strings.**
 
-After v0.6.16 made dev-cycle connector images flow through to phantom-vm, restarting the Caldera connector container pulled the new image — only to fail at the next layer: *"caldera instance has no apiKey configured."* But the SecretStore actually had a 32-char apiKey in plaintext. Investigation showed:
+After v0.6.16 made dev-cycle connector images flow through to guardian-vm, restarting the Caldera connector container pulled the new image — only to fail at the next layer: *"caldera instance has no apiKey configured."* But the SecretStore actually had a 32-char apiKey in plaintext. Investigation showed:
 
 ```
-HOST KEK length: 43 (real KEK in /opt/phantom/.env)
+HOST KEK length: 43 (real KEK in /opt/guardian/.env)
 CONTAINER KEK length: 0 (empty)
 ```
 
@@ -10964,7 +10964,7 @@ The container log made the actual root cause explicit:
 ```
 WARNING runtime.instance_store_client: instance caldera/Caldera: could not 
 resolve secret slot 'apiKey' at '/agents/.../apiKey' — using empty (secret 
-is encrypted (v1 envelope) but PHANTOM_SECRET_KEK is not set on this 
+is encrypted (v1 envelope) but GUARDIAN_SECRET_KEK is not set on this 
 connector container.)
 ```
 
@@ -10975,22 +10975,22 @@ Without the KEK, the SecretStoreReader.read() can't decrypt; the connector-runti
 `updater/src/main.py:1860` (pre-v0.6.17) read:
 
 ```python
-"PHANTOM_SECRET_KEK": os.environ.get("PHANTOM_SECRET_KEK", ""),
+"GUARDIAN_SECRET_KEK": os.environ.get("GUARDIAN_SECRET_KEK", ""),
 ```
 
-The comment claimed *"The customer docker-compose's `environment:` block sets these from the host's .env."* — but the compose `phantom-updater.environment` block INTENTIONALLY DOESN'T pass `PHANTOM_SECRET_KEK`, per v0.5.51's docker-compose env-stability invariant (any env block change forces phantom-updater container recreate on stack upgrade, defeating the digest-pinning state-preservation). So `os.environ.get()` returned `""`.
+The comment claimed *"The customer docker-compose's `environment:` block sets these from the host's .env."* — but the compose `guardian-updater.environment` block INTENTIONALLY DOESN'T pass `GUARDIAN_SECRET_KEK`, per v0.5.51's docker-compose env-stability invariant (any env block change forces guardian-updater container recreate on stack upgrade, defeating the digest-pinning state-preservation). So `os.environ.get()` returned `""`.
 
 This bug has been latent since v0.5.51. It surfaced now because v0.6.x finally exercised the connector-container start path end-to-end.
 
 ### v0.6.17 fix
 
-Switch to the same pattern as `PHANTOM_VERSION` / `DIGEST_PHANTOM_*` reads — `_host_env_get()` reads `/host/.env` at runtime, no compose env-block dependency:
+Switch to the same pattern as `GUARDIAN_VERSION` / `DIGEST_GUARDIAN_*` reads — `_host_env_get()` reads `/host/.env` at runtime, no compose env-block dependency:
 
 ```python
-"PHANTOM_SECRET_KEK": _host_env_get("PHANTOM_SECRET_KEK", "") or "",
+"GUARDIAN_SECRET_KEK": _host_env_get("GUARDIAN_SECRET_KEK", "") or "",
 ```
 
-This preserves the env-block stability invariant (phantom-updater container doesn't recreate on KEK rotation) AND propagates the KEK correctly to spawned connector containers.
+This preserves the env-block stability invariant (guardian-updater container doesn't recreate on KEK rotation) AND propagates the KEK correctly to spawned connector containers.
 
 ### Files
 
@@ -11007,13 +11007,13 @@ This preserves the env-block stability invariant (phantom-updater container does
 
 ## [v0.6.16] — 2026-05-19
 
-**Bring per-connector images into the dev cycle. Pre-v0.6.16 connector source changes never reached phantom-vm even though build-connectors.yml was pushing fresh `:dev` tags.**
+**Bring per-connector images into the dev cycle. Pre-v0.6.16 connector source changes never reached guardian-vm even though build-connectors.yml was pushing fresh `:dev` tags.**
 
-Surfaced after v0.6.15. The marketplace catalog + Caldera connector fallback chain were both updated and pushed. build-connectors.yml ran and pushed a new `phantom-connector-caldera:dev` image with the `calderaUrl` fallback baked in. But when I restarted the Caldera instance via phantom-updater's restart endpoint, it pulled the SAME old digest: `sha256:93ce722b…` — the v0.6.4 customer release's connector image.
+Surfaced after v0.6.15. The marketplace catalog + Caldera connector fallback chain were both updated and pushed. build-connectors.yml ran and pushed a new `guardian-connector-caldera:dev` image with the `calderaUrl` fallback baked in. But when I restarted the Caldera instance via guardian-updater's restart endpoint, it pulled the SAME old digest: `sha256:93ce722b…` — the v0.6.4 customer release's connector image.
 
-Root cause: `/opt/phantom/connector-digests.env` is populated by phantom-installer from the dev manifest. The dev manifest's `DIGEST_PHANTOM_CONNECTOR_*` values were fetched from the LATEST CUSTOMER RELEASE (v0.6.7 right now), not from each connector's `:dev` tag. So phantom-updater on phantom-vm was always pulling v0.6.x customer-release connector images regardless of what build-connectors.yml had pushed.
+Root cause: `/opt/guardian/connector-digests.env` is populated by guardian-installer from the dev manifest. The dev manifest's `DIGEST_GUARDIAN_CONNECTOR_*` values were fetched from the LATEST CUSTOMER RELEASE (v0.6.7 right now), not from each connector's `:dev` tag. So guardian-updater on guardian-vm was always pulling v0.6.x customer-release connector images regardless of what build-connectors.yml had pushed.
 
-This is the SAME class of issue as v0.6.12 (phantom-updater wasn't in dev cycle) — fixed for one image, repeated for seven.
+This is the SAME class of issue as v0.6.12 (guardian-updater wasn't in dev cycle) — fixed for one image, repeated for seven.
 
 ### v0.6.16 fix
 
@@ -11021,7 +11021,7 @@ This is the SAME class of issue as v0.6.12 (phantom-updater wasn't in dev cycle)
 1. `docker pull` each connector's `:dev` tag from GHCR
 2. Capture the resolved sha256 digest and write to the dev manifest
 3. If `:dev` doesn't exist for a connector (bootstrap case, or a connector whose source has never been pushed in this repo's history), fall back to that key's value from the LATEST CUSTOMER RELEASE manifest
-4. If neither :dev nor stable has a value, log a warning and continue (phantom-updater handles missing per-key with a tag-pinning fallback that would fail visibly at instance-create time)
+4. If neither :dev nor stable has a value, log a warning and continue (guardian-updater handles missing per-key with a tag-pinning fallback that would fail visibly at instance-create time)
 
 Net effect: when a developer changes any `bundles/spark/connectors/<id>/src/` file, build-connectors.yml rebuilds `<id>:dev`, the build-dev-installer cascade picks it up, the dev manifest carries the fresh digest, auto-deploy writes it to `connector-digests.env`, and the next instance restart pulls the new image. Same architectural pattern as agent/xlog/caldera/updater.
 
@@ -11056,7 +11056,7 @@ Root cause: `mcp/agent/app/api/marketplace/connectors/route.ts` hard-codes the c
 
 2. **Runtime fallbacks added** for operator instances created pre-v0.6.15:
    - `bundles/spark/connectors/caldera/src/connector.py`: `calderaUrl` added to the `baseUrl` resolution chain.
-   - `bundles/spark/mcp/src/service/phantom_mcp/server.py` `get_xlog_url()`: `xlogUrl` added to the resolution chain.
+   - `bundles/spark/mcp/src/service/guardian_mcp/server.py` `get_xlog_url()`: `xlogUrl` added to the resolution chain.
 
    These let already-created instances keep working without forcing the operator to recreate them.
 
@@ -11072,23 +11072,23 @@ For now: any new connector added in v0.6.15+ MUST have its marketplace catalog e
 
 **Default `verify=False` on the compose-internal agent URL. v0.6.13 got us to HTTPS, but verify=True against a self-signed cert never succeeds.**
 
-After v0.6.13 deployed (always-HTTPS for `phantom-agent:8080`), testing the reconcile endpoint surfaced the next layer of the problem:
+After v0.6.13 deployed (always-HTTPS for `guardian-agent:8080`), testing the reconcile endpoint surfaced the next layer of the problem:
 
 ```
 {"detail":"could not list instances from agent: [SSL: CERTIFICATE_VERIFY_FAILED] 
  certificate verify failed: self-signed certificate (_ssl.c:1010)"}
 ```
 
-Progress — TLS handshake worked. But the call sites read `PHANTOM_TLS_VERIFY` with default `"1"` (verify=True), and the agent's auto-generated `/tls/cert.pem` is a self-signed cert with no CA chain. Verify=True can NEVER succeed against that cert.
+Progress — TLS handshake worked. But the call sites read `GUARDIAN_TLS_VERIFY` with default `"1"` (verify=True), and the agent's auto-generated `/tls/cert.pem` is a self-signed cert with no CA chain. Verify=True can NEVER succeed against that cert.
 
 ### The architectural fact
 
-The intra-cluster trust boundary is the docker network alias (only the legitimate `phantom-agent` container answers on that DNS name within the compose network) — NOT the cert chain. The agent's cert exists to encrypt the wire, not to authenticate the host; authentication is done by the docker bridge. So `verify=False` is the architecturally correct setting for the default compose-internal URL.
+The intra-cluster trust boundary is the docker network alias (only the legitimate `guardian-agent` container answers on that DNS name within the compose network) — NOT the cert chain. The agent's cert exists to encrypt the wire, not to authenticate the host; authentication is done by the docker bridge. So `verify=False` is the architecturally correct setting for the default compose-internal URL.
 
 ### v0.6.14 fix
 
 New `_agent_tls_verify()` helper:
-- When `PHANTOM_AGENT_INTERNAL_URL` env override is in use → honor `PHANTOM_TLS_VERIFY` (default `"1"`). Operator can opt in to chain validation if they front the agent with a CA-signed cert.
+- When `GUARDIAN_AGENT_INTERNAL_URL` env override is in use → honor `GUARDIAN_TLS_VERIFY` (default `"1"`). Operator can opt in to chain validation if they front the agent with a CA-signed cert.
 - When the default URL is in use → return `False` unconditionally (the cert is always self-signed).
 
 Two call sites updated:
@@ -11112,15 +11112,15 @@ Each layer was an empirical discovery that the prior wasn't sufficient. Per CLAU
 
 v0.6.11 added `_resolve_agent_internal_url()` that derived `http` vs `https` from `/host/.env`'s `SSL_CERT_PEM`. Testing v0.6.11 on the dev cycle (via v0.6.12's new build-updater.yml) revealed the bug: **`SSL_CERT_PEM` is empty in dev-installer'd installs** (and in customer installs too, unless the operator EXPLICITLY pasted a cert at install time). The agent's entrypoint auto-generates a self-signed cert at `/tls/cert.pem` if `SSL_CERT_PEM` is empty, and the TLS proxy serves HTTPS unconditionally.
 
-So v0.6.11's detection always fell to the `http` branch, hit the TLS proxy, got "Server disconnected without sending a response" — exactly the same symptom v0.6.11 was supposed to fix. Empirically verified: `curl http://phantom-agent:8080 → Empty reply from server`; `curl -k https://phantom-agent:8080 → TLS handshake succeeds`.
+So v0.6.11's detection always fell to the `http` branch, hit the TLS proxy, got "Server disconnected without sending a response" — exactly the same symptom v0.6.11 was supposed to fix. Empirically verified: `curl http://guardian-agent:8080 → Empty reply from server`; `curl -k https://guardian-agent:8080 → TLS handshake succeeds`.
 
 ### v0.6.13 fix
 
-`_resolve_agent_internal_url()` always returns `https://phantom-agent:8080` (or the explicit `PHANTOM_AGENT_INTERNAL_URL` override). No more derivation — the agent's TLS state isn't reliably signaled by env, and the cert file is in the agent's own volume which phantom-updater can't inspect.
+`_resolve_agent_internal_url()` always returns `https://guardian-agent:8080` (or the explicit `GUARDIAN_AGENT_INTERNAL_URL` override). No more derivation — the agent's TLS state isn't reliably signaled by env, and the cert file is in the agent's own volume which guardian-updater can't inspect.
 
 The TLS `verify=False` path that callers already use is correct because the agent's cert is self-signed; trust boundary is at the compose network edge, not the cert chain.
 
-Per CLAUDE.md § "Rule 3 — Derive runtime state from observable evidence, not env vars that mid-process scripts mutate" (v0.4.0 retrospective): the v0.6.11 attempt used env (wrong); v0.6.13 uses a hard architectural fact (phantom-agent:8080 is always HTTPS in v0.4.0+).
+Per CLAUDE.md § "Rule 3 — Derive runtime state from observable evidence, not env vars that mid-process scripts mutate" (v0.4.0 retrospective): the v0.6.11 attempt used env (wrong); v0.6.13 uses a hard architectural fact (guardian-agent:8080 is always HTTPS in v0.4.0+).
 
 This is the actual unblock for `POST /api/v1/connectors/reconcile` and per-connector audit URL writes on TLS-enabled installs.
 
@@ -11132,9 +11132,9 @@ This is the actual unblock for `POST /api/v1/connectors/reconcile` and per-conne
 
 ## [v0.6.12] — 2026-05-19
 
-**Bring phantom-updater into the dev cycle. Customer-release is no longer the only path to test updater changes.**
+**Bring guardian-updater into the dev cycle. Customer-release is no longer the only path to test updater changes.**
 
-Operator caught the design flaw: I was driving toward "approve customer release as a way to test untested updater code." That's backwards — customer releases are the FINAL step, not the iteration mechanism. The architectural gap forcing the mistake: phantom-updater had no `build-updater.yml`, so any updater code change required a customer-release tag to bake an image, then a customer install to test.
+Operator caught the design flaw: I was driving toward "approve customer release as a way to test untested updater code." That's backwards — customer releases are the FINAL step, not the iteration mechanism. The architectural gap forcing the mistake: guardian-updater had no `build-updater.yml`, so any updater code change required a customer-release tag to bake an image, then a customer install to test.
 
 v0.6.12 fixes the gap.
 
@@ -11142,8 +11142,8 @@ v0.6.12 fixes the gap.
 
 | File | Change |
 |---|---|
-| `.github/workflows/build-updater.yml` | NEW. Mirrors `build-agent.yml`. Triggers on `updater/**` source changes. Builds + pushes `phantom-updater:dev` via the shared `build-and-push-dev-image` composite action. |
-| `.github/workflows/build-dev-installer.yml` | (1) Added `Build updater` to the `workflow_run` cascade trigger list. (2) The `:dev` digest resolution loop now includes `phantom-updater` alongside agent/xlog/caldera. (3) Removed `DIGEST_PHANTOM_UPDATER` from the "fetch from latest customer release" block — only browser remains there. |
+| `.github/workflows/build-updater.yml` | NEW. Mirrors `build-agent.yml`. Triggers on `updater/**` source changes. Builds + pushes `guardian-updater:dev` via the shared `build-and-push-dev-image` composite action. |
+| `.github/workflows/build-dev-installer.yml` | (1) Added `Build updater` to the `workflow_run` cascade trigger list. (2) The `:dev` digest resolution loop now includes `guardian-updater` alongside agent/xlog/caldera. (3) Removed `DIGEST_GUARDIAN_UPDATER` from the "fetch from latest customer release" block — only browser remains there. |
 
 ### Effect on the dev cycle
 
@@ -11152,12 +11152,12 @@ Pre-v0.6.12:                     Post-v0.6.12:
   updater/** push                  updater/** push
     ↓                                ↓
   (no rebuild — updater is        build-updater.yml
-   release-only)                      → pushes phantom-updater:dev
+   release-only)                      → pushes guardian-updater:dev
     ↓                                ↓
   Wait for customer release tag    build-dev-installer.yml
     ↓                                → resolves :dev digest
   release.yml builds                 ↓
-    ↓                              auto-deploy on phantom-vm
+    ↓                              auto-deploy on guardian-vm
   Customer install                   ↓
     ↓                              Test updater changes immediately
   Discover bug
@@ -11167,15 +11167,15 @@ Pre-v0.6.12:                     Post-v0.6.12:
 
 ### Risk envelope
 
-Same as agent/xlog/caldera dev builds: a bug in updater could break the dev install on phantom-vm. Mitigation is symmetric — customer installs are unaffected because `release.yml` still builds updater independently on customer tag push. The dev cycle gives us a chance to CATCH updater bugs before they reach customers, where pre-v0.6.12 the only signal was customers hitting them.
+Same as agent/xlog/caldera dev builds: a bug in updater could break the dev install on guardian-vm. Mitigation is symmetric — customer installs are unaffected because `release.yml` still builds updater independently on customer tag push. The dev cycle gives us a chance to CATCH updater bugs before they reach customers, where pre-v0.6.12 the only signal was customers hitting them.
 
 ### Closes the testing loop
 
 After v0.6.12 lands on dev, v0.6.11's TLS-aware agent URL fix can be tested by:
 1. Push to main (already done — commit `724798c`)
-2. `build-updater.yml` rebuilds phantom-updater:dev with the v0.6.11 code
+2. `build-updater.yml` rebuilds guardian-updater:dev with the v0.6.11 code
 3. `build-dev-installer.yml` cascades; new manifest carries the new :dev digest
-4. Auto-deploy installs new phantom-updater on phantom-vm
+4. Auto-deploy installs new guardian-updater on guardian-vm
 5. Test `POST /api/v1/connectors/reconcile` — should succeed (no more "Server disconnected")
 6. Recreate Caldera instance; connector container should start
 7. Test kill chain end-to-end
@@ -11186,18 +11186,18 @@ Only THEN, after operator-side verification, talk about tagging customer release
 
 ## [v0.6.11] — 2026-05-19
 
-**phantom-updater TLS-incompat fix — was hard-coding `http://phantom-agent:8080` for three agent calls; v0.4.0+ the agent runs behind a TLS proxy on that port.**
+**guardian-updater TLS-incompat fix — was hard-coding `http://guardian-agent:8080` for three agent calls; v0.4.0+ the agent runs behind a TLS proxy on that port.**
 
-Surfaced during v0.6.7's connector-digest reconcile testing. Operator hit `POST /api/v1/connectors/reconcile` and got back `502: could not list instances from agent: Server disconnected without sending a response.` Root cause: phantom-updater's `agent_url` defaulted to plain HTTP, but v0.4.0 added TLS-by-default to the agent's port 8080. Plain HTTP requests hit the TLS proxy and got rejected at the TLS handshake layer — hence "server disconnected" rather than a proper HTTP error code.
+Surfaced during v0.6.7's connector-digest reconcile testing. Operator hit `POST /api/v1/connectors/reconcile` and got back `502: could not list instances from agent: Server disconnected without sending a response.` Root cause: guardian-updater's `agent_url` defaulted to plain HTTP, but v0.4.0 added TLS-by-default to the agent's port 8080. Plain HTTP requests hit the TLS proxy and got rejected at the TLS handshake layer — hence "server disconnected" rather than a proper HTTP error code.
 
 This is a latent v0.4.0 bug that never surfaced because:
 - The instance container_url update path (line 1620, hit on instance creation) DID work over HTTP somehow, OR was tolerated by retry semantics
-- The audit-row write path (line 1763, inherited by per-connector containers as `PHANTOM_AUDIT_URL`) was a fire-and-forget that the operator never noticed failing
+- The audit-row write path (line 1763, inherited by per-connector containers as `GUARDIAN_AUDIT_URL`) was a fire-and-forget that the operator never noticed failing
 - The reconcile path (line 2036) was net-new and only exercised today
 
 Now all three derive scheme from observable state per CLAUDE.md § "Rule 3 — Derive runtime state from observable evidence, not env vars that mid-process scripts mutate" (v0.4.0 retrospective). The new `_resolve_agent_internal_url()` helper:
 
-1. Honors `PHANTOM_AGENT_INTERNAL_URL` env override if explicitly set (operator escape hatch)
+1. Honors `GUARDIAN_AGENT_INTERNAL_URL` env override if explicitly set (operator escape hatch)
 2. Otherwise derives scheme from `/host/.env`'s `SSL_CERT_PEM`: non-empty → https, empty → http
 3. Always returns a URL without trailing slash so `f"{url}/api/v1/…"` doesn't double-slash
 
@@ -11207,12 +11207,12 @@ Now all three derive scheme from observable state per CLAUDE.md § "Rule 3 — D
 
 ### Customer upgrade
 
-Install v0.6.11 — phantom-updater image gets the new helper. After install, `POST /api/v1/connectors/reconcile` works on TLS-enabled installs, and per-instance connector audit-row writes resolve to the right scheme.
+Install v0.6.11 — guardian-updater image gets the new helper. After install, `POST /api/v1/connectors/reconcile` works on TLS-enabled installs, and per-instance connector audit-row writes resolve to the right scheme.
 
 This is what unblocks the kill-chain end-to-end test:
-1. v0.6.7 phantom-updater added the connector-digests.env reader
-2. v0.6.11 phantom-updater can actually TALK TO the agent over TLS
-3. With both, recreate Caldera instance via UI → phantom-updater pulls connector image from `/host/connector-digests.env` → tells agent the container_url over HTTPS → caldera dispatch works → kill chain fires
+1. v0.6.7 guardian-updater added the connector-digests.env reader
+2. v0.6.11 guardian-updater can actually TALK TO the agent over TLS
+3. With both, recreate Caldera instance via UI → guardian-updater pulls connector image from `/host/connector-digests.env` → tells agent the container_url over HTTPS → caldera dispatch works → kill chain fires
 
 Closes the last gap in the v0.6.7 architectural fix chain.
 
@@ -11279,37 +11279,37 @@ Verified post-deploy via `curl https://localhost:3000/api/agent/models` — retu
 
 **Auto-deploy + agent-smoke contract — collapse the dev cycle's build → install → smoke into one continuous flow.**
 
-Pre-v0.6.8 the dev iteration loop was: push → wait for build → operator manually runs `sudo /home/ayman/phantom-installer-dev` → operator pings the agent → agent smokes. Three failure modes:
+Pre-v0.6.8 the dev iteration loop was: push → wait for build → operator manually runs `sudo /home/ayman/guardian-installer-dev` → operator pings the agent → agent smokes. Three failure modes:
 1. **Forgotten installs.** Operator pushed a change, walked away, forgot to re-install before running tests against an old version.
 2. **Version skew.** Agent's smoke ran against whatever was deployed at smoke-time, which may or may not match `HEAD`.
 3. **Wasted operator time.** Manual install step between every push, even for trivial CI/CD doc tweaks.
 
-v0.6.8 collapses build + deploy + smoke into one workflow run. After the build succeeds, the workflow runs `sudo /home/ayman/phantom-installer-dev` itself (the self-hosted runner IS phantom-vm with NOPASSWD sudo; no SSH, no separate credentials, no inter-host transfer). The agent then smokes against the just-deployed install — by definition aligned with `HEAD`.
+v0.6.8 collapses build + deploy + smoke into one workflow run. After the build succeeds, the workflow runs `sudo /home/ayman/guardian-installer-dev` itself (the self-hosted runner IS guardian-vm with NOPASSWD sudo; no SSH, no separate credentials, no inter-host transfer). The agent then smokes against the just-deployed install — by definition aligned with `HEAD`.
 
 ### What ships
 
 | Change | File | Detail |
 |---|---|---|
-| Auto-deploy step | `.github/workflows/build-dev-installer.yml` | New step after the existing `Stage dev installer` step. Runs `sudo /home/ayman/phantom-installer-dev` with full output tee'd to workflow log + `/tmp/phantom-install.log`. Failure turns workflow red. |
+| Auto-deploy step | `.github/workflows/build-dev-installer.yml` | New step after the existing `Stage dev installer` step. Runs `sudo /home/ayman/guardian-installer-dev` with full output tee'd to workflow log + `/tmp/guardian-install.log`. Failure turns workflow red. |
 | Auto-deploy contract section | `docs/CICD.md § Workflow file layout` | New `Auto-deploy contract (v0.6.8+ — dev cycle only)` subsection. Documents what / why / safety properties / trade-offs / verification / forbidden list. |
 | Post-deploy smoke contract section | `docs/CICD.md § Workflow file layout` | New `Post-auto-deploy agent smoke contract (v0.6.8+)` subsection. Pairs with the auto-deploy contract; references CLAUDE.md § Agent-side headless smoke for the full mechanics. |
 | Agent smoke discipline updated | `CLAUDE.md § Agent-side headless smoke` | Added v0.6.8 timing addendum. Smoke now runs against the auto-deployed install (verified-current); pre-v0.6.8 the agent had to ask the operator what version was running. |
 
 ### Customer flow is unchanged
 
-**Auto-deploy is a dev-cycle-only mechanic.** Customer release tags (`vX.Y.Z`) still require explicit operator approval in chat (per CLAUDE.md § Approval phrasing), and customer installs still happen via `sudo /opt/phantom/phantom-installer` driven by the customer manually — never by CI. The "CI never installs anything on phantom-vm" principle in `docs/CICD.md § Build & release workflow (mechanics)` is amended to: *CI never installs anything on customer-facing hosts. The dev-flow auto-deploy on phantom-vm is the one explicit exception, scoped to operator-mirror iteration only.*
+**Auto-deploy is a dev-cycle-only mechanic.** Customer release tags (`vX.Y.Z`) still require explicit operator approval in chat (per CLAUDE.md § Approval phrasing), and customer installs still happen via `sudo /opt/guardian/guardian-installer` driven by the customer manually — never by CI. The "CI never installs anything on guardian-vm" principle in `docs/CICD.md § Build & release workflow (mechanics)` is amended to: *CI never installs anything on customer-facing hosts. The dev-flow auto-deploy on guardian-vm is the one explicit exception, scoped to operator-mirror iteration only.*
 
 ### Verification
 
 After this commit lands + the next build-dev-installer.yml run completes:
 
 ```bash
-# On phantom-vm:
-sudo grep ^PHANTOM_VERSION /opt/phantom/.env       # should match HEAD's short SHA
-sudo docker inspect phantom_agent --format '{{.Created}}'  # mtime ≈ workflow run time
+# On guardian-vm:
+sudo grep ^GUARDIAN_VERSION /opt/guardian/.env       # should match HEAD's short SHA
+sudo docker inspect guardian_agent --format '{{.Created}}'  # mtime ≈ workflow run time
 ```
 
-If `PHANTOM_VERSION` matches `git rev-parse --short HEAD` on `main` without you having manually re-run the installer, auto-deploy worked.
+If `GUARDIAN_VERSION` matches `git rev-parse --short HEAD` on `main` without you having manually re-run the installer, auto-deploy worked.
 
 ### Trade-offs (operator-visible)
 
@@ -11327,52 +11327,52 @@ Operator decided the trade-off was worth it — testing-time savings outweigh th
 
 ## [v0.6.7] — 2026-05-18
 
-**Architectural cleanup: decouple per-connector image digests from `/opt/phantom/.env`. Closes #55.**
+**Architectural cleanup: decouple per-connector image digests from `/opt/guardian/.env`. Closes #55.**
 
-Operator discovered during v0.6.6 chat-API testing that the per-instance Caldera connector container wasn't starting on a dev install — phantom-updater was tag-pinning to `dev-<sha>` because `DIGEST_PHANTOM_CONNECTOR_CALDERA` was missing from `.env`. Investigation revealed the deeper issue: the dev installer's manifest doesn't include connector digests (only the 5 core stack-service digests + version), and even on customer installs, mixing `DIGEST_PHANTOM_CONNECTOR_*` lines into `.env` violates the operator config-file separation principle.
+Operator discovered during v0.6.6 chat-API testing that the per-instance Caldera connector container wasn't starting on a dev install — guardian-updater was tag-pinning to `dev-<sha>` because `DIGEST_GUARDIAN_CONNECTOR_CALDERA` was missing from `.env`. Investigation revealed the deeper issue: the dev installer's manifest doesn't include connector digests (only the 5 core stack-service digests + version), and even on customer installs, mixing `DIGEST_GUARDIAN_CONNECTOR_*` lines into `.env` violates the operator config-file separation principle.
 
 ### The principle (now codified in CLAUDE.md)
 
-`.env` is for **service credentials + the 5 core compose-substitution digests** that `docker-compose.yml` interpolates into its `image: ...@${DIGEST_X}` references. Per-connector image refs are NOT compose substitutions — they're runtime data phantom-updater uses to spawn dynamic instance containers. They belong in a dedicated file.
+`.env` is for **service credentials + the 5 core compose-substitution digests** that `docker-compose.yml` interpolates into its `image: ...@${DIGEST_X}` references. Per-connector image refs are NOT compose substitutions — they're runtime data guardian-updater uses to spawn dynamic instance containers. They belong in a dedicated file.
 
 | File | Owns | Read by |
 |---|---|---|
-| `/opt/phantom/.env` | Service credentials + 5 stack-service compose-substitution digests + `PHANTOM_VERSION` | docker-compose at stack-up; phantom-updater for stack-version/stack-digest reads |
-| `/opt/phantom/connector-digests.env` (NEW) | 7 `DIGEST_PHANTOM_CONNECTOR_*` lines, nothing else | phantom-updater ONLY, for spawning per-instance connector containers |
+| `/opt/guardian/.env` | Service credentials + 5 stack-service compose-substitution digests + `GUARDIAN_VERSION` | docker-compose at stack-up; guardian-updater for stack-version/stack-digest reads |
+| `/opt/guardian/connector-digests.env` (NEW) | 7 `DIGEST_GUARDIAN_CONNECTOR_*` lines, nothing else | guardian-updater ONLY, for spawning per-instance connector containers |
 
 ### What ships
 
 | Layer | Change |
 |---|---|
 | `updater/src/main.py` | New reader `_read_host_connector_digests_env()` reads `/host/connector-digests.env`. `_connector_digest(connector_id)` reads from the new source. Backward-compat: falls back to `/host/.env` for the transition window (operators upgrading from pre-v0.6.7), with a one-shot deprecation log per process. |
-| `installer/phantom-installer.template.sh` | Manifest application splits the embedded `DIGEST_MANIFEST` into core (PHANTOM_VERSION + non-connector digests → `.env`) and per-connector (`DIGEST_PHANTOM_CONNECTOR_*` → `connector-digests.env`). The existing `^DIGEST_PHANTOM_` strip pattern already removes legacy connector digests from `.env` on upgrade. |
-| `installer/docker-compose.yml` | No change — phantom-updater already mounts `.:/host:rw` (the whole install dir), so `/opt/phantom/connector-digests.env` automatically appears at `/host/connector-digests.env`. |
-| `.github/workflows/build-dev-installer.yml` | Fetches the 7 `DIGEST_PHANTOM_CONNECTOR_*` values from the latest customer release's manifest and includes them in the dev manifest. Without this, dev installs leave operators without connector image refs and phantom-updater can't pull connector images. |
+| `installer/guardian-installer.template.sh` | Manifest application splits the embedded `DIGEST_MANIFEST` into core (GUARDIAN_VERSION + non-connector digests → `.env`) and per-connector (`DIGEST_GUARDIAN_CONNECTOR_*` → `connector-digests.env`). The existing `^DIGEST_GUARDIAN_` strip pattern already removes legacy connector digests from `.env` on upgrade. |
+| `installer/docker-compose.yml` | No change — guardian-updater already mounts `.:/host:rw` (the whole install dir), so `/opt/guardian/connector-digests.env` automatically appears at `/host/connector-digests.env`. |
+| `.github/workflows/build-dev-installer.yml` | Fetches the 7 `DIGEST_GUARDIAN_CONNECTOR_*` values from the latest customer release's manifest and includes them in the dev manifest. Without this, dev installs leave operators without connector image refs and guardian-updater can't pull connector images. |
 | `CLAUDE.md` | New section: **Operator config-file separation (v0.6.7+)** — codifies the rule + the pre-v0.6.7 transition story + a Forbidden list to prevent regression. |
 
 ### Customer upgrade
 
-Install v0.6.7 — `dev-installer` users `sudo /home/ayman/phantom-installer-dev`; customers download the new `phantom-installer`. The installer applies the new file layout automatically:
-- Strips `DIGEST_PHANTOM_CONNECTOR_*` from `.env`
-- Writes `/opt/phantom/connector-digests.env` from the embedded manifest
-- phantom-updater image rebuilt with the new reader
+Install v0.6.7 — `dev-installer` users `sudo /home/ayman/guardian-installer-dev`; customers download the new `guardian-installer`. The installer applies the new file layout automatically:
+- Strips `DIGEST_GUARDIAN_CONNECTOR_*` from `.env`
+- Writes `/opt/guardian/connector-digests.env` from the embedded manifest
+- guardian-updater image rebuilt with the new reader
 
 After install, the operator can verify:
 ```
-sudo ls -la /opt/phantom/connector-digests.env  # new file, ~7 connector digests
-sudo grep ^DIGEST_PHANTOM_CONNECTOR_ /opt/phantom/.env  # should be empty
-sudo docker logs phantom_updater | tail -20  # no more "tag-pinning" warnings on instance create
+sudo ls -la /opt/guardian/connector-digests.env  # new file, ~7 connector digests
+sudo grep ^DIGEST_GUARDIAN_CONNECTOR_ /opt/guardian/.env  # should be empty
+sudo docker logs guardian_updater | tail -20  # no more "tag-pinning" warnings on instance create
 ```
 
-Then recreate any connector instance via `/instances`. The instance container should start cleanly because phantom-updater now has the right image digest.
+Then recreate any connector instance via `/instances`. The instance container should start cleanly because guardian-updater now has the right image digest.
 
 Closes #55. Stacks on top of v0.6.6 (chat fixes) — v0.6.6 + v0.6.7 can be tagged together.
 
 ### Bonus — staged-binary contract codified
 
-Operator pointed out that the auto-copy of the dev installer to `/home/ayman/phantom-installer-dev` (the convenience path for `sudo /home/ayman/phantom-installer-dev` upgrades on phantom-vm) was scattered across passing mentions in docs/CICD.md but not codified as a permanent contract. The mechanism has been in place since the build-dev-installer.yml workflow was created (atomic `cp` + `mv` from the self-hosted runner, which IS phantom-vm), but there was no single source of truth that said "this is a permanent contract; do not remove this step."
+Operator pointed out that the auto-copy of the dev installer to `/home/ayman/guardian-installer-dev` (the convenience path for `sudo /home/ayman/guardian-installer-dev` upgrades on guardian-vm) was scattered across passing mentions in docs/CICD.md but not codified as a permanent contract. The mechanism has been in place since the build-dev-installer.yml workflow was created (atomic `cp` + `mv` from the self-hosted runner, which IS guardian-vm), but there was no single source of truth that said "this is a permanent contract; do not remove this step."
 
-Added a dedicated subsection `Staged-binary contract (auto-copy to /home/ayman/phantom-installer-dev)` under `docs/CICD.md § Workflow file layout`. The section documents: the contract, the implementation, the three properties it provides (atomic swap / survives runner workspace cleanup / no SSH), how to verify post-build, the forbidden list (don't remove the step, don't replace with symlink, don't make the write non-atomic), and the failure-mode signal (binary version doesn't match HEAD).
+Added a dedicated subsection `Staged-binary contract (auto-copy to /home/ayman/guardian-installer-dev)` under `docs/CICD.md § Workflow file layout`. The section documents: the contract, the implementation, the three properties it provides (atomic swap / survives runner workspace cleanup / no SSH), how to verify post-build, the forbidden list (don't remove the step, don't replace with symlink, don't make the write non-atomic), and the failure-mode signal (binary version doesn't match HEAD).
 
 No workflow change required — the step at `build-dev-installer.yml:243-264` already does the right thing. This is purely codification.
 
@@ -11382,7 +11382,7 @@ No workflow change required — the step at `build-dev-installer.yml:243-264` al
 
 **Chat session reliability: remove every default truncation; surface silent export failures; live-telemetry export; subagent toggle; fix proxy that silently dropped session-message query params.**
 
-Operator caught four chat-related issues during the first hands-on testing of the new Gemini provider on phantom-vm. v0.6.6 fixes them all in one contained release.
+Operator caught four chat-related issues during the first hands-on testing of the new Gemini provider on guardian-vm. v0.6.6 fixes them all in one contained release.
 
 ### 1 — No more default limits on chat sessions or transcripts
 
@@ -11430,7 +11430,7 @@ When testing the chat flow, the `subagent_create` synthetic tool fires whenever 
 
 ### Customer upgrade
 
-Install v0.6.6 — `dev-installer` users `sudo /home/ayman/phantom-installer-dev`; customers download the new `phantom-installer`. No volume changes, no schema changes; secrets + KEK + operator state preserved across the upgrade. Storage backward-compatible.
+Install v0.6.6 — `dev-installer` users `sudo /home/ayman/guardian-installer-dev`; customers download the new `guardian-installer`. No volume changes, no schema changes; secrets + KEK + operator state preserved across the upgrade. Storage backward-compatible.
 
 After install, the chat header gains a new toggle button (group icon, primary color when subagents are ON). The Live Telemetry panel gains a download icon next to Clear. Long chat sessions reload completely.
 
@@ -11442,7 +11442,7 @@ Closes #54. v0.6.5 (installer text fix, #53) is still in-flight at `status:ready
 
 **Installer cleanup: fix stale "Update button" message that referenced a path removed in v0.5.20.**
 
-The phantom-installer's success message (displayed at the end of every install + upgrade) told operators:
+The guardian-installer's success message (displayed at the end of every install + upgrade) told operators:
 
 > Future updates:  use the Update button in the UI sidebar (no need to re-run this installer).
 
@@ -11450,25 +11450,25 @@ That UI Update button was removed in v0.5.20 — per docs/CICD.md § *v0.5.20 mo
 
 ### What ships
 
-`installer/phantom-installer.template.sh` lines 1105–1106 — the two-line "Update button" block — replaced with a clear ~10-line block that tells operators:
+`installer/guardian-installer.template.sh` lines 1105–1106 — the two-line "Update button" block — replaced with a clear ~10-line block that tells operators:
 
-- Download the new phantom-installer binary from the GitHub Releases page
-- Run with sudo on the host; installer detects existing install at `/opt/phantom`
+- Download the new guardian-installer binary from the GitHub Releases page
+- Run with sudo on the host; installer detects existing install at `/opt/guardian`
 - Secrets, KEK material, and operator state are preserved across upgrades
 - Only image digests + docker-compose.yml are refreshed in place
-- Phantom has no in-UI Update button by design — upgrades go through the installer only
+- Guardian has no in-UI Update button by design — upgrades go through the installer only
 
-URL provided inline: `https://github.com/kite-production/phantom/releases`.
+URL provided inline: `https://github.com/kite-production/guardian/releases`.
 
 ### What does NOT change
 
-- Installer behavior — still detects `/opt/phantom`, preserves secrets, refreshes digest manifest. Only the closing message text changes.
+- Installer behavior — still detects `/opt/guardian`, preserves secrets, refreshes digest manifest. Only the closing message text changes.
 - All other docs surfaces (`/help/architecture`, `/help/user#upgrades`, `docs/CICD.md`) were already correct; nothing else needed updating.
 - No new operator workflow added or retired — this is a text-correctness fix.
 
 ### Customer upgrade
 
-Install v0.6.5 (download the new `phantom-installer` from this release page, run with sudo). The corrected message will appear at the end of every subsequent install + upgrade.
+Install v0.6.5 (download the new `guardian-installer` from this release page, run with sudo). The corrected message will appear at the end of every subsequent install + upgrade.
 
 All other image digests (agent / xlog / caldera / connectors / updater / browser) are byte-identical to v0.6.4 — the only meaningfully-changed asset between v0.6.4 and v0.6.5 is the installer template (and the agent image gets a no-op rebuild because release-notes.ts was touched, same as the v0.6.4 → v0.6.5 cycle convention).
 
@@ -11482,45 +11482,45 @@ Closes #53.
 
 The v0.6.3 fix made `release.yml` pull `:dev` instead of rebuilding from vanilla source when `CHANGED=1` — but between v0.6.2 → v0.6.3 commits, ONLY workflow + docs files changed (no caldera-content), so the detection correctly said "unchanged" and retagged v0.6.2's (vanilla) digest as v0.6.3. The retag chain propagated forward.
 
-v0.6.4 breaks the chain by adding a real content marker tag to `phantom-master-killchain.yml`. The detection now fires `CHANGED=1`, the v0.6.3 fix kicks in (`docker pull :dev` + retag), and the customer image gets the actual `:dev` content (which `build-caldera.yml` has correctly built with the Phantom + CTID overlay since v0.5.91).
+v0.6.4 breaks the chain by adding a real content marker tag to `guardian-master-killchain.yml`. The detection now fires `CHANGED=1`, the v0.6.3 fix kicks in (`docker pull :dev` + retag), and the customer image gets the actual `:dev` content (which `build-caldera.yml` has correctly built with the Guardian + CTID overlay since v0.5.91).
 
 After v0.6.4, the chain restarts on a correct baseline. Future v0.6.x patches that don't touch caldera-content will retag v0.6.4's digest (which IS correct) — same caldera-state-preservation behavior as designed, just from a non-vanilla baseline.
 
-### Customer upgrade — install v0.6.4 to get the actual Phantom content
+### Customer upgrade — install v0.6.4 to get the actual Guardian content
 
-Same content as v0.6.3 intended to ship. The marker tag in `phantom-master-killchain.yml` is the only content difference vs. `:dev`, and is operator-visible only as an extra tag string on the adversary in Caldera UI.
+Same content as v0.6.3 intended to ship. The marker tag in `guardian-master-killchain.yml` is the only content difference vs. `:dev`, and is operator-visible only as an extra tag string on the adversary in Caldera UI.
 
 ---
 
 ## [v0.6.3] — 2026-05-18
 
-**Critical hotfix: this is the FIRST customer release that actually ships the Phantom plugin content in the caldera image.**
+**Critical hotfix: this is the FIRST customer release that actually ships the Guardian plugin content in the caldera image.**
 
-If you installed v0.5.57 or any later version through v0.6.2, your caldera image is vanilla aymanam-style Caldera. **No Phantom adversaries (Master Killchain, Ransack curated, Super Spy, Thief, etc.) have ever been in a customer image.** v0.6.1's hotfix corrected one bug (detection); v0.6.2's path-fix exposed a deeper bug; v0.6.3 finally ships the actual content.
+If you installed v0.5.57 or any later version through v0.6.2, your caldera image is vanilla aymanam-style Caldera. **No Guardian adversaries (Master Killchain, Ransack curated, Super Spy, Thief, etc.) have ever been in a customer image.** v0.6.1's hotfix corrected one bug (detection); v0.6.2's path-fix exposed a deeper bug; v0.6.3 finally ships the actual content.
 
 ### What went wrong
 
-`release.yml`'s "Build or retag phantom-caldera" step had `docker build third_party/caldera/` with NO overlay step. The Phantom plugin content + CTID adversary emulation plans are only overlaid by `build-caldera.yml` (the `:dev` builder), never by `release.yml`. Every customer release rebuild produced vanilla Caldera.
+`release.yml`'s "Build or retag guardian-caldera" step had `docker build third_party/caldera/` with NO overlay step. The Guardian plugin content + CTID adversary emulation plans are only overlaid by `build-caldera.yml` (the `:dev` builder), never by `release.yml`. Every customer release rebuild produced vanilla Caldera.
 
 v0.6.1's bug was a SYMPTOM (detection said "no rebuild needed" so retagged v0.6.0). v0.6.2's CHANGED=1 rebuild ALSO produced vanilla output because of this deeper issue.
 
 ### v0.6.3 fix
 
-`release.yml` now pulls the `:dev` image (which `build-caldera.yml` correctly builds with the full Phantom + CTID overlay) and retags it as `:vX.Y.Z`. Single source of truth for caldera content: `build-caldera.yml`. Falls back to vanilla rebuild only if `:dev` pull fails.
+`release.yml` now pulls the `:dev` image (which `build-caldera.yml` correctly builds with the full Guardian + CTID overlay) and retags it as `:vX.Y.Z`. Single source of truth for caldera content: `build-caldera.yml`. Falls back to vanilla rebuild only if `:dev` pull fails.
 
 ### Customer upgrade
 
-**If you installed v0.5.57 through v0.6.2**: download + install v0.6.3 to get the actual Phantom adversary content. Caldera UI → Adversaries should show "Phantom: Master Killchain", "Phantom: Ransack (curated)", "Phantom: Super Spy (curated)", "Phantom: Thief (curated)", "Phantom: Lateral Movement Sweep". If those are missing, you're on a vanilla image.
+**If you installed v0.5.57 through v0.6.2**: download + install v0.6.3 to get the actual Guardian adversary content. Caldera UI → Adversaries should show "Guardian: Master Killchain", "Guardian: Ransack (curated)", "Guardian: Super Spy (curated)", "Guardian: Thief (curated)", "Guardian: Lateral Movement Sweep". If those are missing, you're on a vanilla image.
 
 What v0.6.3 actually ships (effectively v0.6.1's + v0.6.2's intended content + everything since v0.5.57):
-- Phantom Master Killchain (22-step adversary, 9 MITRE tactics validated against Cortex XDR)
-- Phantom Ransack / Super Spy / Thief / Lateral Movement Sweep curated adversaries
-- Phantom Phishing v3.3 (Office macro → WINWORD → cmd → PSh → BITS → dropped Caldera implant with dynamic discovery)
+- Guardian Master Killchain (22-step adversary, 9 MITRE tactics validated against Cortex XDR)
+- Guardian Ransack / Super Spy / Thief / Lateral Movement Sweep curated adversaries
+- Guardian Phishing v3.3 (Office macro → WINWORD → cmd → PSh → BITS → dropped Caldera implant with dynamic discovery)
 - T1518.001 modern PowerShell discovery (Cortex XDR enumerated by name, replaces wmic-deprecated stockpile)
 - CTID Adversary Emulation Plans (APT29 / FIN6 / OilRig / etc.) baked into the emu plugin
 - Lab-safe lookalike abilities + decoy file setup
 
-All other image digests (agent / xlog / connectors / updater / browser) are byte-identical to v0.6.2 — only phantom-caldera changes between v0.6.2 and v0.6.3.
+All other image digests (agent / xlog / connectors / updater / browser) are byte-identical to v0.6.2 — only guardian-caldera changes between v0.6.2 and v0.6.3.
 
 ---
 
@@ -11528,7 +11528,7 @@ All other image digests (agent / xlog / connectors / updater / browser) are byte
 
 **Hotfix release: fixes v0.6.1's silent regression where the caldera image was retagged from v0.6.0 instead of rebuilt with the new content.**
 
-If you installed v0.6.1, **download + install v0.6.2 to get the actual phishing v3.3 + #52 fix content**. Your v0.6.1 caldera image was bit-identical to v0.6.0 — none of the v3.3 phishing dropper or T1518.001 PSh discovery changes shipped. v0.6.2 republishes the caldera image correctly. All other image digests (agent / xlog / connectors / updater / browser) are byte-identical to v0.6.1 — only phantom-caldera changes between v0.6.1 and v0.6.2.
+If you installed v0.6.1, **download + install v0.6.2 to get the actual phishing v3.3 + #52 fix content**. Your v0.6.1 caldera image was bit-identical to v0.6.0 — none of the v3.3 phishing dropper or T1518.001 PSh discovery changes shipped. v0.6.2 republishes the caldera image correctly. All other image digests (agent / xlog / connectors / updater / browser) are byte-identical to v0.6.1 — only guardian-caldera changes between v0.6.1 and v0.6.2.
 
 ### Why this happened
 
@@ -11544,22 +11544,22 @@ Same as the v0.6.1 CHANGELOG entry below — all those changes ship for real in 
 
 ## [v0.6.1] — 2026-05-18
 
-**Patch release: Phantom T1518.001 modern-PowerShell discovery + dynamic Caldera-implant detection in the phishing-dropper ability (Scenario 1 — code-only, no installer protocol changes, but the caldera image digest changes so re-running the v0.6.0 installer pulls the new content).**
+**Patch release: Guardian T1518.001 modern-PowerShell discovery + dynamic Caldera-implant detection in the phishing-dropper ability (Scenario 1 — code-only, no installer protocol changes, but the caldera image digest changes so re-running the v0.6.0 installer pulls the new content).**
 
-This release rolls up 4 dev commits (v0.5.91-94) into a focused customer-visible improvement to the Phantom-curated adversary catalog. The headline gains: Phantom-bundled Ransack + Super Spy now ship modern Win10/Server-compatible AV/EDR + Firewall discovery (closing #52), and the phishing dropper auto-detects whatever the operator names their sandcat (no more hardcoded mars/venus list).
+This release rolls up 4 dev commits (v0.5.91-94) into a focused customer-visible improvement to the Guardian-curated adversary catalog. The headline gains: Guardian-bundled Ransack + Super Spy now ship modern Win10/Server-compatible AV/EDR + Firewall discovery (closing #52), and the phishing dropper auto-detects whatever the operator names their sandcat (no more hardcoded mars/venus list).
 
 ### Headline changes
 
-- **Closes #52** — Phantom T1518.001 PowerShell replacements. Stockpile abilities `2dece965` (wmic AntiVirus) and `8c06ebf8` (Get-WmiObject Firewalls) fail systematically on Windows Server 2022 (wmic deprecated + `root\SecurityCenter2` namespace absent on Server). Replaced with:
-  - **Phantom: Discover AV/EDR (4-path)** (`a52d1e10`) — Get-CimInstance SecurityCenter2 + Get-MpComputerStatus Defender + Get-Service filter for known EDR names + Get-Process filter. **Validated**: enumerated Cortex XDR (`cyserver` service) + Microsoft Defender on both Server 2022 hosts.
-  - **Phantom: Identify Firewalls** (`b81f4c93`) — Get-NetFirewallProfile + Get-NetFirewallRule with netsh fallback. Returns per-profile Domain/Private/Public state + inbound/outbound rule counts. Stockpile mis-name fixed (the original "Identify Firewalls" ability actually queried AV WMI).
+- **Closes #52** — Guardian T1518.001 PowerShell replacements. Stockpile abilities `2dece965` (wmic AntiVirus) and `8c06ebf8` (Get-WmiObject Firewalls) fail systematically on Windows Server 2022 (wmic deprecated + `root\SecurityCenter2` namespace absent on Server). Replaced with:
+  - **Guardian: Discover AV/EDR (4-path)** (`a52d1e10`) — Get-CimInstance SecurityCenter2 + Get-MpComputerStatus Defender + Get-Service filter for known EDR names + Get-Process filter. **Validated**: enumerated Cortex XDR (`cyserver` service) + Microsoft Defender on both Server 2022 hosts.
+  - **Guardian: Identify Firewalls** (`b81f4c93`) — Get-NetFirewallProfile + Get-NetFirewallRule with netsh fallback. Returns per-profile Domain/Private/Public state + inbound/outbound rule counts. Stockpile mis-name fixed (the original "Identify Firewalls" ability actually queried AV WMI).
   - Curated Ransack + Super Spy adversaries updated to reference the new ability IDs. Master Killchain unaffected (didn't include the broken abilities).
 - **Phishing v3.3 — dynamic Caldera-implant discovery** via process-tree walk. v0.6.0 shipped v3.1 with a hardcoded candidate list (`mars.exe`, `venus.exe`, `sandcat.go-windows.exe`). v3.3 walks the process tree from `$PID` upward, skipping known interpreters (`powershell`, `cmd`, `conhost`, `wsmprovhost`, `svchost`, etc.) until it finds the first non-interpreter ancestor — that's the running implant by definition. Ability is now immune to operator-renames; works for any sandcat binary name.
 - **Validated end-to-end**: curated Ransack chain success rate jumped from 78.6% → **94.4%** after the #52 fix. Only T1018 `nltest` workgroup-environment failure remains (env-dep, not fixable). Master Killchain re-run with v3.3 phishing produced identical 88.6% chain quality + 9 MITRE tactics + 22 techniques + 74 new Cortex alerts rolling into incident 1794 (140 → 214 total).
 
 ### Bug fixes
 
-- Stockpile T1518.001 abilities now SUPERSEDED by Phantom modern replacements in curated adversaries. Stock adversaries unchanged (Phantom doesn't modify stockpile in place).
+- Stockpile T1518.001 abilities now SUPERSEDED by Guardian modern replacements in curated adversaries. Stock adversaries unchanged (Guardian doesn't modify stockpile in place).
 - v0.6.0's hardcoded mars/venus list could break for operators using non-standard sandcat names. v0.6.1's process-tree walk has no such failure mode.
 
 ### Documentation
@@ -11568,25 +11568,25 @@ This release rolls up 4 dev commits (v0.5.91-94) into a focused customer-visible
 
 ### Upgrade notes for customers
 
-- Re-run the v0.6.1 phantom-installer on your host. The caldera image digest changes (new content baked in), agent + xlog + connectors retain v0.6.0 digests. Storage backward-compatible (Scenario 1). Volumes preserved.
-- In Caldera UI → Adversaries → the "Phantom: Ransack (curated)" + "Phantom: Super Spy (curated)" adversaries now run the new Phantom T1518.001 PowerShell discovery; you'll see Cortex XDR + Defender enumerated in the run output instead of wmic-deprecated errors.
+- Re-run the v0.6.1 guardian-installer on your host. The caldera image digest changes (new content baked in), agent + xlog + connectors retain v0.6.0 digests. Storage backward-compatible (Scenario 1). Volumes preserved.
+- In Caldera UI → Adversaries → the "Guardian: Ransack (curated)" + "Guardian: Super Spy (curated)" adversaries now run the new Guardian T1518.001 PowerShell discovery; you'll see Cortex XDR + Defender enumerated in the run output instead of wmic-deprecated errors.
 - The phishing simulation ability no longer requires the implant to be named `mars.exe` or `venus.exe` — it auto-detects whatever's running.
 
 ---
 
 ## [v0.6.0] — 2026-05-18
 
-**Major release: comprehensive Caldera adversary battery + Cortex XDR connector + Phantom Master Killchain (Scenario 2 — code + installer change, storage backward-compatible, customer installer rebuild required, volumes preserved).**
+**Major release: comprehensive Caldera adversary battery + Cortex XDR connector + Guardian Master Killchain (Scenario 2 — code + installer change, storage backward-compatible, customer installer rebuild required, volumes preserved).**
 
-This release rolls up 84 dev commits since v0.5.5 into one customer-facing milestone. The headline: Phantom is now a detection-validation platform end-to-end. You run a Phantom-curated adversary in Caldera; the operator's chat agent queries Cortex XDR via the new connector; the loop closes inside Phantom without leaving the UI.
+This release rolls up 84 dev commits since v0.5.5 into one customer-facing milestone. The headline: Guardian is now a detection-validation platform end-to-end. You run a Guardian-curated adversary in Caldera; the operator's chat agent queries Cortex XDR via the new connector; the loop closes inside Guardian without leaving the UI.
 
 ### Headline features
 
-- **Phantom Master Killchain (curated)** — flagship 22-step adversary that combines the v0.5.57 phishing chain + Phantom decoy pre-condition + PowerKatz mid-chain. Validated against Cortex XDR: produces 60+ alerts across 7 MITRE tactics (Execution, Persistence, Privilege Escalation, Defense Evasion, Credential Access, Lateral Movement, C2). Use this as the standard "does the lab work end-to-end" smoke test for new deployments. (See `docs/caldera-adversary-battery.md` for per-tactic alert breakdown.)
+- **Guardian Master Killchain (curated)** — flagship 22-step adversary that combines the v0.5.57 phishing chain + Guardian decoy pre-condition + PowerKatz mid-chain. Validated against Cortex XDR: produces 60+ alerts across 7 MITRE tactics (Execution, Persistence, Privilege Escalation, Defense Evasion, Credential Access, Lateral Movement, C2). Use this as the standard "does the lab work end-to-end" smoke test for new deployments. (See `docs/caldera-adversary-battery.md` for per-tactic alert breakdown.)
 - **Phishing simulation v3.1 — Office macro drops Caldera implant**. The phishing-emailclient-spawn ability (`85d04954`) now produces the FULL initial-access EDR sub-tree: WINWORD.EXE (renamed cmd, T1036.003 Masquerading) → cmd /c → powershell (simulated VBA macro) → BITS transfer (T1197) → dropped implant binary (T1105 + WildFire Malware verdict). Lab-safe: dropped implant runs briefly with invalid beacon URL so no new paw is created. Auto-detects venus.exe vs mars.exe vs sandcat.exe on disk.
-- **Cortex XDR connector** — the agent can now query Cortex cases + issues + run XQL queries directly via `^xdr_get_cases_and_issues`, `^xdr_run_xql_query`, `^xdr_get_incident_extra_data`. Detection-validation feedback loop now lives inside Phantom — no jumping to the XDR console mid-test.
-- **Phantom-curated adversary catalog**: Ransack (`9c7f4d5a`) + Super Spy (`8b2f4d56`) + Thief (`7d3e1f8a`) + Lateral Movement Sweep (`e5a9c1b2`) + Master Killchain (`9d7b5a3c`). Each bypasses a structural limitation in stockpile adversaries (workgroup-environment DNS PTR gap, missing decoy files for ransomware-staging) so they actually dispatch on a clean lab. See `docs/caldera-release-plan.md` for the selection guide.
-- **Phantom decoy + lateral target pre-condition abilities**: `phantom-ransack-decoy-setup.yml` (`7e88a8b1`) drops 27 lab-safe decoy files in `C:\Users\Public\Documents\Decoys` so T1005 sensitive-file discovery actually finds something; `phantom-lateral-target-facts.yml` (`a4f1b2c8`) documents the hardcoded lateral target for the Lateral Movement Sweep adversary.
+- **Cortex XDR connector** — the agent can now query Cortex cases + issues + run XQL queries directly via `^xdr_get_cases_and_issues`, `^xdr_run_xql_query`, `^xdr_get_incident_extra_data`. Detection-validation feedback loop now lives inside Guardian — no jumping to the XDR console mid-test.
+- **Guardian-curated adversary catalog**: Ransack (`9c7f4d5a`) + Super Spy (`8b2f4d56`) + Thief (`7d3e1f8a`) + Lateral Movement Sweep (`e5a9c1b2`) + Master Killchain (`9d7b5a3c`). Each bypasses a structural limitation in stockpile adversaries (workgroup-environment DNS PTR gap, missing decoy files for ransomware-staging) so they actually dispatch on a clean lab. See `docs/caldera-release-plan.md` for the selection guide.
+- **Guardian decoy + lateral target pre-condition abilities**: `guardian-ransack-decoy-setup.yml` (`7e88a8b1`) drops 27 lab-safe decoy files in `C:\Users\Public\Documents\Decoys` so T1005 sensitive-file discovery actually finds something; `guardian-lateral-target-facts.yml` (`a4f1b2c8`) documents the hardcoded lateral target for the Lateral Movement Sweep adversary.
 - **`^command` chat invocation** — type `^xdr_get_cases_and_issues limit=5` in chat to call any MCP tool directly, bypassing the LLM. Works even without a provider configured. The detection-validation feedback loop is finally usable in development.
 - **CTID Adversary Emulation Plans baked into the caldera image** — APT29/FIN6/OilRig/etc. adversary profiles ship by default. Operators no longer need to manually install the CTID emu plugin.
 - **Lab-safe lookalike abilities** for techniques Cortex signature-blocks (e.g. mimikatz-arg lookalikes that produce detection telemetry without the actual LSA acquire being attempted).
@@ -11598,7 +11598,7 @@ This release rolls up 84 dev commits since v0.5.5 into one customer-facing miles
 - **Bug-family audit (v0.5.80)** — extended the v0.5.77 `from usecase.*` fix across caldera + xsiam + cortex-content connectors. New CLAUDE.md Rule 7 codifies the audit discipline.
 - **Connector instance form widget vocabulary** — supports 11 widget types (text/url/string/number/password/secret/textarea/select/radio/multi_select/boolean/array) so per-connector schema declarations actually render the right UI (v0.5.70).
 - **Test Connection button dirty-tracking** — fixed staleness in the /providers UI test-connection state (v0.5.71).
-- **Caldera image install** — phantom + ctid emu plugins now reconciled at startup so neither overwrites the other (v0.5.65-66).
+- **Caldera image install** — guardian + ctid emu plugins now reconciled at startup so neither overwrites the other (v0.5.65-66).
 - **/help/cicd page** added with 6 SVG diagrams covering installer separation, build pipeline, change scenarios, release lifecycle, customer upgrade, and smoke testing discipline (v0.5.78-79).
 
 ### Documentation
@@ -11610,7 +11610,7 @@ This release rolls up 84 dev commits since v0.5.5 into one customer-facing miles
 ### Upgrade notes for customers
 
 - **Storage**: backward-compatible (Scenario 2). Volumes preserved. Re-run the new installer; pass `WIPE_VOLUMES=false` (the default).
-- **Caldera adversaries**: when you open Caldera UI → Adversaries, you'll see 6 new "Phantom: ..." profiles. Use Master Killchain for broad-coverage testing.
+- **Caldera adversaries**: when you open Caldera UI → Adversaries, you'll see 6 new "Guardian: ..." profiles. Use Master Killchain for broad-coverage testing.
 - **XDR connector**: install via Marketplace → cortex-xdr, then `/connectors → Add Cortex XDR Instance`. Pre-existing customers: optional install. New deployments: encouraged.
 - **Skills volume**: the per-release marker auto-merges new image-baked default skills on first boot (v0.3.2+ behavior). No manual `docker exec` needed.
 
@@ -11660,7 +11660,7 @@ caldera + xsiam both had the same `from usecase.instance_store import instance_s
 
 The v0.5.75 "Agent-side headless smoke" addendum had six rules. v0.5.80 adds a seventh — codifying the discipline gap the operator just caught:
 
-> **Rule 7 — Bug-family audit.** When fixing a bug in a connector-system file, audit sibling connectors for the same bug pattern in the same release. Identify the bug pattern as a grep expression. Run it across `bundles/spark/connectors/*/src/` and `bundles/spark/mcp/src/` (also `phantom-connector-runtime/runtime/` if the pattern could live there). For each hit, fix it in the same release OR document the gap inline with a tracking-issue reference. Do NOT silently leave a known-broken sibling.
+> **Rule 7 — Bug-family audit.** When fixing a bug in a connector-system file, audit sibling connectors for the same bug pattern in the same release. Identify the bug pattern as a grep expression. Run it across `bundles/spark/connectors/*/src/` and `bundles/spark/mcp/src/` (also `guardian-connector-runtime/runtime/` if the pattern could live there). For each hit, fix it in the same release OR document the gap inline with a tracking-issue reference. Do NOT silently leave a known-broken sibling.
 
 Forbidden under Rule 7: fixing one connector for a class of bug + walking away from the audit. The fix isn't done until grep returns no hits OR every remaining hit has a documented reason for being left alone.
 
@@ -11676,7 +11676,7 @@ Forbidden under Rule 7: fixing one connector for a class of bug + walking away f
 
 ### Smoke-test bullets
 
-After install (re-run `sudo /home/ayman/phantom-installer-dev`):
+After install (re-run `sudo /home/ayman/guardian-installer-dev`):
 
 - [ ] ✓ **agent-verified** (during cascade): build-connectors rebuilds caldera, xsiam, cortex-content with the new source.
 - [ ] ⨯ **agent-verified-blocked**: end-to-end deployment validation gated by operator re-install + the v0.5.73 #46-bug-3 KNOWN_CONNECTORS-on-updater-image issue (still customer-release-only).
@@ -11748,7 +11748,7 @@ Same `DIAGRAM_THEME_CSS` + `DiagramMarkers` shared theme as the other 5 cicd-* d
 After install:
 
 - [ ] ✓ **agent-verified** (during v0.5.79 cascade): `npm run build` registers the new diagram + section anchor; `/help/cicd` route grows from 15.5 kB to 19.8 kB.
-- [ ] ⨯ **agent-verified-blocked**: end-to-end deployment verification gated by operator re-install — running container is still v0.5.78 image until `sudo phantom-installer-dev` runs.
+- [ ] ⨯ **agent-verified-blocked**: end-to-end deployment verification gated by operator re-install — running container is still v0.5.78 image until `sudo guardian-installer-dev` runs.
 - [ ] ? **agent-skipped, operator hands-on**: open `https://localhost:3001/help/cicd#smoke-testing` — section renders + 6th diagram visible.
 - [ ] ? **agent-skipped, operator hands-on**: TOC sidebar shows 8 sections (was 7) — "Smoke Testing Discipline" appears under "Build & Release."
 - [ ] ? **agent-skipped, operator hands-on**: 6th diagram renders cleanly in both light + dark themes; label state machine + 6 rule cards + classification table all readable.
@@ -11784,13 +11784,13 @@ CLAUDE.md rule 6a — "no new UI page without a sidebar nav entry in the same re
 
 Each follows the existing `DIAGRAM_THEME_CSS` + `DiagramMarkers` pattern from `_diagram-theme.tsx` for visual consistency with `/help/architecture` diagrams. Light/dark theme support via the shared CSS variables.
 
-1. **`cicd-two-installers.tsx`** — dev-installer vs customer-installer. Three-column layout: dev (left) + shared (middle) + customer (right). Highlights what's identical across both flows (install ceremony, compose template shape, `/opt/phantom` location, env-file format) and what differs (image digests baked at build time: `:dev` tags resolved at build-dev-installer.yml time vs content digests pinned by release.yml at tag time).
+1. **`cicd-two-installers.tsx`** — dev-installer vs customer-installer. Three-column layout: dev (left) + shared (middle) + customer (right). Highlights what's identical across both flows (install ceremony, compose template shape, `/opt/guardian` location, env-file format) and what differs (image digests baked at build time: `:dev` tags resolved at build-dev-installer.yml time vs content digests pinned by release.yml at tag time).
 
-2. **`cicd-build-pipeline.tsx`** — path-filtered per-service workflows + the `workflow_run` cascade. Top: `git push origin main`. Middle: four per-service workflows (build-agent / build-connectors / build-caldera / build-xlog), each with its path filter visible. Bottom: build-dev-installer cascade + a callout for the STABLE-ADVANCED carve-out (phantom-updater + phantom-browser don't rebuild on dev — only on customer release tags).
+2. **`cicd-build-pipeline.tsx`** — path-filtered per-service workflows + the `workflow_run` cascade. Top: `git push origin main`. Middle: four per-service workflows (build-agent / build-connectors / build-caldera / build-xlog), each with its path filter visible. Bottom: build-dev-installer cascade + a callout for the STABLE-ADVANCED carve-out (guardian-updater + guardian-browser don't rebuild on dev — only on customer release tags).
 
 3. **`cicd-change-scenarios.tsx`** — two-level decision tree for scenario classification. First diamond: "touched the installer?" — NO branches to Scenario 1 (code-only, minor bump, customer re-runs existing installer, volumes preserved). YES branches to a second diamond: "BC-incompatible storage?" — NO → Scenario 2 (MAJOR bump, new installer, `WIPE_VOLUMES=false`, volumes preserved). YES → Scenario 3 (MAJOR bump, new installer, `WIPE_VOLUMES=true`, volumes wiped; operator-manual backup required first).
 
-4. **`cicd-release-lifecycle.tsx`** — release.yml's five phases from tag-push to GitHub release publish: (1) Detect changed services (diff HEAD against prev tag), (2) Build OR retag per service (changed → buildx; unchanged → docker pull/tag/push from prev = bit-identical), (3) Manifest assembly (`release-manifest-vX.Y.Z.env` with one `DIGEST_PHANTOM_*` per service), (4) GHCR per-version access (gh release create flips image versions from private to org-readable; customer PATs can pull only after this fires), (5) Publish GitHub release with installer binary + manifest + tarball + sha256 attached.
+4. **`cicd-release-lifecycle.tsx`** — release.yml's five phases from tag-push to GitHub release publish: (1) Detect changed services (diff HEAD against prev tag), (2) Build OR retag per service (changed → buildx; unchanged → docker pull/tag/push from prev = bit-identical), (3) Manifest assembly (`release-manifest-vX.Y.Z.env` with one `DIGEST_GUARDIAN_*` per service), (4) GHCR per-version access (gh release create flips image versions from private to org-readable; customer PATs can pull only after this fires), (5) Publish GitHub release with installer binary + manifest + tarball + sha256 attached.
 
 5. **`cicd-customer-upgrade.tsx`** — customer upgrade flow. Top row: 4-step sequence (download → run installer → docker compose pull → docker compose up -d). Bottom row: per-scenario outcome cards detailing volume fate, customer downtime, re-onboarding requirements. Footer: the load-bearing invariant — same image digest = container keeps running across the upgrade; changed digest = container recreates. This is what makes caldera + xlog preserve in-memory state across releases that don't touch their code.
 
@@ -11811,7 +11811,7 @@ Header doc-comment explicitly documents the no-sidebar exception per CLAUDE.md r
 
 ### Smoke-test bullets
 
-After install (re-run `sudo /home/ayman/phantom-installer-dev`):
+After install (re-run `sudo /home/ayman/guardian-installer-dev`):
 
 - [ ] ✓ **agent-verified** (during v0.5.78 cascade build): `npm run build` registers `/help/cicd` as a static route (15.5 kB).
 - [ ] ✓ **agent-verified** (post-cascade tunnel probe): `GET https://localhost:3001/help/cicd` returns 200 + the page HTML.
@@ -11863,7 +11863,7 @@ Rewrote `_get_xdr_config()`:
 
 ### Smoke-test bullets
 
-After install (re-run `sudo /home/ayman/phantom-installer-dev`):
+After install (re-run `sudo /home/ayman/guardian-installer-dev`):
 
 - [ ] ✓ **agent-verified** (will run during v0.5.77 cascade): `^get_cases_and_issues limit=3` returns a JSON code block containing actual `incidents: [...]` array data from the tenant — NOT `"ModuleNotFoundError: No module named 'usecase'"`, NOT `"connector has no container_url"`, NOT `"Unknown tool"`.
 - [ ] ? **agent-skipped, operator hands-on**: `^xdr_run_xql_query query="dataset = xdr_data | limit 5"` returns rows or a clean PENDING/execution_id payload.
@@ -11884,7 +11884,7 @@ After install (re-run `sudo /home/ayman/phantom-installer-dev`):
 
 ## [v0.5.76] — 2026-05-17
 
-**Bug 6 in the XDR connector chain — function-prefix vs connector-id mismatch (closes #48 amendment).** Discovered during the v0.5.75 end-to-end smoke (the very first time the new "agent-side end-to-end probe" discipline fired). Cortex-xdr functions use the `xdr_` prefix from connector.yaml's `functionPrefix`, but `phantom-connector-runtime`'s prefix-stripping logic only knew about `phantom_<connector_id>_`, `<connector_id>_`, and `phantom_` patterns. None matched `xdr_` (because `<connector_id>` = `cortex-xdr`, not `cortex` or `xdr`). Container registered tools as `xdr_get_cases_and_issues`, but the agent's proxy (which always calls bare names per connector.yaml's `spec.tools[].name`) sent `get_cases_and_issues`. Result: `"Unknown tool: 'get_cases_and_issues'"` at every call.
+**Bug 6 in the XDR connector chain — function-prefix vs connector-id mismatch (closes #48 amendment).** Discovered during the v0.5.75 end-to-end smoke (the very first time the new "agent-side end-to-end probe" discipline fired). Cortex-xdr functions use the `xdr_` prefix from connector.yaml's `functionPrefix`, but `guardian-connector-runtime`'s prefix-stripping logic only knew about `guardian_<connector_id>_`, `<connector_id>_`, and `guardian_` patterns. None matched `xdr_` (because `<connector_id>` = `cortex-xdr`, not `cortex` or `xdr`). Container registered tools as `xdr_get_cases_and_issues`, but the agent's proxy (which always calls bare names per connector.yaml's `spec.tools[].name`) sent `get_cases_and_issues`. Result: `"Unknown tool: 'get_cases_and_issues'"` at every call.
 
 ### Why the smoke discipline caught this and nothing else did
 
@@ -11904,7 +11904,7 @@ Same latent bug exists for cortex-docs (`cortex_` functionPrefix vs `cortex-docs
 - `__all__` updated to match.
 - Inline comment documents WHY: the runtime's `<connector_id>_` strip rule doesn't match `xdr_` for cortex-xdr; bare function names sidestep the strip entirely. Internal references in docstrings naming the agent-side tool names (`xdr_get_cases_and_issues`) are correct — the agent's proxy still registers a `xdr_*`-prefixed alias via connector.yaml's functionPrefix; only the function name + container-side registration change.
 
-#### `phantom-connector-runtime/runtime/entrypoint.py`
+#### `guardian-connector-runtime/runtime/entrypoint.py`
 
 Belt + suspenders: even after the cortex-xdr rename, the runtime's strip-prefix list still couldn't handle cortex-docs / cortex-content. New 4th rule: **auto-detected longest common prefix** among the names being registered.
 
@@ -11912,7 +11912,7 @@ Conservative heuristic:
 - Only fires when ≥2 names are registered (single-tool connectors have no "common" prefix).
 - Common prefix must end in `_` (namespace prefixes only, not arbitrary string prefixes).
 - Prefix length must be ≥3 chars (avoids stripping accidental shared starts like `get_`).
-- Doesn't double-strip prefixes the existing rules already handle (`<connector_id>_`, `phantom_<connector_id>_`, `phantom_`).
+- Doesn't double-strip prefixes the existing rules already handle (`<connector_id>_`, `guardian_<connector_id>_`, `guardian_`).
 
 For cortex-docs (`cortex_search`, `cortex_suggest`, `cortex_xql_lookup`, `cortex_fetch_topic`, `cortex_fetch_toc`, `cortex_deep_research`): common prefix `cortex_` (6 chars, ends in `_`, doesn't match existing rules). Stripped. Tools register as `search`, `suggest`, etc. Namespace aliases (`cortex-docs.search`) now resolve end-to-end. Same for cortex-content.
 
@@ -11920,7 +11920,7 @@ For cortex-docs (`cortex_search`, `cortex_suggest`, `cortex_xql_lookup`, `cortex
 
 After install:
 
-- [ ] ✓ **agent-verified** (during v0.5.76 cascade): `docker logs phantom-connector-cortex-xdr-<slug> | tail -20` shows `registered 4 tool(s) for connector 'cortex-xdr'` with NO `Unknown tool` errors from the agent side. (Run during v0.5.76 cascade as part of the new discipline.)
+- [ ] ✓ **agent-verified** (during v0.5.76 cascade): `docker logs guardian-connector-cortex-xdr-<slug> | tail -20` shows `registered 4 tool(s) for connector 'cortex-xdr'` with NO `Unknown tool` errors from the agent side. (Run during v0.5.76 cascade as part of the new discipline.)
 - [ ] ? **agent-skipped, operator hands-on**: `^get_cases_and_issues limit=3` in chat returns a JSON code block with XDR incidents (proves end-to-end through the agent's tool/call proxy → container's tool dispatch → upstream XDR API).
 - [ ] ? **agent-skipped, operator hands-on**: `^cortex-docs.search query="Broker VM" product=xdr` returns search results (proves the runtime's new common-prefix detection unblocked cortex-docs' namespace alias).
 - [ ] ? **agent-skipped, operator hands-on**: existing chat-LLM-driven cortex-docs tool calls still work (regression — verifies the prefix-style aliases still match the now-bare container registrations).
@@ -11941,7 +11941,7 @@ After install:
 
 ## [v0.5.75] — 2026-05-17
 
-**Two XDR connector bugs that blocked end-to-end tool dispatch + a CLAUDE.md smoke-discipline reckoning (closes #48).** Operator's manual unblock attempt for #46-bug-3 (updater missing cortex-xdr) surfaced TWO more latent bugs in the same XDR validation chain: (1) the connector container crashes at boot because `_wrap_xdr_call` returns a `*args` wrapper that fastmcp's `Tool.from_function` refuses to register; (2) the agent passes the operator-typed instance display name verbatim to phantom-updater, which rejects spaces + accents via its path-segment validation. Both fixes ride along with a CLAUDE.md addendum codifying the smoke-test discipline gap that let five-in-a-row bugs ship without agent-side execution-path verification.
+**Two XDR connector bugs that blocked end-to-end tool dispatch + a CLAUDE.md smoke-discipline reckoning (closes #48).** Operator's manual unblock attempt for #46-bug-3 (updater missing cortex-xdr) surfaced TWO more latent bugs in the same XDR validation chain: (1) the connector container crashes at boot because `_wrap_xdr_call` returns a `*args` wrapper that fastmcp's `Tool.from_function` refuses to register; (2) the agent passes the operator-typed instance display name verbatim to guardian-updater, which rejects spaces + accents via its path-segment validation. Both fixes ride along with a CLAUDE.md addendum codifying the smoke-test discipline gap that let five-in-a-row bugs ship without agent-side execution-path verification.
 
 ### Why
 
@@ -11966,7 +11966,7 @@ v0.5.75 ships the technical fixes AND the discipline change in the same release.
 - `_updater_start` calls the slug helper before building the URL.
 - `_updater_stop` does the same.
 
-The slug is purely a wire-format concern. `instance_store` continues to persist the original display name; the `/connectors` UI continues to show "Cortex XDR" (with the space) or whatever the operator typed. Only the docker container name + the phantom-updater URL path use the slug.
+The slug is purely a wire-format concern. `instance_store` continues to persist the original display name; the `/connectors` UI continues to show "Cortex XDR" (with the space) or whatever the operator typed. Only the docker container name + the guardian-updater URL path use the slug.
 
 #### `CLAUDE.md` — new "Agent-side headless smoke" section (THE LOAD-BEARING CHANGE)
 
@@ -11975,7 +11975,7 @@ Codifies the discipline gap that let v0.5.67/70/73/74/48 each ship a basic bug t
 1. **Execute each bullet I author** — not "trace through what it should do." Tunnel + curl/Playwright/state-check against the actual surface. Operator hands-on is the SECOND validation, not the first.
 2. **State verification on every "X happens" bullet.** Pair "submit creates Y" with "GET Y shows the expected shape." #46-bug-1 (api_key persisted to config not secrets) shipped because the smoke bullet said "Create button enables" but never verified the persisted state.
 3. **End-to-end probe for connector-system changes.** Any change touching `bundles/spark/connectors/**`, `bundles/spark/mcp/src/api/instances.py`, `bundles/spark/mcp/src/usecase/connector_*.py`, `mcp/agent/app/connectors/page.tsx`, or `updater/src/main.py` requires an actual `POST /api/v1/instances/<id>/test` round trip AND an actual `tools/call` round trip. v0.5.74's `*args` crash would have surfaced on the third bullet here.
-4. **Dev-cycle gap awareness — LEAD with it, don't bury it.** When a fix touches `updater/src/main.py` or `phantom-browser/`, the smoke matrix opens with "This release ships agent-side code that pairs with an updater-side change. The updater image is not rebuilt on the dev cycle — only on customer release tags. Until `vX.Y.Z` ships, the end-to-end loop still returns `<specific error>`."
+4. **Dev-cycle gap awareness — LEAD with it, don't bury it.** When a fix touches `updater/src/main.py` or `guardian-browser/`, the smoke matrix opens with "This release ships agent-side code that pairs with an updater-side change. The updater image is not rebuilt on the dev cycle — only on customer release tags. Until `vX.Y.Z` ships, the end-to-end loop still returns `<specific error>`."
 5. **Smoke-matrix state-classification.** Each bullet annotated inline with `✓ agent-verified`, `⨯ agent-verified-blocked` (known gap prevented full verification), or `? agent-skipped` (operator hands-on is primary).
 6. **Bug-found-in-released-code postmortem.** Every time the operator catches a bug in `dev-built` code that smoke missed, the next release ships a CLAUDE.md or docs/CICD.md addendum naming the specific smoke gap. v0.5.75's #1-#5 above is the postmortem for the five-in-a-row stretch.
 
@@ -11987,12 +11987,12 @@ Forbidden additions to the existing smoke-test-bullet contract:
 
 ### Smoke-test bullets
 
-**Dev-cycle gap (lead): this release ships agent + connector code. The phantom-updater image is NOT rebuilt on dev (its `KNOWN_CONNECTORS` from v0.5.73 also doesn't ship until customer tag). For the cortex-xdr container to spawn automatically via the agent's create_instance flow, you need either (a) v0.6.0 customer release, OR (b) the manual `docker run` recipe I'll apply below.**
+**Dev-cycle gap (lead): this release ships agent + connector code. The guardian-updater image is NOT rebuilt on dev (its `KNOWN_CONNECTORS` from v0.5.73 also doesn't ship until customer tag). For the cortex-xdr container to spawn automatically via the agent's create_instance flow, you need either (a) v0.6.0 customer release, OR (b) the manual `docker run` recipe I'll apply below.**
 
-After install (re-run `sudo /home/ayman/phantom-installer-dev`):
+After install (re-run `sudo /home/ayman/guardian-installer-dev`):
 
-- [ ] `docker ps` shows `phantom-connector-cortex-xdr-<slug>` Up + healthy (where `<slug>` is the slug of your instance name, e.g. `Cortex_XDR`).
-- [ ] `docker logs phantom-connector-cortex-xdr-<slug> | tail -10` → no `ValueError: Functions with *args are not supported as tools`. Clean `4 tools registered` line.
+- [ ] `docker ps` shows `guardian-connector-cortex-xdr-<slug>` Up + healthy (where `<slug>` is the slug of your instance name, e.g. `Cortex_XDR`).
+- [ ] `docker logs guardian-connector-cortex-xdr-<slug> | tail -10` → no `ValueError: Functions with *args are not supported as tools`. Clean `4 tools registered` line.
 - [ ] In chat: `^get_cases_and_issues limit=3` → JSON code block with up to 3 XDR incidents.
 - [ ] `^xdr_run_xql_query query="dataset = xdr_data | filter event_type = ENUM.PROCESS | limit 3"` → returns rows or PENDING/execution_id.
 - [ ] Create a new instance with a deliberately problematic name (`My Test XDR #2`) → `docker ps` shows the slugged container name; `/connectors` UI shows the original name.
@@ -12041,7 +12041,7 @@ POST endpoint accepting `{name: string, arguments: object}`. Internals:
 2. Opens a JSON-RPC session against the embedded MCP — `initialize` + `notifications/initialized` (mcp-session-id header tracked).
 3. Calls `tools/list` to resolve bare names like `get_cases_and_issues` → `xdr_get_cases_and_issues`. Exact match wins; falls back to suffix-match against `<connector>.<name>` and `<prefix>_<name>` forms. Returns 404 with an ambiguity message if multiple tools share the suffix.
 4. Issues `tools/call` with the resolved name + arguments. 150-second timeout (XQL polling can take up to 2 minutes per the connector spec).
-5. Parses the SSE response, unwraps `result.content[0].text` (most Phantom tools return JSON strings), returns `{ok, resolved_name, result, error?, duration_ms}`.
+5. Parses the SSE response, unwraps `result.content[0].text` (most Guardian tools return JSON strings), returns `{ok, resolved_name, result, error?, duration_ms}`.
 
 Auth model: cookie session via Next.js middleware (same as every other `/api/agent/*` route). **No provider config check** — this is the whole point.
 
@@ -12108,7 +12108,7 @@ After install:
 
 ## [v0.5.73] — 2026-05-17
 
-**Three coupled connector-instance bugs uncovered during XDR end-to-end smoke (closes #46):** (1) the Create-instance form persists `api_key` into `config` (cleartext, visible in GET responses) instead of `secrets` (SecretStore) — the form's masked rendering was purely cosmetic; the submit handler didn't honor `param.type`; (2) the Edit dialog's Test Connection result banner renders at the TOP of the scrolled body while the Test button is in the BOTTOM footer, so operators clicking Test never see the result; (3) `phantom-updater`'s `KNOWN_CONNECTORS` set is missing `cortex-xdr` — v0.5.61 introduced the connector but missed this registration, so the agent's create-instance flow gets HTTP 400 from updater and no per-instance container ever spawns. Tool calls later fail with "container_url — phantom-updater hasn't started the container yet."
+**Three coupled connector-instance bugs uncovered during XDR end-to-end smoke (closes #46):** (1) the Create-instance form persists `api_key` into `config` (cleartext, visible in GET responses) instead of `secrets` (SecretStore) — the form's masked rendering was purely cosmetic; the submit handler didn't honor `param.type`; (2) the Edit dialog's Test Connection result banner renders at the TOP of the scrolled body while the Test button is in the BOTTOM footer, so operators clicking Test never see the result; (3) `guardian-updater`'s `KNOWN_CONNECTORS` set is missing `cortex-xdr` — v0.5.61 introduced the connector but missed this registration, so the agent's create-instance flow gets HTTP 400 from updater and no per-instance container ever spawns. Tool calls later fail with "container_url — guardian-updater hasn't started the container yet."
 
 ### Why
 
@@ -12171,7 +12171,7 @@ Operators who already created an XDR instance pre-v0.5.73 have a broken row with
 1. **Open the edit dialog and click Save Changes (no edits needed).** The existing edit-dialog regex (`/key|token|secret|password|credential/i`) classifies `api_key` as a secret on PATCH; the backend writes it to SecretStore. Cleanest path; no instance loss.
 2. **Delete + recreate the instance after v0.5.73 lands.** The new `handleSave` does the right thing from the start.
 
-Both paths still require the v0.5.73 phantom-updater image with cortex-xdr in `KNOWN_CONNECTORS` for the container to spawn. Without that, the migration just fixes the probe; tools still fail at call time. The customer release will ship both fixes in the same image set.
+Both paths still require the v0.5.73 guardian-updater image with cortex-xdr in `KNOWN_CONNECTORS` for the container to spawn. Without that, the migration just fixes the probe; tools still fail at call time. The customer release will ship both fixes in the same image set.
 
 ### Smoke-test surface
 
@@ -12180,7 +12180,7 @@ Both paths still require the v0.5.73 phantom-updater image with cortex-xdr in `K
 - [ ] Click per-instance **Test Connection** → green check (probe runs against XDR `/incidents/get_incidents`)
 - [ ] Open Edit dialog, change nothing, click **Test Connection** → see "Probe succeeded — credentials are valid (this was a dry-run; click Save to persist)" message right above the footer
 - [ ] Open Edit dialog, change Project ID to junk, click **Test Connection** → see "Probe failed: ..." persistent error message (not a 3-sec flash, not hidden at top of scroll)
-- [ ] `docker ps` on phantom-vm shows `phantom-connector-cortex-xdr-<name>` container running
+- [ ] `docker ps` on guardian-vm shows `guardian-connector-cortex-xdr-<name>` container running
 - [ ] Agent chat: ask "show me 3 recent XDR incidents" → returns real data from the tenant
 - [ ] Agent chat: ask "run XQL: dataset = xdr_data | filter event_type = ENUM.PROCESS | limit 5" → returns rows
 
@@ -12233,16 +12233,16 @@ Documents:
 - **How the KB works**: SqliteKnowledgeBase ingestion, `text-embedding-004` embedder, automatic mtime-based reindex on agent boot.
 - **Entry shape**: frontmatter fields, filename convention, sectioned body template.
 - **The three confidence buckets**: `operator-validated` (gold standard — names tenant + scenario), `vendor-documented` (vendor doc citation; needs tenant validation before relying), `pattern-derived` (inferred — use sparingly to avoid signal dilution).
-- **Local verification recipe**: after saving entries, `docker compose restart phantom-agent` + `curl knowledge_search` to confirm the index picked up.
+- **Local verification recipe**: after saving entries, `docker compose restart guardian-agent` + `curl knowledge_search` to confirm the index picked up.
 - **Cross-references**: schema, manifest entry, runtime impl, connector wrapper, related skills.
 
 The README codifies the discipline the issue's `## Forbidden` section asked for — "Don't add queries that haven't been validated against a real XDR tenant" → README's three-bucket model makes "validated" precise + makes it the *expected* default.
 
 ### Smoke-test surface
 
-After install (re-run `sudo /home/ayman/phantom-installer-dev`):
+After install (re-run `sudo /home/ayman/guardian-installer-dev`):
 
-- [ ] `docker exec phantom_agent ls /app/bundles/spark/kbs/xql-examples/entries/ | grep -c xdr` → 5 (the new entries)
+- [ ] `docker exec guardian_agent ls /app/bundles/spark/kbs/xql-examples/entries/ | grep -c xdr` → 5 (the new entries)
 - [ ] `/observability/events` shows a `knowledge_indexed` audit row for `kb_name="xql-examples"` after the boot (proves the new entries got embedded)
 - [ ] Agent chat: ask *"what XQL query lists recent high-severity alerts on the XDR tenant?"* — agent should hit `knowledge_search` against `xql-examples` and cite entry XQL-162 (or one of the other XDR-pattern entries).
 - [ ] Agent chat: ask *"how do I trace a process causality chain in XDR?"* — agent cites XQL-166.
@@ -12293,7 +12293,7 @@ The anthropic / openai / ollama Test buttons are unconditionally `disabled` (tho
 
 ### Smoke-test surface
 
-After install (re-run `sudo /home/ayman/phantom-installer-dev`):
+After install (re-run `sudo /home/ayman/guardian-installer-dev`):
 
 - [ ] Sign in to `/providers` with valid Vertex creds (Project + Region + paste JSON → Save). Re-load the page.
 - [ ] Page renders: Project + Region in cleartext, JSON shown as masked bullets, Test Connection button **disabled** (hover → tooltip explains "Re-paste the Service Account JSON to test").
@@ -12417,11 +12417,11 @@ During v0.5.68 dogfooding the cortex-docs connector (the operator-as-agent loop'
 
 1. **The connector tools work** — `cortex-docs/search` returns the canonical `Cortex XDR API Reference` topic for "Cortex XDR API" queries. ✅
 2. **But `fetch_topic` was single-level only** — when a topic is a thin TOC-stub container, it descends into direct children; when a child is ALSO a stub, descent stops. The operator's earlier dogfooding session against the XDR API Reference returned thin content because the actual per-endpoint docs aren't in this topic's direct children.
-3. **And Phantom was missing the agent-guidance layer entirely** — the operator's personal `myworkassistant` library has a 300-line SKILL.md with the workflow + a 254-line search-patterns reference + a 470-line API-reference doc. The cortex-docs connector ships the scripts (already ported to Phantom in v0.5.55) but NOT the discipline for using them well.
+3. **And Guardian was missing the agent-guidance layer entirely** — the operator's personal `myworkassistant` library has a 300-line SKILL.md with the workflow + a 254-line search-patterns reference + a 470-line API-reference doc. The cortex-docs connector ships the scripts (already ported to Guardian in v0.5.55) but NOT the discipline for using them well.
 
 v0.5.69 fixes both:
 
-- **Port the agent-guidance** as three Phantom foundation skills with proper lazy-loading per Phantom's skill convention.
+- **Port the agent-guidance** as three Guardian foundation skills with proper lazy-loading per Guardian's skill convention.
 - **Fix the multi-level descent** in `fetch_topic_with_fallback` so deeper TOC structures are surfaced naturally.
 
 ### What ships
@@ -12449,7 +12449,7 @@ v0.5.69 fixes both:
 - Metadata-filter patterns (by publication, cluster, product)
 - Sort options, error handling, locale guidance (`en-US` is the only locale with full content)
 
-All three skills use Phantom's standard frontmatter (name/displayName/category/description/icon/source/loadingMode/locked/attack), `loadingMode: on-demand` so they don't bloat the agent's context for non-Cortex questions, and cross-reference each other for the lazy-load pattern.
+All three skills use Guardian's standard frontmatter (name/displayName/category/description/icon/source/loadingMode/locked/attack), `loadingMode: on-demand` so they don't bloat the agent's context for non-Cortex questions, and cross-reference each other for the lazy-load pattern.
 
 #### `fetch_topic_with_fallback` — multi-level descent + thin-content preservation
 
@@ -12497,7 +12497,7 @@ After install:
 
 ### Cross-references
 
-- Source: operator's personal `~/Documents/myworkassistant/skills/cortex-assistant/cortex-docs-search/` (Feb-Mar 2026 authoring; v0.5.69 port to Phantom)
+- Source: operator's personal `~/Documents/myworkassistant/skills/cortex-assistant/cortex-docs-search/` (Feb-Mar 2026 authoring; v0.5.69 port to Guardian)
 - Companion: v0.5.68 (XDR connector description rewrite for general-purpose use) — both this session's smoke-test feedback
 - Bug discovered via: operator-as-agent dogfooding of the cortex-docs connector while building the XDR connector
 
@@ -12568,7 +12568,7 @@ Operator hit this on v0.5.66 hands-on smoke: clicking Install on the Cortex XDR 
 - UI's `/connectors` → renders from `mcp/agent/app/api/marketplace/connectors/route.ts` synthetic-card list ✅ (cortex-xdr was added in v0.5.61)
 - UI's "Install" button → `POST /api/v1/marketplace/{id}/install` → MCP's `_scan_catalogue()` reads `bundles/spark/manifest.yaml:toolConnectors[]` ❌ (cortex-xdr was MISSING here)
 
-Phantom has two parallel connector catalogs:
+Guardian has two parallel connector catalogs:
 1. **Bundle catalogue** in `manifest.yaml` — drives the install endpoint
 2. **Synthetic card list** in `route.ts` — drives the UI's available-connectors display
 
@@ -12634,19 +12634,19 @@ After v0.5.67 install:
 
 ## [v0.5.66] — 2026-05-17
 
-**Entrypoint hook ensures phantom + emu plugins enabled across upgrades.** Companion to v0.5.65's plugin-pattern fix. Discovered during v0.5.65 post-install smoke: even with phantom plugin code correctly baked into `plugins/phantom/data/` at the right path, Caldera's entrypoint script reads `local.yml` from the **`caldera_conf` named volume** which was populated at first install — Docker doesn't re-copy named-volume content from new image builds. So v0.5.63/65's `default.yml` modifications were shadowed by the frozen volume content; restart → entrypoint regenerates `local.yml` from the volume's frozen `default.yml` → phantom + emu entries lost on every restart. Closes the v0.5.65 follow-up.
+**Entrypoint hook ensures guardian + emu plugins enabled across upgrades.** Companion to v0.5.65's plugin-pattern fix. Discovered during v0.5.65 post-install smoke: even with guardian plugin code correctly baked into `plugins/guardian/data/` at the right path, Caldera's entrypoint script reads `local.yml` from the **`caldera_conf` named volume** which was populated at first install — Docker doesn't re-copy named-volume content from new image builds. So v0.5.63/65's `default.yml` modifications were shadowed by the frozen volume content; restart → entrypoint regenerates `local.yml` from the volume's frozen `default.yml` → guardian + emu entries lost on every restart. Closes the v0.5.65 follow-up.
 
 ### Why
 
-v0.5.65 fixed the data/ volume-shadow bug (#44) by moving Phantom content to `plugins/phantom/data/`. Verified by `docker exec caldera ls /usr/src/app/plugins/phantom/data/abilities/` — all 12 subdirs present in the image.
+v0.5.65 fixed the data/ volume-shadow bug (#44) by moving Guardian content to `plugins/guardian/data/`. Verified by `docker exec caldera ls /usr/src/app/plugins/guardian/data/abilities/` — all 12 subdirs present in the image.
 
 But the **plugin enable** step still didn't take effect at runtime. Investigation:
 
-1. v0.5.65 workflow correctly inserted `- phantom` + `- emu` into the image's `/usr/src/app/conf/default.yml`
+1. v0.5.65 workflow correctly inserted `- guardian` + `- emu` into the image's `/usr/src/app/conf/default.yml`
 2. The customer compose mounts `caldera_conf:/usr/src/app/conf` — volume content shadows image content
-3. The volume was populated at first install (pre-v0.5.65) with a default.yml that has NO phantom/emu
+3. The volume was populated at first install (pre-v0.5.65) with a default.yml that has NO guardian/emu
 4. Image's modified default.yml is NEVER read at runtime — the volume's stale copy wins
-5. Caldera's entrypoint regenerates `local.yml` from the volume's `default.yml` on every startup → phantom/emu absent
+5. Caldera's entrypoint regenerates `local.yml` from the volume's `default.yml` on every startup → guardian/emu absent
 
 Manual workaround (`docker exec ... sed ... local.yml; docker restart`) **doesn't work** because the entrypoint OVERWRITES local.yml on every restart from default.yml.
 
@@ -12666,7 +12666,7 @@ After the existing `cfg["users"]["red"] = {red_user: red_password}` block, the e
 
 ```python
 plugins = cfg.setdefault("plugins", [])
-for required in ("phantom", "emu"):
+for required in ("guardian", "emu"):
     if required not in plugins:
         plugins.append(required)
         print(f"[caldera-init] enabled plugin: {required}")
@@ -12674,8 +12674,8 @@ for required in ("phantom", "emu"):
 
 Idempotent — re-runs are no-ops once entries exist. Logs the change so operators can see what happened in `docker logs caldera`. Runs on every container start, so:
 
-- Fresh install: phantom + emu added during the first entrypoint pass; preserved in `local.yml` thereafter
-- Upgrade from any v0.5.x: phantom + emu added on next restart; subsequent restarts no-op
+- Fresh install: guardian + emu added during the first entrypoint pass; preserved in `local.yml` thereafter
+- Upgrade from any v0.5.x: guardian + emu added on next restart; subsequent restarts no-op
 - Operator deliberately disabled a plugin via removing from list: entries re-added on next restart (the correct way to disable a plugin is via its `hook.py` `enabled` attribute or the Caldera UI — not via list-removal)
 
 #### Why NOT just modify default.yml
@@ -12688,39 +12688,39 @@ That's what v0.5.65 tried — and it works in the image, but the runtime sees th
 
 ### Smoke-test surface
 
-After installing v0.5.66 (`sudo /home/ayman/phantom-installer-dev`):
+After installing v0.5.66 (`sudo /home/ayman/guardian-installer-dev`):
 
-- [ ] `docker logs caldera | grep "caldera-init.*enabled plugin"` shows both `enabled plugin: phantom` and `enabled plugin: emu` on the first post-upgrade restart (no output on subsequent restarts — idempotent)
-- [ ] `docker exec caldera grep -A 14 '^plugins:' /usr/src/app/conf/local.yml` shows phantom + emu in the plugins list
-- [ ] `curl -sk -H 'KEY: ...' http://<vm>:8888/api/v2/health | jq '.plugins[] | select(.enabled and .name=="phantom")'` returns a non-empty object — phantom plugin loaded
-- [ ] Caldera UI → Adversaries → Phantom phishing kill chain + Phantom Lookalike Validation visible with full atomic_ordering resolved (no "Missing ability" rows)
+- [ ] `docker logs caldera | grep "caldera-init.*enabled plugin"` shows both `enabled plugin: guardian` and `enabled plugin: emu` on the first post-upgrade restart (no output on subsequent restarts — idempotent)
+- [ ] `docker exec caldera grep -A 14 '^plugins:' /usr/src/app/conf/local.yml` shows guardian + emu in the plugins list
+- [ ] `curl -sk -H 'KEY: ...' http://<vm>:8888/api/v2/health | jq '.plugins[] | select(.enabled and .name=="guardian")'` returns a non-empty object — guardian plugin loaded
+- [ ] Caldera UI → Adversaries → Guardian phishing kill chain + Guardian Lookalike Validation visible with full atomic_ordering resolved (no "Missing ability" rows)
 - [ ] CTID emu adversaries still empty (v0.5.63's walker bug remains; tracked for v0.5.67)
 
 ### Forbidden post-v0.5.66
 
 - **Don't try to fix conf-volume issues by modifying default.yml in the image.** Volume shadows it. Use the entrypoint pattern.
-- **Don't remove the entrypoint's plugin-enable block.** Operators upgrading from any pre-v0.5.66 release rely on this to pick up phantom + emu enable.
+- **Don't remove the entrypoint's plugin-enable block.** Operators upgrading from any pre-v0.5.66 release rely on this to pick up guardian + emu enable.
 
 ### Cross-references
 
 - Discovered during: v0.5.65 post-install smoke (this session)
 - Companion to: v0.5.65 (#44) — together they fix the volume-shadow problem in both directions (data/ via plugin layout + conf/ via entrypoint reconciliation)
-- Pattern source: phantom-agent's v0.3.2 skills-bootstrap entrypoint (same marker-driven default-merge for `/app/skills/`)
-- Followups: v0.5.67 — CTID emu walker bug + atomic-based Phantom chains (#42)
+- Pattern source: guardian-agent's v0.3.2 skills-bootstrap entrypoint (same marker-driven default-merge for `/app/skills/`)
+- Followups: v0.5.67 — CTID emu walker bug + atomic-based Guardian chains (#42)
 
 ---
 
 ## [v0.5.65] — 2026-05-17
 
-**Fix v0.5.57's "factory state" claim — Phantom Caldera content moved to plugin layout so it survives the `caldera_data` volume mount.** Discovered during smoke-test of v0.5.58-64: the running phantom-caldera container's `/usr/src/app/data/` directory contained NONE of the v0.5.57 kill-chain abilities, v0.5.63 CTID adversaries, or v0.5.64 lookalikes — because the customer compose mounts `caldera_data:/usr/src/app/data` as a named volume that shadows any image-baked content at runtime. v0.5.65 corrects the overlay strategy: Phantom content now lives at `plugins/phantom/data/` (a path NOT volume-mounted), and the phantom plugin is registered in Caldera's `default.yml` plugins list. Closes [#44](https://github.com/kite-production/phantom/issues/44).
+**Fix v0.5.57's "factory state" claim — Guardian Caldera content moved to plugin layout so it survives the `caldera_data` volume mount.** Discovered during smoke-test of v0.5.58-64: the running guardian-caldera container's `/usr/src/app/data/` directory contained NONE of the v0.5.57 kill-chain abilities, v0.5.63 CTID adversaries, or v0.5.64 lookalikes — because the customer compose mounts `caldera_data:/usr/src/app/data` as a named volume that shadows any image-baked content at runtime. v0.5.65 corrects the overlay strategy: Guardian content now lives at `plugins/guardian/data/` (a path NOT volume-mounted), and the guardian plugin is registered in Caldera's `default.yml` plugins list. Closes [#44](https://github.com/kite-production/guardian/issues/44).
 
 ### Why
 
-The smoke test of v0.5.58-64 (operator-driven `sudo /home/ayman/phantom-installer-dev` followed by direct `docker exec caldera ls /usr/src/app/data/abilities/`) revealed:
+The smoke test of v0.5.58-64 (operator-driven `sudo /home/ayman/guardian-installer-dev` followed by direct `docker exec caldera ls /usr/src/app/data/abilities/`) revealed:
 
 - Only Caldera's default empty `data/abilities/` subdirs visible (`collection/`, `discovery/`, etc.)
-- **None** of the 11 Phantom subdirs (`00-bootstrap/`, `04-credential-access/`, ..., `14-lab-safe-lookalikes/`) present
-- Caldera UI Adversaries view: no Phantom Lookalike Validation, no APT29/FIN6/OilRig from CTID
+- **None** of the 11 Guardian subdirs (`00-bootstrap/`, `04-credential-access/`, ..., `14-lab-safe-lookalikes/`) present
+- Caldera UI Adversaries view: no Guardian Lookalike Validation, no APT29/FIN6/OilRig from CTID
 - CI logs SHOW the `cp -rv` succeeded — files made it into the build context
 - But `installer/docker-compose.yml` mounts `caldera_data:/usr/src/app/data` as a Docker named volume → image-baked content is shadowed at runtime
 
@@ -12739,25 +12739,25 @@ The stockpile plugin is the canonical example: 162 abilities baked into `plugins
 
 ### What ships
 
-#### A — New `phantom` plugin shell
+#### A — New `guardian` plugin shell
 
 `bundles/spark/caldera-content/plugin/`:
 
 - `__init__.py` (empty, just for Python package recognition)
-- `hook.py` — minimal `name = 'Phantom'`, `description = ...`, `address = ''` (no GUI tab), empty `async def enable(services)`. Pure-content plugin; the plugin loader registers metadata + triggers data_svc to scan `plugins/phantom/data/`.
+- `hook.py` — minimal `name = 'Guardian'`, `description = ...`, `address = ''` (no GUI tab), empty `async def enable(services)`. Pure-content plugin; the plugin loader registers metadata + triggers data_svc to scan `plugins/guardian/data/`.
 - `VERSION.txt` — `0.1.0`
 
 #### B — `build-caldera.yml` overlay step rewrite
 
 Old: `bundles/spark/caldera-content/{abilities,adversaries}/` → `third_party/caldera/data/{abilities,adversaries}/` (shadowed by volume)
 
-New: `bundles/spark/caldera-content/{abilities,adversaries,plugin/{__init__.py,hook.py,VERSION.txt},README.md}` → `third_party/caldera/plugins/phantom/{data/abilities,data/adversaries,__init__.py,hook.py,VERSION.txt,PHANTOM-KILL-CHAIN-README.md}` (survives volume mount)
+New: `bundles/spark/caldera-content/{abilities,adversaries,plugin/{__init__.py,hook.py,VERSION.txt},README.md}` → `third_party/caldera/plugins/guardian/{data/abilities,data/adversaries,__init__.py,hook.py,VERSION.txt,GUARDIAN-KILL-CHAIN-README.md}` (survives volume mount)
 
-Step renamed: `Overlay Phantom kill-chain content` → `Overlay Phantom plugin content`.
+Step renamed: `Overlay Guardian kill-chain content` → `Overlay Guardian plugin content`.
 
-#### C — Enable phantom plugin in `default.yml`
+#### C — Enable guardian plugin in `default.yml`
 
-New step `Enable phantom plugin in caldera default.yml` — idempotently inserts `- phantom` into the `plugins:` list in `third_party/caldera/conf/default.yml`. Insertion point: between `manx` and `response` (alphabetical).
+New step `Enable guardian plugin in caldera default.yml` — idempotently inserts `- guardian` into the `plugins:` list in `third_party/caldera/conf/default.yml`. Insertion point: between `manx` and `response` (alphabetical).
 
 **Critical**: target is `default.yml` not `local.yml`. The v0.5.63 step that tried `local.yml` failed (`WARN: local.yml not found`) because `local.yml` doesn't exist in the build context — it's generated at runtime by Caldera. `default.yml` IS in the image and works as expected for fresh installs.
 
@@ -12772,11 +12772,11 @@ The same path-correction applied to the emu-enable step (was `local.yml`, now `d
 ```bash
 # One-time, after running the v0.5.65 dev-installer
 docker exec -it caldera sh -c \
-  'grep -qE "^- phantom$" /usr/src/app/conf/local.yml || sed -i "/^- manx$/a- phantom" /usr/src/app/conf/local.yml'
+  'grep -qE "^- guardian$" /usr/src/app/conf/local.yml || sed -i "/^- manx$/a- guardian" /usr/src/app/conf/local.yml'
 docker restart caldera
 ```
 
-For fresh installs (factory-reset path, never-installed-before VMs): no operator action needed — `default.yml` is loaded directly when `local.yml` doesn't exist yet, and phantom plugin auto-enables.
+For fresh installs (factory-reset path, never-installed-before VMs): no operator action needed — `default.yml` is loaded directly when `local.yml` doesn't exist yet, and guardian plugin auto-enables.
 
 A follow-up release (v0.5.67+) will add an entrypoint hook that merges new default plugins into existing `local.yml` at startup, making the upgrade case truly hands-off too.
 
@@ -12784,10 +12784,10 @@ A follow-up release (v0.5.67+) will add an entrypoint hook that merges new defau
 
 After v0.5.65 install:
 
-- [ ] `docker exec caldera ls /usr/src/app/plugins/phantom/data/abilities/` — see all 11 Phantom subdirs
-- [ ] `docker exec caldera ls /usr/src/app/plugins/phantom/data/adversaries/` — see `phantom-phishing-kill-chain.yml` + `phantom-lookalike-validation.yml`
+- [ ] `docker exec caldera ls /usr/src/app/plugins/guardian/data/abilities/` — see all 11 Guardian subdirs
+- [ ] `docker exec caldera ls /usr/src/app/plugins/guardian/data/adversaries/` — see `guardian-phishing-kill-chain.yml` + `guardian-lookalike-validation.yml`
 - [ ] **Run the one-time operator action above** (since this is an upgrade, not a fresh install)
-- [ ] Caldera UI → Adversaries → Phantom Lookalike Validation + Phantom phishing → ransomware kill chain both visible with full atomic_ordering resolved
+- [ ] Caldera UI → Adversaries → Guardian Lookalike Validation + Guardian phishing → ransomware kill chain both visible with full atomic_ordering resolved
 - [ ] Caldera UI → Abilities → search "Lookalike" → 5 abilities (Powerkatz-lite, Fodhelper-trace, ETW-patch-marker, AMSI-bypass-marker, comsvcs-minidump-trace)
 
 ### Forbidden post-v0.5.65
@@ -12799,18 +12799,18 @@ After v0.5.65 install:
 
 - Bug introduced by: v0.5.57 (factory-state overlay claim, never validated)
 - Bugs exposed: v0.5.63 (CTID emu — content present in build context but didn't reach image runtime due to data/ pattern), v0.5.64 (lookalikes — same issue)
-- Related: v0.3.2 skills-bootstrap entrypoint pattern (phantom-agent's `entrypoint.sh` already implements the marker-driven default-merge for `/app/skills/`; v0.5.67+ phantom-caldera could adopt the same pattern for `conf/local.yml` merging)
-- Cross-refs: EPIC [#39](https://github.com/kite-production/phantom/issues/39)
+- Related: v0.3.2 skills-bootstrap entrypoint pattern (guardian-agent's `entrypoint.sh` already implements the marker-driven default-merge for `/app/skills/`; v0.5.67+ guardian-caldera could adopt the same pattern for `conf/local.yml` merging)
+- Cross-refs: EPIC [#39](https://github.com/kite-production/guardian/issues/39)
 
 ---
 
 ## [v0.5.64] — 2026-05-17
 
-**Lab-safe lookalike abilities for techniques Cortex signature-blocks.** 5 new abilities under `bundles/spark/caldera-content/abilities/14-lab-safe-lookalikes/` that emit the same syscall / registry / file-write / process-create patterns Cortex XDR's signature engine matches against — without achieving the actual malicious effect. Detection events fire; sandcat agent survives the full chain. Plus a `Phantom Lookalike Validation` adversary that runs all 5 in sequence. Closes [#43](https://github.com/kite-production/phantom/issues/43).
+**Lab-safe lookalike abilities for techniques Cortex signature-blocks.** 5 new abilities under `bundles/spark/caldera-content/abilities/14-lab-safe-lookalikes/` that emit the same syscall / registry / file-write / process-create patterns Cortex XDR's signature engine matches against — without achieving the actual malicious effect. Detection events fire; sandcat agent survives the full chain. Plus a `Guardian Lookalike Validation` adversary that runs all 5 in sequence. Closes [#43](https://github.com/kite-production/guardian/issues/43).
 
 ### Why
 
-The v0.5.57 phantom-killchain run + Alice 2.0 run exposed two distinct ways Cortex XDR interferes with adversary execution:
+The v0.5.57 guardian-killchain run + Alice 2.0 run exposed two distinct ways Cortex XDR interferes with adversary execution:
 
 1. **Cortex kills the parent process** — e.g. when sandcat spawns a child that matches a Cortex signature (Fodhelper → cmd.exe → Child Process Protection code 80400057). The agent dies; the chain stalls.
 2. **Cortex blocks the sensitive syscall** but lets the parent continue — Mimikatz's `OpenProcess(lsass.exe, ...)` returns "access denied" via `cyvrmtgn`; the PowerShell host runs to completion with exit 0 but credential extraction fails.
@@ -12832,21 +12832,21 @@ The lookalike pattern: emit the syscall / registry / parent-child / command-line
 | `comsvcs-minidump-trace.yml` | T1003.001 LSASS dump (rundll32) | rundll32 + comsvcs.dll + MiniDump → lsass.exe handle | `rundll32 comsvcs.dll, MiniDump -1 <path> full` (invalid PID -1) | rundll32 spawns + loads comsvcs.dll but MiniDump fails on bad PID; no lsass access |
 
 Each ability:
-- Deterministic UUID5 from a fixed Phantom namespace
+- Deterministic UUID5 from a fixed Guardian namespace
 - 60s timeout (lookalikes are quick — they emit the pattern + exit)
 - Explicit `[+] CORTEX SHOULD FIRE` / similar markers in stdout so operators can grep the chain output to confirm intent
 - Description names the safety mechanism + links #43 for traceability
 
-#### 1 new adversary YAML `bundles/spark/caldera-content/adversaries/phantom-lookalike-validation.yml`
+#### 1 new adversary YAML `bundles/spark/caldera-content/adversaries/guardian-lookalike-validation.yml`
 
 5-step chain running all lookalikes in narrative order: credential dumping (2 variants) → privilege escalation → defense evasion (2 variants). Expected total runtime ~3 minutes. Use to validate "do my Cortex rules fire on the patterns?" without any agent-killing or actual exploit.
 
 ### Smoke-test surface
 
-After install (operator runs `sudo /home/ayman/phantom-installer-dev`):
+After install (operator runs `sudo /home/ayman/guardian-installer-dev`):
 
 - [ ] Caldera UI (https://localhost:8889) → Abilities → search "Lookalike" — see 5 new abilities tagged with their real ATT&CK technique
-- [ ] Caldera UI → Adversaries → "Phantom Lookalike Validation" exists with 5 atomic_ordering entries; all UUIDs resolve cleanly
+- [ ] Caldera UI → Adversaries → "Guardian Lookalike Validation" exists with 5 atomic_ordering entries; all UUIDs resolve cleanly
 - [ ] Run the lookalike-validation adversary against `group=red` xdragent → all 5 steps complete (no sandcat death) in ~3 minutes
 - [ ] Per-step output shows `[+]` markers + the specific pattern emitted (LSASS handle attempt, registry SET hierarchy, ETW GetProcAddress, AMSI signature strings, rundll32 comsvcs command line)
 - [ ] Cortex XDR console (or via #36 XDR connector once v0.5.61 lands): detection events for each step within the run window — specifically:
@@ -12864,15 +12864,15 @@ After install (operator runs `sudo /home/ayman/phantom-installer-dev`):
 
 ### Cross-references
 
-- EPIC: [#39](https://github.com/kite-production/phantom/issues/39)
-- Source of need: [#36](https://github.com/kite-production/phantom/issues/36) (XDR connector for telemetry capture) + [#40](https://github.com/kite-production/phantom/issues/40) (battery matrix where Cortex blocks were documented)
-- Pairs with: [#42](https://github.com/kite-production/phantom/issues/42) (atomic-based chains — DEFERRED to next session; atomic-author may substitute a lookalike in place of a real atomic test for Cortex-blocked chains)
+- EPIC: [#39](https://github.com/kite-production/guardian/issues/39)
+- Source of need: [#36](https://github.com/kite-production/guardian/issues/36) (XDR connector for telemetry capture) + [#40](https://github.com/kite-production/guardian/issues/40) (battery matrix where Cortex blocks were documented)
+- Pairs with: [#42](https://github.com/kite-production/guardian/issues/42) (atomic-based chains — DEFERRED to next session; atomic-author may substitute a lookalike in place of a real atomic test for Cortex-blocked chains)
 
 ---
 
 ## [v0.5.63] — 2026-05-17
 
-**CTID Adversary Emulation Plans baked into the phantom-caldera image.** Extends the v0.5.57 build-overlay pattern with two new workflow steps: clone the CTID `adversary_emulation_library` from `center-for-threat-informed-defense/...` into the emu plugin's data tree, then enable the `emu` plugin in Caldera's `local.yml`. Operators get APT29 / FIN6 / OilRig / menuPass / Sandworm / Carbanak preloaded — real APT TTPs Caldera ships specifically for the kind of detection-validation work this whole workstream is about. Closes [#41](https://github.com/kite-production/phantom/issues/41).
+**CTID Adversary Emulation Plans baked into the guardian-caldera image.** Extends the v0.5.57 build-overlay pattern with two new workflow steps: clone the CTID `adversary_emulation_library` from `center-for-threat-informed-defense/...` into the emu plugin's data tree, then enable the `emu` plugin in Caldera's `local.yml`. Operators get APT29 / FIN6 / OilRig / menuPass / Sandworm / Carbanak preloaded — real APT TTPs Caldera ships specifically for the kind of detection-validation work this whole workstream is about. Closes [#41](https://github.com/kite-production/guardian/issues/41).
 
 ### Why
 
@@ -12898,7 +12898,7 @@ Each is curated, ATT&CK-mapped, and well-documented — much higher quality than
 - Walks both CTID directory layouts (newer `<adv>/Resources/caldera/`, older `<adv>/Emulation_Plan/CALDERA/`)
 - Copies ability YAMLs to `third_party/caldera/plugins/emu/data/abilities/<adv-name>/`
 - Copies adversary YAMLs to `third_party/caldera/plugins/emu/data/adversaries/<adv-name>/`
-- **Graceful degrade**: if the CTID clone fails (network blip, repo moved), the step exits 0 with a warning rather than blocking the entire phantom-caldera image build. The emu plugin then reports empty content; stockpile + atomic + phantom adversaries still ship.
+- **Graceful degrade**: if the CTID clone fails (network blip, repo moved), the step exits 0 with a warning rather than blocking the entire guardian-caldera image build. The emu plugin then reports empty content; stockpile + atomic + guardian adversaries still ship.
 
 **Step "Enable emu plugin in Caldera config"**:
 
@@ -12907,37 +12907,37 @@ Each is curated, ATT&CK-mapped, and well-documented — much higher quality than
 - Skip if already present (re-runs don't duplicate)
 - Outputs the post-edit plugins block for build-log inspection
 
-Both steps run after the existing v0.5.57 Phantom-content overlay so emu content doesn't trample our kill chain.
+Both steps run after the existing v0.5.57 Guardian-content overlay so emu content doesn't trample our kill chain.
 
 ### Smoke-test surface
 
-After install (operator runs `sudo /home/ayman/phantom-installer-dev`):
+After install (operator runs `sudo /home/ayman/guardian-installer-dev`):
 
 - [ ] `docker exec caldera ls /usr/src/app/plugins/emu/data/adversaries/` — see directories for each CTID-published adversary (APT29, FIN6, OilRig, etc.)
 - [ ] `docker exec caldera ls /usr/src/app/plugins/emu/data/abilities/` — see ability YAMLs grouped by adversary
 - [ ] Caldera UI (https://localhost:8889) → Adversaries → filter list — find ~10-15 new adversaries from CTID library alongside the 27 stockpile adversaries
 - [ ] Pick an adversary (e.g. FIN6) → view its atomic_ordering → all UUIDs resolve to real ability records (no "Missing ability" rows)
 - [ ] Create a one-step test operation from one of the CTID adversaries → completes (or surfaces specific step-level errors we can decode)
-- [ ] Phantom kill chain + stockpile adversaries still appear correctly — overlay didn't trample existing content
+- [ ] Guardian kill chain + stockpile adversaries still appear correctly — overlay didn't trample existing content
 
 ### Forbidden post-v0.5.63
 
 - **Don't pin the CTID library to a specific commit hash** unless we discover layout-instability. Their `main` branch is curated; shallow-cloning latest is appropriate for a content overlay (vs. pinning a code dependency where reproducibility matters more).
 - **Don't enable additional plugins (e.g. `human`) without populating their data.** That produces an empty plugin pane in Caldera UI, which is operator-confusing. Enable + populate in the same release.
-- **Don't ship CTID content in a separate phantom-emu image.** Keep it in phantom-caldera so the customer compose only changes one digest. The overlay-at-build pattern is the architectural fit.
+- **Don't ship CTID content in a separate guardian-emu image.** Keep it in guardian-caldera so the customer compose only changes one digest. The overlay-at-build pattern is the architectural fit.
 
 ### Cross-references
 
-- EPIC: [#39](https://github.com/kite-production/phantom/issues/39)
+- EPIC: [#39](https://github.com/kite-production/guardian/issues/39)
 - Pattern source: v0.5.57 overlay-at-build (already documented in `.github/workflows/build-caldera.yml`)
-- Pairs with: [#40](https://github.com/kite-production/phantom/issues/40) (`docs/caldera-adversary-battery.md`) — once emu adversaries are running, the battery matrix expands with their rows
-- Pairs with: [#42](https://github.com/kite-production/phantom/issues/42) (atomic-based Phantom adversaries — coming up in the next release)
+- Pairs with: [#40](https://github.com/kite-production/guardian/issues/40) (`docs/caldera-adversary-battery.md`) — once emu adversaries are running, the battery matrix expands with their rows
+- Pairs with: [#42](https://github.com/kite-production/guardian/issues/42) (atomic-based Guardian adversaries — coming up in the next release)
 
 ---
 
 ## [v0.5.62] — 2026-05-17
 
-**`docs/caldera-adversary-battery.md` — durable matrix tracking adversary runs against the Phantom + Cortex XDR lab.** Closes [#40](https://github.com/kite-production/phantom/issues/40).
+**`docs/caldera-adversary-battery.md` — durable matrix tracking adversary runs against the Guardian + Cortex XDR lab.** Closes [#40](https://github.com/kite-production/guardian/issues/40).
 
 ### Why
 
@@ -12945,7 +12945,7 @@ Adversary runs accumulate findings that currently live only in session context. 
 
 ### What ships
 
-`docs/caldera-adversary-battery.md` — initial population covers the 3 adversaries we've already run (Phantom kill chain v0.5.57, Alice 2.0, Defense Evasion) plus a queue of 13 remaining stockpile adversaries prioritized by expected Cortex-detection density. Schema captured: adversary metadata, Cortex preventions observed, known-broken steps with TODO/SKIP/fix-status, per-run protocol checklist. Plus a skip-list with reasons (Everything Bagel too long, Windows Worm variants domain-dependent, etc.).
+`docs/caldera-adversary-battery.md` — initial population covers the 3 adversaries we've already run (Guardian kill chain v0.5.57, Alice 2.0, Defense Evasion) plus a queue of 13 remaining stockpile adversaries prioritized by expected Cortex-detection density. Schema captured: adversary metadata, Cortex preventions observed, known-broken steps with TODO/SKIP/fix-status, per-run protocol checklist. Plus a skip-list with reasons (Everything Bagel too long, Windows Worm variants domain-dependent, etc.).
 
 Every adversary run going forward should append a row + per-adversary detailed-findings sub-section.
 
@@ -12963,14 +12963,14 @@ Every adversary run going forward should append a row + per-adversary detailed-f
 
 ## [v0.5.61] — 2026-05-17
 
-**Cortex XDR connector — read-only counterpart to the Caldera connector for closing the agent-as-operator detection-validation loop.** New per-instance connector with 4 tools (`xdr_get_cases_and_issues`, `xdr_get_incident_extra_data`, `xdr_run_xql_query`, `xdr_get_xql_results`). Same Cortex Public API auth pattern as XSIAM (Authorization + x-xdr-auth-id headers), unified `api_url` / `api_id` / `api_key` field names per v0.5.59 / [#35](https://github.com/kite-production/phantom/issues/35). First release on the now-fixed (v0.5.60 / [#38](https://github.com/kite-production/phantom/issues/38)) build-connectors pipeline. Closes [#36](https://github.com/kite-production/phantom/issues/36).
+**Cortex XDR connector — read-only counterpart to the Caldera connector for closing the agent-as-operator detection-validation loop.** New per-instance connector with 4 tools (`xdr_get_cases_and_issues`, `xdr_get_incident_extra_data`, `xdr_run_xql_query`, `xdr_get_xql_results`). Same Cortex Public API auth pattern as XSIAM (Authorization + x-xdr-auth-id headers), unified `api_url` / `api_id` / `api_key` field names per v0.5.59 / [#35](https://github.com/kite-production/guardian/issues/35). First release on the now-fixed (v0.5.60 / [#38](https://github.com/kite-production/guardian/issues/38)) build-connectors pipeline. Closes [#36](https://github.com/kite-production/guardian/issues/36).
 
 ### Why
 
-The Phantom + Cortex XDR detection-validation workflow (EPIC [#39](https://github.com/kite-production/phantom/issues/39)) needs a programmatic way for the agent to verify "did Cortex actually catch what we just fired via Caldera?" without manual operator inspection in the XSIAM/XDR console. v0.5.61 closes that loop:
+The Guardian + Cortex XDR detection-validation workflow (EPIC [#39](https://github.com/kite-production/guardian/issues/39)) needs a programmatic way for the agent to verify "did Cortex actually catch what we just fired via Caldera?" without manual operator inspection in the XSIAM/XDR console. v0.5.61 closes that loop:
 
 ```
-operator: "Run the v0.5.57 phantom-killchain via Caldera, then check what Cortex caught"
+operator: "Run the v0.5.57 guardian-killchain via Caldera, then check what Cortex caught"
    ↓
 agent: caldera/create_operation(...) + poll to completion
    ↓
@@ -12982,7 +12982,7 @@ agent: xdr/get_cases_and_issues(endpoint="xdragent", from_time=<op_start>)
 agent: builds per-step coverage matrix → reports to operator
 ```
 
-This is the workflow phantom-agent (Gemini model) will eventually run autonomously per [#39](https://github.com/kite-production/phantom/issues/39)'s Phase 3 roadmap. v0.5.61 ships the connector first; manual operator-driven dogfooding (via me, Claude) validates the API surface before phantom-agent skills are authored against it.
+This is the workflow guardian-agent (Gemini model) will eventually run autonomously per [#39](https://github.com/kite-production/guardian/issues/39)'s Phase 3 roadmap. v0.5.61 ships the connector first; manual operator-driven dogfooding (via me, Claude) validates the API surface before guardian-agent skills are authored against it.
 
 ### What ships
 
@@ -12995,7 +12995,7 @@ This is the workflow phantom-agent (Gemini model) will eventually run autonomous
   - `xdr_get_incident_extra_data(incident_id, alerts_limit)` — POST `/incidents/get_incident_extra_data`. Returns full alerts + network/file artifacts.
   - `xdr_run_xql_query(query, tenant_ids, timeframe_from, timeframe_to)` — synchronous path: POST `/xql/start_xql_query/` → poll `/xql/get_query_results/` with bounded retries. Returns `{status: SUCCESS, results, total_rows, fields}` when complete; `{status: PENDING, execution_id}` when the query exceeds the synchronous poll window.
   - `xdr_get_xql_results(execution_id, limit)` — async path: poll an in-flight query by id. Caller uses this after `run_xql_query` returns PENDING.
-- **`Dockerfile`** — `FROM phantom-connector-runtime:dev`, copy in src/, no extra deps (httpx already in the base runtime).
+- **`Dockerfile`** — `FROM guardian-connector-runtime:dev`, copy in src/, no extra deps (httpx already in the base runtime).
 
 #### Wiring
 
@@ -13006,13 +13006,13 @@ This is the workflow phantom-agent (Gemini model) will eventually run autonomous
 
 ### Smoke-test surface
 
-After fresh install (operator runs `sudo /home/ayman/phantom-installer-dev`):
+After fresh install (operator runs `sudo /home/ayman/guardian-installer-dev`):
 
 - [ ] `/connectors` → **Cortex XDR** card visible with the red Cortex glyph, displayName "Cortex XDR", tags include `xdr` / `edr` / `xql` / `detection`.
 - [ ] Click card → "Create instance" → form shows **API URL** / **API key** / **API ID** labels (same uniform schema as XSIAM post-v0.5.59).
 - [ ] Operator pastes real XDR creds (Advanced API Key from Cortex XDR console → Settings → Configurations → API Keys), saves. Modal closes immediately (per v0.5.58 / #33).
 - [ ] On the new instance card, click "Test Connection" → ✅ Connection successful (probe hits `/incidents/get_incidents` with minimal body; 200 confirms auth).
-- [ ] In a phantom-agent chat (or via direct MCP curl): `xdr_get_cases_and_issues(endpoint='xdragent', from_time='2026-05-16T00:00:00Z')` → returns a list of incidents from the Caldera adversary runs we did yesterday.
+- [ ] In a guardian-agent chat (or via direct MCP curl): `xdr_get_cases_and_issues(endpoint='xdragent', from_time='2026-05-16T00:00:00Z')` → returns a list of incidents from the Caldera adversary runs we did yesterday.
 - [ ] `xdr_run_xql_query(query='dataset=xdr_data | filter agent_hostname="xdragent" | limit 5')` → returns 5 rows from XDR's data lake.
 
 ### Forbidden post-v0.5.61
@@ -13024,28 +13024,28 @@ After fresh install (operator runs `sudo /home/ayman/phantom-installer-dev`):
 
 ### Cross-references
 
-- EPIC: [#39](https://github.com/kite-production/phantom/issues/39)
-- Depends on (now shipped): [#38](https://github.com/kite-production/phantom/issues/38) (CI fix for per-connector image builds) + [#35](https://github.com/kite-production/phantom/issues/35) (uniform api_* field names)
-- Next: phantom-agent skill that USES this connector after Caldera runs to produce coverage matrices — Phase 3 of EPIC [#39](https://github.com/kite-production/phantom/issues/39)
+- EPIC: [#39](https://github.com/kite-production/guardian/issues/39)
+- Depends on (now shipped): [#38](https://github.com/kite-production/guardian/issues/38) (CI fix for per-connector image builds) + [#35](https://github.com/kite-production/guardian/issues/35) (uniform api_* field names)
+- Next: guardian-agent skill that USES this connector after Caldera runs to produce coverage matrices — Phase 3 of EPIC [#39](https://github.com/kite-production/guardian/issues/39)
 
 ---
 
 ## [v0.5.60] — 2026-05-17
 
-**Fix chronic build-connectors workflow failure (silent since v0.5.11).** Every per-connector image build (xlog / xsiam / caldera / web / cortex-docs / cortex-content) was failing with HTTP 401 on `docker build --pull` against the freshly-pushed `phantom-connector-runtime:dev` base. The chronic failure went unnoticed for 5+ release cycles because customer compose pins specific image digests baked at `release.yml` time; only the dev-iteration path was broken. Surfaced as a release-blocker when v0.5.59's XSIAM cred-rename needed the connector image to actually rebuild. Closes [#38](https://github.com/kite-production/phantom/issues/38).
+**Fix chronic build-connectors workflow failure (silent since v0.5.11).** Every per-connector image build (xlog / xsiam / caldera / web / cortex-docs / cortex-content) was failing with HTTP 401 on `docker build --pull` against the freshly-pushed `guardian-connector-runtime:dev` base. The chronic failure went unnoticed for 5+ release cycles because customer compose pins specific image digests baked at `release.yml` time; only the dev-iteration path was broken. Surfaced as a release-blocker when v0.5.59's XSIAM cred-rename needed the connector image to actually rebuild. Closes [#38](https://github.com/kite-production/guardian/issues/38).
 
 ### Why
 
 Reading the v0.5.59 build-connectors failure:
 
 ```
-#2 [internal] load metadata for ghcr.io/kite-production/phantom-connector-runtime:dev
-#2 ERROR: unexpected status from HEAD request to https://ghcr.io/v2/kite-production/phantom-connector-runtime/manifests/dev: 401 Unauthorized
+#2 [internal] load metadata for ghcr.io/kite-production/guardian-connector-runtime:dev
+#2 ERROR: unexpected status from HEAD request to https://ghcr.io/v2/kite-production/guardian-connector-runtime/manifests/dev: 401 Unauthorized
 ```
 
-The race condition: `build-runtime` job builds + pushes `phantom-connector-runtime:dev` to GHCR. Per-connector jobs follow with `needs: build-runtime` and try to `FROM ghcr.io/.../phantom-connector-runtime:dev`. The composite action ran `docker build --pull` which forces a re-fetch of the base image's manifest from GHCR. But the freshly-pushed `:dev` version is **private by default** — it becomes org-readable only when associated with a GitHub Release (the `dev-latest` prerelease), and that association happens later in `build-dev-installer.yml`'s cascade, AFTER all per-connector jobs already tried (and failed) to build. So `--pull` hits the just-pushed manifest, gets 401, fails.
+The race condition: `build-runtime` job builds + pushes `guardian-connector-runtime:dev` to GHCR. Per-connector jobs follow with `needs: build-runtime` and try to `FROM ghcr.io/.../guardian-connector-runtime:dev`. The composite action ran `docker build --pull` which forces a re-fetch of the base image's manifest from GHCR. But the freshly-pushed `:dev` version is **private by default** — it becomes org-readable only when associated with a GitHub Release (the `dev-latest` prerelease), and that association happens later in `build-dev-installer.yml`'s cascade, AFTER all per-connector jobs already tried (and failed) to build. So `--pull` hits the just-pushed manifest, gets 401, fails.
 
-Pre-v0.5.59 releases that only touched connector.yaml metadata (logos, displayName, tags — read by phantom-agent at boot, not packaged into the connector image) were unaffected. v0.5.59 was the first release in months to need a `src/connector.py` change shipped in the per-connector image — and that's when the silent CI break became loud.
+Pre-v0.5.59 releases that only touched connector.yaml metadata (logos, displayName, tags — read by guardian-agent at boot, not packaged into the connector image) were unaffected. v0.5.59 was the first release in months to need a `src/connector.py` change shipped in the per-connector image — and that's when the silent CI break became loud.
 
 ### What ships
 
@@ -13055,7 +13055,7 @@ New input `pull-policy` (default `'always'`, accepts `'never'`). When `'never'`,
 
 #### `.github/workflows/build-connectors.yml`
 
-Every per-connector job (`build-xlog-connector`, `build-xsiam-connector`, `build-caldera-connector`, `build-web-connector`, `build-cortex-docs-connector`, `build-cortex-content-connector`) sets `pull-policy: never`. They inherit the locally-cached `phantom-connector-runtime:dev` produced by their `needs: build-runtime` dependency seconds earlier. The `build-runtime` job KEEPS the default `'always'` because its base is `python:3.12-slim` from Docker Hub — first-party publicly-readable image where `--pull` is the right call.
+Every per-connector job (`build-xlog-connector`, `build-xsiam-connector`, `build-caldera-connector`, `build-web-connector`, `build-cortex-docs-connector`, `build-cortex-content-connector`) sets `pull-policy: never`. They inherit the locally-cached `guardian-connector-runtime:dev` produced by their `needs: build-runtime` dependency seconds earlier. The `build-runtime` job KEEPS the default `'always'` because its base is `python:3.12-slim` from Docker Hub — first-party publicly-readable image where `--pull` is the right call.
 
 #### `docs/CICD.md`
 
@@ -13063,7 +13063,7 @@ New entry **#12** in the CI/CD failure-modes catalog documenting the failure mod
 
 ### Why fixing this also rebuilds v0.5.59's XSIAM image
 
-The build-connectors workflow won't trigger on a workflow-file-only change (the path filter is `bundles/spark/connectors/**` and `phantom-connector-runtime/**` — neither matches `.github/workflows/build-connectors.yml`). To exercise the fix, after the v0.5.60 commit lands:
+The build-connectors workflow won't trigger on a workflow-file-only change (the path filter is `bundles/spark/connectors/**` and `guardian-connector-runtime/**` — neither matches `.github/workflows/build-connectors.yml`). To exercise the fix, after the v0.5.60 commit lands:
 
 ```bash
 gh workflow run build-connectors.yml --ref main
@@ -13077,21 +13077,21 @@ After the fix lands + force-trigger:
 
 - [ ] `gh run view <new-run-id>` shows all 7 jobs (build-runtime + 6 per-connector) ALL succeeded.
 - [ ] Per-connector build step's log shows `docker build (pull-policy=never)` group header — no `--pull` flag in the actual command.
-- [ ] `gh api orgs/kite-production/packages/container/phantom-connector-xsiam/versions --jq '.[0]'` shows a digest created post-v0.5.60 commit time.
-- [ ] On phantom-vm post-install: `docker inspect phantom-connector-xsiam-<instance-id> | jq .[0].Config.Image` shows the new digest. `xsiam_get_datasets` tool call succeeds with the new dual-name `_get_fetcher()` code path.
+- [ ] `gh api orgs/kite-production/packages/container/guardian-connector-xsiam/versions --jq '.[0]'` shows a digest created post-v0.5.60 commit time.
+- [ ] On guardian-vm post-install: `docker inspect guardian-connector-xsiam-<instance-id> | jq .[0].Config.Image` shows the new digest. `xsiam_get_datasets` tool call succeeds with the new dual-name `_get_fetcher()` code path.
 - [ ] Future pushes that touch `bundles/spark/connectors/**` trigger `Build connectors` automatically and succeed without manual intervention.
 
 ### Forbidden post-v0.5.60
 
-- **Don't remove `--pull` from any workflow's first-party base build.** Docker Hub bases (`python:3.12-slim`, `node:20-alpine`, `debian:bookworm-slim`) MUST stay `--pull` to catch upstream CVE updates. The opt-out is narrowly scoped to "Phantom-own image just built locally in the same run."
+- **Don't remove `--pull` from any workflow's first-party base build.** Docker Hub bases (`python:3.12-slim`, `node:20-alpine`, `debian:bookworm-slim`) MUST stay `--pull` to catch upstream CVE updates. The opt-out is narrowly scoped to "Guardian-own image just built locally in the same run."
 - **Don't auto-associate `:dev` package versions with `dev-latest` from build-runtime.** That was the alternate fix path (Path 2 in #38) — explicitly rejected because it broadens the partial-release window where `dev-latest` references images that haven't passed the rest of the pipeline. The `pull-policy: never` fix is narrower + preserves the release-association ordering invariant.
-- **Don't expect build-connectors to auto-trigger on workflow-file edits.** Its path filter is narrow (`bundles/spark/connectors/**` + `phantom-connector-runtime/**`) — workflow edits piggyback on the next source change OR force-trigger with `gh workflow run build-connectors.yml`. This is intentional (per the v0.5.12 narrowing) — workflow-file edits otherwise produced spurious image rebuilds with new digests despite no real source change.
+- **Don't expect build-connectors to auto-trigger on workflow-file edits.** Its path filter is narrow (`bundles/spark/connectors/**` + `guardian-connector-runtime/**`) — workflow edits piggyback on the next source change OR force-trigger with `gh workflow run build-connectors.yml`. This is intentional (per the v0.5.12 narrowing) — workflow-file edits otherwise produced spurious image rebuilds with new digests despite no real source change.
 
 ---
 
 ## [v0.5.59] — 2026-05-17
 
-**XSIAM connector credentials renamed to `api_url` / `api_id` / `api_key`.** Standardization in preparation for the Cortex XDR connector (issue #36, landing in the next release) which uses the same auth model. Both Cortex products will now expose the same three field names instead of XSIAM's PAPI-specific `papiUrl` / `papiAuthId` / `papiAuthHeader`. Existing instances keep working through the rename via dual-name read at the connector + probe + coverage-tool layers. Closes [#35](https://github.com/kite-production/phantom/issues/35).
+**XSIAM connector credentials renamed to `api_url` / `api_id` / `api_key`.** Standardization in preparation for the Cortex XDR connector (issue #36, landing in the next release) which uses the same auth model. Both Cortex products will now expose the same three field names instead of XSIAM's PAPI-specific `papiUrl` / `papiAuthId` / `papiAuthHeader`. Existing instances keep working through the rename via dual-name read at the connector + probe + coverage-tool layers. Closes [#35](https://github.com/kite-production/guardian/issues/35).
 
 ### Why
 
@@ -13156,7 +13156,7 @@ v0.5.60 ships the Cortex XDR connector (issue #36) which adopts these field name
 
 ## [v0.5.58] — 2026-05-17
 
-**Connector instance create + test feels honest.** Two issues compounded into a confusing operator experience when creating a new connector instance: (1) the modal stayed open after a successful Create — making operators think something went wrong — and (2) the test-connection panel routinely showed "Could not reach the service. Verify your credentials and try again." for connectors that have no wired probe (like `cortex-docs` and `cortex-content`, which talk to unauthenticated public APIs). v0.5.58 fixes both: the modal closes immediately on successful create, and the two cortex-docs/content connectors now have real probes that actually verify upstream reachability. Closes [#33](https://github.com/kite-production/phantom/issues/33) + [#34](https://github.com/kite-production/phantom/issues/34).
+**Connector instance create + test feels honest.** Two issues compounded into a confusing operator experience when creating a new connector instance: (1) the modal stayed open after a successful Create — making operators think something went wrong — and (2) the test-connection panel routinely showed "Could not reach the service. Verify your credentials and try again." for connectors that have no wired probe (like `cortex-docs` and `cortex-content`, which talk to unauthenticated public APIs). v0.5.58 fixes both: the modal closes immediately on successful create, and the two cortex-docs/content connectors now have real probes that actually verify upstream reachability. Closes [#33](https://github.com/kite-production/guardian/issues/33) + [#34](https://github.com/kite-production/guardian/issues/34).
 
 ### Why
 
@@ -13192,7 +13192,7 @@ After fresh install:
 - [ ] Click either card → "Create instance" → fill instance name (other fields can default) → click "Create Instance".
 - [ ] **Modal closes immediately.** The new instance appears in the parent list.
 - [ ] On the new instance card, click "Test Connection" → status flips to ✅ "Connection successful" within ~5s.
-- [ ] (If you block phantom-vm's egress to `docs-cortex.paloaltonetworks.com` or `api.github.com`) — Test Connection flips to ❌ "Connection failed" with a useful error.
+- [ ] (If you block guardian-vm's egress to `docs-cortex.paloaltonetworks.com` or `api.github.com`) — Test Connection flips to ❌ "Connection failed" with a useful error.
 - [ ] Existing instances (xsiam, caldera, xlog) — Test Connection still works exactly as before.
 
 ### Forbidden post-v0.5.58
@@ -13205,11 +13205,11 @@ After fresh install:
 
 ## [v0.5.57] — 2026-05-16
 
-**Caldera kill-chain content is now factory state — baked into the `phantom-caldera` image at build time and auto-loaded on container start.** Plus an **expansion from 12 to 20 steps** that adds the high-signal XDR detection techniques most SOCs care about: **LSASS memory dump via comsvcs.dll (T1003.001 — the marquee EDR rule)**, **Defender real-time disable + exclusions (T1562.001)**, **certutil-decode LOLBin (T1140)**, **Registry Run key + Scheduled task persistence (T1547.001 + T1053.005)**, and **Security event log clear (T1070.001 — Security 1102 fires unconditionally)**. The kill chain went from "12 steps that mostly fire user-account events" to "20 steps spanning 11 tactics with multiple marquee EDR signals."
+**Caldera kill-chain content is now factory state — baked into the `guardian-caldera` image at build time and auto-loaded on container start.** Plus an **expansion from 12 to 20 steps** that adds the high-signal XDR detection techniques most SOCs care about: **LSASS memory dump via comsvcs.dll (T1003.001 — the marquee EDR rule)**, **Defender real-time disable + exclusions (T1562.001)**, **certutil-decode LOLBin (T1140)**, **Registry Run key + Scheduled task persistence (T1547.001 + T1053.005)**, and **Security event log clear (T1070.001 — Security 1102 fires unconditionally)**. The kill chain went from "12 steps that mostly fire user-account events" to "20 steps spanning 11 tactics with multiple marquee EDR signals."
 
 ### Why
 
-v0.5.55 shipped the kill-chain content as a bundle in `bundles/spark/caldera-content/`. v0.5.56 shipped the agent skill that drives it. But operators still had to **manually paste each YAML into the Caldera UI** before they could run the chain — a 15-minute onboarding step that defeats the "fresh install just works" promise that the rest of Phantom maintains. And the 12-step chain, while structurally complete, generated relatively few high-signal XDR events: most steps were user-account creates + registry mutations, with the only marquee signal being the cross-host lateral move.
+v0.5.55 shipped the kill-chain content as a bundle in `bundles/spark/caldera-content/`. v0.5.56 shipped the agent skill that drives it. But operators still had to **manually paste each YAML into the Caldera UI** before they could run the chain — a 15-minute onboarding step that defeats the "fresh install just works" promise that the rest of Guardian maintains. And the 12-step chain, while structurally complete, generated relatively few high-signal XDR events: most steps were user-account creates + registry mutations, with the only marquee signal being the cross-host lateral move.
 
 v0.5.57 fixes both problems together because they're the same concept: **make the kill chain "factory state" in two senses — auto-loaded out of the box, AND noisy enough that operators can actually exercise their detection rules against it.**
 
@@ -13217,7 +13217,7 @@ v0.5.57 fixes both problems together because they're the same concept: **make th
 
 #### Build-time overlay: `bundles/spark/caldera-content/` → image
 
-The Caldera image is built from `third_party/caldera/` — a git submodule pointing at upstream `mitre/caldera.git`. Files committed there become "untracked-in-submodule" and never reach our main branch. The fix: keep the YAMLs in our own repo (`bundles/spark/caldera-content/`, tracked normally) and add a **CI overlay step** in `.github/workflows/build-caldera.yml` that copies them into `third_party/caldera/data/` just before `docker build` runs. The `ADD . .` directive in the Caldera Dockerfile then includes them in the build context, and Caldera's `data_svc.py` auto-scans `/usr/src/app/data/{abilities,adversaries}/*` on container start (server/app/service/data_svc.py lines 30-31). Net result: the customer compose's `phantom-caldera` digest contains the kill chain pre-loaded; operators see the adversary in the UI on first login, no manual import.
+The Caldera image is built from `third_party/caldera/` — a git submodule pointing at upstream `mitre/caldera.git`. Files committed there become "untracked-in-submodule" and never reach our main branch. The fix: keep the YAMLs in our own repo (`bundles/spark/caldera-content/`, tracked normally) and add a **CI overlay step** in `.github/workflows/build-caldera.yml` that copies them into `third_party/caldera/data/` just before `docker build` runs. The `ADD . .` directive in the Caldera Dockerfile then includes them in the build context, and Caldera's `data_svc.py` auto-scans `/usr/src/app/data/{abilities,adversaries}/*` on container start (server/app/service/data_svc.py lines 30-31). Net result: the customer compose's `guardian-caldera` digest contains the kill chain pre-loaded; operators see the adversary in the UI on first login, no manual import.
 
 The workflow path-filter expanded to `third_party/caldera/**` OR `bundles/spark/caldera-content/**` so edits to our YAMLs trigger a rebuild. Submodule pin bumps still trigger rebuilds the same way they did before.
 
@@ -13230,15 +13230,15 @@ The workflow path-filter expanded to `third_party/caldera/**` OR `bundles/spark/
 | `04-credential-access/lsass-minidump-comsvcs.yml` | credential-access | T1003.001 | **`rundll32.exe comsvcs.dll, MiniDump` — Sysmon EID 10 (handle to lsass.exe) — marquee EDR rule** |
 | `05-defense-evasion/disable-defender-realtime.yml` | defense-evasion | T1562.001 | **`Set-MpPreference -DisableRealtimeMonitoring $true` + 3 exclusion paths — Defender's own 5001/5007** |
 | `05-defense-evasion/certutil-decode-payload.yml` | defense-evasion | T1140 | `certutil.exe -decode` of base64 blob — LOLBin abuse |
-| `06-persistence/registry-run-key.yml` | persistence | T1547.001 | `HKCU:\...\Run\PhantomUpdater` value set — Sysmon EID 13 |
-| `06-persistence/scheduled-task-logon.yml` | persistence | T1053.005 | `schtasks /create /tn PhantomMaintenance /sc onlogon /ru SYSTEM` — Security 4698 |
+| `06-persistence/registry-run-key.yml` | persistence | T1547.001 | `HKCU:\...\Run\GuardianUpdater` value set — Sysmon EID 13 |
+| `06-persistence/scheduled-task-logon.yml` | persistence | T1053.005 | `schtasks /create /tn GuardianMaintenance /sc onlogon /ru SYSTEM` — Security 4698 |
 | `13-cleanup/clear-security-eventlog.yml` | defense-evasion | T1070.001 | **`wevtutil cl Security` — Security 1102 fires unconditionally (Microsoft built it specifically to flag log clearing)** |
 
 Each ability follows the existing pattern: PowerShell command base64-encoded as UTF-16 LE (Caldera strips whitespace from `command:` fields), `timeout: 120`, deterministic UUID derived from name, **lab-safe** (LSASS dump file deleted immediately, Defender disable is reversible with `-DisableRealtimeMonitoring $false`, persistence payloads are no-op log appends, no actual encryption or exfil).
 
-#### Updated adversary profile (`bundles/spark/caldera-content/adversaries/phantom-phishing-kill-chain.yml`)
+#### Updated adversary profile (`bundles/spark/caldera-content/adversaries/guardian-phishing-kill-chain.yml`)
 
-Renamed to `Phantom phishing -> ransomware kill chain (cross-host, expanded)` — the adversary ID (`f81c14fe-6730-4215-bc95-e8eaca1530ab`) is preserved. `atomic_ordering` expanded from 12 to 20 entries with the 8 new ability UUIDs woven in at narratively-correct points (discovery burst right after the user-account discovery, LSASS dump right after cached creds, Defender tamper + certutil right after UAC bypass, Run-key + scheduled task right after the local-account create, event-log clear as the final post-defacement cleanup step).
+Renamed to `Guardian phishing -> ransomware kill chain (cross-host, expanded)` — the adversary ID (`f81c14fe-6730-4215-bc95-e8eaca1530ab`) is preserved. `atomic_ordering` expanded from 12 to 20 entries with the 8 new ability UUIDs woven in at narratively-correct points (discovery burst right after the user-account discovery, LSASS dump right after cached creds, Defender tamper + certutil right after UAC bypass, Run-key + scheduled task right after the local-account create, event-log clear as the final post-defacement cleanup step).
 
 #### Updated skill (`bundles/spark/mcp/skills/workflows/run_phishing_kill_chain.md`)
 
@@ -13252,15 +13252,15 @@ Rewritten preamble: "this content is now baked into the image, auto-loaded by Ca
 
 After fresh install of the v0.5.57 dev installer:
 
-- **Adversary auto-loaded**: navigate to https://localhost:8889 → Caldera UI → Adversaries → find `Phantom phishing -> ransomware kill chain (cross-host, expanded)` with 20 atomic_ordering entries (no "Missing ability" UUIDs).
+- **Adversary auto-loaded**: navigate to https://localhost:8889 → Caldera UI → Adversaries → find `Guardian phishing -> ransomware kill chain (cross-host, expanded)` with 20 atomic_ordering entries (no "Missing ability" UUIDs).
 - **Abilities auto-loaded**: Caldera UI → Abilities → filter by tactic — all 14 custom abilities present (3 bootstrap + 11 in-chain). Stockpile abilities still present.
-- **End-to-end run**: with two Windows agents checked in (group=red + group=victim, bootstraps already run from a prior session), tell the phantom-agent in chat "run the phishing kill chain." It loads the skill, asks for confirmation, fires the operation, polls to completion in ~10-14 min, returns the 20-step summary table. Step 7 (LSASS) and step 20 (event-log clear) should be the visually-loudest steps in the output.
-- **Image digest changed**: `docker inspect /opt/phantom/docker-compose.yml | grep phantom-caldera` shows a new digest vs the v0.5.56 install.
+- **End-to-end run**: with two Windows agents checked in (group=red + group=victim, bootstraps already run from a prior session), tell the guardian-agent in chat "run the phishing kill chain." It loads the skill, asks for confirmation, fires the operation, polls to completion in ~10-14 min, returns the 20-step summary table. Step 7 (LSASS) and step 20 (event-log clear) should be the visually-loudest steps in the output.
+- **Image digest changed**: `docker inspect /opt/guardian/docker-compose.yml | grep guardian-caldera` shows a new digest vs the v0.5.56 install.
 - **No regression** in the rest of the stack: agent UI loads, MCP tools enumerate, no broken services.
 
 ### Forbidden post-v0.5.57
 
-- **Don't commit Phantom-specific YAMLs directly to `third_party/caldera/`.** That's a submodule. Anything dropped there becomes orphan untracked content. The build-time overlay pattern is the architecture — keep YAMLs in `bundles/spark/caldera-content/`, the workflow handles the rest.
+- **Don't commit Guardian-specific YAMLs directly to `third_party/caldera/`.** That's a submodule. Anything dropped there becomes orphan untracked content. The build-time overlay pattern is the architecture — keep YAMLs in `bundles/spark/caldera-content/`, the workflow handles the rest.
 - **Don't add manual-import instructions** to operator-facing docs going forward. The auto-load path is THE path; the pre-v0.5.57 manual flow is kept in the README's bottom section as historical-reference only. Net-new operator-facing references should always say "auto-loaded on container start."
 - **Don't ship abilities without lab-safety language in the description.** The new noisy techniques (LSASS dump, Defender disable, event-log clear) are detection bait but lab-safe; each YAML's description names the safety mechanism (dump deleted, reversible via Set-MpPreference, etc). New techniques follow the same pattern.
 - **Don't expand the chain past 25 steps.** Runtime scales linearly with the agent beacon interval (30-60s/step). The 20-step chain runs in ~10-14 min; at 25+ steps operators start losing patience between confirmation and result, which encourages skipping the read of per-step output (the most valuable part).
@@ -13270,7 +13270,7 @@ After fresh install of the v0.5.57 dev installer:
 
 ## [v0.5.56] — 2026-05-16
 
-**New skill `run_phishing_kill_chain` under `bundles/spark/mcp/skills/workflows/`** — pairs with v0.5.55's bundled Caldera content. The phantom-agent can now drive the 12-step phishing → ransomware kill chain end-to-end from a chat prompt: verify prereqs, fire the operation, poll to completion, decode per-step output, produce a SOC-ready telemetry summary.
+**New skill `run_phishing_kill_chain` under `bundles/spark/mcp/skills/workflows/`** — pairs with v0.5.55's bundled Caldera content. The guardian-agent can now drive the 12-step phishing → ransomware kill chain end-to-end from a chat prompt: verify prereqs, fire the operation, poll to completion, decode per-step output, produce a SOC-ready telemetry summary.
 
 ### Why
 
@@ -13298,7 +13298,7 @@ The skill is `loadingMode: on-demand` (not auto-loaded into every chat context) 
 Operator says one of:
 - "Run the phishing kill chain"
 - "Fire the Caldera attack chain"
-- "Execute the phantom phishing → ransomware adversary"
+- "Execute the guardian phishing → ransomware adversary"
 
 The agent loads the skill, runs the procedure: verifies the agents are checked in, finds the adversary, creates the operation, sets it running against `group=red`, polls each step, decodes outputs, and produces the per-step + lateral-evidence + telemetry-signature summary.
 
@@ -13352,7 +13352,7 @@ caldera-content/
 │   ├── 03-discovery/
 │   │   └── account-system-discovery.yml      (T1087.001)
 │   ├── 06-persistence/
-│   │   └── create-phantomlab-user-localadmin.yml (T1136.001)
+│   │   └── create-guardianlab-user-localadmin.yml (T1136.001)
 │   ├── 07-lateral-movement/
 │   │   └── lateral-smb-wmi-winrm.yml         (T1021.002) ← REAL cross-host
 │   ├── 08-collection/
@@ -13362,7 +13362,7 @@ caldera-content/
 │   └── 11-exfiltration/
 │       └── exfil-staged-loot.yml             (T1041)
 └── adversaries/
-    └── phantom-phishing-kill-chain.yml       (12-step atomic_ordering)
+    └── guardian-phishing-kill-chain.yml       (12-step atomic_ordering)
 ```
 
 9 ability YAMLs (each base64-encoded PowerShell to survive Caldera's whitespace-strip) + 1 adversary profile YAML referencing the full 12-step chain (6 custom + 6 stockpile abilities by UUID).
@@ -13389,11 +13389,11 @@ caldera-content/
 **Quick path** — Caldera UI import:
 1. Open Caldera UI (IAP-tunneled `https://localhost:8889`, login `red` / `$CALDERA_RED_PASSWORD`).
 2. **Advanced → Abilities → Import YAML** for each `*.yml` under `abilities/`.
-3. **Advanced → Adversaries → Import YAML** for `adversaries/phantom-phishing-kill-chain.yml`.
+3. **Advanced → Adversaries → Import YAML** for `adversaries/guardian-phishing-kill-chain.yml`.
 4. Run the two bootstrap abilities once (one on `group=victim`, one on `group=red`).
 5. Fire the adversary as an Operation targeting `group=red`. Atomic planner runs the 12 steps sequentially over ~6-8 minutes.
 
-**Durable path** — volume mount the abilities/adversaries directories into the Caldera container at `/usr/src/app/data/abilities/phantom` and `/usr/src/app/data/adversaries/phantom`. Edit `installer/docker-compose.yml`'s `caldera:` service to add the mounts.
+**Durable path** — volume mount the abilities/adversaries directories into the Caldera container at `/usr/src/app/data/abilities/guardian` and `/usr/src/app/data/adversaries/guardian`. Edit `installer/docker-compose.yml`'s `caldera:` service to add the mounts.
 
 Full prerequisites, telemetry expectations, lab-safety notes, and customization guide are in `bundles/spark/caldera-content/README.md`.
 
@@ -13401,7 +13401,7 @@ Full prerequisites, telemetry expectations, lab-safety notes, and customization 
 
 Workgroup-to-workgroup lateral on Server 2022 requires a specific 6-knob configuration most operators discover the hard way:
 
-1. **Password complexity** — Windows rejects local-account passwords containing the username substring (case-insensitive). `Lab26Pass#` avoids "phantomlab" and satisfies 3 of 4 categories.
+1. **Password complexity** — Windows rejects local-account passwords containing the username substring (case-insensitive). `Lab26Pass#` avoids "guardianlab" and satisfies 3 of 4 categories.
 2. **`LocalAccountTokenFilterPolicy=1`** on the victim — lets local admins get a full token on network logon (UAC token filtering would otherwise reduce the network logon to standard-user rights).
 3. **`Service\AllowUnencrypted=true`** on the victim's WinRM — required for HTTP listener Basic/Negotiate without HTTPS.
 4. **`Client\TrustedHosts`** on the attacker — required for workgroup WinRM (no Kerberos available, fallback to NTLM via Negotiate requires explicit trust).
@@ -13418,7 +13418,7 @@ Each step generates distinct Sysmon / Windows Security event IDs. The README's "
 
 - **No making any of these abilities `singleton: true`.** They're idempotent and lab-runnable repeatedly; making them singleton would prevent re-running a chain in the same operation, which is operator-friendly behavior.
 - **No replacing the base64-`-EncodedCommand` PowerShell wrapping** with plaintext multi-line strings. Caldera's ability serializer strips whitespace from `command:` fields, breaking any non-trivial multi-line PowerShell. Base64 preserves everything.
-- **No removing the `phantomlab` password from being literal `Lab26Pass#` in the YAMLs.** It's lab-safe, complexity-compliant, and intentionally not parameterized — operators who want different creds edit the YAML directly. Parameterizing would force runtime fact-injection through Caldera which complicates the install path.
+- **No removing the `guardianlab` password from being literal `Lab26Pass#` in the YAMLs.** It's lab-safe, complexity-compliant, and intentionally not parameterized — operators who want different creds edit the YAML directly. Parameterizing would force runtime fact-injection through Caldera which complicates the install path.
 - **No bundling stockpile abilities** (the 6 from Caldera's own library). Caldera ships them; our YAMLs reference them by UUID. Duplicating would create maintenance debt + version drift.
 
 ---
@@ -13445,7 +13445,7 @@ After the v0.5.53 cycle of marketplace iteration (download endpoint, real upload
 - New `ConnectorsDesign` section component with 5 subsections:
   1. **End-to-end lifecycle** — the SVG diagram (described below).
   2. **The two origin paths** — bundle vs user, side-by-side spec comparing Path / Origin / Image / Schema / Edit semantics.
-  3. **The five storage layers** — 5-row table covering bundle YAML, user YAML, marketplace.db, instances.db, SecretStore. Each row: content / backed-by / lifecycle. Includes a "sixth ephemeral store" note for the phantom-updater docker daemon.
+  3. **The five storage layers** — 5-row table covering bundle YAML, user YAML, marketplace.db, instances.db, SecretStore. Each row: content / backed-by / lifecycle. Includes a "sixth ephemeral store" note for the guardian-updater docker daemon.
   4. **Lifecycle walkthrough** — 10-step numbered narrative following one connector (cortex-docs) from author commit through runtime tool call. Each step names the file paths + API endpoints involved.
   5. **Where the operator sees what** — 6-row triage table mapping "I want to see X" → exact UI route or API endpoint. Helps with day-to-day debugging.
 - New `ConnectorsLifecycleSvg` component (~250 LoC) — inline SVG, 1100×820 viewBox, 7 horizontal lanes:
@@ -13454,12 +13454,12 @@ After the v0.5.53 cycle of marketplace iteration (download endpoint, real upload
   3. Validate (jsonschema validator)
   4. Catalog (in-memory + marketplace.db install state)
   5. Configure (instances.db + SecretStore)
-  6. Spawn (phantom-updater + per-instance container)
+  6. Spawn (guardian-updater + per-instance container)
   7. Runtime (agent MCP connector_loader proxy)
 
 Color encoding in the SVG:
 - **Blue** (`#60a5fa`) — bundle path + runtime routing
-- **Purple** (`#c084fc`) — user-upload path + phantom-updater spawn chain
+- **Purple** (`#c084fc`) — user-upload path + guardian-updater spawn chain
 - **Orange** (`#fb923c`) — schema validation (the universal join point — both origins converge here)
 - **Green** (`#34d399`) — catalog + install state + container_url callback
 - **Red** (`#ef4444`) — SecretStore + decryption path
@@ -13637,22 +13637,22 @@ Three questions the operator asked, and the answer:
 
 ## [v0.5.51] — 2026-05-16
 
-**phantom-updater now reads `PHANTOM_VERSION` + `DIGEST_PHANTOM_*` from `/host/.env` at runtime instead of receiving them as `environment:` entries from the compose file.** This closes a long-standing violation of the v0.3.0+ image-digest-pinning invariant — pre-v0.5.51 phantom-updater was recreated on every stack upgrade even when its own image digest was unchanged, because `docker compose`'s config-hash flipped any time a stack digest in the resolved env block flipped.
+**guardian-updater now reads `GUARDIAN_VERSION` + `DIGEST_GUARDIAN_*` from `/host/.env` at runtime instead of receiving them as `environment:` entries from the compose file.** This closes a long-standing violation of the v0.3.0+ image-digest-pinning invariant — pre-v0.5.51 guardian-updater was recreated on every stack upgrade even when its own image digest was unchanged, because `docker compose`'s config-hash flipped any time a stack digest in the resolved env block flipped.
 
 ### Why
 
-Operator caught this during the v0.5.50 deploy smoke. The `phantom-updater` container is supposed to follow the same contract as `xlog` and `caldera`: same image digest → no recreate, in-memory state preserved across upgrades. Pre-v0.5.51 it didn't: even though `phantom-updater@sha256:cd50e9b…` was identical between v0.5.49 and v0.5.50, the compose file's `phantom-updater` env block contained:
+Operator caught this during the v0.5.50 deploy smoke. The `guardian-updater` container is supposed to follow the same contract as `xlog` and `caldera`: same image digest → no recreate, in-memory state preserved across upgrades. Pre-v0.5.51 it didn't: even though `guardian-updater@sha256:cd50e9b…` was identical between v0.5.49 and v0.5.50, the compose file's `guardian-updater` env block contained:
 
 ```yaml
-- PHANTOM_VERSION        # changed: dev-83e8016 → dev-d9b56a0
-- DIGEST_PHANTOM_AGENT   # changed
-- DIGEST_PHANTOM_XLOG    # unchanged
-- DIGEST_PHANTOM_CALDERA # unchanged
-- DIGEST_PHANTOM_UPDATER # unchanged
+- GUARDIAN_VERSION        # changed: dev-83e8016 → dev-d9b56a0
+- DIGEST_GUARDIAN_AGENT   # changed
+- DIGEST_GUARDIAN_XLOG    # unchanged
+- DIGEST_GUARDIAN_CALDERA # unchanged
+- DIGEST_GUARDIAN_UPDATER # unchanged
 - …
 ```
 
-`docker compose up -d` computes a per-service config-hash that includes the resolved env-var VALUES. When `DIGEST_PHANTOM_AGENT` flipped value, the resolved env block was different, so compose recreated the container. The image was identical; the container's effective config wasn't.
+`docker compose up -d` computes a per-service config-hash that includes the resolved env-var VALUES. When `DIGEST_GUARDIAN_AGENT` flipped value, the resolved env block was different, so compose recreated the container. The image was identical; the container's effective config wasn't.
 
 xlog and caldera don't have this problem because their compose service definitions don't reference the version/digest env vars.
 
@@ -13662,29 +13662,29 @@ xlog and caldera don't have this problem because their compose service definitio
 
 - New `/host/.env reads` module-level block (~115 LoC) providing:
   - `_read_host_env() → dict[str, str]` — parses `/host/.env` with a **30-second TTL cache** so hot-path API calls (e.g. `/api/v1/version/current` on every observability-panel refresh) don't re-parse on every request. The cache is bypassed (cleared) by `_invalidate_host_env_cache()` when `_apply_manifest_to_env` writes a new manifest, so freshly-applied values propagate within microseconds, not 30 seconds.
-  - `_running_phantom_version() → str | None` — reads `PHANTOM_VERSION`.
-  - `_stack_digest_env_var(service) → str` + `_stack_digest(service) → str | None` — centralizes the `phantom-agent → DIGEST_PHANTOM_AGENT` casing rule + reads stack digest.
+  - `_running_guardian_version() → str | None` — reads `GUARDIAN_VERSION`.
+  - `_stack_digest_env_var(service) → str` + `_stack_digest(service) → str | None` — centralizes the `guardian-agent → DIGEST_GUARDIAN_AGENT` casing rule + reads stack digest.
   - `_connector_digest_env_var(connector_id) → str` + `_connector_digest(connector_id) → str | None` — sister functions for connector digests.
   - All helpers handle missing `/host/.env`, missing keys, malformed lines, and surrounding quotes gracefully — never crash the updater over .env edits.
 
 - `_apply_manifest_to_env(manifest)` now calls `_invalidate_host_env_cache()` after the file write so the in-process cache reflects on-disk reality immediately.
 
-- Migrated all 7 call-sites that previously read `os.environ.get("PHANTOM_VERSION")` or `os.environ.get(f"DIGEST_PHANTOM_…")`:
+- Migrated all 7 call-sites that previously read `os.environ.get("GUARDIAN_VERSION")` or `os.environ.get(f"DIGEST_GUARDIAN_…")`:
   - `version_check()` (2 reads — running_version + per-service env_var derivation)
   - `update SSE stream handler` (2 reads — running_version + per-service env_var)
   - `_connector_image_ref()` (3 reads — running_version + connector_digest_env_var + connector_digest)
   - `image_pinning_for()` (2 reads — connector_digest + running_version fallback tag)
 
-- Other env vars (`PHANTOM_REGISTRY_USER`, `PHANTOM_REGISTRY_TOKEN`, `MCP_TOKEN`, `HOST_INSTALL_DIR`, `HEALTHY_TIMEOUT_S`) remain on `os.environ.get` — they're either stable across upgrades (REGISTRY_USER) or operator-provided startup config (MCP_TOKEN). Only the **release-cadence-changing** vars moved to `/host/.env` reads.
+- Other env vars (`GUARDIAN_REGISTRY_USER`, `GUARDIAN_REGISTRY_TOKEN`, `MCP_TOKEN`, `HOST_INSTALL_DIR`, `HEALTHY_TIMEOUT_S`) remain on `os.environ.get` — they're either stable across upgrades (REGISTRY_USER) or operator-provided startup config (MCP_TOKEN). Only the **release-cadence-changing** vars moved to `/host/.env` reads.
 
 #### `installer/docker-compose.yml`
 
-Stripped from phantom-updater's `environment:` block:
-- `PHANTOM_VERSION`
-- `DIGEST_PHANTOM_AGENT` / `_XLOG` / `_CALDERA` / `_UPDATER` / `_BROWSER`
-- `DIGEST_PHANTOM_CONNECTOR_RUNTIME` / `_XLOG` / `_XSIAM` / `_CALDERA` / `_WEB` / `_CORTEX_DOCS`
+Stripped from guardian-updater's `environment:` block:
+- `GUARDIAN_VERSION`
+- `DIGEST_GUARDIAN_AGENT` / `_XLOG` / `_CALDERA` / `_UPDATER` / `_BROWSER`
+- `DIGEST_GUARDIAN_CONNECTOR_RUNTIME` / `_XLOG` / `_XSIAM` / `_CALDERA` / `_WEB` / `_CORTEX_DOCS`
 
-Replaced with a comment block explaining the v0.5.51 contract: these values come from /host/.env at runtime now. The phantom-agent service's env block (lines 360-374) still contains these passthroughs — the agent reads them via its existing TS-side runtime-config path, which is a separate concern from phantom-updater.
+Replaced with a comment block explaining the v0.5.51 contract: these values come from /host/.env at runtime now. The guardian-agent service's env block (lines 360-374) still contains these passthroughs — the agent reads them via its existing TS-side runtime-config path, which is a separate concern from guardian-updater.
 
 ### Operator-visible behavior change
 
@@ -13692,20 +13692,20 @@ After v0.5.51 lands:
 
 | Upgrade scenario | Pre-v0.5.51 | v0.5.51+ |
 |---|---|---|
-| phantom-updater image digest unchanged, any stack digest changed | Recreated (state lost) | **Untouched** (state preserved) |
-| phantom-updater image digest changed | Recreated | Recreated (same as before) |
+| guardian-updater image digest unchanged, any stack digest changed | Recreated (state lost) | **Untouched** (state preserved) |
+| guardian-updater image digest changed | Recreated | Recreated (same as before) |
 | Operator hand-edits /host/.env (e.g. rotates token) | Required compose recreate to propagate | Propagates within 30s via cache TTL |
 
-The first row is the load-bearing improvement: phantom-updater's in-memory state (compose subprocess handle, ongoing-update SSE stream state, the `_HOST_ENV_CACHE` itself) survives stack upgrades.
+The first row is the load-bearing improvement: guardian-updater's in-memory state (compose subprocess handle, ongoing-update SSE stream state, the `_HOST_ENV_CACHE` itself) survives stack upgrades.
 
 The "30s cache TTL" trade-off is worth calling out: a manual `.env` edit takes up to 30 seconds to reflect in API responses. The alternative (no cache) would re-parse on every request — fine for low-volume API but `/api/v1/version/current` fires per observability-panel refresh. 30s is short enough that operators don't notice ("did my edit work?") and long enough to amortize hot paths. `_apply_manifest_to_env` bypasses the cache entirely so the updater's own manifest writes are visible immediately.
 
 ### Forbidden post-v0.5.51
 
-- **No re-adding `DIGEST_PHANTOM_*` or `PHANTOM_VERSION` to phantom-updater's `environment:` block**, even as a "belt and suspenders" backup. The whole point is that the env block must stay stable across digest changes. Adding them back re-introduces the recreate cycle.
-- **No reading these values via `os.environ.get` anywhere in `updater/src/main.py`.** The grep test: `grep -nE 'os\.environ\.get\("PHANTOM_VERSION"\)|os\.environ\.get\("DIGEST_PHANTOM' updater/src/main.py` must return zero matches. Use the helpers instead.
+- **No re-adding `DIGEST_GUARDIAN_*` or `GUARDIAN_VERSION` to guardian-updater's `environment:` block**, even as a "belt and suspenders" backup. The whole point is that the env block must stay stable across digest changes. Adding them back re-introduces the recreate cycle.
+- **No reading these values via `os.environ.get` anywhere in `updater/src/main.py`.** The grep test: `grep -nE 'os\.environ\.get\("GUARDIAN_VERSION"\)|os\.environ\.get\("DIGEST_GUARDIAN' updater/src/main.py` must return zero matches. Use the helpers instead.
 - **No removing the cache-invalidation hook in `_apply_manifest_to_env`.** Without it, the 30s TTL means the updater would briefly return stale digest values right after applying a manifest — the exact opposite of the contract.
-- **No reading TLS material, secrets, or connector instance state from `/host/.env`.** That path is the .env file's *manifest section*, not a free-form key-value store. Reading sensitive material from there would create a new audit-trail gap. Stick to PHANTOM_VERSION + DIGEST_* — those are version metadata, not secrets.
+- **No reading TLS material, secrets, or connector instance state from `/host/.env`.** That path is the .env file's *manifest section*, not a free-form key-value store. Reading sensitive material from there would create a new audit-trail gap. Stick to GUARDIAN_VERSION + DIGEST_* — those are version metadata, not secrets.
 
 ### Cross-subsystem alignment
 
@@ -13713,15 +13713,15 @@ This change is invisible to the customer compose's UPGRADE invariant (defined in
 
 > "containers retain in-memory state across upgrades that don't change image content"
 
-Pre-v0.5.51 the contract held for `xlog` and `caldera` but not `phantom-updater`. v0.5.51 makes the contract uniform across all three.
+Pre-v0.5.51 the contract held for `xlog` and `caldera` but not `guardian-updater`. v0.5.51 makes the contract uniform across all three.
 
-`phantom-agent` still gets recreated when its own image digest changes (correct — that IS a content change). The next gap to consider: phantom-agent's env block also references `DIGEST_PHANTOM_*` vars; the agent reads these via its runtime-config layer at the Next.js side. The agent's recreation is driven by its OWN image digest changing on every release (release-notes.ts + UI code changes), so the env-var question is moot in practice — but if a future release ships with zero phantom-agent image changes, the same env-recreate trap would fire. A follow-up (post-v0.5.51) can apply the same `/host/.env` runtime-read pattern there. Not yet load-bearing.
+`guardian-agent` still gets recreated when its own image digest changes (correct — that IS a content change). The next gap to consider: guardian-agent's env block also references `DIGEST_GUARDIAN_*` vars; the agent reads these via its runtime-config layer at the Next.js side. The agent's recreation is driven by its OWN image digest changing on every release (release-notes.ts + UI code changes), so the env-var question is moot in practice — but if a future release ships with zero guardian-agent image changes, the same env-recreate trap would fire. A follow-up (post-v0.5.51) can apply the same `/host/.env` runtime-read pattern there. Not yet load-bearing.
 
 ---
 
 ## [v0.5.50] — 2026-05-16
 
-**Installer fix: a freshly-provided GHCR token is now persisted back to `/opt/phantom/.env`** instead of being held only in memory for the current install. Closes a long-standing nuisance where every re-run on an existing install would re-prompt for a fresh PAT because the previous run never wrote the captured token back to disk.
+**Installer fix: a freshly-provided GHCR token is now persisted back to `/opt/guardian/.env`** instead of being held only in memory for the current install. Closes a long-standing nuisance where every re-run on an existing install would re-prompt for a fresh PAT because the previous run never wrote the captured token back to disk.
 
 ### Why
 
@@ -13730,7 +13730,7 @@ Pre-v0.5.50 flow on an existing install with an expired `.env`-stored token:
 1. Step 4 reads `.env` → finds the stale `ghs_…` (already-expired short-lived token from a previous run) → validation fails.
 2. Installer prompts: `Token (input hidden):` — operator pastes a fresh `ghp_…` PAT.
 3. Validation succeeds, `$GHCR_TOKEN` holds the fresh token in-memory.
-4. Step 5 says "✓ Reusing existing secrets from /opt/phantom/.env" — **but skips the `.env` rewrite because `EXISTING_INSTALL=1`**.
+4. Step 5 says "✓ Reusing existing secrets from /opt/guardian/.env" — **but skips the `.env` rewrite because `EXISTING_INSTALL=1`**.
 5. Step 7 uses `$GHCR_TOKEN` for `docker login` + image pulls — both succeed because the in-memory token is fresh.
 6. **`.env` on disk still contains the stale token from before step 4.**
 
@@ -13738,13 +13738,13 @@ On the next re-run, the cycle repeats — operator pastes another fresh PAT, ins
 
 ### What ships
 
-#### `installer/phantom-installer.template.sh`
+#### `installer/guardian-installer.template.sh`
 
 - New helper `write_env_value VAR VALUE` — sister of the existing `read_env_value VAR`. Updates an existing `VAR=…` line in-place via awk (matching the `VAR=` prefix anchor so `VAR2` doesn't accidentally collide), or appends `VAR=VALUE` if the key isn't present. Reapplies `chmod 600` after the rewrite. Idempotent.
 - New call-site at the end of Step 4 (registry credentials), gated on `EXISTING_INSTALL == 1 && TOKEN_SOURCE != "$INSTALL_DIR/.env"`:
-  - If the captured token came from the **env var path** (`PHANTOM_REGISTRY_TOKEN=… sudo ./phantom-installer`) or the **interactive prompt path**, persist it to `.env`.
+  - If the captured token came from the **env var path** (`GUARDIAN_REGISTRY_TOKEN=… sudo ./guardian-installer`) or the **interactive prompt path**, persist it to `.env`.
   - The `.env`-source path is skipped because the value already matches what's on disk.
-  - On success: `✓ Persisted fresh token to /opt/phantom/.env (next re-run won't re-prompt unless this token also expires)`.
+  - On success: `✓ Persisted fresh token to /opt/guardian/.env (next re-run won't re-prompt unless this token also expires)`.
 
 The fresh-install path (`EXISTING_INSTALL=0`) is unaffected — that path already writes the full `.env` via the heredoc at line ~715, including the freshly-captured token.
 
@@ -13770,7 +13770,7 @@ After v0.5.50:
 
 ### Why
 
-While testing v0.5.48 deployed to phantom-vm, the operator hit `/` and `/observability` but couldn't see the new install-form UI, plugin-handler transport, etc. The deployed bundles contained the correct v0.5.48 code (verified via grep) and `/api/agent/version` returned `dev-5582e5b` — so the deployment was correct. The actual gap: pages like `/observability/plugins` and `/settings/hooks` weren't in `components/sidebar.tsx`'s `navEntries`. The only way to reach them was typing the URL directly.
+While testing v0.5.48 deployed to guardian-vm, the operator hit `/` and `/observability` but couldn't see the new install-form UI, plugin-handler transport, etc. The deployed bundles contained the correct v0.5.48 code (verified via grep) and `/api/agent/version` returned `dev-5582e5b` — so the deployment was correct. The actual gap: pages like `/observability/plugins` and `/settings/hooks` weren't in `components/sidebar.tsx`'s `navEntries`. The only way to reach them was typing the URL directly.
 
 Audit: 9 routes that ship `page.tsx` were missing from the sidebar.
 
@@ -13794,7 +13794,7 @@ Each new entry has an inline code comment where context matters (e.g. "v0.5.44+ 
 
 Order rationale:
 - Command group: Agents lands right after Skills (both are agent-runtime concerns); Tasks after Jobs (both are work-queue surfaces, jobs=operator-queued / tasks=worker-running).
-- Integration: Plugins joins Connectors / Approvals / API Keys as one of the "things connected to this Phantom instance" cluster.
+- Integration: Plugins joins Connectors / Approvals / API Keys as one of the "things connected to this Guardian instance" cluster.
 - Observability: telemetry primitives stay grouped first (Metrics / Traces / Logs / Events / Runtime events), then operational surfaces (Connectors / Pipeline / Cost / Bench / Plugins), then Live activity.
 - Settings: Hooks lands between Providers and Personality — both Hooks + Personality customize agent behavior, while Providers + Models are upstream config.
 
@@ -13806,7 +13806,7 @@ This rule lives next to Rule 6 ("no backend feature without a UI surface") becau
 
 ### Operator UX
 
-Open Phantom after the upgrade and expand each sidebar group; you should now see:
+Open Guardian after the upgrade and expand each sidebar group; you should now see:
 
 **Command**: Chat, Skills, **Agents**, Memory, Knowledge, Jobs, **Tasks**
 
@@ -13825,11 +13825,11 @@ Open Phantom after the upgrade and expand each sidebar group; you should now see
 
 ## [v0.5.48] — 2026-05-16
 
-**Plugin-contributed hook handlers are now CALLABLE from the agent's hook-runner.** Closes the cross-language bridge piece of #29; pairs with v0.5.31/44/47 (discovery + lifecycle) to make the entry-point plugin system end-to-end functional. Discovery now meets invocation; plugin authors can ship pip-installable hook libraries that operators install + wire up from `/settings/hooks` without touching the Phantom image.
+**Plugin-contributed hook handlers are now CALLABLE from the agent's hook-runner.** Closes the cross-language bridge piece of #29; pairs with v0.5.31/44/47 (discovery + lifecycle) to make the entry-point plugin system end-to-end functional. Discovery now meets invocation; plugin authors can ship pip-installable hook libraries that operators install + wire up from `/settings/hooks` without touching the Guardian image.
 
 ### Why
 
-Pre-v0.5.48: the entry-point plugin system shipped discovery (v0.5.31, what's installed) + lifecycle (v0.5.47, install/uninstall via UI) — but **no way to actually invoke** plugin-contributed handlers. A plugin could register `[project.entry-points."phantom.hooks"] my-handler = "my_pkg:my_handler"` and show up in `/observability/plugins`, but operators couldn't wire that handler into the hook framework. v0.5.48 closes that gap with a new `plugin` transport type for hooks.
+Pre-v0.5.48: the entry-point plugin system shipped discovery (v0.5.31, what's installed) + lifecycle (v0.5.47, install/uninstall via UI) — but **no way to actually invoke** plugin-contributed handlers. A plugin could register `[project.entry-points."guardian.hooks"] my-handler = "my_pkg:my_handler"` and show up in `/observability/plugins`, but operators couldn't wire that handler into the hook framework. v0.5.48 closes that gap with a new `plugin` transport type for hooks.
 
 The architectural challenge: plugin handlers live in **Python** (entry-points are a Python-package mechanism); the agent's hook-runner lives in **TypeScript** (lib/hook-runner.ts). v0.5.48 ships an HTTP bridge — when a `plugin`-transport hook fires, the hook-runner POSTs the payload to MCP's `/api/v1/plugin-hooks/{name}/invoke`, MCP runs the Python handler on a thread pool, returns the result back over JSON, the hook-runner translates that into the standard `HookResult` shape.
 
@@ -13837,9 +13837,9 @@ The architectural challenge: plugin handlers live in **Python** (entry-points ar
 
 #### `bundles/spark/mcp/src/usecase/plugin_hook_runner.py` (NEW)
 
-In-process registry + invoker for `phantom.hooks` entry-points. Key surface:
+In-process registry + invoker for `guardian.hooks` entry-points. Key surface:
 
-- `get_handlers(refresh: bool = False) → dict[str, PluginHookHandler]` — walks `importlib.metadata.entry_points(group="phantom.hooks")` and resolves each `name = "module:fn"` into a callable. Caches the result. `refresh=True` re-walks (used after pip install).
+- `get_handlers(refresh: bool = False) → dict[str, PluginHookHandler]` — walks `importlib.metadata.entry_points(group="guardian.hooks")` and resolves each `name = "module:fn"` into a callable. Caches the result. `refresh=True` re-walks (used after pip install).
 - `list_handlers() → list[dict]` — JSON-safe descriptor list for the UI dropdown (name, dist_name, dist_version, target).
 - `invoke_handler(name, payload, config, timeout_s)` — calls the handler on a shared 4-worker thread pool with a hard timeout. Returns `{ok, result, duration_ms, handler}` on success or `{ok: False, error}` on timeout/exception/unknown-name/non-dict-return.
 - `clear_cache()` — drops the resolved-handler cache. Called automatically by `plugin_entry_points_routes.install_entry` / `uninstall_entry` so freshly installed plugins are picked up without an MCP restart.
@@ -13887,7 +13887,7 @@ Next.js proxy for `GET /api/agent/plugin-hooks?refresh=…` — used by the `/se
 
 ```python
 # pyproject.toml
-[project.entry-points."phantom.hooks"]
+[project.entry-points."guardian.hooks"]
 my-handler = "my_pkg.hooks:my_handler"
 
 # my_pkg/hooks.py
@@ -13906,8 +13906,8 @@ def my_handler(payload: dict, config: dict) -> dict | None:
 
 ### Operator UX
 
-1. Author publishes `phantom-hook-mypolicy` to pypi with a `phantom.hooks` entry-point.
-2. Operator visits `/observability/plugins`, types `phantom-hook-mypolicy` into the install form, clicks Install.
+1. Author publishes `guardian-hook-mypolicy` to pypi with a `guardian.hooks` entry-point.
+2. Operator visits `/observability/plugins`, types `guardian-hook-mypolicy` into the install form, clicks Install.
 3. MCP runs pip → returns success → clears the plugin-hook cache. The new handler is now discoverable.
 4. Operator visits `/settings/hooks`, clicks Add hook, picks event (e.g. `PreToolUse`), picks transport "Plugin handler", clicks Refresh on the handler dropdown if needed, selects `my-handler` from the list, fills the JSON config, saves.
 5. Hook fires next time the event happens. The agent dispatches into the Python handler via the MCP bridge; handler returns `allow` / `deny` / `ask` / `null`; the hook-runner treats it like any other transport's result.
@@ -13926,7 +13926,7 @@ def my_handler(payload: dict, config: dict) -> dict | None:
 
 - **No skipping the audit row.** Plugin invocations are sensitive (operator-controlled code running in the MCP process); every fire MUST land in the audit log. If a future optimization batches invokes, batch the audit too — don't drop it.
 - **No expanding the `agent` transport to dispatch plugin handlers.** The `agent` transport name stays reserved for the future "invoke an MCP tool as a hook handler" feature. `plugin` is the entry-point bridge; `agent` is the MCP-tool bridge; they're distinct and shouldn't share code paths.
-- **No removing the cache-clear hooks on install/uninstall.** Operators won't accept "restart phantom-agent to use your new plugin" — the v0.5.47 + v0.5.48 contract is that plugin-hook handlers hot-reload on install. Other contribution types (skills, connectors) still need restart; that's a separate gap.
+- **No removing the cache-clear hooks on install/uninstall.** Operators won't accept "restart guardian-agent to use your new plugin" — the v0.5.47 + v0.5.48 contract is that plugin-hook handlers hot-reload on install. Other contribution types (skills, connectors) still need restart; that's a separate gap.
 
 ---
 
@@ -13936,9 +13936,9 @@ def my_handler(payload: dict, config: dict) -> dict | None:
 
 ### Why
 
-v0.5.44 made discovered plugins **visible** but left install/uninstall as a `docker exec phantom_agent pip install …` ceremony. v0.5.47 closes that gap: the page now hosts an install form that runs `pip install --user <spec>` server-side, plus per-row Uninstall buttons that run `pip uninstall -y <dist>`. Every action is audited via `record_event` so the trail lives at `/observability/events`.
+v0.5.44 made discovered plugins **visible** but left install/uninstall as a `docker exec guardian_agent pip install …` ceremony. v0.5.47 closes that gap: the page now hosts an install form that runs `pip install --user <spec>` server-side, plus per-row Uninstall buttons that run `pip uninstall -y <dist>`. Every action is audited via `record_event` so the trail lives at `/observability/events`.
 
-This release ALSO fixes a v0.5.44 boot bug that would have TypeErrored on phantom-agent startup: that release's commit message claimed it added `bundles/spark/mcp/src/api/plugins.py` but the new file never landed — only a `register_plugin_routes(mcp)` 1-arg call was added to `main.py`, which would call the existing 5-arg `register_plugin_routes(mcp, loader, memory_store, audit, agent_definition_store=...)` with too few args. v0.5.47 replaces that 1-arg call with `register_plugin_entry_points_routes(mcp)` calling a new function that lives in its own module (`api/plugin_entry_points_routes.py`) so the two surfaces — filesystem-discovered Phase X plugins (5-arg, retained) vs entry-point-discovered distributable plugins (1-arg, new) — never collide by name.
+This release ALSO fixes a v0.5.44 boot bug that would have TypeErrored on guardian-agent startup: that release's commit message claimed it added `bundles/spark/mcp/src/api/plugins.py` but the new file never landed — only a `register_plugin_routes(mcp)` 1-arg call was added to `main.py`, which would call the existing 5-arg `register_plugin_routes(mcp, loader, memory_store, audit, agent_definition_store=...)` with too few args. v0.5.47 replaces that 1-arg call with `register_plugin_entry_points_routes(mcp)` calling a new function that lives in its own module (`api/plugin_entry_points_routes.py`) so the two surfaces — filesystem-discovered Phase X plugins (5-arg, retained) vs entry-point-discovered distributable plugins (1-arg, new) — never collide by name.
 
 ### What ships
 
@@ -13955,9 +13955,9 @@ Audit entry shape (visible at `/observability/events` after install/uninstall):
 ```
 {
   "action": "plugin_install",
-  "target": "plugin:phantom-hook-mypackage",
+  "target": "plugin:guardian-hook-mypackage",
   "status": "success",
-  "metadata": {"spec": "phantom-hook-mypackage", "return_code": 0, "stderr_tail": ""}
+  "metadata": {"spec": "guardian-hook-mypackage", "return_code": 0, "stderr_tail": ""}
 }
 ```
 
@@ -13983,10 +13983,10 @@ Three Next.js route proxies — GET, POST, DELETE — that forward to the MCP en
 ### Operator UX
 
 1. Open `/observability/plugins` → see install form at top, group sections below.
-2. Paste a spec (e.g. `phantom-hook-mypackage` or `git+https://github.com/…`), click Install.
-3. Server runs pip; on success returns 201 with the success note. UI shows "Installed `<spec>`. Restart phantom-agent to load contributed builtins."
-4. Catalog refreshes — the newly-installed package's entry-points (if any target a `phantom.*` group) appear in the right section.
-5. Restart phantom-agent (or wait for the next routine restart) for the package's CONTRIBUTED handlers to load — discovery alone doesn't import them.
+2. Paste a spec (e.g. `guardian-hook-mypackage` or `git+https://github.com/…`), click Install.
+3. Server runs pip; on success returns 201 with the success note. UI shows "Installed `<spec>`. Restart guardian-agent to load contributed builtins."
+4. Catalog refreshes — the newly-installed package's entry-points (if any target a `guardian.*` group) appear in the right section.
+5. Restart guardian-agent (or wait for the next routine restart) for the package's CONTRIBUTED handlers to load — discovery alone doesn't import them.
 6. To remove: click Uninstall on the row, confirm the prompt, the row disappears after refresh.
 
 ### Security model
@@ -14085,7 +14085,7 @@ A parent created Yesterday + a fork created Today now both render under "Yesterd
 
 ### Forbidden post-v0.5.45
 
-- **No removing the cycle defense.** Even if Phantom's current fork operation can't create cycles, future re-parenting flows might; the seen-set defense is cheap and load-bearing.
+- **No removing the cycle defense.** Even if Guardian's current fork operation can't create cycles, future re-parenting flows might; the seen-set defense is cheap and load-bearing.
 
 ---
 
@@ -14113,14 +14113,14 @@ v0.5.31 shipped the plugin-entry-points discovery scaffolding; v0.5.36 wired `lo
 
 #### `mcp/agent/app/observability/plugins/page.tsx` (new)
 
-- Discovery view rendering one section per group (`phantom.skills`, `phantom.connectors`, `phantom.hooks`, `phantom.scanners`, `phantom.providers`) with per-group metadata (label, icon, one-line about) + a count badge.
+- Discovery view rendering one section per group (`guardian.skills`, `guardian.connectors`, `guardian.hooks`, `guardian.scanners`, `guardian.providers`) with per-group metadata (label, icon, one-line about) + a count badge.
 - Per-row table when plugins exist: name, distribution (dist_name + dist_version), target.
 - "How to author a plugin" footer card with a copy-pasteable `pyproject.toml` snippet.
 - Banner at the top noting "Discovery only — plugin-contributed handlers are NOT yet invocable. Cross-language handler bridge ships as a separate release."
 
 ### What's still deferred
 
-- **Plugin install / uninstall from the UI.** Today's path is `docker exec phantom_agent pip install` + restart. A UI-driven install would need a pip-runner endpoint with strict allowlist + audit, which is its own design exercise.
+- **Plugin install / uninstall from the UI.** Today's path is `docker exec guardian_agent pip install` + restart. A UI-driven install would need a pip-runner endpoint with strict allowlist + audit, which is its own design exercise.
 - **Plugin-contributed handler invocation.** The discovery surfaces the entry point's target (`my_pkg.module:callable`); the agent's hook-runner / skill registry / connector loader don't yet know to import + invoke it. The cross-language bridge (Node hook-runner ↔ Python handler) is the meaningful remaining work.
 
 ### Forbidden post-v0.5.44
@@ -14377,7 +14377,7 @@ v0.5.32 wired #28's Notification + PermissionRequest fire-sites with the honest 
 
 v0.5.30 shipped the session-fork backend (schema + API + audit) but deferred the UI. Operators forking a session via curl was the workaround. v0.5.36 closes the UX gap with a Fork option in the session sidebar's per-row menu.
 
-v0.5.31 shipped plugin entry-point discovery (`plugin_entry_points.py`) but deferred the boot-time `log_discovery()` call. v0.5.36 wires it: at MCP startup, all five reserved groups (`phantom.skills`, `phantom.connectors`, `phantom.hooks`, `phantom.scanners`, `phantom.providers`) get walked + per-group counts logged.
+v0.5.31 shipped plugin entry-point discovery (`plugin_entry_points.py`) but deferred the boot-time `log_discovery()` call. v0.5.36 wires it: at MCP startup, all five reserved groups (`guardian.skills`, `guardian.connectors`, `guardian.hooks`, `guardian.scanners`, `guardian.providers`) get walked + per-group counts logged.
 
 ### What ships
 
@@ -14530,16 +14530,16 @@ v0.5.29 shipped the benchmark scaffolding (BenchManifest, BenchCase, scorer, Ben
 
 #### `bundles/spark/mcp/src/usecase/benchmark_runner.py` (new)
 
-- `load_manifest(manifest_ref)` resolves a manifest reference to a `BenchManifest`. Accepts path, bundled-corpus id (e.g. `phantom-soc-v1`), or `<id>/manifest.yaml` shape.
+- `load_manifest(manifest_ref)` resolves a manifest reference to a `BenchManifest`. Accepts path, bundled-corpus id (e.g. `guardian-soc-v1`), or `<id>/manifest.yaml` shape.
 - `_dispatch_case(case, model_override?, thinking?)` — async HTTP POST to `/api/chat` with the case prompt. Streams the SSE response, collects `text_delta` + `tool_call` + `meta` (cost) events, returns `(response, tool_call_names, cost_usd, wall_seconds, error?)`.
 - `run_manifest(...)` runs every case in the manifest, builds `CaseScore`s via the v0.5.29 scorer, records to `BenchRunStore` when `record=True`. Per-case errors flow into `CaseScore.error` and are excluded from rate denominators (per v0.5.29's infrastructure-error discipline).
 - `run_manifest_sync(...)` sync wrapper for the MCP-tool path.
 
-#### `bundles/spark/mcp/src/usecase/bench_cases/phantom-soc-v1.yaml` (new)
+#### `bundles/spark/mcp/src/usecase/bench_cases/guardian-soc-v1.yaml` (new)
 
 Sample 3-case corpus the operator can run end-to-end:
-- `generate-syslog` — exercises `phantom_create_data_worker` (expects 1 tool call).
-- `list-scenarios` — exercises `phantom_list_scenarios`.
+- `generate-syslog` — exercises `guardian_create_data_worker` (expects 1 tool call).
+- `list-scenarios` — exercises `guardian_list_scenarios`.
 - `conversational-no-tool` — text-only response (expects 0 tool calls).
 
 Each case has `prompt`, `expected_output_match` (substring), `expected_tool_calls` (list for Jaccard), `max_wall_seconds`.
@@ -14547,7 +14547,7 @@ Each case has `prompt`, `expected_output_match` (substring), `expected_tool_call
 #### `bundles/spark/mcp/src/usecase/builtin_components/self_mod_tools.py`
 
 - New MCP tool `bench_run(manifest, router_preset_model?, thinking_enabled?)`. Approval-gated under `risk_tier="soft"`. Returns `{run_id, summary}` on success; `{error}` on manifest-parse failure.
-- Docstring documents the manifest-resolution semantics + concrete trigger phrases ("run the phantom-soc-v1 benchmark", "bench the agent on flash routing").
+- Docstring documents the manifest-resolution semantics + concrete trigger phrases ("run the guardian-soc-v1 benchmark", "bench the agent on flash routing").
 
 #### `bundles/spark/mcp/src/usecase/connector_loader.py`
 
@@ -14556,14 +14556,14 @@ Each case has `prompt`, `expected_output_match` (substring), `expected_tool_call
 ### Operator usage
 
 From chat:
-> "Run the phantom-soc-v1 benchmark"
+> "Run the guardian-soc-v1 benchmark"
 
-The agent calls `bench_run(manifest="phantom-soc-v1")`. The runner dispatches 3 cases against `/api/chat`, scores each, returns the summary. Operator can then inspect `benchmark_runs.db` for the recorded run (`docker exec phantom_agent sqlite3 /app/data/benchmark_runs.db 'SELECT run_id, manifest_id, started_at, completed_at FROM benchmark_runs ORDER BY started_at DESC LIMIT 5'`).
+The agent calls `bench_run(manifest="guardian-soc-v1")`. The runner dispatches 3 cases against `/api/chat`, scores each, returns the summary. Operator can then inspect `benchmark_runs.db` for the recorded run (`docker exec guardian_agent sqlite3 /app/data/benchmark_runs.db 'SELECT run_id, manifest_id, started_at, completed_at FROM benchmark_runs ORDER BY started_at DESC LIMIT 5'`).
 
 ### What's still deferred
 
 - `/observability/bench` page (run history table, per-run drill-down, compare view).
-- CLI binary `phantom bench run` (operators invoke from chat today).
+- CLI binary `guardian bench run` (operators invoke from chat today).
 - Larger curated corpus + val/test split via salted hash.
 - Scheduled bench job (operators wire today via the existing scheduler + bench_run tool).
 - Regression-flag integration with release-gating.
@@ -14571,7 +14571,7 @@ The agent calls `bench_run(manifest="phantom-soc-v1")`. The runner dispatches 3 
 ### Forbidden post-v0.5.33
 
 - **No skipping infrastructure-error exclusion in scoring.** Cases that fail because the chat route was unreachable / the agent OOM'd are tagged `error` and EXCLUDED from the rate denominators per v0.5.29's discipline. The runner already honors this; future contributions must preserve it.
-- **No corpus mutations to `phantom-soc-v1.yaml` without a baseline-rebaseline plan.** The corpus IS the SLO contract; changing cases shifts what's being measured. Add new corpora rather than mutating this one.
+- **No corpus mutations to `guardian-soc-v1.yaml` without a baseline-rebaseline plan.** The corpus IS the SLO contract; changing cases shifts what's being measured. Add new corpora rather than mutating this one.
 
 ---
 
@@ -14593,7 +14593,7 @@ v0.5.32 wires both up so operator testing of v0.5.21-31 matches what the UI prom
 #### `bundles/spark/mcp/src/usecase/hook_dispatch_callback.py` (new)
 
 - `fire_hook_event_async(event, payload)` — fire-and-forget HTTP POST to the agent's internal fire-hook endpoint. Runs on a daemon thread so MCP code paths return immediately. Best-effort: failures logged at debug only, never block the caller.
-- Reads `PHANTOM_AGENT_INTERNAL_URL` + `MCP_TOKEN` at call time so late env changes are respected.
+- Reads `GUARDIAN_AGENT_INTERNAL_URL` + `MCP_TOKEN` at call time so late env changes are respected.
 
 #### `mcp/agent/app/api/agent/internal/fire-hook/route.ts` (new)
 
@@ -14633,13 +14633,13 @@ v0.5.32 ships without recursion defense. If an operator installs a Notification 
 
 The original #29 spec called for a full plugin lifecycle: entry-point discovery, marketplace UI for `pip install`, hot-reload on install, plugin detail pages, safety warnings, sandboxed execution. That's a multi-week effort with real security implications (plugins run with agent privileges). v0.5.31 ships the DISCOVERY SCAFFOLDING — the contract third-party developers can target while consumer-side wiring (skill registry, hook store reading the loader's results) happens in parallel.
 
-Phantom already had a filesystem-based plugin loader (`plugin_loader.py`, Phase X, directory-discovered plugins under `bundles/spark/plugins/<name>/`). v0.5.31 adds the **distributable** side: pip-installable Python packages that declare contributions via `entry_points`.
+Guardian already had a filesystem-based plugin loader (`plugin_loader.py`, Phase X, directory-discovered plugins under `bundles/spark/plugins/<name>/`). v0.5.31 adds the **distributable** side: pip-installable Python packages that declare contributions via `entry_points`.
 
 ### What ships
 
 #### `bundles/spark/mcp/src/usecase/plugin_entry_points.py` (new)
 
-- Reserved entry-point group names: `phantom.skills`, `phantom.connectors`, `phantom.hooks`, `phantom.scanners`, `phantom.providers`.
+- Reserved entry-point group names: `guardian.skills`, `guardian.connectors`, `guardian.hooks`, `guardian.scanners`, `guardian.providers`.
 - `PluginRef` dataclass: `{group, name, dist_name, dist_version, target}`. Identifies the distribution + the callable; resolution (importing + invoking) is the consumer-side concern.
 - `discover_plugins(group)` walks `importlib.metadata.entry_points(group=...)` and returns refs. Safe on systems with no plugins installed — empty list.
 - `discover_all()` walks every supported group.
@@ -14650,14 +14650,14 @@ Phantom already had a filesystem-based plugin loader (`plugin_loader.py`, Phase 
 Future plugin authors declare contributions in their `pyproject.toml`:
 
 ```toml
-[project.entry-points."phantom.skills"]
+[project.entry-points."guardian.skills"]
 my-skill = "my_pkg.skills:my_skill_factory"
 
-[project.entry-points."phantom.hooks"]
+[project.entry-points."guardian.hooks"]
 my-hook-builtin = "my_pkg.hooks:HookBuiltinSpec"
 ```
 
-The agent walks these at boot via `discover_plugins("phantom.skills")` (etc.).
+The agent walks these at boot via `discover_plugins("guardian.skills")` (etc.).
 
 ### What's deferred to a follow-up release
 
@@ -14763,10 +14763,10 @@ The original #24 spec called for a full benchmark stack: runner, scorer, corpus,
 ### What's deferred to a follow-up release
 
 - The actual **runner** that dispatches each `BenchCase` against the chat-route's HTTP endpoint, collects observed tool calls + final response + cost + wall, and feeds the result into `score_case`. v0.5.29 has the data model; the runner-against-route plumbing comes next.
-- **Corpus** at `bundles/spark/mcp/src/usecase/bench_cases/phantom-soc-v1/manifest.yaml`. The shape is documented in the module docstring; an operator-supplied YAML works today.
+- **Corpus** at `bundles/spark/mcp/src/usecase/bench_cases/guardian-soc-v1/manifest.yaml`. The shape is documented in the module docstring; an operator-supplied YAML works today.
 - **MCP tool** `bench_run` so the agent can fire a benchmark from chat.
 - **`/observability/bench` page** with run list + per-run detail + compare view.
-- **CLI binary** `phantom bench run` / `phantom bench compare`.
+- **CLI binary** `guardian bench run` / `guardian bench compare`.
 - **Scheduled bench job** (weekly auto-run).
 
 ### Forbidden post-v0.5.29
@@ -14821,7 +14821,7 @@ The follow-up release ships the UI + storage together once the operator validate
 
 ### Why
 
-Long tool outputs (e.g. `xlog_logs_tail(count=1000)`) blow the agent's context window with 200K of repetitive log noise that crowds out reasoning context AND inflates input-token cost on every subsequent turn until compaction. Octagon hit this in Verify phase and added truncation: replace the middle with a marker, keep the head + tail. v0.5.27 brings the same primitive to Phantom's chat route.
+Long tool outputs (e.g. `xlog_logs_tail(count=1000)`) blow the agent's context window with 200K of repetitive log noise that crowds out reasoning context AND inflates input-token cost on every subsequent turn until compaction. Octagon hit this in Verify phase and added truncation: replace the middle with a marker, keep the head + tail. v0.5.27 brings the same primitive to Guardian's chat route.
 
 ### What ships
 
@@ -14860,7 +14860,7 @@ Operator-tunable per-job / per-tool config (e.g. `xlog_logs_tail` gets 65536, `c
 
 ### Why
 
-Octagon's `inject_memory_context()` fires deterministically at the start of Recon — the agent doesn't have to remember to call memory_search. Phantom's chat agent DOES have to remember today, and only does it ~30% of the time in practice. The remaining 70%, the operator's prior context sits in `SqliteMemoryStore` (which Phantom's analysis showed is way more sophisticated than Octagon's — vector + FTS hybrid, MMR rerank, temporal decay, scoping) — unused. v0.5.26 ships the deterministic-inject path Phantom was missing.
+Octagon's `inject_memory_context()` fires deterministically at the start of Recon — the agent doesn't have to remember to call memory_search. Guardian's chat agent DOES have to remember today, and only does it ~30% of the time in practice. The remaining 70%, the operator's prior context sits in `SqliteMemoryStore` (which Guardian's analysis showed is way more sophisticated than Octagon's — vector + FTS hybrid, MMR rerank, temporal decay, scoping) — unused. v0.5.26 ships the deterministic-inject path Guardian was missing.
 
 ### What ships
 
@@ -14923,7 +14923,7 @@ Future enhancements (separate issue): in-chat banner via SSE side-channel; per-t
 
 ### Forbidden post-v0.5.25
 
-- **No auto-install at MCP startup without the operator opt-in path.** Phantom doesn't ship hooks the operator didn't ask for; the builtin must be installed explicitly via /settings/hooks.
+- **No auto-install at MCP startup without the operator opt-in path.** Guardian doesn't ship hooks the operator didn't ask for; the builtin must be installed explicitly via /settings/hooks.
 - **No silent compaction once this hook is installed.** Any future chat-route refactor that introduces a new compaction path must fire `PreCompact` for the hook to work.
 
 ---
@@ -15023,7 +15023,7 @@ Pre-v0.5.23 every job's dispatched chat turn could call any MCP tool. A schedule
 
 ### Why this change
 
-Pre-v0.5.22 every job dispatch used the runtime default model (`runtimeConfig.GEMINI_MODEL`). Operators with mixed workloads — a "nightly summary" job that genuinely needs Pro reasoning AND a "fire 10K logs every 5 minutes" job where Flash is fine — were stuck overpaying for either one. The Octagon benchmark numbers establish the cost case: same task, ~10× cost delta between cheap and default routing presets. Phantom needs the equivalent knob anchored to a workload boundary the operator can name. Jobs are that boundary.
+Pre-v0.5.22 every job dispatch used the runtime default model (`runtimeConfig.GEMINI_MODEL`). Operators with mixed workloads — a "nightly summary" job that genuinely needs Pro reasoning AND a "fire 10K logs every 5 minutes" job where Flash is fine — were stuck overpaying for either one. The Octagon benchmark numbers establish the cost case: same task, ~10× cost delta between cheap and default routing presets. Guardian needs the equivalent knob anchored to a workload boundary the operator can name. Jobs are that boundary.
 
 ### What ships
 
@@ -15087,7 +15087,7 @@ Pre-v0.5.22 every job dispatch used the runtime default model (`runtimeConfig.GE
 
 ### Why this change
 
-Phantom's hook framework already supported `command` (subprocess) and `http` (webhook) transports — both rightly required external integration (a script you wrote, a service you deployed). But framework-side primitives like "Slack approval routing" had no operator-friendly install path: you had to either deploy a slack-approval-receiver service yourself (HTTP transport) or paste a 25-line JSON snippet from `lib/slack-approval-hook.ts` (still HTTP under the hood). v0.5.21 makes installing those primitives one dropdown pick + filling 1-3 config fields.
+Guardian's hook framework already supported `command` (subprocess) and `http` (webhook) transports — both rightly required external integration (a script you wrote, a service you deployed). But framework-side primitives like "Slack approval routing" had no operator-friendly install path: you had to either deploy a slack-approval-receiver service yourself (HTTP transport) or paste a 25-line JSON snippet from `lib/slack-approval-hook.ts` (still HTTP under the hood). v0.5.21 makes installing those primitives one dropdown pick + filling 1-3 config fields.
 
 This is the Octagon gap-analysis Sprint 1 foundation issue — three later issues (#25 auto-inject memory, #27 pre-compact warning, #31 cost-ledger refactor) all want to ship as builtins, so #26 lands first.
 
@@ -15179,9 +15179,9 @@ Scenario 1 (code-only) = **MINOR bump within current major** (v5.29 → v5.30), 
 
 - **Green ↑ arrow realigned**: Dev cycle Section 1 — moved x=555 → x=702 to anchor under "Install dev binary" (was floating in the gap).
 - **Section 2 (Release cycle) — Customer consumes panel rewritten**:
-  - Removed "A. UI Update button" green sub-box and "phantom-updater polls GitHub Releases API" text.
-  - New A: "Minor release · S1" green — "re-run EXISTING installer (already on /opt/phantom/) → pulls newer images · same major"
-  - New B: "Major release · S2 / S3" blue — "download NEW installer · sudo ./phantom-installer-v(X+1) → installer flag: keep/wipe volumes"
+  - Removed "A. UI Update button" green sub-box and "guardian-updater polls GitHub Releases API" text.
+  - New A: "Minor release · S1" green — "re-run EXISTING installer (already on /opt/guardian/) → pulls newer images · same major"
+  - New B: "Major release · S2 / S3" blue — "download NEW installer · sudo ./guardian-installer-v(X+1) → installer flag: keep/wipe volumes"
   - Header rewritten: "Customer consumes — installer is the ONLY upgrade path"
 - **Section 3 (Three change scenarios) — all three cards rewritten**:
   - **Scenario 1 (green)**: pill changes PATCH → MINOR. Versioning: `v5.29 → v5.30 (minor bump, same major)`. Customer: "Re-run EXISTING installer on disk · Pulls newer images · same major version".
@@ -15191,7 +15191,7 @@ Scenario 1 (code-only) = **MINOR bump within current major** (v5.29 → v5.30), 
   - Removed the 5-step automated tar restore procedure.
   - New content: "Fully manual · NO automation" + "No automated content/data restore." + "Operator owns the entire flow" + bullets for customer-side backup decisions + manual data restoration.
   - Footer pill: "NO AUTOMATED RESTORE BY DESIGN".
-- **Operator yank card** updated: removed "phantom-updater stops surfacing it as 'available'" reference; replaced with "hides from release listing / fresh installer downloads skip it."
+- **Operator yank card** updated: removed "guardian-updater stops surfacing it as 'available'" reference; replaced with "hides from release listing / fresh installer downloads skip it."
 - **Section 6 (Path-filter contract)** — emphasis added:
   - Subtitle changed from "no source change → no workflow trigger → no digest change → no container recreate" to "no source change → NO new image · NO new release tag · same digest retagged from prev release".
   - Path filters header changed to "PATH FILTERS — UNTOUCHED SERVICES NEVER REBUILD OR RETAG".
@@ -15199,7 +15199,7 @@ Scenario 1 (code-only) = **MINOR bump within current major** (v5.29 → v5.30), 
 #### `docs/CICD.md`
 
 - **§ Change scenarios** — fully rewritten:
-  - S1: "MINOR bump within current major (v5.29 → v5.30)" + "Customer's existing installer at /opt/phantom/phantom-installer reads the latest minor manifest" + "No new installer binary published". Added "The 'no UI Update button' rule" subsection.
+  - S1: "MINOR bump within current major (v5.29 → v5.30)" + "Customer's existing installer at /opt/guardian/guardian-installer reads the latest minor manifest" + "No new installer binary published". Added "The 'no UI Update button' rule" subsection.
   - S2: "MAJOR bump (v5.29 → v6.0)" + "WIPE_VOLUMES=false flag (baked in at installer-build time for Scenario 2 releases)".
   - S3: "MAJOR bump (v5.29 → v6.0)" + "WIPE_VOLUMES=true flag" + "No interactive prompt — the major version bump + release notes are the customer's signal".
   - New subsection **The installer's `WIPE_VOLUMES` flag — Scenario 2 vs Scenario 3** explaining the build-time flag mechanic.
@@ -15207,9 +15207,9 @@ Scenario 1 (code-only) = **MINOR bump within current major** (v5.29 → v5.30), 
 - **§ Scenario implementation status** table rewritten — flag-based mechanic is the new future-work item.
 - **§ Customer onboarding flow** — step 7 rewritten to remove "UI Update button" mention.
 - **§ Rollback procedure → Customer-side rollback (Scenario 3)** — rewritten as fully manual: "No automated content/data restore. Operator owns the entire flow." Removed the 5-step tarball restore procedure.
-- **§ Operator-side: yanking a bad release** — removed phantom-updater UI Update reference.
-- **§ phantom-updater in the release loop** — fully reframed:
-  - New header "Primary role: per-instance connector container lifecycle" (phantom-updater's actual production role today).
+- **§ Operator-side: yanking a bad release** — removed guardian-updater UI Update reference.
+- **§ guardian-updater in the release loop** — fully reframed:
+  - New header "Primary role: per-instance connector container lifecycle" (guardian-updater's actual production role today).
   - v0.5.20 model correction note explaining the upgrade-detection endpoints are vestigial.
   - "Legacy upgrade endpoints (vestigial)" subsection acknowledging the endpoints still exist in source but aren't consumed.
   - Forbidden list: added "Re-introducing a customer-facing UI Update button."
@@ -15218,7 +15218,7 @@ Scenario 1 (code-only) = **MINOR bump within current major** (v5.29 → v5.30), 
 #### `CLAUDE.md`
 
 - Three-scenario summary table updated: S1 = Minor (v5.29 → v5.30), S2/S3 = MAJOR (v5.29 → v6.0) with `WIPE_VOLUMES` flag.
-- phantom-updater cross-reference updated to reflect the v0.5.20 reframing (primary role is connector container lifecycle; UI Update button removed).
+- guardian-updater cross-reference updated to reflect the v0.5.20 reframing (primary role is connector container lifecycle; UI Update button removed).
 
 ### Forbidden post-v0.5.20
 
@@ -15230,8 +15230,8 @@ Scenario 1 (code-only) = **MINOR bump within current major** (v5.29 → v5.30), 
 ### Files
 
 - `docs/cicd-pipeline.svg` (5 visual fixes)
-- `docs/CICD.md` (Change scenarios + decision tree + impl status + Customer onboarding step 7 + Rollback Scenario 3 + Operator yank + phantom-updater + path-filter contract)
-- `CLAUDE.md` (three-scenario summary table + phantom-updater cross-reference)
+- `docs/CICD.md` (Change scenarios + decision tree + impl status + Customer onboarding step 7 + Rollback Scenario 3 + Operator yank + guardian-updater + path-filter contract)
+- `CLAUDE.md` (three-scenario summary table + guardian-updater cross-reference)
 - `CHANGELOG.md` — this entry
 - `mcp/agent/lib/release-notes.ts` — v0.5.20 entry prepended
 
@@ -15326,7 +15326,7 @@ The audit method is documented in this entry for future use: when in doubt about
 This is the **second issue end-to-end under v0.5.17**. Lifecycle so far:
 
 1. Operator chat: "lets update our ci/cd svg diagram..."
-2. Agent opened [#20](https://github.com/kite-production/phantom/issues/20) with template body (Summary / Why / What ships / Smoke / Forbidden / Cross-references); applied `status:spec`, `component:docs`, `scenario:docs-only`
+2. Agent opened [#20](https://github.com/kite-production/guardian/issues/20) with template body (Summary / Why / What ships / Smoke / Forbidden / Cross-references); applied `status:spec`, `component:docs`, `scenario:docs-only`
 3. Operator chat: "go ahead"
 4. Agent transitioned `status:spec` → `status:spec-approved` per prompt-and-apply path; posted comment logging verbal authorization
 5. Implementation in this commit
@@ -15374,15 +15374,15 @@ The two dimensions are orthogonal: a change to `mcp/agent/lib/auth.ts` carries B
 | `area:backup-restore` | `/settings/backup-restore`, export/import |
 | `area:rest-api` | `/api/agent/*` REST surface |
 | `area:profile` | `/profile`, password change flow |
-| `area:factory-reset` | `phantom-factory-reset` script + flow |
-| `area:password-reset` | `phantom-reset-admin-password` + in-container CLI |
-| `area:auth` | login, session, `phantom_auth` cookie, SecretStore |
+| `area:factory-reset` | `guardian-factory-reset` script + flow |
+| `area:password-reset` | `guardian-reset-admin-password` + in-container CLI |
+| `area:auth` | login, session, `guardian_auth` cookie, SecretStore |
 
 **Files**:
 - `.github/labels.json` — 19 new entries under a new `area:*` block with `_comment` header explaining the orthogonal-to-component design
 - `docs/CICD.md § Spec-driven workflow` — new "Area" subsection with the full 19-label table, common label combinations table (showing how the four dimensions compose: e.g., "Chat UI bug fix" → `component:agent + area:chat + scenario:1`), and the rationale for keeping the dimensions orthogonal
 - `CLAUDE.md § Spec-driven workflow` — expanded responsibility #3 (mechanical labels) to mention that I apply ALL relevant classification labels at issue creation time across all four dimensions
-- Sync script run against `kite-production/phantom` — all 40 labels (21 existing + 19 new) confirmed live
+- Sync script run against `kite-production/guardian` — all 40 labels (21 existing + 19 new) confirmed live
 
 ### Items from operator's list already covered (NOT recreated)
 
@@ -15426,7 +15426,7 @@ The repo has an older `area: ui` label (with a space after the colon — differe
 This is the **first release end-to-end under the v0.5.17 spec-driven discipline**:
 
 1. Operator described the change in chat
-2. Agent opened issue [#19](https://github.com/kite-production/phantom/issues/19) with full spec (Summary / Why / What ships / Smoke-test bullets / Forbidden / Cross-references)
+2. Agent opened issue [#19](https://github.com/kite-production/guardian/issues/19) with full spec (Summary / Why / What ships / Smoke-test bullets / Forbidden / Cross-references)
 3. Agent applied mechanical labels: `status:spec`, `component:workflows`, `component:docs`, `scenario:docs-only`
 4. Operator authorized via chat ("lets go")
 5. Agent transitioned to `status:spec-approved` per operator's verbal authorization (prompt-and-apply path)
@@ -15457,7 +15457,7 @@ For a single-operator project this is overkill on small changes (hence the `scen
   - **Status** (7, exactly one at a time): `spec` → `spec-approved` → `in-progress` → `dev-built` → `testing-complete` → `release-approved` → `released`. Color gradient (gray → green → purple) makes lifecycle visible in the issue list.
   - **Component** (9, zero or more): mirrors per-service path-filter scopes (`agent` / `xlog` / `caldera` / `connectors` / `installer` / `workflows` / `docs` / `help-pages` / `journeys`).
   - **Scenario** (5, exactly one): mirrors docs/CICD.md § Change scenarios (`1` / `2` / `3` / `docs-only` / `trivial`). Colors match the SVG diagram (green/blue/red for 1/2/3).
-- **`.github/scripts/sync-labels.sh`** (NEW) — idempotently applies `labels.json` to the repo via `gh label create --force`. Runs once at bootstrap + whenever the taxonomy changes. Already applied to `kite-production/phantom`; all 21 labels live.
+- **`.github/scripts/sync-labels.sh`** (NEW) — idempotently applies `labels.json` to the repo via `gh label create --force`. Runs once at bootstrap + whenever the taxonomy changes. Already applied to `kite-production/guardian`; all 21 labels live.
 - **`.github/ISSUE_TEMPLATE/release.md`** (NEW) — spec-driven issue template. Pre-applies `status:spec`. Body sections (Summary / Why / What ships / Smoke-test bullets / Forbidden / Cross-references) mirror the CHANGELOG entry structure 1:1, so the issue body becomes the CHANGELOG entry at release time with minor wording edits.
 - **`docs/CICD.md` § Spec-driven workflow (NEW top-level section)** — full mechanics: lifecycle states, label taxonomy with rationale per dimension, trivial-change escape hatch criteria, auto-promotion design decision (Option A: label is metadata, chat approval stays; Options B + C deferred to v0.6.0+), cross-reference patterns between issues + commits + release.yml, backfill policy (none — start fresh from v0.5.17), forbidden patterns.
 - **CLAUDE.md updates**:
@@ -15501,7 +15501,7 @@ Why Option A first: zero new automation to maintain, zero misclick risk (custome
 
 ### Repo state at v0.5.17
 
-- 21 labels live on kite-production/phantom (verified via `gh label list`)
+- 21 labels live on kite-production/guardian (verified via `gh label list`)
 - Issue template wired via `?template=release.md` URL parameter
 - Spec discipline documented in both authoritative locations (docs/CICD.md for mechanics, CLAUDE.md for agent behavior)
 - Next non-trivial change opens [Issue #1 (or higher) — Phase 2 auto-labeling] under the new flow
@@ -15516,7 +15516,7 @@ Why Option A first: zero new automation to maintain, zero misclick risk (custome
 
 - **`docs/cicd-pipeline.svg`** (NEW, 41 KB, 707 lines of SVG) — six-section comprehensive diagram covering:
   1. **Dev cycle** (top): swim-lane layout with OPERATOR lane (local edit → push → install → smoke → ASK approval) over CI/CD lane (build-<svc>.yml → build-dev-installer.yml → dev-latest prerelease → staged binary). Animated flow arrows show pipeline direction.
-  2. **Release cycle**: git tag → release.yml → GitHub Release → customer (A: UI Update button via phantom-updater, B: re-download installer). Includes monorepo invariant callout.
+  2. **Release cycle**: git tag → release.yml → GitHub Release → customer (A: UI Update button via guardian-updater, B: re-download installer). Includes monorepo invariant callout.
   3. **Three change scenarios — decision tree**: central diamond ("What did the change touch?") with three color-coded outcome cards (Scenario 1 = green/code-only, Scenario 2 = blue/installer-change, Scenario 3 = red/breaking). Each card shows trigger, versioning, customer experience, volume policy.
   4. **GHCR per-version access matrix**: 3×2 grid mapping PAT type (customer / operator / no-association) against tag type (customer release / dev). Each cell shows the HTTP response. Includes "LOAD-BEARING MECHANIC" callout flagging build-dev-installer.yml's prerelease step as the v0.5.9 fix.
   5. **Rollback & recovery**: four side-by-side paths (Scenario 1+2 rollback via older installer, Scenario 3 manual backup restore, operator yank via `gh release edit --draft`, factory reset as cross-cutting).
@@ -15567,11 +15567,11 @@ When the pipeline changes substantively (new workflow file, scenario boundary mo
 
 2. **Tag immutability + accidental tag deletion recovery** — expanded subsection inside Rollback procedure. Codifies tag-immutability rules (never force-push a different commit to a published tag, never delete a published tag), accidental-tag-deletion recovery procedure (recover commit SHA from GitHub Release / workflow run / git reflog → recreate tag → push → verify customer flow), pointer to PREV_V race for back-to-back tagging.
 
-3. **Pre-release / beta channel (future)** — new top-level section after phantom-updater. Status today: not implemented. Future-work design sketch: separate `vX.Y.Z-beta.N` tag pattern, prerelease + NOT-latest marking, mechanic for phantom-updater channel-awareness. When this becomes relevant + implementation work needed + forbidden patterns (marking dev-latest as latest, obscuring beta status, granting beta customers repo scope).
+3. **Pre-release / beta channel (future)** — new top-level section after guardian-updater. Status today: not implemented. Future-work design sketch: separate `vX.Y.Z-beta.N` tag pattern, prerelease + NOT-latest marking, mechanic for guardian-updater channel-awareness. When this becomes relevant + implementation work needed + forbidden patterns (marking dev-latest as latest, obscuring beta status, granting beta customers repo scope).
 
 4. **Build cache observability** — new top-level section after Base-image digest pinning. Where caches live on the self-hosted runner (Docker layer cache under /var/lib/docker/overlay2/, buildx cache, npm cache per-job ephemeral). Inspection commands (`docker system df`, `docker system df -v`, `docker ps --format`, `docker images "ghcr.io/.../*"`, `docker buildx du`). Symptom-to-cause table for cache problems. Cleanup recipes (safe daily prune, aggressive old-version-tag removal, build-cache-only prune). Monitoring thresholds (>80% urgent, >90% urgent + investigate retention). When cache helps vs hurts. Forbidden: `--volumes=false` omission, direct filesystem manipulation, disabling `--pull`.
 
-5. **Self-hosted runner capacity** — new subsection inside phantom-vm runner prerequisites. Current state (one runner on phantom-vm). When to add a second (queue depth >3 jobs for >5 min, recurrent operator-reported delays). Topology options (same-VM vs separate-VM). Adding-a-second-runner procedure. Runner failover plan if phantom-vm goes down (currently no failover; mitigation steps documented).
+5. **Self-hosted runner capacity** — new subsection inside guardian-vm runner prerequisites. Current state (one runner on guardian-vm). When to add a second (queue depth >3 jobs for >5 min, recurrent operator-reported delays). Topology options (same-VM vs separate-VM). Adding-a-second-runner procedure. Runner failover plan if guardian-vm goes down (currently no failover; mitigation steps documented).
 
 6. **Image signing, SBOM, provenance (future)** — new top-level section after Image digest pinning contract. Status today: not implemented. Design sketch for when enterprise customer demand triggers implementation: cosign keyless signing via OIDC, syft for SBOM generation per image, slsa-github-generator for SLSA Level 3 provenance. Operational impact (~30-60s added to release.yml runtime, optional install-time verification gate). Forbidden: signing with repo-secret keypair, install-time SBOM generation (defeats provenance), jumping to SLSA L3 without intermediate levels.
 
@@ -15594,7 +15594,7 @@ After v0.5.15, all 15 audit gaps from the v0.5.13 retrospective are closed (v0.5
 | 2 | PAT recipes | Black box | ✅ Concrete recipes per type | No |
 | 3 | Rollback procedure | Not documented | ✅ Full procedure incl. tag immutability | No |
 | 4 | CI/CD failure modes | Scattered | ✅ 11-entry catalog with structure | No |
-| 5 | phantom-updater architectural role | Underspecified | ✅ Full architectural section | Future: scenario-awareness for Scenarios 2 + 3 |
+| 5 | guardian-updater architectural role | Underspecified | ✅ Full architectural section | Future: scenario-awareness for Scenarios 2 + 3 |
 | 6 | Composite action | Name-dropped | ✅ Inputs/outputs/steps documented | No |
 | 7 | Monorepo release invariant | Implicit | ✅ Explicitly codified | No |
 | 8 | PR cycle vs main-push cycle | Implicit | ✅ Table + rules | No |
@@ -15640,11 +15640,11 @@ After v0.5.15, all 15 audit gaps from the v0.5.13 retrospective are closed (v0.5
 
 3. **Rollback procedure** — new top-level section. Customer-side rollback for Scenario 1+2 (re-run older installer, volumes preserved), Scenario 3 (manual backup-restore — operationally expensive by design), operator-side yank procedure (`gh release edit --draft`), recovery from `release.yml` partial failure (re-dispatch or delete+retag). Closes the "we shipped a bad release, what now?" gap.
 
-4. **phantom-updater in the release loop** — new top-level section. Architectural piece previously underspecified. Covers source location, MCP_TOKEN auth + PAT auth for GHCR pulls, the 5 API endpoints (`/healthz`, `/api/v1/version/current`, `/version/check`, `/update/status`, `/update`), update detection mechanics (GitHub Releases API polling + manifest fetch + per-service digest comparison), update-apply SSE flow, V1 scope constraints (no rollback, no volume snapshots, no self-update), which 3 services updater manages, and scenario-aware behavior (today: Scenario 1 fully automated; Scenarios 2 + 3 need operator-driven installer download — Scenario 3 enforcement requires the `INCOMPATIBLE_FROM` mechanism that's documented but not yet implemented).
+4. **guardian-updater in the release loop** — new top-level section. Architectural piece previously underspecified. Covers source location, MCP_TOKEN auth + PAT auth for GHCR pulls, the 5 API endpoints (`/healthz`, `/api/v1/version/current`, `/version/check`, `/update/status`, `/update`), update detection mechanics (GitHub Releases API polling + manifest fetch + per-service digest comparison), update-apply SSE flow, V1 scope constraints (no rollback, no volume snapshots, no self-update), which 3 services updater manages, and scenario-aware behavior (today: Scenario 1 fully automated; Scenarios 2 + 3 need operator-driven installer download — Scenario 3 enforcement requires the `INCOMPATIBLE_FROM` mechanism that's documented but not yet implemented).
 
 5. **`build-and-push-dev-image` composite action** — new subsection under Workflow file layout. Documents the inputs (8), outputs (`digest`, `ref`), 4 steps (GHCR login, build with `--pull`, push-with-retry, capture-digest from RepoDigests), and why it's a composite action vs a reusable workflow. Closes the gap where the action was name-dropped in the workflow file layout but its actual behavior was opaque.
 
-6. **Monorepo release invariant** — new subsection under The two installers. Codifies the rule: all 11 images (5 stack + 6 connector) ship in lockstep at the same `vX.Y.Z`. Mixed-version manifests not supported by phantom-installer or phantom-updater. Closes the implicit-invariant gap that would otherwise be discoverable only by attempting to violate it.
+6. **Monorepo release invariant** — new subsection under The two installers. Codifies the rule: all 11 images (5 stack + 6 connector) ship in lockstep at the same `vX.Y.Z`. Mixed-version manifests not supported by guardian-installer or guardian-updater. Closes the implicit-invariant gap that would otherwise be discoverable only by attempting to violate it.
 
 7. **PR cycle (vs main-push cycle)** — new subsection under Build & release mechanics. Table comparing what fires on `pull_request` events vs `push` to main events. PR builds: docker build + tests + lint, NO `:dev` push, NO `dev-latest` republish, NO installer staging. Push-to-main: full pipeline. When to use each.
 
@@ -15653,7 +15653,7 @@ After v0.5.15, all 15 audit gaps from the v0.5.13 retrospective are closed (v0.5
 ### CLAUDE.md changes
 
 - New "When CI/CD breaks — failure-mode catalog" subsection inside the CI/CD pipeline section, with explicit instruction: "check [docs/CICD.md § CI/CD failure modes + recovery playbook] FIRST" when something goes wrong.
-- New "Other operator-facing CI/CD topics" subsection with crisp pointers to the 7 other new sections in docs/CICD.md (customer onboarding, PAT recipes, rollback, phantom-updater, monorepo invariant, PR cycle, composite action).
+- New "Other operator-facing CI/CD topics" subsection with crisp pointers to the 7 other new sections in docs/CICD.md (customer onboarding, PAT recipes, rollback, guardian-updater, monorepo invariant, PR cycle, composite action).
 - TOC at top of docs/CICD.md updated with all new sections + anchors.
 
 ### Doc size delta
@@ -15668,7 +15668,7 @@ The bulk of v0.5.14 is in docs/CICD.md (where it belongs per the v0.5.13 split �
 ### What v0.5.14 explicitly does NOT do
 
 - Implement Scenario 3's installer code. Still documented as deferred to first triggering release.
-- Implement phantom-updater's scenario-awareness for Scenarios 2 + 3. The contract is documented; the implementation is TBD when first needed.
+- Implement guardian-updater's scenario-awareness for Scenarios 2 + 3. The contract is documented; the implementation is TBD when first needed.
 - Build base-image auto-update workflow. Documented as a future helper; cadence remains manual.
 - Add CI/CD-level observability / alerting (gap #13 from the audit). Lower priority; deferred until repeated build failures actually hide.
 - Add SBOM / image signing / provenance attestation (gap #10). Deferred to enterprise-customer demand.
@@ -15715,16 +15715,16 @@ Each scenario in docs/CICD.md gets: trigger conditions, versioning rule, what ar
 
 ### What ships
 
-- **`docs/CICD.md`** (NEW) — full pipeline guide. 18 sections covering: overview, three change scenarios with decision tree + implementation status table, the two installers, image tag convention, GHCR per-version access, per-service path-filter contract, `docker compose pull` semantics (NOT a fresh build), REBUILT/UNCHANGED diagnostic, base-image digest pinning (+ caldera carve-out), install location + volumes + recovery utilities, workflow file layout, build & release mechanics, phantom-vm runner prerequisites, code → VM contract, smoke-test commands, installer build env-var contract, image digest pinning contract for the customer compose, consolidated forbidden list.
+- **`docs/CICD.md`** (NEW) — full pipeline guide. 18 sections covering: overview, three change scenarios with decision tree + implementation status table, the two installers, image tag convention, GHCR per-version access, per-service path-filter contract, `docker compose pull` semantics (NOT a fresh build), REBUILT/UNCHANGED diagnostic, base-image digest pinning (+ caldera carve-out), install location + volumes + recovery utilities, workflow file layout, build & release mechanics, guardian-vm runner prerequisites, code → VM contract, smoke-test commands, installer build env-var contract, image digest pinning contract for the customer compose, consolidated forbidden list.
 - **`CLAUDE.md`** trimmed:
   - **Removed** (now in docs/CICD.md): full `## Local-mirrors-customer deploy flow` section (270 lines), full `## Remote-first workflow` section (110 lines), full `## Build & release workflow` mechanics (130+ lines of mechanics; kept the agent-behavior subsections), full `## Image digest pinning contract` (50 lines), CI/CD smoke-test commands from `## Command reference` (60 lines).
   - **Replaced with pointers**:
     - New `## CI/CD pipeline → see docs/CICD.md` section with the three-scenario summary + the agent-behavior list + the approval-gates summary.
-    - New `## phantom-vm operator environment` section (keeping VM coordinates + credentials + IAP access pattern, which are agent-environment-specific not CI/CD).
+    - New `## guardian-vm operator environment` section (keeping VM coordinates + credentials + IAP access pattern, which are agent-environment-specific not CI/CD).
     - New `## Build & release workflow contracts` section with just the BEHAVIORAL contracts: pre-deploy gate, smoke-test bullet contract, approval phrasing, pointer to the post-tag closure deliverable template in Documentation discipline.
     - New `## Image digest pinning → see docs/CICD.md` pointer.
     - Renamed `## Command reference` to `## Stack runtime behavior` (skills bootstrap is product behavior, not CI/CD).
-  - **Kept verbatim** (agent-behavior or product knowledge): Operator communication context, Contained-release discipline, Agent credential guardrail, What Phantom is, Pre-build context refresh, Architecture page is the spec, Documentation discipline (including the Release closure report template), Canonical-state discipline, Stack topology, Architecture that isn't obvious from the tree, Configuration, Conventions to preserve.
+  - **Kept verbatim** (agent-behavior or product knowledge): Operator communication context, Contained-release discipline, Agent credential guardrail, What Guardian is, Pre-build context refresh, Architecture page is the spec, Documentation discipline (including the Release closure report template), Canonical-state discipline, Stack topology, Architecture that isn't obvious from the tree, Configuration, Conventions to preserve.
 - **All 6 workflow file headers** updated: `CLAUDE.md § Per-service path-filter contract` → `docs/CICD.md § Per-service path-filter contract`. Cross-references between workflows + CLAUDE.md still work; future maintainers see the actual reference file.
 
 ### Mental model the split enforces
@@ -15739,11 +15739,11 @@ When pipeline mechanics change (a new build workflow, a new path filter, a Docke
 The contract for Scenario 3 (backwards-incompatible storage schema, volume reset required) is fully documented in docs/CICD.md including:
 - `INCOMPATIBLE_FROM` flag baked into the installer at build time
 - Backup-then-wipe logic gated behind `UPGRADE` confirmation
-- Backup destination `/opt/phantom/backups/<release>-pre-upgrade-<timestamp>/`
+- Backup destination `/opt/guardian/backups/<release>-pre-upgrade-<timestamp>/`
 - Release-time discipline for breaking-change documentation
 - No bypass flag — confirmation is non-negotiable
 
-**The implementation isn't in v0.5.13** because no v0.5.x change has triggered Scenario 3 yet. The contract is documented now so when the first backwards-incompatible release ships (likely v1.0.0 or v2.0.0), the implementation has a clear target. docs/CICD.md § Scenario implementation status lists exactly what's needed in installer/phantom-installer.template.sh + installer/build-phantom-installer.sh to make Scenario 3 work.
+**The implementation isn't in v0.5.13** because no v0.5.x change has triggered Scenario 3 yet. The contract is documented now so when the first backwards-incompatible release ships (likely v1.0.0 or v2.0.0), the implementation has a clear target. docs/CICD.md § Scenario implementation status lists exactly what's needed in installer/guardian-installer.template.sh + installer/build-guardian-installer.sh to make Scenario 3 work.
 
 ### What v0.5.13 explicitly does NOT do
 
@@ -15764,7 +15764,7 @@ The contract for Scenario 3 (backwards-incompatible storage schema, volume reset
 
 ## [v0.5.12] — 2026-05-14
 
-**No unnecessary image rebuilds: narrow path-filter triggers + digest-pinned base images.** v0.5.11's diagnostic exposed a real bug it didn't cause: per-service workflows' path filters listed `.github/workflows/build-<svc>.yml` AND `.github/actions/build-and-push-dev-image/**` — so editing a workflow's COMMENT HEADER (or the shared composite action) re-triggered the build. `docker build --pull` then fetched fresh upstream base layers (`python:3.12-slim`, `node:20-alpine`), producing different image digests despite zero service source changes. Result on the operator-driven install: `phantom-xlog` and `phantom-caldera` recreated unnecessarily on the v0.5.11 cycle, costing caldera in-memory state.
+**No unnecessary image rebuilds: narrow path-filter triggers + digest-pinned base images.** v0.5.11's diagnostic exposed a real bug it didn't cause: per-service workflows' path filters listed `.github/workflows/build-<svc>.yml` AND `.github/actions/build-and-push-dev-image/**` — so editing a workflow's COMMENT HEADER (or the shared composite action) re-triggered the build. `docker build --pull` then fetched fresh upstream base layers (`python:3.12-slim`, `node:20-alpine`), producing different image digests despite zero service source changes. Result on the operator-driven install: `guardian-xlog` and `guardian-caldera` recreated unnecessarily on the v0.5.11 cycle, costing caldera in-memory state.
 
 v0.5.12 closes both gaps simultaneously:
 
@@ -15777,14 +15777,14 @@ v0.5.12 closes both gaps simultaneously:
   - **xlog**: `xlog/**` only (removed: self-path, composite-action-path)
   - **agent**: `mcp/agent/**` + `bundles/spark/**` only (removed: self-path, composite-action-path)
   - **caldera**: `third_party/caldera/**` only (removed: self-path, composite-action-path) — caldera is the highest-stakes consumer of this fix because state loss on recreate
-  - **connectors**: `bundles/spark/connectors/**` + `phantom-connector-runtime/**` only
+  - **connectors**: `bundles/spark/connectors/**` + `guardian-connector-runtime/**` only
   - In-file comment block on each `paths:` documents the trade-off (workflow-file edits no longer auto-rebuild; use `gh workflow run` for forced exercise)
 - **Dockerfiles digest-pinned** (8 `FROM` lines across 5 files):
   - `mcp/agent/Dockerfile`: `node:20-alpine@sha256:fb4cd12c…`, `python:3.12-slim@sha256:401f6e1a…` (×2 stages)
   - `xlog/Dockerfile`: `python:3.12@sha256:d824f747…`
   - `updater/Dockerfile`: `python:3.12-slim@sha256:401f6e1a…`
-  - `phantom-browser/Dockerfile`: `chromedp/headless-shell:latest@sha256:313ed725…` (the `:latest` tag is now cosmetic — digest is the source of truth)
-  - `phantom-connector-runtime/Dockerfile`: `python:3.12-slim@sha256:401f6e1a…`
+  - `guardian-browser/Dockerfile`: `chromedp/headless-shell:latest@sha256:313ed725…` (the `:latest` tag is now cosmetic — digest is the source of truth)
+  - `guardian-connector-runtime/Dockerfile`: `python:3.12-slim@sha256:401f6e1a…`
   - Each pin has an inline comment with the `docker pull + docker inspect` recipe for future digest updates
 - **`CLAUDE.md` § Base-image digest pinning (NEW)** under "Per-service path-filter contract":
   - Why pinning matters (concrete example of v0.5.11's xlog drift)
@@ -15804,7 +15804,7 @@ After v0.5.12 lands and the next push to main fires `build-dev-installer.yml`, t
 - Services whose source didn't change: **✓ UNCHANGED** (digests stable across `--pull` retries)
 - Services whose source DID change: **🔨 REBUILT** (only the legitimate cases)
 
-`phantom-xlog` and `phantom-caldera` rebuild ONLY when their respective source paths actually change. Workflow-file edits, comment header touches, and composite-action improvements no longer cause container recreates. Caldera in-memory state survives every push that doesn't move the caldera submodule pin.
+`guardian-xlog` and `guardian-caldera` rebuild ONLY when their respective source paths actually change. Workflow-file edits, comment header touches, and composite-action improvements no longer cause container recreates. Caldera in-memory state survives every push that doesn't move the caldera submodule pin.
 
 ### Mental model after v0.5.12
 
@@ -15825,7 +15825,7 @@ Either alone is necessary but not sufficient. Together they enforce: workflow ru
 ### Files
 
 - `.github/workflows/build-xlog.yml`, `build-agent.yml`, `build-caldera.yml`, `build-connectors.yml` — path filters narrowed
-- `mcp/agent/Dockerfile`, `xlog/Dockerfile`, `updater/Dockerfile`, `phantom-browser/Dockerfile`, `phantom-connector-runtime/Dockerfile` — `FROM` digest pinning
+- `mcp/agent/Dockerfile`, `xlog/Dockerfile`, `updater/Dockerfile`, `guardian-browser/Dockerfile`, `guardian-connector-runtime/Dockerfile` — `FROM` digest pinning
 - `CLAUDE.md` — new "Base-image digest pinning" subsection + Forbidden list expansion
 - `CHANGELOG.md` — this entry
 - `mcp/agent/lib/release-notes.ts` — v0.5.12 entry prepended
@@ -15845,7 +15845,7 @@ v0.5.11 codifies the contracts that govern the dev/release cycle so the same con
   - The "no source change = no workflow trigger = no `:dev` digest change = no container recreate" invariant stated explicitly
   - A subsection explaining `docker compose pull`'s "Pulled" output is NOT a fresh build (manifest-verify for cached digests is ~1s; real fetches are minutes); the followup `docker compose up` is the forensic indicator (Running/Healthy vs Started/Recreated)
   - Subsection describing the new REBUILT/UNCHANGED diagnostic and its four states (🆕 FIRST-BUILD, ✓ UNCHANGED, 🔨 REBUILT, 📦 STABLE-ADVANCED for updater/browser)
-  - Forbidden list: removing path filters, adding workflow_dispatch shortcuts that bypass them, removing the diagnostic step, hand-editing digests in `/opt/phantom/.env`
+  - Forbidden list: removing path filters, adding workflow_dispatch shortcuts that bypass them, removing the diagnostic step, hand-editing digests in `/opt/guardian/.env`
 - **`CLAUDE.md` § Smoke-test bullet contract (NEW)** under "Build & release workflow (MANDATORY)":
   - When: every successful `build-dev-installer.yml` run, in the same chat message that announces "dev-latest staged"
   - Where: in chat only — NOT in the prerelease body, NOT in release-notes.ts (per operator preference; durable docs describe SHIPPED state, not testing process)
@@ -15899,8 +15899,8 @@ The pre-v0.5.11 state had all the right mechanisms (path-filtered builds, digest
 The first install attempt against v0.5.9's `dev-latest` prerelease hit this:
 
 ```
-→ Validating token against ghcr.io/kite-production/phantom-agent ...
-! Token from /opt/phantom/.env failed validation against ghcr.io.
+→ Validating token against ghcr.io/kite-production/guardian-agent ...
+! Token from /opt/guardian/.env failed validation against ghcr.io.
 ! Likely causes: expired (ghs_ tokens last ~1 hour), missing
 ! read:packages scope, or revoked.
 ```
@@ -15909,7 +15909,7 @@ The PAT was a fresh `read:packages` token and was, in fact, pullable — verifie
 
 ### What ships
 
-- **`installer/phantom-installer.template.sh`** — `validate_ghcr_token()`'s probe Accept header expanded from one media type to four:
+- **`installer/guardian-installer.template.sh`** — `validate_ghcr_token()`'s probe Accept header expanded from one media type to four:
   - `application/vnd.oci.image.index.v1+json` (multi-arch OCI index; `:dev` tags)
   - `application/vnd.oci.image.manifest.v1+json` (single-arch OCI)
   - `application/vnd.docker.distribution.manifest.list.v2+json` (multi-arch Docker manifest list)
@@ -15927,17 +15927,17 @@ The fix is the cheap kind: stop assuming the format. Accept all four standard ma
 
 ### What v0.5.10 explicitly does NOT do
 
-- Probe a different image. The probe still targets `phantom-agent:dev` (post-v0.5.9 the access pre-condition is met; before that, the probe couldn't have succeeded regardless of Accept header). Future-me writing a new validation probe: if you switch the image, also re-check the manifest format the target uses and confirm the Accept header still covers it.
+- Probe a different image. The probe still targets `guardian-agent:dev` (post-v0.5.9 the access pre-condition is met; before that, the probe couldn't have succeeded regardless of Accept header). Future-me writing a new validation probe: if you switch the image, also re-check the manifest format the target uses and confirm the Accept header still covers it.
 - Re-implement validation against `docker compose pull --dry-run` (which would handle media types correctly by construction). The current probe is fine; the Accept header was the only gap.
 - Add a `--skip-validation` escape hatch. Per the operator's no-workarounds rule + the v0.5.8 design intent (catch token issues early before any state mutation). The Accept-header fix closes the gap that motivated wanting a bypass; no bypass needed.
 
 ### Customer impact
 
-Customers running `phantom-installer` (customer flavor, customer release tags) were never affected — their tags use the legacy single-arch format and validate fine with the narrow Accept header. v0.5.10 is operator-cycle plumbing that becomes customer-visible only the day a customer release tag changes manifest format (e.g., if `release.yml` ever flips to buildx-style multi-arch builds). At that point, v0.5.10's wider Accept header silently survives the change.
+Customers running `guardian-installer` (customer flavor, customer release tags) were never affected — their tags use the legacy single-arch format and validate fine with the narrow Accept header. v0.5.10 is operator-cycle plumbing that becomes customer-visible only the day a customer release tag changes manifest format (e.g., if `release.yml` ever flips to buildx-style multi-arch builds). At that point, v0.5.10's wider Accept header silently survives the change.
 
 ### Files
 
-- `installer/phantom-installer.template.sh` — `validate_ghcr_token()` Accept header expansion + explanatory comment
+- `installer/guardian-installer.template.sh` — `validate_ghcr_token()` Accept header expansion + explanatory comment
 - `CHANGELOG.md` — this entry
 - `mcp/agent/lib/release-notes.ts` — v0.5.10 entry prepended
 
@@ -15945,11 +15945,11 @@ Customers running `phantom-installer` (customer flavor, customer release tags) w
 
 ## [v0.5.9] — 2026-05-13
 
-**Dev image versions are now pullable by the operator's PAT — via a `dev-latest` GitHub prerelease.** Pre-v0.5.9 the operator-driven dev install on phantom-vm failed at `docker compose pull` even when the registry token validated cleanly via v0.5.8's probe: a PAT with `read:packages` (and even `repo + read:packages`) returned 404 for `ghcr.io/kite-production/phantom-agent:dev` while pulling `:vX.Y.Z` worked fine. The root cause: **GHCR enforces pull access per IMAGE VERSION, not per package or token scope alone.**
+**Dev image versions are now pullable by the operator's PAT — via a `dev-latest` GitHub prerelease.** Pre-v0.5.9 the operator-driven dev install on guardian-vm failed at `docker compose pull` even when the registry token validated cleanly via v0.5.8's probe: a PAT with `read:packages` (and even `repo + read:packages`) returned 404 for `ghcr.io/kite-production/guardian-agent:dev` while pulling `:vX.Y.Z` worked fine. The root cause: **GHCR enforces pull access per IMAGE VERSION, not per package or token scope alone.**
 
 A package version becomes org-readable when the workflow run that publishes it ALSO creates a GitHub Release. Customer `vX.Y.Z` versions get this via `release.yml`'s `gh release create`. Dev `:dev` versions, published by per-service `build-<svc>.yml` workflows that don't create releases, stayed scoped to the publishing workflow's `GITHUB_TOKEN` — invisible to any third-party PAT regardless of scope.
 
-The v0.5.9 fix: `build-dev-installer.yml` publishes a GitHub Release marked `--prerelease` with tag `dev-latest` after each successful dev build. The `:dev` image versions inherit pull permission from this prerelease, so the operator's PAT (the same kind customers use, with `read:packages`) can now pull `:dev` from phantom-vm.
+The v0.5.9 fix: `build-dev-installer.yml` publishes a GitHub Release marked `--prerelease` with tag `dev-latest` after each successful dev build. The `:dev` image versions inherit pull permission from this prerelease, so the operator's PAT (the same kind customers use, with `read:packages`) can now pull `:dev` from guardian-vm.
 
 ### What ships
 
@@ -15967,11 +15967,11 @@ git push origin main
   ↓
 build-<svc>.yml workflows rebuild images whose source changed → push :dev
   ↓
-build-dev-installer.yml: builds phantom-installer-dev pinned to current :dev digests
-                          + stages at /home/ayman/phantom-installer-dev
+build-dev-installer.yml: builds guardian-installer-dev pinned to current :dev digests
+                          + stages at /home/ayman/guardian-installer-dev
                           + publishes dev-latest prerelease  ← v0.5.9 addition
   ↓
-operator runs: sudo /home/ayman/phantom-installer-dev
+operator runs: sudo /home/ayman/guardian-installer-dev
                           ↑
               this now SUCCEEDS at docker compose pull because the
               operator's PAT can resolve :dev via the prerelease
@@ -15982,7 +15982,7 @@ release.yml: builds + publishes customer images + customer installer
               + deletes dev-latest prerelease ← v0.5.9 addition
 ```
 
-The operator-facing commands are unchanged from v0.5.7+ (`git push origin main`; `sudo /home/ayman/phantom-installer-dev` on phantom-vm). The fix is entirely in the access layer: what was a confusing 404 at pull time becomes a clean install.
+The operator-facing commands are unchanged from v0.5.7+ (`git push origin main`; `sudo /home/ayman/guardian-installer-dev` on guardian-vm). The fix is entirely in the access layer: what was a confusing 404 at pull time becomes a clean install.
 
 ### Why prerelease (and not the alternatives)
 
@@ -16001,7 +16001,7 @@ The operator-facing commands are unchanged from v0.5.7+ (`git push origin main`;
 
 - Auto-rotate the operator's PAT. Token strategy (classic vs fine-grained, 30-day vs no-expiry) is an operator choice; v0.5.8's token-validation re-prompt handles expiry ergonomically.
 - Cache the prerelease's pull bearer. Each install run does its own GHCR token exchange (cheap; ~1-2s); caching would add a key-rotation concern for sub-second savings.
-- Surface the dev-latest prerelease in the customer-facing release listing. `--prerelease` keeps it OUT of the "latest" slot for `gh release download --pattern phantom-installer`. The operator can `gh release download dev-latest --pattern phantom-installer-dev` explicitly, but customers never see it from a default browse.
+- Surface the dev-latest prerelease in the customer-facing release listing. `--prerelease` keeps it OUT of the "latest" slot for `gh release download --pattern guardian-installer`. The operator can `gh release download dev-latest --pattern guardian-installer-dev` explicitly, but customers never see it from a default browse.
 
 ### Files
 
@@ -16015,32 +16015,32 @@ The operator-facing commands are unchanged from v0.5.7+ (`git push origin main`;
 
 ## [v0.5.8] — 2026-05-13
 
-**Installer validates the registry token before using it; re-prompts if stale.** Operator-reported: after running `sudo /home/ayman/phantom-installer-dev` on phantom-vm post-v0.5.7, step 7's `docker compose pull` failed with `denied: denied` from GHCR. Cause: the token in `/opt/phantom/.env` was the ephemeral `ghs_…` token from a prior auto-deploy run (~hours-old, GitHub App installation tokens TTL is ~1 hour). The installer blindly reused that stale token through steps 4-6 and only failed at step 7 with a confusing error.
+**Installer validates the registry token before using it; re-prompts if stale.** Operator-reported: after running `sudo /home/ayman/guardian-installer-dev` on guardian-vm post-v0.5.7, step 7's `docker compose pull` failed with `denied: denied` from GHCR. Cause: the token in `/opt/guardian/.env` was the ephemeral `ghs_…` token from a prior auto-deploy run (~hours-old, GitHub App installation tokens TTL is ~1 hour). The installer blindly reused that stale token through steps 4-6 and only failed at step 7 with a confusing error.
 
 Pre-v0.5.7 the auto-deploy workflow was masking this lifecycle problem by always injecting a fresh `secrets.GITHUB_TOKEN` per run. v0.5.7's "CI builds, operator installs" change correctly surfaced the issue — and v0.5.8 fixes the installer to handle it.
 
 ### What ships
 
-- **`installer/phantom-installer.template.sh`** — step 4 (Registry token) now:
+- **`installer/guardian-installer.template.sh`** — step 4 (Registry token) now:
   1. Captures the token from the existing priority chain (env var → `.env` → prompt).
-  2. **Validates** it against GHCR by exchanging it for a per-image pull bearer via `https://ghcr.io/token` and fetching a manifest for `ghcr.io/kite-production/phantom-agent:dev`.
-  3. On validation failure, re-prompts the operator for a fresh PAT (interactive only — if no TTY available, dies with a clear "provide PHANTOM_REGISTRY_TOKEN=… or update `.env`" message rather than silently failing at step 7).
+  2. **Validates** it against GHCR by exchanging it for a per-image pull bearer via `https://ghcr.io/token` and fetching a manifest for `ghcr.io/kite-production/guardian-agent:dev`.
+  3. On validation failure, re-prompts the operator for a fresh PAT (interactive only — if no TTY available, dies with a clear "provide GUARDIAN_REGISTRY_TOKEN=… or update `.env`" message rather than silently failing at step 7).
   4. Caps at 3 attempts to obtain a valid token; gives up with a clear error pointing at github.com/settings/tokens.
 - Catches three failure modes early instead of at step 7:
   - **Expired token** (most common — ephemeral `ghs_` lifetimes)
   - **Wrong scope** (a `repo`-only PAT won't pull packages — needs `read:packages` for `kite-production`)
   - **Revoked token** (operator rotated their PAT externally; old value in `.env` no longer works)
-- Operator's recovery is now ergonomic: paste a fresh PAT at the prompt and the install continues. Pre-v0.5.8 the operator had to manually edit `.env` or re-run with `PHANTOM_REGISTRY_TOKEN=… sudo -E …`.
+- Operator's recovery is now ergonomic: paste a fresh PAT at the prompt and the install continues. Pre-v0.5.8 the operator had to manually edit `.env` or re-run with `GUARDIAN_REGISTRY_TOKEN=… sudo -E …`.
 
 ### How the probe works
 
 ```
-PAT → POST ghcr.io/token?service=ghcr.io&scope=repository:kite-production/phantom-agent:pull
+PAT → POST ghcr.io/token?service=ghcr.io&scope=repository:kite-production/guardian-agent:pull
        (basic auth with thekite-dev + the PAT)
     ↓
    bearer token (short-lived, per-image)
     ↓
-HEAD ghcr.io/v2/kite-production/phantom-agent/manifests/dev
+HEAD ghcr.io/v2/kite-production/guardian-agent/manifests/dev
      (Authorization: Bearer <bearer>)
     ↓
 HTTP 200 = valid;  403 = scope missing;  401 = bad bearer;  any other = die
@@ -16060,7 +16060,7 @@ Customers using long-lived fine-grained PATs (the canonical install path per the
 
 ### Files
 
-- `installer/phantom-installer.template.sh` — step 4 token validation loop + `validate_ghcr_token()` helper; added `GHCR_OWNER` constant
+- `installer/guardian-installer.template.sh` — step 4 token validation loop + `validate_ghcr_token()` helper; added `GHCR_OWNER` constant
 - `CHANGELOG.md` — this entry
 - `mcp/agent/lib/release-notes.ts` — v0.5.8 entry prepended
 
@@ -16068,21 +16068,21 @@ Customers using long-lived fine-grained PATs (the canonical install path per the
 
 ## [v0.5.7] — 2026-05-13
 
-**Dev workflow no longer auto-deploys: CI builds, operator installs.** The dev `deploy-dev-installer.yml` workflow used to run `sudo ./phantom-installer-dev` on phantom-vm after every successful image build, automatically installing the new dev bytes. v0.5.7 retires that behavior. The workflow is renamed `build-dev-installer.yml` and only **builds + stages** the dev installer binary; the operator drives every install on phantom-vm by hand.
+**Dev workflow no longer auto-deploys: CI builds, operator installs.** The dev `deploy-dev-installer.yml` workflow used to run `sudo ./guardian-installer-dev` on guardian-vm after every successful image build, automatically installing the new dev bytes. v0.5.7 retires that behavior. The workflow is renamed `build-dev-installer.yml` and only **builds + stages** the dev installer binary; the operator drives every install on guardian-vm by hand.
 
 Why retire auto-deploy:
-- **Doesn't match the customer flow** that operators are simulating. Customers download phantom-installer, run it themselves, walk the upgrade ceremony as a discrete operator experience. The dev path was diverging from this — every `git push` auto-installed without operator involvement.
+- **Doesn't match the customer flow** that operators are simulating. Customers download guardian-installer, run it themselves, walk the upgrade ceremony as a discrete operator experience. The dev path was diverging from this — every `git push` auto-installed without operator involvement.
 - **Took control of upgrade timing away from the operator.** When you push a fix, you want to install when YOU are ready to test it, not the moment CI finishes. Auto-deploy created a race between CI completion and the operator's mental readiness to verify.
 - **Short-circuited explicit upgrade testing.** "I have v0.5.6 installed; let me upgrade to v0.5.7 via the installer's upgrade path" is a customer scenario worth exercising deliberately. Auto-deploy made every install effectively a first-install (or a transparent in-place swap) rather than a witnessed upgrade.
 
 ### What ships
 
-- **`.github/workflows/build-dev-installer.yml`** — renamed from `deploy-dev-installer.yml`. Builds phantom-installer-dev with current `:dev` digests pinned + stages a fresh copy at `/home/ayman/phantom-installer-dev` on phantom-vm + uploads the binary as a workflow artifact. No `Deploy on phantom-vm` step.
-- **Operator's new install command on phantom-vm**:
+- **`.github/workflows/build-dev-installer.yml`** — renamed from `deploy-dev-installer.yml`. Builds guardian-installer-dev with current `:dev` digests pinned + stages a fresh copy at `/home/ayman/guardian-installer-dev` on guardian-vm + uploads the binary as a workflow artifact. No `Deploy on guardian-vm` step.
+- **Operator's new install command on guardian-vm**:
   ```bash
-  sudo /home/ayman/phantom-installer-dev
+  sudo /home/ayman/guardian-installer-dev
   ```
-  Same install ceremony as a customer running `sudo ./phantom-installer` on their VM — pull pinned digests, recreate services whose image content changed, run the post-install banner. Runs at the operator's cadence, not CI's.
+  Same install ceremony as a customer running `sudo ./guardian-installer` on their VM — pull pinned digests, recreate services whose image content changed, run the post-install banner. Runs at the operator's cadence, not CI's.
 - **CLAUDE.md** updates throughout: workflow file layout table reflects the new name + per-service build files; "What this means operationally" describes the build-then-operator-install flow; "Build & release workflow (MANDATORY)" section codifies the four rules (CI builds, operator installs, IAP tunnel is smoke-test-only, releases need explicit chat approval); approval-gates table includes the operator's install as an explicit step; docker-compose.yml header comment corrected (the repo-root compose is dev-workstation only, not CI).
 
 ### Operator's dev cycle going forward
@@ -16096,12 +16096,12 @@ git push origin main
   ↓
 build-<svc>.yml workflows: rebuild images whose source changed
   ↓
-build-dev-installer.yml: rebuilds phantom-installer-dev, stages it at
-                         /home/ayman/phantom-installer-dev
+build-dev-installer.yml: rebuilds guardian-installer-dev, stages it at
+                         /home/ayman/guardian-installer-dev
   ↓
-OPERATOR ssh's to phantom-vm + runs: sudo /home/ayman/phantom-installer-dev
+OPERATOR ssh's to guardian-vm + runs: sudo /home/ayman/guardian-installer-dev
   ↓
-phantom-vm now upgraded; operator walks smoke-test matrix in browser
+guardian-vm now upgraded; operator walks smoke-test matrix in browser
   ↓
 ASK FOR APPROVAL  ← only step that requires operator confirmation
   ↓
@@ -16113,11 +16113,11 @@ git tag vX.Y.Z + push → release.yml fires
 - Touch the per-service build workflows (`build-xlog.yml` / `build-agent.yml` / `build-caldera.yml` / `build-connectors.yml`). They still trigger on path-filtered push to main and build `:dev` images. Unchanged.
 - Touch `release.yml`. Releases still fire on `v*.*.*` tag push and publish to GHCR + GitHub Releases. Unchanged.
 - Add a "deploy on demand" flag or workflow_dispatch hook for auto-deploy. The contract is clear: CI builds, operator installs. No bypass switch.
-- Move the runtime install location. `/opt/phantom/` is still where the installed stack lives.
+- Move the runtime install location. `/opt/guardian/` is still where the installed stack lives.
 
 ### Customer impact
 
-None — customers were never affected by the dev auto-deploy path. The customer flow has always been "download phantom-installer, run it" and remains unchanged. v0.5.7 is an operator-facing change to the dev-cycle workflow only.
+None — customers were never affected by the dev auto-deploy path. The customer flow has always been "download guardian-installer, run it" and remains unchanged. v0.5.7 is an operator-facing change to the dev-cycle workflow only.
 
 ### Files
 
@@ -16131,15 +16131,15 @@ None — customers were never affected by the dev auto-deploy path. The customer
 
 ## [v0.5.6] — 2026-05-13
 
-**Factory-reset depends on the installer being part of the install — refuses cleanly when it isn't.** Operator-reported: `sudo /opt/phantom/phantom-factory-reset --dry-run` printed a warning + prompted for typed `YES` confirmation to "proceed without auto-recovery". Two root causes, both addressed in v0.5.6:
+**Factory-reset depends on the installer being part of the install — refuses cleanly when it isn't.** Operator-reported: `sudo /opt/guardian/guardian-factory-reset --dry-run` printed a warning + prompted for typed `YES` confirmation to "proceed without auto-recovery". Two root causes, both addressed in v0.5.6:
 
-1. The installer binary was never persisted into `$INSTALL_DIR/` after install — it lived wherever the operator ran it from (`~/`, `/tmp/`, runner workspace). After install, `/opt/phantom/` had `docker-compose.yml`, `.env`, `phantom-factory-reset`, `phantom-reset-admin-password` — but not the installer that produced them.
+1. The installer binary was never persisted into `$INSTALL_DIR/` after install — it lived wherever the operator ran it from (`~/`, `/tmp/`, runner workspace). After install, `/opt/guardian/` had `docker-compose.yml`, `.env`, `guardian-factory-reset`, `guardian-reset-admin-password` — but not the installer that produced them.
 2. Factory-reset offered a "Type YES to proceed without auto-recovery" workaround for the missing binary. That's the wrong shape: the installer is part of the shipped package; its absence is an install-integrity violation, not a "let me bypass" scenario.
 
 ### What ships
 
-- **`installer/phantom-installer.template.sh`** — after the stack-healthy check (step 7 epilogue), the installer self-installs by copying its own binary to `$INSTALL_DIR/$(basename $0)`. The basename preserves the dev-vs-release flavor: `phantom-installer-dev` lands at `/opt/phantom/phantom-installer-dev`; `phantom-installer` lands at `/opt/phantom/phantom-installer`. Idempotent on re-run (skips the cp if source and dest are the same file). Fails-soft if the copy can't happen (the rest of the install was already successful).
-- **`installer/phantom-factory-reset.sh`** — refuses to proceed when neither `$INSTALL_DIR/phantom-installer` nor `$INSTALL_DIR/phantom-installer-dev` is executable. **No more warn + prompt + bypass.** Hard error with a clear recovery path: re-run a fresh installer (which self-installs). Applies to both `--dry-run` and real-run modes — the missing installer is the same problem in either path.
+- **`installer/guardian-installer.template.sh`** — after the stack-healthy check (step 7 epilogue), the installer self-installs by copying its own binary to `$INSTALL_DIR/$(basename $0)`. The basename preserves the dev-vs-release flavor: `guardian-installer-dev` lands at `/opt/guardian/guardian-installer-dev`; `guardian-installer` lands at `/opt/guardian/guardian-installer`. Idempotent on re-run (skips the cp if source and dest are the same file). Fails-soft if the copy can't happen (the rest of the install was already successful).
+- **`installer/guardian-factory-reset.sh`** — refuses to proceed when neither `$INSTALL_DIR/guardian-installer` nor `$INSTALL_DIR/guardian-installer-dev` is executable. **No more warn + prompt + bypass.** Hard error with a clear recovery path: re-run a fresh installer (which self-installs). Applies to both `--dry-run` and real-run modes — the missing installer is the same problem in either path.
 - **`installer/install.sh`** (multi-file kit) — explanatory comment block noting that the kit's `install.sh` runs from the extracted directory in-place, so no self-copy is needed for that flavor.
 
 ### The new error shape
@@ -16147,43 +16147,43 @@ None — customers were never affected by the dev auto-deploy path. The customer
 When the installer is missing, factory-reset exits non-zero with:
 
 ```
-✗ Phantom installer binary missing from /opt/phantom/.
+✗ Guardian installer binary missing from /opt/guardian/.
 
    Expected one of:
-     /opt/phantom/phantom-installer     (customer-release flavor)
-     /opt/phantom/phantom-installer-dev (dev / build.yml flavor)
+     /opt/guardian/guardian-installer     (customer-release flavor)
+     /opt/guardian/guardian-installer-dev (dev / build.yml flavor)
 
    The installer is shipped alongside the recovery utilities in
-   every Phantom install package and self-installs to /opt/phantom/
+   every Guardian install package and self-installs to /opt/guardian/
    on first run. Its absence means the install is incomplete;
    factory-reset cannot continue (it depends on this binary to
    bring the stack back up after the wipe).
 
    To recover:
-     1. Download a fresh phantom-installer from
-        https://github.com/kite-production/phantom/releases
-     2. Run it (sudo ./phantom-installer) — it will self-install
-        into /opt/phantom/ as part of the normal install ceremony
-     3. Re-run sudo /opt/phantom/phantom-factory-reset
+     1. Download a fresh guardian-installer from
+        https://github.com/kite-production/guardian/releases
+     2. Run it (sudo ./guardian-installer) — it will self-install
+        into /opt/guardian/ as part of the normal install ceremony
+     3. Re-run sudo /opt/guardian/guardian-factory-reset
 ```
 
 No `Type YES to bypass`. No `--force` flag. The install package is treated as a coherent unit: if the installer's missing, fix the install before wiping volumes.
 
 ### Effect on existing installs
 
-Customers on v0.5.5 upgrading to v0.5.6: their next installer run self-installs the binary to `/opt/phantom/`. From that point forward, `phantom-factory-reset` runs cleanly. No operator action required beyond running the v0.5.6 installer once. Operators who attempt `phantom-factory-reset` BEFORE upgrading to v0.5.6 hit the new hard error pointing them at the upgrade path — which is correct.
+Customers on v0.5.5 upgrading to v0.5.6: their next installer run self-installs the binary to `/opt/guardian/`. From that point forward, `guardian-factory-reset` runs cleanly. No operator action required beyond running the v0.5.6 installer once. Operators who attempt `guardian-factory-reset` BEFORE upgrading to v0.5.6 hit the new hard error pointing them at the upgrade path — which is correct.
 
 ### What v0.5.6 explicitly does NOT do
 
 - Touch the install ceremony itself. Same prompts, same secrets generation, same docker compose pull + up. Only the post-install self-copy is new.
-- Change `phantom-factory-reset`'s actual wipe behavior. Same volume enumeration, same typed-confirmation guardrail, same installer re-run at the end.
+- Change `guardian-factory-reset`'s actual wipe behavior. Same volume enumeration, same typed-confirmation guardrail, same installer re-run at the end.
 - Add a `--force` / `--no-installer` / `--skip-recovery` flag to factory-reset. The package integrity is the contract; bypass flags would re-introduce the v0.3.x "silent fallback" pattern that v0.4.0 codified the absence of.
-- Re-locate `/opt/phantom/`. The install dir contract is unchanged; the installer now just lives THERE instead of wherever the operator originally ran it from.
+- Re-locate `/opt/guardian/`. The install dir contract is unchanged; the installer now just lives THERE instead of wherever the operator originally ran it from.
 
 ### Files
 
-- `installer/phantom-installer.template.sh` — self-install step
-- `installer/phantom-factory-reset.sh` — hard-fail when installer missing (no more bypass prompt)
+- `installer/guardian-installer.template.sh` — self-install step
+- `installer/guardian-factory-reset.sh` — hard-fail when installer missing (no more bypass prompt)
 - `installer/install.sh` — clarifying comment
 - `CHANGELOG.md` — this entry
 - `mcp/agent/lib/release-notes.ts` — v0.5.6 entry prepended
@@ -16192,19 +16192,19 @@ Customers on v0.5.5 upgrading to v0.5.6: their next installer run self-installs 
 
 ## [v0.5.5] — 2026-05-13
 
-**Last in-image credential removed: `DEFAULT_ADMIN_PASSWORD` migrated to `.env`.** Operator-stated requirement: **no credentials in any Phantom image, full stop**. Pre-v0.5.5 audit found exactly one violation — the literal `"phantom-admin-CHANGE-ME"` in `mcp/agent/lib/auth-defaults.ts:65`, baked into the phantom-agent image and passed to the entrypoint's seed routine. v0.5.5 closes the gap: the installer auto-generates a random per-install bootstrap password into `PHANTOM_DEFAULT_ADMIN_PASSWORD` in `.env`, the agent's entrypoint sources it from env at seed time, and the seed path fails-loud if the env var is empty on a fresh install (refuses to seed an empty hash; operator must re-run the installer or use `phantom-reset-admin-password`).
+**Last in-image credential removed: `DEFAULT_ADMIN_PASSWORD` migrated to `.env`.** Operator-stated requirement: **no credentials in any Guardian image, full stop**. Pre-v0.5.5 audit found exactly one violation — the literal `"guardian-admin-CHANGE-ME"` in `mcp/agent/lib/auth-defaults.ts:65`, baked into the guardian-agent image and passed to the entrypoint's seed routine. v0.5.5 closes the gap: the installer auto-generates a random per-install bootstrap password into `GUARDIAN_DEFAULT_ADMIN_PASSWORD` in `.env`, the agent's entrypoint sources it from env at seed time, and the seed path fails-loud if the env var is empty on a fresh install (refuses to seed an empty hash; operator must re-run the installer or use `guardian-reset-admin-password`).
 
 ### What ships
 
-- **`installer/.env.example`** — new `PHANTOM_DEFAULT_ADMIN_PASSWORD=` template with the bootstrap-password rationale + the openssl one-liner.
-- **`installer/phantom-installer.template.sh`** — generates `openssl rand -base64 24 | tr -d '/+=' | head -c 24` on fresh install. Embedded in the `.env` write block alongside KEK + MCP_TOKEN + caldera/xlog secrets. On upgrade from pre-v0.5.5 (where `.env` lacks the var), back-fills with a fresh generated value (harmless if SecretStore is already initialized — the env var is consulted only on empty SecretStore). Epilogue prints the value in the "First-time login" banner.
+- **`installer/.env.example`** — new `GUARDIAN_DEFAULT_ADMIN_PASSWORD=` template with the bootstrap-password rationale + the openssl one-liner.
+- **`installer/guardian-installer.template.sh`** — generates `openssl rand -base64 24 | tr -d '/+=' | head -c 24` on fresh install. Embedded in the `.env` write block alongside KEK + MCP_TOKEN + caldera/xlog secrets. On upgrade from pre-v0.5.5 (where `.env` lacks the var), back-fills with a fresh generated value (harmless if SecretStore is already initialized — the env var is consulted only on empty SecretStore). Epilogue prints the value in the "First-time login" banner.
 - **`installer/install.sh`** (multi-file kit) — same generation + back-fill logic. Epilogue prints the value.
 - **`installer/bootstrap.sh`** — same generation in the interactive bootstrap flow.
-- **`installer/docker-compose.yml` + repo-root `docker-compose.yml`** — `PHANTOM_DEFAULT_ADMIN_PASSWORD` added to phantom-agent's env passthrough block.
-- **`mcp/agent/entrypoint.sh`** — Python seed call now reads `os.environ.get("PHANTOM_DEFAULT_ADMIN_PASSWORD", "").strip()` instead of passing the hardcoded literal. First-boot credentials banner prints the actual seeded value (so operators who lost the installer banner can still recover from `docker logs`). Fail-loud failure mode documented (refuses to boot with empty password on a fresh install).
+- **`installer/docker-compose.yml` + repo-root `docker-compose.yml`** — `GUARDIAN_DEFAULT_ADMIN_PASSWORD` added to guardian-agent's env passthrough block.
+- **`mcp/agent/entrypoint.sh`** — Python seed call now reads `os.environ.get("GUARDIAN_DEFAULT_ADMIN_PASSWORD", "").strip()` instead of passing the hardcoded literal. First-boot credentials banner prints the actual seeded value (so operators who lost the installer banner can still recover from `docker logs`). Fail-loud failure mode documented (refuses to boot with empty password on a fresh install).
 - **`bundles/spark/mcp/src/usecase/auth_store.py`** — `seed_admin_defaults_if_empty()` raises `ValueError` if seeding is needed but `default_password` is empty. Already-initialized stores skip the check (upgrades from pre-v0.5.5 without the env var don't break).
 - **`mcp/agent/lib/auth-defaults.ts`** — `DEFAULT_ADMIN_PASSWORD` constant REMOVED. Migration comment + history preserved at the top of the file. `ADMIN_USERNAME`, `SESSION_COOKIE_NAME`, `SESSION_TTL_SECONDS` stay (usernames are not credentials; cookie name is not a secret; TTL is a constant).
-- **Operator-facing UI** — `app/profile/page.tsx` banner text updated to reference `PHANTOM_DEFAULT_ADMIN_PASSWORD` instead of the literal. `components/diagrams/auth-flows.tsx` detail box shows `admin / $PHANTOM_DEFAULT_ADMIN_PASSWORD`. `help/user/page.tsx` First-Time-Login subsection rewritten for v0.5.5 (three places to find the value: installer banner, docker logs first-boot only, `.env`). `help/architecture/page.tsx` `#authentication` login-flow subsection notes the source migration. Journey `auth-first-time-login` rewritten with the new flow + added a verification step that no Phantom image ships any baked admin password. Journey `ops-factory-reset-host-utility` updated to mention the post-reset login uses the env-sourced value.
+- **Operator-facing UI** — `app/profile/page.tsx` banner text updated to reference `GUARDIAN_DEFAULT_ADMIN_PASSWORD` instead of the literal. `components/diagrams/auth-flows.tsx` detail box shows `admin / $GUARDIAN_DEFAULT_ADMIN_PASSWORD`. `help/user/page.tsx` First-Time-Login subsection rewritten for v0.5.5 (three places to find the value: installer banner, docker logs first-boot only, `.env`). `help/architecture/page.tsx` `#authentication` login-flow subsection notes the source migration. Journey `auth-first-time-login` rewritten with the new flow + added a verification step that no Guardian image ships any baked admin password. Journey `ops-factory-reset-host-utility` updated to mention the post-reset login uses the env-sourced value.
 
 ### Audit result (the rule being enforced)
 
@@ -16213,30 +16213,30 @@ The post-v0.5.5 audit grep:
 ```
 grep -rn -E "password.*=.*\"[a-zA-Z0-9_-]{6,}\"" mcp/agent/lib bundles/spark/mcp/src
 # → no matches
-docker exec phantom_agent grep -r phantom-admin-CHANGE-ME /app 2>/dev/null
+docker exec guardian_agent grep -r guardian-admin-CHANGE-ME /app 2>/dev/null
 # → no matches
 ```
 
-No credential of any kind is baked into any Phantom image. Caldera's third-party prebuilt image carries unknown internal defaults, but every effective credential surface is overridden by `${VAR}` substitution from `.env` at compose-up time.
+No credential of any kind is baked into any Guardian image. Caldera's third-party prebuilt image carries unknown internal defaults, but every effective credential surface is overridden by `${VAR}` substitution from `.env` at compose-up time.
 
 ### What v0.5.5 explicitly does NOT do
 
-- Touch the password-change flow at `/profile`. The forced first-login change still fires; the only difference is the operator types a random 24-char string instead of `phantom-admin-CHANGE-ME` on that one login.
+- Touch the password-change flow at `/profile`. The forced first-login change still fires; the only difference is the operator types a random 24-char string instead of `guardian-admin-CHANGE-ME` on that one login.
 - Touch xlog, caldera, or any other image. Audit confirmed they're already clean.
 - Add `.env` hardening (boot-time permission audit, modification audit, immutable bit, TPM sealing, etc.). Operator deferred these; can land in a future release if requested.
-- Add a `phantom-show-default-credentials` CLI. Operators who lose the random value before completing the forced first-login change use `phantom-reset-admin-password` to set a new one interactively (same flow that already exists for forgotten passwords).
-- Rotate `PHANTOM_DEFAULT_ADMIN_PASSWORD` on upgrade. The value is consumed exactly once per fresh SecretStore; rotating it on every install run would waste entropy + log noise. Back-fill on upgrade adds it once, then leaves it alone.
+- Add a `guardian-show-default-credentials` CLI. Operators who lose the random value before completing the forced first-login change use `guardian-reset-admin-password` to set a new one interactively (same flow that already exists for forgotten passwords).
+- Rotate `GUARDIAN_DEFAULT_ADMIN_PASSWORD` on upgrade. The value is consumed exactly once per fresh SecretStore; rotating it on every install run would waste entropy + log noise. Back-fill on upgrade adds it once, then leaves it alone.
 
 ### Customer impact on upgrade
 
-Operators on v0.4.0–v0.5.4 upgrading to v0.5.5: their existing `SecretStore` already holds the PBKDF2 hash of their operator-set password. The entrypoint's seed call returns `"already_initialized"` and the env var is never consulted. On the next installer run (auto-deploy or manual), `PHANTOM_DEFAULT_ADMIN_PASSWORD` gets back-filled into `.env` with a fresh random value — useful only if the operator later runs `phantom-factory-reset` (which preserves `.env` so the seed value survives the wipe).
+Operators on v0.4.0–v0.5.4 upgrading to v0.5.5: their existing `SecretStore` already holds the PBKDF2 hash of their operator-set password. The entrypoint's seed call returns `"already_initialized"` and the env var is never consulted. On the next installer run (auto-deploy or manual), `GUARDIAN_DEFAULT_ADMIN_PASSWORD` gets back-filled into `.env` with a fresh random value — useful only if the operator later runs `guardian-factory-reset` (which preserves `.env` so the seed value survives the wipe).
 
-Fresh installs of v0.5.5 boot with a per-install random admin password. The installer prints it in its epilogue; the agent prints it in its first-boot docker logs banner; it's also visible at `grep PHANTOM_DEFAULT_ADMIN_PASSWORD /opt/phantom/.env`.
+Fresh installs of v0.5.5 boot with a per-install random admin password. The installer prints it in its epilogue; the agent prints it in its first-boot docker logs banner; it's also visible at `grep GUARDIAN_DEFAULT_ADMIN_PASSWORD /opt/guardian/.env`.
 
 ### Files
 
 - `installer/.env.example`
-- `installer/phantom-installer.template.sh`
+- `installer/guardian-installer.template.sh`
 - `installer/install.sh`
 - `installer/bootstrap.sh`
 - `installer/docker-compose.yml`
@@ -16256,29 +16256,29 @@ Fresh installs of v0.5.5 boot with a per-install random admin password. The inst
 
 ## [v0.5.4] — 2026-05-13
 
-**Installer hotfix: `.env` rewrite now idempotent across the comment header, not just the value lines.** Operator-reported: `cat /opt/phantom/.env` on a phantom-vm with ~25 dev-installer runs showed ~25 stale `# ─── Digest manifest (managed by phantom-installer vdev-XXXXX) ──` header blocks accumulated at the bottom of the file. Only the last block had its values; the rest were orphan headers. The bug: pre-v0.5.4 the strip step targeted only `^PHANTOM_VERSION=` and `^DIGEST_PHANTOM_` lines; the 3–4 line comment header above them was untouched, so every re-run added a fresh header without removing the old ones.
+**Installer hotfix: `.env` rewrite now idempotent across the comment header, not just the value lines.** Operator-reported: `cat /opt/guardian/.env` on a guardian-vm with ~25 dev-installer runs showed ~25 stale `# ─── Digest manifest (managed by guardian-installer vdev-XXXXX) ──` header blocks accumulated at the bottom of the file. Only the last block had its values; the rest were orphan headers. The bug: pre-v0.5.4 the strip step targeted only `^GUARDIAN_VERSION=` and `^DIGEST_GUARDIAN_` lines; the 3–4 line comment header above them was untouched, so every re-run added a fresh header without removing the old ones.
 
 ### What ships
 
-- **`installer/phantom-installer.template.sh`** — strip step extended to also remove the comment header lines. Matches the canonical 4-line block emitted by phantom-installer AND the 3-line variant install.sh emits, so a `.env` that's been touched by both flavors gets cleaned the same way.
+- **`installer/guardian-installer.template.sh`** — strip step extended to also remove the comment header lines. Matches the canonical 4-line block emitted by guardian-installer AND the 3-line variant install.sh emits, so a `.env` that's been touched by both flavors gets cleaned the same way.
 - **`installer/install.sh`** — same strip-pattern fix in the multi-file kit path.
 - **Both files** — added a one-line awk pass after the strip to collapse consecutive blank lines, so the cleanup of N orphan headers (each separated by a blank) doesn't leave N blank gaps in the file.
 
 ### Effect on existing installs
 
-Customers on v0.5.3 upgrading to v0.5.4 (or running the next dev-installer auto-deploy after this lands): on the next installer run, the strip step removes ALL accumulated stale headers (matches every variant — phantom-installer and install.sh) and the awk pass collapses the resulting empty lines. After one re-run, `.env` returns to the clean shape the original first install had. No customer action required beyond the standard re-install.
+Customers on v0.5.3 upgrading to v0.5.4 (or running the next dev-installer auto-deploy after this lands): on the next installer run, the strip step removes ALL accumulated stale headers (matches every variant — guardian-installer and install.sh) and the awk pass collapses the resulting empty lines. After one re-run, `.env` returns to the clean shape the original first install had. No customer action required beyond the standard re-install.
 
 The fix is read-only-safe for any operator-added comments outside the canonical Digest-manifest block — the strip patterns are pinned to the exact header text the installers themselves emit, so a customer who added their own `# ─── My company-specific notes ──` block above the manifest survives the rewrite untouched.
 
 ### What v0.5.4 explicitly does NOT do
 
-- Touch the value lines' format. `PHANTOM_VERSION=` + `DIGEST_PHANTOM_*=` are still managed exactly as before; only the surrounding comment block's lifecycle is fixed.
+- Touch the value lines' format. `GUARDIAN_VERSION=` + `DIGEST_GUARDIAN_*=` are still managed exactly as before; only the surrounding comment block's lifecycle is fixed.
 - Change the customer-facing comment text. The new fresh block reads identically to what v0.5.3 emitted — operators reading `.env` for the first time won't see anything different (other than the absence of stale orphans).
-- Backfill the fix to v0.5.0–v0.5.3 installer binaries on the GitHub Release. Those still ship the buggy strip; customers who want the fix need v0.5.4+. The phantom-updater's in-app update path WILL pick this fix up on the next upgrade hop.
+- Backfill the fix to v0.5.0–v0.5.3 installer binaries on the GitHub Release. Those still ship the buggy strip; customers who want the fix need v0.5.4+. The guardian-updater's in-app update path WILL pick this fix up on the next upgrade hop.
 
 ### Files
 
-- `installer/phantom-installer.template.sh` — strip + collapse logic
+- `installer/guardian-installer.template.sh` — strip + collapse logic
 - `installer/install.sh` — same fix in multi-file kit path
 - `CHANGELOG.md` — this entry
 - `mcp/agent/lib/release-notes.ts` — v0.5.4 entry prepended
@@ -16287,21 +16287,21 @@ The fix is read-only-safe for any operator-added comments outside the canonical 
 
 ## [v0.5.3] — 2026-05-13
 
-**Host-side recovery utilities — `phantom-factory-reset` + `phantom-reset-admin-password`.** v0.5.2 fresh-state hygiene closed the "fake data in operator-named UI" gap. v0.5.3 closes the related ergonomics gap: pre-v0.5.3 the only way to test a fresh install was to type the manual wipe-and-reinstall recipe from CLAUDE.md, and the only way to reset a forgotten admin password was to memorize `docker exec -it phantom_agent node /app/cli/reset-admin.mjs`. Both work; neither is friendly. v0.5.3 promotes both to named host-side utilities that mirror each other's invocation shape:
+**Host-side recovery utilities — `guardian-factory-reset` + `guardian-reset-admin-password`.** v0.5.2 fresh-state hygiene closed the "fake data in operator-named UI" gap. v0.5.3 closes the related ergonomics gap: pre-v0.5.3 the only way to test a fresh install was to type the manual wipe-and-reinstall recipe from CLAUDE.md, and the only way to reset a forgotten admin password was to memorize `docker exec -it guardian_agent node /app/cli/reset-admin.mjs`. Both work; neither is friendly. v0.5.3 promotes both to named host-side utilities that mirror each other's invocation shape:
 
 ```bash
-sudo /opt/phantom/phantom-factory-reset         # wipe state + re-install
-sudo /opt/phantom/phantom-reset-admin-password  # reset forgotten admin password
+sudo /opt/guardian/guardian-factory-reset         # wipe state + re-install
+sudo /opt/guardian/guardian-reset-admin-password  # reset forgotten admin password
 ```
 
 ### What ships
 
-- **`installer/phantom-factory-reset.sh` — new host-side script.** Lists every `phantom_*` docker volume (with approximate sizes), asks the operator to type `FACTORY RESET` for typed-confirmation guardrail, stops the stack, wipes the volumes, re-runs the installer so containers come back up healthy. Preserves `/opt/phantom/.env` so `PHANTOM_SECRET_KEK` + registry creds + operator-managed settings survive across the reset (re-installs reuse existing images on disk; no image pulls needed). Flags: `--yes` (skip prompt for scripted use), `--dry-run` (show plan without wiping), `--help`. **Host-side by physical necessity** — a container can't delete the docker volume it's mounting (the daemon refuses with "volume in use"), so factory reset MUST live outside the container boundary.
-- **`installer/phantom-reset-admin-password.sh` — new host-side wrapper.** Thin wrapper around the in-container CLI at `/app/cli/reset-admin.mjs`. Validates the agent container is running (clean error if down, pointing at `docker compose up -d`), then exec-replaces itself with the docker-exec invocation. Credential-write logic stays inside the container (same SecretStore + audit machinery as `/profile`'s change-password flow — single source of truth, no parallel host implementation). v0.4.0 deliberately put the logic inside the image; v0.5.3 just adds operator-facing ergonomics on top.
+- **`installer/guardian-factory-reset.sh` — new host-side script.** Lists every `guardian_*` docker volume (with approximate sizes), asks the operator to type `FACTORY RESET` for typed-confirmation guardrail, stops the stack, wipes the volumes, re-runs the installer so containers come back up healthy. Preserves `/opt/guardian/.env` so `GUARDIAN_SECRET_KEK` + registry creds + operator-managed settings survive across the reset (re-installs reuse existing images on disk; no image pulls needed). Flags: `--yes` (skip prompt for scripted use), `--dry-run` (show plan without wiping), `--help`. **Host-side by physical necessity** — a container can't delete the docker volume it's mounting (the daemon refuses with "volume in use"), so factory reset MUST live outside the container boundary.
+- **`installer/guardian-reset-admin-password.sh` — new host-side wrapper.** Thin wrapper around the in-container CLI at `/app/cli/reset-admin.mjs`. Validates the agent container is running (clean error if down, pointing at `docker compose up -d`), then exec-replaces itself with the docker-exec invocation. Credential-write logic stays inside the container (same SecretStore + audit machinery as `/profile`'s change-password flow — single source of truth, no parallel host implementation). v0.4.0 deliberately put the logic inside the image; v0.5.3 just adds operator-facing ergonomics on top.
 - **Both scripts ship via BOTH distribution paths**:
-  - The single-file `phantom-installer` binary embeds them via heredoc (same pattern as `docker-compose.yml` — see `installer/build-phantom-installer.sh`'s new `__INSTALLER_FACTORY_RESET_SH__` + `__INSTALLER_RESET_PASSWORD_SH__` markers).
+  - The single-file `guardian-installer` binary embeds them via heredoc (same pattern as `docker-compose.yml` — see `installer/build-guardian-installer.sh`'s new `__INSTALLER_FACTORY_RESET_SH__` + `__INSTALLER_RESET_PASSWORD_SH__` markers).
   - The multi-file install kit copies them verbatim via `release.yml`'s "Pack customer install kit" step.
-- **After install**, both live at `/opt/phantom/` (chmod 755). The `install.sh` epilogue and the `phantom-installer` epilogue both surface the canonical invocations.
+- **After install**, both live at `/opt/guardian/` (chmod 755). The `install.sh` epilogue and the `guardian-installer` epilogue both surface the canonical invocations.
 - **Retired**: `scripts/reset_admin.sh` — was a dev-side convenience that lived only in the repo (never shipped to customers). v0.5.3 consolidates on the `installer/` paths so the same script the customer runs is also the one operators use during dev.
 
 ### Docs + journeys
@@ -16316,23 +16316,23 @@ sudo /opt/phantom/phantom-reset-admin-password  # reset forgotten admin password
 - Re-implement the password reset host-side. The credential-write logic STAYS in the container (`/app/cli/reset-admin.mjs`). The host script is a wrapper, not a reimplementation — CLAUDE.md's canonical-state-discipline Rule 1 applies to code paths too.
 - Add a `--reset-volumes` (or `--clean` / `--fresh`) flag to the installer. v0.4.0's separation-of-responsibilities rule still applies: installer = image deployment, factory-reset = state management. The factory-reset script IS the answer — separate tool, separate concern.
 - Touch the in-container `/app/cli/reset-admin.mjs` itself. Same CLI, same prompts, same ceremony, same audit fields. Operators who already type the docker-exec form by muscle memory keep working unchanged.
-- Wipe `.env` during factory reset. Operators who want to rotate `PHANTOM_SECRET_KEK` (which silently invalidates every stored secret) must do so EXPLICITLY before running factory-reset. The script's whole point is "give me back the fresh-shipped operational state, not the fresh-generated KEK."
+- Wipe `.env` during factory reset. Operators who want to rotate `GUARDIAN_SECRET_KEK` (which silently invalidates every stored secret) must do so EXPLICITLY before running factory-reset. The script's whole point is "give me back the fresh-shipped operational state, not the fresh-generated KEK."
 
 ### Customer impact on upgrade
 
-Operators on v0.5.2 upgrading to v0.5.3: existing operator state survives unchanged. The two new scripts appear at `/opt/phantom/` on the next installer run (which happens automatically per the dev-installer flow or explicitly via `phantom-installer` for releases). The docker-exec invocation for password reset still works — operators don't need to relearn anything; they just have a friendlier alternative when they want it. The factory-reset script is genuinely new — there was no equivalent pre-v0.5.3.
+Operators on v0.5.2 upgrading to v0.5.3: existing operator state survives unchanged. The two new scripts appear at `/opt/guardian/` on the next installer run (which happens automatically per the dev-installer flow or explicitly via `guardian-installer` for releases). The docker-exec invocation for password reset still works — operators don't need to relearn anything; they just have a friendlier alternative when they want it. The factory-reset script is genuinely new — there was no equivalent pre-v0.5.3.
 
 Fresh installs of v0.5.3 boot with both scripts already in place; operator can immediately run either without further setup.
 
 ### Files
 
-- `installer/phantom-factory-reset.sh` — new
-- `installer/phantom-reset-admin-password.sh` — new
-- `installer/build-phantom-installer.sh` — two new markers + `FACTORY_RESET_SH` + `RESET_ADMIN_SH` env vars
-- `installer/phantom-installer.template.sh` — two new heredoc blocks + updated epilogue
+- `installer/guardian-factory-reset.sh` — new
+- `installer/guardian-reset-admin-password.sh` — new
+- `installer/build-guardian-installer.sh` — two new markers + `FACTORY_RESET_SH` + `RESET_ADMIN_SH` env vars
+- `installer/guardian-installer.template.sh` — two new heredoc blocks + updated epilogue
 - `installer/install.sh` — updated epilogue
 - `.github/workflows/release.yml` — "Pack customer install kit" step copies both scripts into $KIT
-- `scripts/reset_admin.sh` — deleted (consolidated to `installer/phantom-reset-admin-password.sh`)
+- `scripts/reset_admin.sh` — deleted (consolidated to `installer/guardian-reset-admin-password.sh`)
 - `mcp/agent/app/help/architecture/page.tsx` — `#authentication` section updates
 - `mcp/agent/app/help/user/page.tsx` — Forgot-password + new Factory-reset subsections
 - `mcp/agent/lib/journeys.ts` — `ops-cli-reset-admin-password` rewritten; new `ops-factory-reset-host-utility`
@@ -16349,9 +16349,9 @@ Fresh installs of v0.5.3 boot with both scripts already in place; operator can i
 ### What ships
 
 - **`bundles/spark/plugins/example-vendor/manifest.yaml` — `enabled: false`**. The plugin stays discoverable as a live demo of the contribution shape (1 skill + 3 memory seeds + 3 agent definitions, the cleanest example we have), but its contributions no longer fire on boot. Operators wanting the demo content flip `enabled: true` + restart. Pre-v0.5.2 this was on by default, which conflicted with v0.5.0's minimal-default-state requirement (auto-seeded 3 memory entries + 3 agent_definitions + 1 plugin skill at every fresh boot).
-- **Notifications page rewrite (no more demo data)**. Deleted the 158-line `NOTIFICATIONS` hardcoded fallback array; the page now renders exclusively from the live `/api/agent/notifications` result. Tab counts (All / Unread / Approvals / Alerts / System) derive from `source.filter(matchesTab)` instead of hardcoded numbers (`8 unread` before, `0` on a fresh install now). Footer shifted from "Showing 0 of 23" to "Showing 0 of 0" (`source.length` derived). Removed the workspace filter button + state + the per-notification workspace chip — Phantom is single-tenant.
+- **Notifications page rewrite (no more demo data)**. Deleted the 158-line `NOTIFICATIONS` hardcoded fallback array; the page now renders exclusively from the live `/api/agent/notifications` result. Tab counts (All / Unread / Approvals / Alerts / System) derive from `source.filter(matchesTab)` instead of hardcoded numbers (`8 unread` before, `0` on a fresh install now). Footer shifted from "Showing 0 of 23" to "Showing 0 of 0" (`source.length` derived). Removed the workspace filter button + state + the per-notification workspace chip — Guardian is single-tenant.
 - **API keys page wired to the real backend**. The 803-line pure-mock page is rewritten against `/api/v1/api_keys` (which already existed and was fully functional — the mock never used it). Removed the invented 3-tier permissions taxonomy (Full / Read+Execute / Read-only); replaced with the real advisory scopes the backend persists (`audit:read`, `settings:read`, `settings:write`, `approvals:resolve`, `tools:call`, `*` for admin-equivalent). Removed the workspace scope dimension. Removed the expiration dropdown (backend keys are valid until revoked, not time-boxed). Removed the Recent Usage detail panel (backend stores `last_used_at` as a single timestamp, not a request history). Wired create + revoke against the real endpoints; create-response shows the plaintext key once with a copy button, the warning note, and the record metadata.
-- **Skills page — workspace cleanup**. Removed two sections from the skill-detail panel that had no backend wiring: "Workspace Assignment" (per-skill workspace toggles) and "Workspace Overrides" (per-workspace override config). Both ported over from Spark's multi-tenant skill UI; in single-tenant Phantom they rendered a permanent decorative placeholder ("All workspaces using platform defaults") for every skill forever. Deleted the `WsToggle` component, the `workspaces` and `overrides` fields from the `SkillDef` interface, and the corresponding stub entries from all 20+ hardcoded fallback skill cards.
+- **Skills page — workspace cleanup**. Removed two sections from the skill-detail panel that had no backend wiring: "Workspace Assignment" (per-skill workspace toggles) and "Workspace Overrides" (per-workspace override config). Both ported over from Spark's multi-tenant skill UI; in single-tenant Guardian they rendered a permanent decorative placeholder ("All workspaces using platform defaults") for every skill forever. Deleted the `WsToggle` component, the `workspaces` and `overrides` fields from the `SkillDef` interface, and the corresponding stub entries from all 20+ hardcoded fallback skill cards.
 - **Sidebar deduplication**. `/notifications` was listed twice — once nested inside the Integration nav group, once as a standalone footer link (the cross-cutting bell-icon pattern). Integration-group entry gone; footer entry stays. Code comment added explaining the rule so the next nav change doesn't reintroduce the duplicate.
 
 ### What v0.5.2 explicitly does NOT do
@@ -16378,7 +16378,7 @@ Operators on v0.5.1 upgrading to v0.5.2: their existing operator state (memory e
 
 ## [v0.5.1] — 2026-05-13
 
-**Operator workflow state — third canonical-state category.** Two pre-v0.5.1 UI surfaces persisted operator workflow state in browser localStorage (journey-tested marks at `phantom.help.tested-journeys`; metrics bookmarks at `spark.observability.metrics.bookmarks.v1`). Both violated v0.4.0's canonical-state discipline (rule 1: one state surface = one storage home) and produced the four failure modes the operator surfaced during v0.5.0 testing — volume wipes didn't clear them, cross-device + cross-browser inconsistency, missing-from-backup.
+**Operator workflow state — third canonical-state category.** Two pre-v0.5.1 UI surfaces persisted operator workflow state in browser localStorage (journey-tested marks at `guardian.help.tested-journeys`; metrics bookmarks at `spark.observability.metrics.bookmarks.v1`). Both violated v0.4.0's canonical-state discipline (rule 1: one state surface = one storage home) and produced the four failure modes the operator surfaced during v0.5.0 testing — volume wipes didn't clear them, cross-device + cross-browser inconsistency, missing-from-backup.
 
 v0.5.1 collapses to ONE canonical home in MCP per the same pattern v0.4.0 used for auth + v0.5.0 used for marketplace.
 
@@ -16388,7 +16388,7 @@ v0.5.1 collapses to ONE canonical home in MCP per the same pattern v0.4.0 used f
 - `GET/PUT/DELETE /api/v1/operator-state/{key}` + Next.js proxy at `/api/agent/operator-state/[key]`.
 - `use-tested-journeys.ts` + `metrics-bookmarks.tsx` rewritten as server-backed with optimistic UI + fire-and-forget PUT. External contract unchanged from pre-v0.5.1 (all hook callers keep working without modification).
 - **One-shot localStorage → server migration** on first mount. Operators upgrading from v0.5.0 don't lose their marks/bookmarks — the hook detects server-empty + localStorage-non-empty, persists to server, then clears the legacy key. Idempotent.
-- **Dead code purged**: deleted `mcp/agent/components/chat/chat-session-context.tsx` (the v0.2.x-flagged dead `ChatSessionProvider` that was still polluting browser localStorage with a `phantom.chat.sessions.v1` key on every page load even though zero React components consumed the context). Also removed its mount from `app/layout.tsx`.
+- **Dead code purged**: deleted `mcp/agent/components/chat/chat-session-context.tsx` (the v0.2.x-flagged dead `ChatSessionProvider` that was still polluting browser localStorage with a `guardian.chat.sessions.v1` key on every page load even though zero React components consumed the context). Also removed its mount from `app/layout.tsx`.
 - New architecture-page section: `#operator-state` documenting the three-category model (credential / catalog / operator workflow state) + storage contract + REST surface + migration walkthrough.
 - CLAUDE.md amended with the "Operator workflow state — the third category (v0.5.1)" block + the four-question taxonomy for any future UI surface that needs to persist state.
 - 3 new v0.5.1 acceptance-test journeys (filter chip: `v0.5.1 test`).
@@ -16425,20 +16425,20 @@ Volume wipes now correctly clear journey-tested + metrics-bookmarks state along 
 
 ### The story
 
-Pre-v0.5.0 the connector domain had the same shape v0.4.0 cleaned up in auth: state split across multiple stores (`marketplace_installs.json` in the Next.js layer, `instances.db` in MCP, `connector_state.db` separate again, `KNOWN_CONNECTORS` hardcoded in phantom-updater); some functionality half-wired (install button existed but install state didn't gate anything functional); invisible auto-migration that fought the operator's stated intent (`_auto_migrate` materialized `primary-*` instances at every boot from env vars). Connector dispatch had three runtime styles (`module` / `class` / `container`) with only 1 of 6 connectors actually using container.
+Pre-v0.5.0 the connector domain had the same shape v0.4.0 cleaned up in auth: state split across multiple stores (`marketplace_installs.json` in the Next.js layer, `instances.db` in MCP, `connector_state.db` separate again, `KNOWN_CONNECTORS` hardcoded in guardian-updater); some functionality half-wired (install button existed but install state didn't gate anything functional); invisible auto-migration that fought the operator's stated intent (`_auto_migrate` materialized `primary-*` instances at every boot from env vars). Connector dispatch had three runtime styles (`module` / `class` / `container`) with only 1 of 6 connectors actually using container.
 
 v0.5.0 applies the canonical-state discipline rules CLAUDE.md codified after v0.4.0:
 
 1. **One canonical home for install state**: `marketplace.db` in MCP. The Next.js routes are thin proxies. The old `marketplace_installs.json` file gets a one-shot import on first boot then is deleted.
 2. **Single connector schema**: `bundles/spark/connectors/connector.schema.json` validates every `connector.yaml` (bundle + user-uploaded) at boot. Drift fails fast with a path-into-the-field error.
-3. **Universal container-mode**: all 6 connectors (caldera, cortex-content, cortex-docs, web, xlog, xsiam) now run as per-instance `phantom-connector-*` containers. The module + class in-process dispatch paths are deleted from `connector_loader.py`. The schema enum is tightened to `["container"]` only.
+3. **Universal container-mode**: all 6 connectors (caldera, cortex-content, cortex-docs, web, xlog, xsiam) now run as per-instance `guardian-connector-*` containers. The module + class in-process dispatch paths are deleted from `connector_loader.py`. The schema enum is tightened to `["container"]` only.
 4. **Install gate is functional**: instance creation requires the connector be marketplace-installed first (409 `connector_not_installed`). Tool registration still gates on instance presence (existing behavior). `_AUTO_MIGRATION` is deleted entirely. Fresh installs come up clean: 0 instances, all 6 connectors visible as "available, not installed".
 5. **User-uploaded connectors**: `POST /api/v1/marketplace/upload` accepts a `connector.yaml`, validates against schema, writes to `/app/data/user_connectors/<id>/`. `DELETE /api/v1/marketplace/<id>` removes user connectors; bundle connectors are 403-rejected (image-baked, undeletable at runtime).
 6. **4 new agent tools**: `marketplace_list`, `marketplace_install`, `marketplace_uninstall`, `connector_upload`. Catalog operations only — no secret touch — so they sit on the **catalog side** of the credential boundary CLAUDE.md now codifies. The agent can help the operator manage the marketplace; secrets stay operator-only.
 
 ### Customer impact on upgrade
 
-Existing v0.4.x customer installs carry their state in the `phantom_data` volume. v0.5.0's upgrade migration runs once at boot, iterates `instances.db`, and auto-installs every connector with existing instances (origin=`bundle`). Customer experience: no change — the 3 connectors they were using (typically caldera/xsiam/xlog) stay installed, their instances stay live, their tools stay registered. The marketplace page now shows them as "installed" with the auto-installed timestamp.
+Existing v0.4.x customer installs carry their state in the `guardian_data` volume. v0.5.0's upgrade migration runs once at boot, iterates `instances.db`, and auto-installs every connector with existing instances (origin=`bundle`). Customer experience: no change — the 3 connectors they were using (typically caldera/xsiam/xlog) stay installed, their instances stay live, their tools stay registered. The marketplace page now shows them as "installed" with the auto-installed timestamp.
 
 Fresh v0.5.0 installs come up with zero instances and all 6 connectors visible in the marketplace as "available, not installed". Per the operator brief, this is the new default state.
 
@@ -16469,7 +16469,7 @@ Fresh v0.5.0 installs come up with zero instances and all 6 connectors visible i
 
 ### The story
 
-Pre-v0.4.0 the admin password lived in five overlapping places (SecretStore + `UI_USER`/`UI_PASSWORD` env + `setup.json` + `.env.generated` + the flat `phantom_auth=1` cookie). Every fix shipped against that surface broke something else — v0.3.20 KEK mismatch, v0.3.22 .env.generated cleanup, v0.3.27 empty SA JSON. The migration code between the stores was the entire source of the pain.
+Pre-v0.4.0 the admin password lived in five overlapping places (SecretStore + `UI_USER`/`UI_PASSWORD` env + `setup.json` + `.env.generated` + the flat `guardian_auth=1` cookie). Every fix shipped against that surface broke something else — v0.3.20 KEK mismatch, v0.3.22 .env.generated cleanup, v0.3.27 empty SA JSON. The migration code between the stores was the entire source of the pain.
 
 v0.4.0 collapses the surface to ONE storage home (SecretStore for credentials, `auth_sessions.db` for sessions) and deletes every fallback path. Setup page is gone. Default credentials are seeded on first boot. The forced password change happens at `/profile`. The forgot-password CLI is on the host.
 
@@ -16483,15 +16483,15 @@ SecretStore /ui/auth/admin/
 auth_sessions.db
  └── sessions{token_hash PK, username, created_at, expires_at, ua_hash, revoked_at}
 
-Cookie: phantom_session=<32B random>; HttpOnly; Secure; SameSite=Strict; Max-Age=7200
+Cookie: guardian_session=<32B random>; HttpOnly; Secure; SameSite=Strict; Max-Age=7200
 ```
 
 ### Operator journeys
 
-- **First boot**: container starts → entrypoint seeds default password (`phantom-admin-CHANGE-ME`, also printed to docker logs on the seed boot only) → operator signs in → AuthGate sees `credentials_changed=false` → auto-redirects to `/profile` with a non-dismissible banner → operator changes password → server revokes all sessions + clears cookie → operator signs in again with new password.
-- **Daily login**: 32-byte server-side session token in `phantom_session` cookie; MCP validates per-request with a 30s positive-result cache on the Next.js side.
+- **First boot**: container starts → entrypoint seeds default password (`guardian-admin-CHANGE-ME`, also printed to docker logs on the seed boot only) → operator signs in → AuthGate sees `credentials_changed=false` → auto-redirects to `/profile` with a non-dismissible banner → operator changes password → server revokes all sessions + clears cookie → operator signs in again with new password.
+- **Daily login**: 32-byte server-side session token in `guardian_session` cookie; MCP validates per-request with a 30s positive-result cache on the Next.js side.
 - **Change password**: `/profile` form → MCP verifies current + writes new hash + revoke_all → cookie cleared → re-login.
-- **Forgot password**: `docker exec -it phantom_agent node /app/cli/reset-admin.mjs` from the host. Interactive `RESET` ceremony + masked password prompt. Audited as `actor=cli:<hostname>`.
+- **Forgot password**: `docker exec -it guardian_agent node /app/cli/reset-admin.mjs` from the host. Interactive `RESET` ceremony + masked password prompt. Audited as `actor=cli:<hostname>`.
 
 ### Agent credential guardrail
 
@@ -16499,7 +16499,7 @@ The chat agent has **no MCP tools** that read, write, mint, or rotate credential
 
 ### Login UI port
 
-`components/auth/login-screen.tsx` replaced wholesale with the spark-platform login page per operator direction ("use the exact components and animations, not a simpler version"). WavyBackground (simplex-noise animated waves) + decorative robot on the left half + 3-column form|divider|description grid + animated cyan glow divider + FlippingText typewriter cycling Phantom-relevant tool names. Adapted from spark's `motion/react` to phantom's `framer-motion` import (same package); branding swapped from "Spark AI / Powered by Claude, GPT-4o, ..." to "Cortex XSIAM, MITRE ATT&CK, CALDERA, Vertex AI, Gemini, MCP" + "Continuous SOC simulation" copy. 1.6MB myrobo.webp copied to `public/img/`.
+`components/auth/login-screen.tsx` replaced wholesale with the spark-platform login page per operator direction ("use the exact components and animations, not a simpler version"). WavyBackground (simplex-noise animated waves) + decorative robot on the left half + 3-column form|divider|description grid + animated cyan glow divider + FlippingText typewriter cycling Guardian-relevant tool names. Adapted from spark's `motion/react` to guardian's `framer-motion` import (same package); branding swapped from "Spark AI / Powered by Claude, GPT-4o, ..." to "Cortex XSIAM, MITRE ATT&CK, CALDERA, Vertex AI, Gemini, MCP" + "Continuous SOC simulation" copy. 1.6MB myrobo.webp copied to `public/img/`.
 
 ### CI / build-flow refactor (lands in the same release)
 
@@ -16508,18 +16508,18 @@ Replaced monolithic `build.yml` (608 lines) with four focused workflows + one co
 - `build-xlog.yml` — fires on `xlog/**`
 - `build-agent.yml` — fires on `mcp/agent/**` or `bundles/spark/**`; runs pytest + lint inside the freshly-built image
 - `build-caldera.yml` — fires on `third_party/caldera/**`
-- `deploy-dev-installer.yml` — `workflow_run` on any of the above OR push to `installer/**`; builds `phantom-installer-dev` with `:dev` digests + fetches updater/browser digests from latest stable release manifest; runs `sudo ./phantom-installer-dev` on phantom-vm
+- `deploy-dev-installer.yml` — `workflow_run` on any of the above OR push to `installer/**`; builds `guardian-installer-dev` with `:dev` digests + fetches updater/browser digests from latest stable release manifest; runs `sudo ./guardian-installer-dev` on guardian-vm
 - `.github/actions/build-and-push-dev-image/` — composite action shared by all three build workflows
 
-Per-service rebuild gating means caldera doesn't rebuild when only the agent changed — caldera's in-memory state on phantom-vm now survives unrelated pushes. Customer release.yml's selective-rebuild + digest-preservation logic was already correct; this aligns the dev side with it.
+Per-service rebuild gating means caldera doesn't rebuild when only the agent changed — caldera's in-memory state on guardian-vm now survives unrelated pushes. Customer release.yml's selective-rebuild + digest-preservation logic was already correct; this aligns the dev side with it.
 
-Two installer binaries built from the IDENTICAL script body — only the digest manifest differs. Customer installer = `phantom-installer` (release.yml, semver digests, shipped via GitHub Release). Dev installer = `phantom-installer-dev` (build-flow workflows, `:dev` digests, uploaded as workflow artifact). The customer installer has zero knowledge of dev.
+Two installer binaries built from the IDENTICAL script body — only the digest manifest differs. Customer installer = `guardian-installer` (release.yml, semver digests, shipped via GitHub Release). Dev installer = `guardian-installer-dev` (build-flow workflows, `:dev` digests, uploaded as workflow artifact). The customer installer has zero knowledge of dev.
 
 ### Installer cleanup
 
 - **Deleted**: `installer/reset-ui-password.sh` (358 lines) — replaced by `/app/cli/reset-admin.mjs` inside the agent image.
-- **Updated**: `installer/phantom-installer.template.sh` — smarter sudo elevation (skips re-exec if `INSTALL_DIR` writable + docker reachable); post-install banner now shows default credentials + change-at-profile flow + forgot-password CLI; old setup-wizard messaging removed. `build-phantom-installer.sh` accepts `OUTPUT_NAME` env var for dev variant.
-- **`installer/docker-compose.yml`**: dropped `PHANTOM_AGENT_SETUP_PATH` + `PHANTOM_AGENT_ENV_EXPORT_PATH` env vars (pointed at files v0.4.0 never reads or writes).
+- **Updated**: `installer/guardian-installer.template.sh` — smarter sudo elevation (skips re-exec if `INSTALL_DIR` writable + docker reachable); post-install banner now shows default credentials + change-at-profile flow + forgot-password CLI; old setup-wizard messaging removed. `build-guardian-installer.sh` accepts `OUTPUT_NAME` env var for dev variant.
+- **`installer/docker-compose.yml`**: dropped `GUARDIAN_AGENT_SETUP_PATH` + `GUARDIAN_AGENT_ENV_EXPORT_PATH` env vars (pointed at files v0.4.0 never reads or writes).
 
 ### Deleted files (588 lines of dead code purged)
 
@@ -16532,17 +16532,17 @@ Two installer binaries built from the IDENTICAL script body — only the digest 
 
 ### Customer impact on upgrade
 
-**Volume preservation**: existing customer installs on v0.3.x carry pre-v0.4.0 state in their `phantom_data` volume. v0.4.0 boot will FIND the operator's existing password hash in SecretStore and not seed defaults — login continues to work with the customer's existing credentials. The old `setup.json` / `.env.generated` / `.setup_complete` files are NOT deleted by v0.4.0; they're simply never read.
+**Volume preservation**: existing customer installs on v0.3.x carry pre-v0.4.0 state in their `guardian_data` volume. v0.4.0 boot will FIND the operator's existing password hash in SecretStore and not seed defaults — login continues to work with the customer's existing credentials. The old `setup.json` / `.env.generated` / `.setup_complete` files are NOT deleted by v0.4.0; they're simply never read.
 
-**Volume-wipe case**: if a customer drops their `phantom_data` volume (deliberately or via `docker compose down -v`), v0.4.0 boots cleanly into the default-credentials path. The post-install banner explains.
+**Volume-wipe case**: if a customer drops their `guardian_data` volume (deliberately or via `docker compose down -v`), v0.4.0 boots cleanly into the default-credentials path. The post-install banner explains.
 
-**Forbidden post-v0.4.0**: invoking `docker compose up -d` / `down -v` / `force-recreate` over the IAP tunnel for testing or deploy. The phantom-installer is the contract per the CLAUDE.md "Local-mirrors-customer deploy flow" rule.
+**Forbidden post-v0.4.0**: invoking `docker compose up -d` / `down -v` / `force-recreate` over the IAP tunnel for testing or deploy. The guardian-installer is the contract per the CLAUDE.md "Local-mirrors-customer deploy flow" rule.
 
 ### Verification
 
 - Local pre-deploy gate: `tsc --noEmit` (0), `npm run lint` (0 new warnings), `npm run build` (0).
-- CI: build-agent + build-xlog + build-caldera each run their composite-action flow on push to main path-matching the touched service. deploy-dev-installer runs the dev installer end-to-end on phantom-vm.
-- Smoke verified user journey on phantom-vm: default login → banner → /profile change → forced logout → relogin with new password → chat with provider-not-configured error message → /providers config → chat works → CLI reset path.
+- CI: build-agent + build-xlog + build-caldera each run their composite-action flow on push to main path-matching the touched service. deploy-dev-installer runs the dev installer end-to-end on guardian-vm.
+- Smoke verified user journey on guardian-vm: default login → banner → /profile change → forced logout → relogin with new password → chat with provider-not-configured error message → /providers config → chat works → CLI reset path.
 
 ### Net code change
 
@@ -16582,7 +16582,7 @@ The narration is the agent's UX contract with the operator: "I'll do X, here's w
 
 ### Verification
 
-Local pre-deploy gate: `tsc --noEmit` (exit 0), `next lint` (exit 0, no new warnings), `npm run build` (exit 0). On phantom-vm, the chat agent's response in a fresh `bypass`-mode session no longer mentions approval cards; in a `manual`-mode session the card-promise language is preserved unchanged.
+Local pre-deploy gate: `tsc --noEmit` (exit 0), `next lint` (exit 0, no new warnings), `npm run build` (exit 0). On guardian-vm, the chat agent's response in a fresh `bypass`-mode session no longer mentions approval cards; in a `manual`-mode session the card-promise language is preserved unchanged.
 
 ---
 
@@ -16596,7 +16596,7 @@ Operator-driven clean-design release. v0.3.25 stopped the bleeding from the dive
 
 The architecture pre-v0.3.26 had three skill-related fictions to maintain:
 1. `_HARDCODED_ENRICHMENT` dict in `simulation_skills.py` carrying keywords/complexity/attack_type/etc. that the .md files didn't.
-2. Phantom-vm volume accumulating 20+ legacy skills from earlier bundle versions (`midnight_butterfly`, `ink_and_foil`, `xsiam_top20_coverage`, ...) that aren't in the current bundle source.
+2. Guardian-vm volume accumulating 20+ legacy skills from earlier bundle versions (`midnight_butterfly`, `ink_and_foil`, `xsiam_top20_coverage`, ...) that aren't in the current bundle source.
 3. A merge-time enrichment overlay (`get_skill_metadata` cross-referencing the hardcoded dict against disk) — clever but fragile.
 
 v0.3.26 deletes all three.
@@ -16609,9 +16609,9 @@ v0.3.26 deletes all three.
 
 3. **`port_scan_detection.md` got the schema by example**: keywords, complexity, attack_type, caldera_required, devices_required, prerequisites, tactics, techniques are now declared in YAML frontmatter (where they always should have been). Future skill authors copy this shape; the agent picks it up automatically via the disk scan; no code edits needed when a new skill ships.
 
-### Runtime cleanup (phantom-vm)
+### Runtime cleanup (guardian-vm)
 
-The operator authorized "delete them like manual now" — so the v0.3.26 deploy also rm'd 20 legacy non-bundle skill files from `/app/skills/` on phantom-vm:
+The operator authorized "delete them like manual now" — so the v0.3.26 deploy also rm'd 20 legacy non-bundle skill files from `/app/skills/` on guardian-vm:
 
 ```
 foundation/{generate_shared_iocs, create_device_topology}
@@ -16626,7 +16626,7 @@ validation/{validate_ioc_correlation, xsiam_top20_coverage}
 workflows/{purple_team_exercise}
 ```
 
-Post-cleanup phantom-vm state: 14 skills total (13 bundle scenarios + foundation + 1 plugin example), exactly matching the bundle source under [bundles/spark/mcp/skills/](bundles/spark/mcp/skills/).
+Post-cleanup guardian-vm state: 14 skills total (13 bundle scenarios + foundation + 1 plugin example), exactly matching the bundle source under [bundles/spark/mcp/skills/](bundles/spark/mcp/skills/).
 
 ### Files changed
 
@@ -16647,9 +16647,9 @@ No dict to update. No second source of truth. No drift.
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation: only `phantom-agent` rebuilds (it embeds the new MCP source); other services retag from v0.3.25 with identical content digests.
+PATCH release. SELECTIVE recreation: only `guardian-agent` rebuilds (it embeds the new MCP source); other services retag from v0.3.25 with identical content digests.
 
-**Operator-visible effect on phantom-vm specifically**: the runtime `/app/skills/` directory was cleaned to match the bundle source. The volume drops from 34 → 14 active skills. The operator's `.deleted/` directory (5 entries from earlier UI deletions) is preserved as a denylist — if a future bundle re-introduces one of those names, the entrypoint's denylist removal still applies.
+**Operator-visible effect on guardian-vm specifically**: the runtime `/app/skills/` directory was cleaned to match the bundle source. The volume drops from 34 → 14 active skills. The operator's `.deleted/` directory (5 entries from earlier UI deletions) is preserved as a denylist — if a future bundle re-introduces one of those names, the entrypoint's denylist removal still applies.
 
 **For fresh installs**: skills_seed runs the standard `cp -r /app/mcp/skills-default/* /app/skills/` from the image-baked defaults. The image defaults are now just the bundle's clean 14-skill set. No accumulation.
 
@@ -16701,7 +16701,7 @@ Both `skills_list_all` AND `load_simulation_skills` now return the same on-disk 
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation: only `phantom-agent` rebuilds (it embeds the new MCP source); other services retag from v0.3.24 with identical content digests.
+PATCH release. SELECTIVE recreation: only `guardian-agent` rebuilds (it embeds the new MCP source); other services retag from v0.3.24 with identical content digests.
 
 **Operator-visible effect**: the chat agent's "list skills" response now reflects the real on-disk state. If you deleted a skill via `/skills`, it disappears from the agent's response after the next deploy (no chat-history rewrite — old conversation turns may still mention the deleted skill from their captured tool result, but new turns query fresh and show truth).
 
@@ -16737,7 +16737,7 @@ CLAUDE.md's documentation-discipline rule mandates: *"Every backend feature merg
 
 ### Migration impact
 
-PATCH release. **No runtime code paths change** — only the help pages render new content. Image rebuild identical to v0.3.23 (the Next.js production build picks up the new JSX). SELECTIVE recreation: only `phantom-agent` rebuilds; other services retag from v0.3.23 with identical content digests.
+PATCH release. **No runtime code paths change** — only the help pages render new content. Image rebuild identical to v0.3.23 (the Next.js production build picks up the new JSX). SELECTIVE recreation: only `guardian-agent` rebuilds; other services retag from v0.3.23 with identical content digests.
 
 **Backwards-compatible**: existing deep links to `/help/architecture#setup-wiring` and `/help/user` continue to resolve. The new content is additive — nothing was removed or renamed.
 
@@ -16749,9 +16749,9 @@ CI smoke fix. The post-deploy smoke probe T9.2 (jobs manual-trigger) had been fa
 
 ### Root cause
 
-T9.2 picked the alphabetically-first job from `/api/v1/jobs` and POSTed to `/api/v1/jobs/<name>/run`. On phantom-vm that first job was `"Say hi back"` — an operator-created runtime YAML chat job. Chat-action jobs dispatch through the agent's chat handler, which requires the Vertex provider. When Vertex is degraded (e.g. the long-standing stale-provider KEK-mismatch on phantom-vm), chat jobs fail → status="failed" → T9.2 fails.
+T9.2 picked the alphabetically-first job from `/api/v1/jobs` and POSTed to `/api/v1/jobs/<name>/run`. On guardian-vm that first job was `"Say hi back"` — an operator-created runtime YAML chat job. Chat-action jobs dispatch through the agent's chat handler, which requires the Vertex provider. When Vertex is degraded (e.g. the long-standing stale-provider KEK-mismatch on guardian-vm), chat jobs fail → status="failed" → T9.2 fails.
 
-The flake was 100% reproducible on phantom-vm because that specific operator yaml job sorted first. Other deployments with different operator-job names would hit the same class of bug whenever their first job happened to be chat-style and Vertex was unhealthy.
+The flake was 100% reproducible on guardian-vm because that specific operator yaml job sorted first. Other deployments with different operator-job names would hit the same class of bug whenever their first job happened to be chat-style and Vertex was unhealthy.
 
 ### Fix
 
@@ -16776,7 +16776,7 @@ After v0.3.23 deploys, CI's `deploy compose stack` job will show `success` (assu
 
 ## [v0.3.22] — 2026-05-11
 
-Completes the legacy-credentials elimination. v0.3.20 + v0.3.21 deleted `setup.json` from disk on phantom-vm. But v0.3.21's post-deploy smoke surfaced a second copy of the same problem: **`/app/runtime/.env.generated` is still on disk, still 2.7K bytes, still sourced by `entrypoint.sh` at boot — putting `UI_PASSWORD`, `GOOGLE_APPLICATION_CREDENTIALS` (full Vertex SA JSON inline as an env var), `GEMINI_MODEL`, etc. back into `process.env` where the runtime-config fallback chain picks them up.**
+Completes the legacy-credentials elimination. v0.3.20 + v0.3.21 deleted `setup.json` from disk on guardian-vm. But v0.3.21's post-deploy smoke surfaced a second copy of the same problem: **`/app/runtime/.env.generated` is still on disk, still 2.7K bytes, still sourced by `entrypoint.sh` at boot — putting `UI_PASSWORD`, `GOOGLE_APPLICATION_CREDENTIALS` (full Vertex SA JSON inline as an env var), `GEMINI_MODEL`, etc. back into `process.env` where the runtime-config fallback chain picks them up.**
 
 v0.3.22 strips that file too.
 
@@ -16786,7 +16786,7 @@ Pre-v0.1.34 the setup form's `writeRuntimeSetup` wrote *two* files — `setup.js
 
 ### What gets stripped
 
-Same FIELDS_TO_STRIP set as v0.3.20 (UI credentials, Vertex creds, all connector secrets, GEMINI_MODEL, defaultLogFormat, PHANTOM_TLS_VERIFY) plus `XLOG_URL` (env-only legacy; InstanceStore is now canonical).
+Same FIELDS_TO_STRIP set as v0.3.20 (UI credentials, Vertex creds, all connector secrets, GEMINI_MODEL, defaultLogFormat, GUARDIAN_TLS_VERIFY) plus `XLOG_URL` (env-only legacy; InstanceStore is now canonical).
 
 ### What gets PRESERVED
 
@@ -16810,9 +16810,9 @@ Piggybacks on the same login-time migration as v0.3.20/v0.3.21: `migrateLegacyCr
 
 The login response's `migration.stripped` array now includes `env:<KEY>` entries (prefixed to distinguish from setup.json strips) alongside the setup.json keys. Operators can see exactly which fields came from which file.
 
-### Smoke test outcome (against phantom-vm post-deploy)
+### Smoke test outcome (against guardian-vm post-deploy)
 
-Before v0.3.22 (current phantom-vm state after v0.3.21 ran):
+Before v0.3.22 (current guardian-vm state after v0.3.21 ran):
 ```
 $ ls /app/runtime/
 .env.generated    2766 bytes
@@ -16838,7 +16838,7 @@ $ ls /app/runtime/
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation: only `phantom-agent` rebuilds; `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.21 with identical content digests.
+PATCH release. SELECTIVE recreation: only `guardian-agent` rebuilds; `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.21 with identical content digests.
 
 **Operator action**: next successful login. The migration is idempotent — re-runs find the stripped fields already gone and quietly no-op.
 
@@ -16856,7 +16856,7 @@ Per `/help/architecture#setup-wiring`: *"A small flag file may exist holding onl
 
 ### Changes
 
-1. **Added `PHANTOM_TLS_VERIFY` to `FIELDS_TO_STRIP`** in [setup-cleanup.ts](mcp/agent/lib/setup-cleanup.ts). This is an env-managed runtime knob (set via docker env, NOT via setup form); the legacy `setup.json` copy was dead data. The agent's existing fallback in `getEffectiveRuntimeConfig` reads it from `process.env` directly.
+1. **Added `GUARDIAN_TLS_VERIFY` to `FIELDS_TO_STRIP`** in [setup-cleanup.ts](mcp/agent/lib/setup-cleanup.ts). This is an env-managed runtime knob (set via docker env, NOT via setup form); the legacy `setup.json` copy was dead data. The agent's existing fallback in `getEffectiveRuntimeConfig` reads it from `process.env` directly.
 
 2. **File-delete on empty-values strip.** When `stripMigratedFieldsFromSetupJson` strips the last operator-typed field, it now `fs.unlink`s the file instead of writing an empty shell. The deletion is gated on `.setup_complete` existing (the canonical flag must be in place first — we don't race-delete during pre-setup boot).
 
@@ -16864,27 +16864,27 @@ Per `/help/architecture#setup-wiring`: *"A small flag file may exist holding onl
 
 ### Smoke test sequence (post-deploy)
 
-After v0.3.21 deploys, your next successful login on phantom-vm will:
-- Migration helper finds `setup.json` with only `PHANTOM_TLS_VERIFY` + `migratedAt`
-- Strips `PHANTOM_TLS_VERIFY` → values empty
+After v0.3.21 deploys, your next successful login on guardian-vm will:
+- Migration helper finds `setup.json` with only `GUARDIAN_TLS_VERIFY` + `migratedAt`
+- Strips `GUARDIAN_TLS_VERIFY` → values empty
 - Detects `.setup_complete` exists → `fs.unlink(setup.json)`
-- Login response: `migration.stripped` = `["PHANTOM_TLS_VERIFY"]`
+- Login response: `migration.stripped` = `["GUARDIAN_TLS_VERIFY"]`
 - `ls /app/runtime/setup.json` → "No such file or directory"
 - Only `.setup_complete` remains in `/app/runtime/`
 
 ### Files changed
 
-- [mcp/agent/lib/setup-cleanup.ts](mcp/agent/lib/setup-cleanup.ts) — added PHANTOM_TLS_VERIFY to strip list; added file-delete branch + `.setup_complete`-gated `maybeDeleteEmptyShell` helper
+- [mcp/agent/lib/setup-cleanup.ts](mcp/agent/lib/setup-cleanup.ts) — added GUARDIAN_TLS_VERIFY to strip list; added file-delete branch + `.setup_complete`-gated `maybeDeleteEmptyShell` helper
 - [CHANGELOG.md](CHANGELOG.md), [mcp/agent/lib/release-notes.ts](mcp/agent/lib/release-notes.ts)
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation: only `phantom-agent` rebuilds; `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.20 with identical content digests.
+PATCH release. SELECTIVE recreation: only `guardian-agent` rebuilds; `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.20 with identical content digests.
 
 **Backwards-compatible**:
 - Pre-setup boot (no `.setup_complete`): `maybeDeleteEmptyShell` is gated on the flag existing, so the first-install setup form still works. The form's POST handler stamps `.setup_complete` after materializing instances; subsequent code paths read from the proper stores; setup.json never gets created because `writeRuntimeSetup` was already deleted in v0.1.34.
 - Post-setup boot with v0.3.20-migrated shell: migration helper strips the last field + deletes the file.
-- Operators who didn't trigger v0.3.20 migration (no login since v0.3.19 deploy): nothing changes until their next login, then the full migration runs in one pass — strip credentials + strip PHANTOM_TLS_VERIFY + delete file.
+- Operators who didn't trigger v0.3.20 migration (no login since v0.3.19 deploy): nothing changes until their next login, then the full migration runs in one pass — strip credentials + strip GUARDIAN_TLS_VERIFY + delete file.
 
 **Rollback safety**: if v0.3.21 has a bug, reverting to v0.3.20 image is safe — the missing setup.json triggers the standard fallback chain in runtime-config (env defaults → manifest defaults), which is the same code path active when setup.json contains only an outer shell. No data is unreachable; ProviderStore + InstanceStore + SecretStore + settings_store hold all the operator values.
 
@@ -16898,7 +16898,7 @@ Setup-wiring spec drift fix. Closes the gap operator surfaced during the v0.3.19
 
 The login route already has a two-path verify (MCP hash if present, plaintext compare against setup.json as fallback). v0.3.20 piggybacks on that fallback: when an operator successfully logs in via the plaintext path, the route now ALSO:
 
-1. Calls the existing `POST /api/v1/ui/auth/password` MCP endpoint to write a PBKDF2-HMAC-SHA256 hash to the SecretStore at `/ui/auth/<username>/password_hash` (600k iterations, AES-GCM-encrypted at rest when `PHANTOM_SECRET_KEK` is set — required since v0.3.7).
+1. Calls the existing `POST /api/v1/ui/auth/password` MCP endpoint to write a PBKDF2-HMAC-SHA256 hash to the SecretStore at `/ui/auth/<username>/password_hash` (600k iterations, AES-GCM-encrypted at rest when `GUARDIAN_SECRET_KEK` is set — required since v0.3.7).
 2. Calls `POST /api/v1/settings` to migrate `{setupUiUser, geminiModel, defaultLogFormat}` to the settings_store (those keys are already in `manifest.settings.overridable[]`, so the store already accepts them).
 3. Rewrites `setup.json` to strip the now-redundant fields — `UI_USER`, `UI_PASSWORD`, `GEMINI_MODEL`, `defaultLogFormat`, plus the connector/provider duplicates (`vertexServiceAccountJson`, `xsiamPapiAuthHeader`, `calderaApiKey`, `xlogApiToken`, ...) that v0.1.34 already moved to ProviderStore/InstanceStore/SecretStore. Each stripped field has its canonical home documented in [setup-cleanup.ts](mcp/agent/lib/setup-cleanup.ts)'s `FIELDS_TO_STRIP` array.
 
@@ -16933,9 +16933,9 @@ Each step is idempotent:
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation: only `phantom-agent` rebuilds (it embeds the new migration helpers + route wiring); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.19 with identical content digests.
+PATCH release. SELECTIVE recreation: only `guardian-agent` rebuilds (it embeds the new migration helpers + route wiring); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.19 with identical content digests.
 
-**Operator-visible effect**: on your next login, you'll get the usual success response — plus a one-time `migration: {stripped: [...]}` field on the response. The login itself is unchanged. After the migration runs, `cat /app/runtime/setup.json` on phantom-vm will show only the outer shell + a `migratedAt` timestamp; all 20+ plaintext credential fields are gone. The `/api/v1/metrics` endpoint and runtime behavior are unchanged.
+**Operator-visible effect**: on your next login, you'll get the usual success response — plus a one-time `migration: {stripped: [...]}` field on the response. The login itself is unchanged. After the migration runs, `cat /app/runtime/setup.json` on guardian-vm will show only the outer shell + a `migratedAt` timestamp; all 20+ plaintext credential fields are gone. The `/api/v1/metrics` endpoint and runtime behavior are unchanged.
 
 **Rollback safety**: if anything misbehaves, the migration helpers are gated on `usedLegacy === true` (only fires when the legacy plaintext path successfully matched), and each step is wrapped in try/except. Reverting to v0.3.19 image is safe — the (now empty-ish) setup.json shell stays valid; the legacy fallback path resumes reading from it (and finds nothing, so falls back to the default values).
 
@@ -16989,7 +16989,7 @@ The test uses the same synthetic-package load pattern as `test_cortex_content_in
 
 ### Migration impact
 
-PATCH release. Test-only — **no runtime code paths change**. Image rebuild identical to v0.3.18 (tests run inside the agent image during the build's `test-mcp-server` job). SELECTIVE recreation: only `phantom-agent` rebuilds with the new test file; other services retag from v0.3.18 with identical content digests.
+PATCH release. Test-only — **no runtime code paths change**. Image rebuild identical to v0.3.18 (tests run inside the agent image during the build's `test-mcp-server` job). SELECTIVE recreation: only `guardian-agent` rebuilds with the new test file; other services retag from v0.3.18 with identical content digests.
 
 ---
 
@@ -17024,7 +17024,7 @@ The boot-log signal `tool_dispatcher installed` is documented in the v0.3.16 arc
 
 ### Migration impact
 
-PATCH release. Test-only — **no runtime code paths change**. Image rebuild identical to v0.3.17 (tests run inside the agent image during the build's `test-mcp-server` job). SELECTIVE recreation: only `phantom-agent` rebuilds with the new test file; other services retag from v0.3.17 with identical content digests.
+PATCH release. Test-only — **no runtime code paths change**. Image rebuild identical to v0.3.17 (tests run inside the agent image during the build's `test-mcp-server` job). SELECTIVE recreation: only `guardian-agent` rebuilds with the new test file; other services retag from v0.3.17 with identical content digests.
 
 ---
 
@@ -17036,23 +17036,23 @@ Closes the symmetric observability gap from v0.3.15. That release added Promethe
 
 | Name | Type | Labels | Purpose |
 |---|---|---|---|
-| `phantom_cortex_content_index_runs_total` | counter | `pack=<name>`, `result={succeeded,partial,failed}` | One inc per `index_kb` call. `succeeded` = no errors; `partial` = some rules indexed AND some errored; `failed` = errors with zero successful indexes. Operators alert on `result="failed"` aggregations. |
-| `phantom_cortex_content_indexed_docs_total` | counter | `action={insert,update,unchanged}` | One inc per document inside a pack-index call. `insert`/`update` mean a Vertex embedding was generated; `unchanged` means `source_hash` dedupe skipped the embed step. Lets dashboards split "new-content rate" from "cache-hit rate". |
+| `guardian_cortex_content_index_runs_total` | counter | `pack=<name>`, `result={succeeded,partial,failed}` | One inc per `index_kb` call. `succeeded` = no errors; `partial` = some rules indexed AND some errored; `failed` = errors with zero successful indexes. Operators alert on `result="failed"` aggregations. |
+| `guardian_cortex_content_indexed_docs_total` | counter | `action={insert,update,unchanged}` | One inc per document inside a pack-index call. `insert`/`update` mean a Vertex embedding was generated; `unchanged` means `source_hash` dedupe skipped the embed step. Lets dashboards split "new-content rate" from "cache-hit rate". |
 
 Same emission shape as v0.3.15's batch metrics: lazy registry lookup, `try/except` wrappers that silently no-op on metric errors (the tool's primary path is never affected by observability failures). Both counters are pre-declared in [bundles/spark/manifest.yaml](bundles/spark/manifest.yaml) under `observability.metrics[]` so dashboards see them as 0-valued counters before any index call fires.
 
 ### Emission points (in [bundles/spark/connectors/cortex-content/src/connector.py](bundles/spark/connectors/cortex-content/src/connector.py))
 
 Per document upserted inside `_cortex_index_kb_impl`'s inner loop:
-- `kb.upsert(...)` returns `"insert"` / `"update"` → `phantom_cortex_content_indexed_docs_total{action=<one of>}` += 1
-- `kb.upsert(...)` returns `"unchanged"` (source_hash hit) → `phantom_cortex_content_indexed_docs_total{action="unchanged"}` += 1
+- `kb.upsert(...)` returns `"insert"` / `"update"` → `guardian_cortex_content_indexed_docs_total{action=<one of>}` += 1
+- `kb.upsert(...)` returns `"unchanged"` (source_hash hit) → `guardian_cortex_content_indexed_docs_total{action="unchanged"}` += 1
 
 Once the per-pack loop completes, the run counter records the overall result:
 - All rules indexed cleanly → `{result="succeeded"}`
 - Some indexed + some errored → `{result="partial"}`
 - Errored with zero successful indexes → `{result="failed"}`
 
-The `pack` label lets operators answer "which packs are flaky?" — e.g. `sum by (pack)(phantom_cortex_content_index_runs_total{result="failed"})` ranks them by failure count.
+The `pack` label lets operators answer "which packs are flaky?" — e.g. `sum by (pack)(guardian_cortex_content_index_runs_total{result="failed"})` ranks them by failure count.
 
 ### Tests (4 new pytest cases in [bundles/spark/mcp/tests/test_cortex_content_index_kb.py](bundles/spark/mcp/tests/test_cortex_content_index_kb.py))
 
@@ -17082,7 +17082,7 @@ Closing the pattern means future operators auditing the cluster will find consis
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation: only `phantom-agent` rebuilds (it embeds the new emission code + manifest counters); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.16 with identical content digests.
+PATCH release. SELECTIVE recreation: only `guardian-agent` rebuilds (it embeds the new emission code + manifest counters); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.16 with identical content digests.
 
 **Backwards-compatible**: no API shape changes, no required operator action. The new metrics appear in `GET /api/v1/metrics` as 0-valued counters immediately post-upgrade; values start incrementing as soon as the agent (or operator) invokes `cortex-content/index_kb`.
 
@@ -17105,9 +17105,9 @@ The architecture page already had top-level Sections for `approvals`, `tool-disp
 
 ### Why now
 
-The architecture page is operator-readable documentation hosted at `/help/architecture` — operators land on it when they need to understand "what does Phantom do internally?" or "how do these moving parts compose?". Releasing v0.3.10-v0.3.15 without touching it created a coherent code → broken docs drift exactly of the kind CLAUDE.md's documentation-discipline rule was written to prevent. v0.3.16 fixes the drift before it compounds further.
+The architecture page is operator-readable documentation hosted at `/help/architecture` — operators land on it when they need to understand "what does Guardian do internally?" or "how do these moving parts compose?". Releasing v0.3.10-v0.3.15 without touching it created a coherent code → broken docs drift exactly of the kind CLAUDE.md's documentation-discipline rule was written to prevent. v0.3.16 fixes the drift before it compounds further.
 
-The trade-off explicitly considered in [v0.3.15's stop-summary](https://github.com/kite-production/phantom/releases/tag/v0.3.15) was "5200-line file → tedious to navigate". In practice the actual edit work was 4 targeted insertions at well-known section boundaries — ~150 lines of new prose total. Cost-effective once the operator-value framing made it clear this isn't speculative polish but a required step.
+The trade-off explicitly considered in [v0.3.15's stop-summary](https://github.com/kite-production/guardian/releases/tag/v0.3.15) was "5200-line file → tedious to navigate". In practice the actual edit work was 4 targeted insertions at well-known section boundaries — ~150 lines of new prose total. Cost-effective once the operator-value framing made it clear this isn't speculative polish but a required step.
 
 ### Files changed
 
@@ -17116,7 +17116,7 @@ The trade-off explicitly considered in [v0.3.15's stop-summary](https://github.c
 
 ### Migration impact
 
-PATCH release. **No runtime code paths change** — only the `help/architecture` page renders new content. Image rebuild identical to v0.3.15 (the Next.js production build picks up the new JSX). SELECTIVE recreation: only `phantom-agent` rebuilds; `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.15 with identical content digests.
+PATCH release. **No runtime code paths change** — only the `help/architecture` page renders new content. Image rebuild identical to v0.3.15 (the Next.js production build picks up the new JSX). SELECTIVE recreation: only `guardian-agent` rebuilds; `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.15 with identical content digests.
 
 **Backwards-compatible**: existing operator-facing deep links (`#approvals`, `#tool-dispatch`, etc.) continue to resolve. The new SubSections are additive — nothing was removed or renamed.
 
@@ -17130,9 +17130,9 @@ Observability release. v0.3.10/v0.3.11 shipped `agent_batch_propose` with full a
 
 | Name | Type | Labels | Purpose |
 |---|---|---|---|
-| `phantom_batch_proposals_total` | counter | `approved={true,false}` | Every `agent_batch_propose` call increments once. Reveals batch usage AND the deny-rate over time. |
-| `phantom_batch_actions_total` | counter | `tool=<name>`, `result={success,fail}` | One inc per individual action inside a batch. The `tool` label reveals which tools dominate batch traffic; `result` splits success vs failure for per-tool reliability dashboards. |
-| `phantom_batch_size` | histogram | (none) | Distribution of batch sizes. Custom buckets `(1, 2, 3, 5, 10, 25)` matching the v0.3.10 25-action cap — a value above the top bucket would mean validation regressed (the eager check should block it). |
+| `guardian_batch_proposals_total` | counter | `approved={true,false}` | Every `agent_batch_propose` call increments once. Reveals batch usage AND the deny-rate over time. |
+| `guardian_batch_actions_total` | counter | `tool=<name>`, `result={success,fail}` | One inc per individual action inside a batch. The `tool` label reveals which tools dominate batch traffic; `result` splits success vs failure for per-tool reliability dashboards. |
+| `guardian_batch_size` | histogram | (none) | Distribution of batch sizes. Custom buckets `(1, 2, 3, 5, 10, 25)` matching the v0.3.10 25-action cap — a value above the top bucket would mean validation regressed (the eager check should block it). |
 
 The two counters are pre-declared in [bundles/spark/manifest.yaml](bundles/spark/manifest.yaml) under `observability.metrics[]`, so dashboards see them as 0-valued counters before any batch fires (avoids the "metric not found" gap in the warm-up window). The histogram is registered lazily on first batch call — `main.py`'s manifest-counter loop only handles counters.
 
@@ -17140,11 +17140,11 @@ The two counters are pre-declared in [bundles/spark/manifest.yaml](bundles/spark
 
 | Event | Metric emission |
 |---|---|
-| Batch approved + executed | `phantom_batch_proposals_total{approved="true"}.inc()` + `phantom_batch_size.observe(N)` once |
-| Per action success | `phantom_batch_actions_total{tool=<n>,result="success"}.inc()` |
-| Per action returns `{error: ...}` | `phantom_batch_actions_total{tool=<n>,result="fail"}.inc()` |
+| Batch approved + executed | `guardian_batch_proposals_total{approved="true"}.inc()` + `guardian_batch_size.observe(N)` once |
+| Per action success | `guardian_batch_actions_total{tool=<n>,result="success"}.inc()` |
+| Per action returns `{error: ...}` | `guardian_batch_actions_total{tool=<n>,result="fail"}.inc()` |
 | Per action raises exception | same — `result="fail"` |
-| Batch denied / timeout / bus error | `phantom_batch_proposals_total{approved="false"}.inc()` + `phantom_batch_size.observe(N)`. No action increments (executor never ran). |
+| Batch denied / timeout / bus error | `guardian_batch_proposals_total{approved="false"}.inc()` + `guardian_batch_size.observe(N)`. No action increments (executor never ran). |
 
 ### Silent-fail on metrics errors
 
@@ -17161,10 +17161,10 @@ The fixture's `_reset_caches` now installs a fresh `MetricsRegistry()` per test 
 
 ### What this enables for operators
 
-- Grafana panel `rate(phantom_batch_proposals_total{approved="true"}[5m])` — batch approval throughput
-- Panel `sum(phantom_batch_proposals_total{approved="false"}) / sum(phantom_batch_proposals_total)` — overall deny rate
-- Per-tool reliability via `phantom_batch_actions_total{result="fail"} / phantom_batch_actions_total` aggregated by `tool`
-- Histogram quantiles `histogram_quantile(0.95, phantom_batch_size_bucket)` — operator's typical batch size
+- Grafana panel `rate(guardian_batch_proposals_total{approved="true"}[5m])` — batch approval throughput
+- Panel `sum(guardian_batch_proposals_total{approved="false"}) / sum(guardian_batch_proposals_total)` — overall deny rate
+- Per-tool reliability via `guardian_batch_actions_total{result="fail"} / guardian_batch_actions_total` aggregated by `tool`
+- Histogram quantiles `histogram_quantile(0.95, guardian_batch_size_bucket)` — operator's typical batch size
 
 The metrics are exposed via the existing `GET /api/v1/metrics` endpoint that operators already scrape; no new HTTP surface, no new auth path.
 
@@ -17177,7 +17177,7 @@ The metrics are exposed via the existing `GET /api/v1/metrics` endpoint that ope
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation: only `phantom-agent` rebuilds (it embeds the new emission code + manifest counters); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.14 with identical digests.
+PATCH release. SELECTIVE recreation: only `guardian-agent` rebuilds (it embeds the new emission code + manifest counters); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.14 with identical digests.
 
 **Backwards-compatible**: no API shape changes, no required operator action. The new metrics appear in `GET /api/v1/metrics` as 0-valued counters immediately post-upgrade; values start incrementing as soon as the agent uses `agent_batch_propose`.
 
@@ -17223,7 +17223,7 @@ The connector's bare-name lookup (`client = _get_client()` inside `_cortex_index
 
 ### Migration impact
 
-PATCH release. Test-only — **no runtime code paths change**. Image rebuild identical to v0.3.13 (tests run inside the agent image during the build's `test-mcp-server` job). SELECTIVE recreation: only `phantom-agent` rebuilds with the new test file; xlog, caldera, browser, updater retag from v0.3.13 with identical digests.
+PATCH release. Test-only — **no runtime code paths change**. Image rebuild identical to v0.3.13 (tests run inside the agent image during the build's `test-mcp-server` job). SELECTIVE recreation: only `guardian-agent` rebuilds with the new test file; xlog, caldera, browser, updater retag from v0.3.13 with identical digests.
 
 The cortex-content connector still runs unchanged at runtime; only the test surface grows.
 
@@ -17251,7 +17251,7 @@ Read-only — **no auto-quarantine, no auto-delete, no operator-invisible state 
 
 ### UI — yellow banner on `/jobs` when issues exist
 
-[mcp/agent/app/jobs/page.tsx](mcp/agent/app/jobs/page.tsx): when `yaml-issues count > 0`, the page renders a banner above the summary cards explaining the problem and providing a collapsible details panel with each failed file's basename + error reason. Operator can either fix the YAML in place (`docker exec phantom_agent vi /app/data/jobs/<basename>`) or delete the file if it's stale.
+[mcp/agent/app/jobs/page.tsx](mcp/agent/app/jobs/page.tsx): when `yaml-issues count > 0`, the page renders a banner above the summary cards explaining the problem and providing a collapsible details panel with each failed file's basename + error reason. Operator can either fix the YAML in place (`docker exec guardian_agent vi /app/data/jobs/<basename>`) or delete the file if it's stale.
 
 The banner doesn't take up space when there are no issues — defaulting to "everything is clean" is the desired UX for the typical operator who's never edited a job YAML by hand.
 
@@ -17272,7 +17272,7 @@ The banner doesn't take up space when there are no issues — defaulting to "eve
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation: only `phantom-agent` rebuilds (new endpoint + UI page change); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.12 with identical digests.
+PATCH release. SELECTIVE recreation: only `guardian-agent` rebuilds (new endpoint + UI page change); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.12 with identical digests.
 
 **Backwards-compatible**: no data shape changes; no manifest changes. Operators upgrading from v0.3.12 see the banner appear on `/jobs` if they have malformed YAMLs (which were already failing to load — v0.3.13 just makes the failure visible). The boot log goes from N WARN lines to 1 INFO line.
 
@@ -17333,7 +17333,7 @@ For the v0.3.11 connector-tool tests, the private `connector_loader._reload_stat
 
 PATCH release. Test-only — **no runtime code paths change**. Could arguably skip a release cut entirely and bundle the tests with the next functional change, but cutting them as their own release makes the test addition visible in `git log` and the CHANGELOG so future contributors can find the coverage justification easily.
 
-Image rebuild is identical to v0.3.11 (tests run inside the agent image during the build's `test-mcp-server` job, which is the same image that gets deployed). SELECTIVE recreation: only `phantom-agent` rebuilds with the new test file; xlog, caldera, browser, updater retag from v0.3.11 with identical digests.
+Image rebuild is identical to v0.3.11 (tests run inside the agent image during the build's `test-mcp-server` job, which is the same image that gets deployed). SELECTIVE recreation: only `guardian-agent` rebuilds with the new test file; xlog, caldera, browser, updater retag from v0.3.11 with identical digests.
 
 ---
 
@@ -17386,7 +17386,7 @@ Connector tools that are already in `manifest.approvals.humanRequired[]` (curren
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `phantom-agent` rebuilds (it embeds the new tool_dispatcher module + agent_batch_propose extension + main.py boot wiring); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.10 with identical content digests.
+PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `guardian-agent` rebuilds (it embeds the new tool_dispatcher module + agent_batch_propose extension + main.py boot wiring); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.10 with identical content digests.
 
 **Backwards-compatible**: existing v0.3.10 batches (built-in-only) work identically. Pre-v0.3.11 callers that referenced non-builtin tools got a clean error envelope; v0.3.11 callers get the action executed. The UI render in [approval-card.tsx](mcp/agent/components/chat/approval-card.tsx) is unchanged — connector tool names appear in the action list with the same row format as built-ins.
 
@@ -17462,7 +17462,7 @@ The card retains the standard approve/deny buttons, raw-args expander, and tier-
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `phantom-agent` rebuilds (it embeds the new tool + manifest entry + UI change); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.9 with identical content digests.
+PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `guardian-agent` rebuilds (it embeds the new tool + manifest entry + UI change); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.9 with identical content digests.
 
 **Backwards-compatible**: existing approval cards render identically (the batch detector falls through cleanly when `tool !== "agent_batch_propose"`). The agent doesn't have to use `agent_batch_propose` — single-action approval is unchanged.
 
@@ -17495,7 +17495,7 @@ The follow-on to v0.3.7's cortex-content connector. v0.3.7 shipped 9 GitHub-fetc
 ### Integration with existing infrastructure
 
 Uses the in-process singletons:
-- [bundles/spark/mcp/src/usecase/kb_store.py](bundles/spark/mcp/src/usecase/kb_store.py) `knowledge_base()` — already wired up at MCP boot; the loader's bundle-knowledge-bundled[] path (phantom-soc + xql-examples KBs) and the new cortex-content KB coexist in the same sqlite DB at `/app/data/kb.db`, partitioned by `kb_name`.
+- [bundles/spark/mcp/src/usecase/kb_store.py](bundles/spark/mcp/src/usecase/kb_store.py) `knowledge_base()` — already wired up at MCP boot; the loader's bundle-knowledge-bundled[] path (guardian-soc + xql-examples KBs) and the new cortex-content KB coexist in the same sqlite DB at `/app/data/kb.db`, partitioned by `kb_name`.
 - The existing `knowledge_search` MCP tool ([cognitive_tools.py:178](bundles/spark/mcp/src/usecase/builtin_components/cognitive_tools.py:178)) supports `kb_name="cortex-content"` out of the box — no additional plumbing needed on the search side.
 - Vertex embedder (or TextHash fallback when Vertex is degraded) is the same one memory_store + knowledge_base already use — no separate embedder for this KB.
 
@@ -17511,7 +17511,7 @@ The xsiam connector's pattern in [bundles/spark/connectors/xsiam/src/connector.p
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `phantom-agent` rebuilds (embeds the updated cortex-content connector code + marketplace entry); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.8 with identical content digests. No operator action required.
+PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `guardian-agent` rebuilds (embeds the updated cortex-content connector code + marketplace entry); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.8 with identical content digests. No operator action required.
 
 **Backwards compatibility**: existing 9 cortex-content tools (list_packs, search_packs, get_pack, list/get for the three rule types) are unchanged. Adding `index_kb` is purely additive.
 
@@ -17540,9 +17540,9 @@ The marker-merge was correct architecturally (it's how new image-baked skills ge
 | Image-default skill, deleted by operator | removed after restore | `.deleted/<basename>.md` exists → denylist removes it post-merge |
 | Operator-created skill, deleted by operator | stays deleted | `.deleted/<basename>.md` exists; `cp -r` doesn't restore (no source); denylist no-op |
 
-The denylist is per-operator-volume — it survives `docker compose down`/`up` but not `docker volume rm phantom_mcp_skills` (volume destruction loses all state, including the deletion history).
+The denylist is per-operator-volume — it survives `docker compose down`/`up` but not `docker volume rm guardian_mcp_skills` (volume destruction loses all state, including the deletion history).
 
-**Future work**: a UI affordance to "undelete" a skill (move it back out of `.deleted/`) would close the symmetric gap; today the operator has to `docker exec phantom_agent mv /app/skills/.deleted/foo.md /app/skills/category/foo.md`. Deferred — low frequency.
+**Future work**: a UI affordance to "undelete" a skill (move it back out of `.deleted/`) would close the symmetric gap; today the operator has to `docker exec guardian_agent mv /app/skills/.deleted/foo.md /app/skills/category/foo.md`. Deferred — low frequency.
 
 ### `jobs_create` docstring — idempotency hint
 
@@ -17571,9 +17571,9 @@ Same audit pattern as v0.3.7's `jobs_create`/`jobs_update` work, applied to the 
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `phantom-agent` rebuilds (it embeds the new entrypoint.sh denylist logic + the docstring audit changes); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.7 with identical content digests. caldera red-team state, xlog streaming workers, browser cache, updater state all preserved.
+PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `guardian-agent` rebuilds (it embeds the new entrypoint.sh denylist logic + the docstring audit changes); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.7 with identical content digests. caldera red-team state, xlog streaming workers, browser cache, updater state all preserved.
 
-**One operator-visible change**: skills the operator had previously deleted (and which kept coming back on upgrades) will stay deleted from this release onward. If you want to revive a previously-deleted skill, run `docker exec phantom_agent mv /app/skills/.deleted/<basename>.md /app/skills/<category>/<basename>.md` against the running container.
+**One operator-visible change**: skills the operator had previously deleted (and which kept coming back on upgrades) will stay deleted from this release onward. If you want to revive a previously-deleted skill, run `docker exec guardian_agent mv /app/skills/.deleted/<basename>.md /app/skills/<category>/<basename>.md` against the running container.
 
 ### Files changed
 
@@ -17606,18 +17606,18 @@ New tool connector at [bundles/spark/connectors/cortex-content/](bundles/spark/c
 
 **Deferred to v0.3.8**: semantic embedding of fetched content into the agent's `knowledge_search` KB via Vertex `gemini-embedding-001`. v0.3.7 is the fetch surface only — operators (or the agent) request packs/rules by name; v0.3.8 will let the agent semantic-search "show me an XDM modeling rule for cisco_esa logs" and get pack-specific hits inline.
 
-### `PHANTOM_SECRET_KEK` hardening — refuse-to-start without KEK
+### `GUARDIAN_SECRET_KEK` hardening — refuse-to-start without KEK
 
-[bundles/spark/mcp/src/usecase/secret_store.py](bundles/spark/mcp/src/usecase/secret_store.py): the `SecretStore` no longer silently falls back to plaintext-on-disk mode when `PHANTOM_SECRET_KEK` is unset. Pre-v0.3.7 the fallback emitted a startup warning but still wrote secrets cleartext under `/app/data/secrets/...` — including the Vertex SA JSON. Operators who deployed manually (bypassing the installer) and missed the warning would have credentials sitting cleartext on disk without realizing it.
+[bundles/spark/mcp/src/usecase/secret_store.py](bundles/spark/mcp/src/usecase/secret_store.py): the `SecretStore` no longer silently falls back to plaintext-on-disk mode when `GUARDIAN_SECRET_KEK` is unset. Pre-v0.3.7 the fallback emitted a startup warning but still wrote secrets cleartext under `/app/data/secrets/...` — including the Vertex SA JSON. Operators who deployed manually (bypassing the installer) and missed the warning would have credentials sitting cleartext on disk without realizing it.
 
-v0.3.7+ behavior: the store raises `SecretStoreError` at construction time with a clear remediation message naming both fixes (generate a KEK, or set the new `PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT=1` escape-hatch to explicitly opt into cleartext mode). The escape hatch is for genuinely-acknowledged use cases (isolated test environments, ephemeral dev containers) and still emits the loud warning at boot.
+v0.3.7+ behavior: the store raises `SecretStoreError` at construction time with a clear remediation message naming both fixes (generate a KEK, or set the new `GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT=1` escape-hatch to explicitly opt into cleartext mode). The escape hatch is for genuinely-acknowledged use cases (isolated test environments, ephemeral dev containers) and still emits the loud warning at boot.
 
-**Customer impact**: zero. The `phantom-installer` always generates a fresh KEK on first install (`installer/phantom-installer.template.sh:387` — `openssl rand -base64 32`), so customer-install flows never hit this path. Only manual deploys that skipped the installer hit the new error.
+**Customer impact**: zero. The `guardian-installer` always generates a fresh KEK on first install (`installer/guardian-installer.template.sh:387` — `openssl rand -base64 32`), so customer-install flows never hit this path. Only manual deploys that skipped the installer hit the new error.
 
 Files changed:
 - [bundles/spark/mcp/src/usecase/secret_store.py](bundles/spark/mcp/src/usecase/secret_store.py) — raise on unset KEK; honor escape hatch
 - [bundles/spark/mcp/tests/test_secret_store.py](bundles/spark/mcp/tests/test_secret_store.py) — new test `test_no_kek_no_escape_hatch_raises` + updated plaintext tests to use the escape hatch
-- [docker-compose.yml](docker-compose.yml) — forward `PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT` env var
+- [docker-compose.yml](docker-compose.yml) — forward `GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT` env var
 - [installer/docker-compose.yml](installer/docker-compose.yml) — same
 - [installer/.env.example](installer/.env.example) — document the escape hatch
 
@@ -17654,9 +17654,9 @@ New `JobActions` prop `redirectOnDeleteTo` lets the detail view opt into the red
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `phantom-agent` rebuilds (it embeds the new cortex-content connector + the SecretStore change + the UI fixes + the docstring audit + the manifest update); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` retag from v0.3.6 with identical content digests. caldera red-team state, xlog streaming workers, browser cache, updater state all preserved.
+PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `guardian-agent` rebuilds (it embeds the new cortex-content connector + the SecretStore change + the UI fixes + the docstring audit + the manifest update); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` retag from v0.3.6 with identical content digests. caldera red-team state, xlog streaming workers, browser cache, updater state all preserved.
 
-**One operator-action requirement for manual deploys**: if you deploy without the installer AND haven't set `PHANTOM_SECRET_KEK`, the v0.3.7 phantom-agent will refuse to start. Two fixes — either set the KEK (`openssl rand -base64 32`) or set `PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT=1` to acknowledge the risk. Installer flows never hit this.
+**One operator-action requirement for manual deploys**: if you deploy without the installer AND haven't set `GUARDIAN_SECRET_KEK`, the v0.3.7 guardian-agent will refuse to start. Two fixes — either set the KEK (`openssl rand -base64 32`) or set `GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT=1` to acknowledge the risk. Installer flows never hit this.
 
 ### Files changed
 
@@ -17683,7 +17683,7 @@ Fixes a chat-sidebar pathology that emerged on busy installs: navigating away fr
 
 ### Symptom
 
-Operator on bupa-engine reports: *"when I navigate away from the chat window and come back, I see only the last chat session, the rest are lost."* Live diagnostic against the running stack: 4565 sessions in `sessions.db`, of which 3059 are job-driven (recurring scheduled jobs that fire chat dispatch with `X-Phantom-Trigger: job:*`, marked `meta.scheduled_by=<job-name>` by the chat-route) and 1506 are operator-driven. The chat page's default 50-row fetch was 100% scheduled — the human sessions were buried deeper in history.
+Operator on bupa-engine reports: *"when I navigate away from the chat window and come back, I see only the last chat session, the rest are lost."* Live diagnostic against the running stack: 4565 sessions in `sessions.db`, of which 3059 are job-driven (recurring scheduled jobs that fire chat dispatch with `X-Guardian-Trigger: job:*`, marked `meta.scheduled_by=<job-name>` by the chat-route) and 1506 are operator-driven. The chat page's default 50-row fetch was 100% scheduled — the human sessions were buried deeper in history.
 
 ### Root cause
 
@@ -17722,7 +17722,7 @@ This was a test-coverage gap before v0.3.6 — `bundles/spark/mcp/tests/` had no
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `phantom-agent` rebuilds (it embeds the bundled MCP route handler + the SqliteSessionStore filter logic + the Next.js page); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` all retag from v0.3.5 with identical content digests. caldera red-team operation state, xlog streaming workers, browser cache, updater state all preserved.
+PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `guardian-agent` rebuilds (it embeds the bundled MCP route handler + the SqliteSessionStore filter logic + the Next.js page); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` all retag from v0.3.5 with identical content digests. caldera red-team operation state, xlog streaming workers, browser cache, updater state all preserved.
 
 The new schema-time `CREATE INDEX IF NOT EXISTS idx_sessions_scheduled_by` runs on first boot of v0.3.6 against the existing customer `sessions.db`. SQLite indexes existing rows in place — no downtime, no data migration, no operator action. On a 4565-row table the index build takes ~50ms.
 
@@ -17738,11 +17738,11 @@ The new schema-time `CREATE INDEX IF NOT EXISTS idx_sessions_scheduled_by` runs 
 
 ## [v0.3.5] — 2026-05-10
 
-Four targeted fixes that together eliminate the retry-storm pattern observed in v0.3.4 test sessions when the agent invokes `phantom_create_data_worker` / `phantom_create_scenario_worker`. Diagnosed empirically across 13 chat-test sessions exported from bupa-engine.
+Four targeted fixes that together eliminate the retry-storm pattern observed in v0.3.4 test sessions when the agent invokes `guardian_create_data_worker` / `guardian_create_scenario_worker`. Diagnosed empirically across 13 chat-test sessions exported from bupa-engine.
 
 ### Diagnosis (TL;DR)
 
-The agent retried `phantom_create_*_worker` 4-5 times per scenario in some sessions before landing on a payload that the GraphQL schema accepted. Live probes against rosetta confirmed:
+The agent retried `guardian_create_*_worker` 4-5 times per scenario in some sessions before landing on a payload that the GraphQL schema accepted. Live probes against rosetta confirmed:
 
 - Rosetta has 1169 supported fields (fields ARE there, contrary to the initial impression that they were missing).
 - Strawberry's `auto_camel_case=True` means `observables_dict` keys must be camelCase (`authentication_method` → `authenticationMethod`); `required_fields` enum values must be UPPER_SNAKE_CASE (`AUTHENTICATION_METHOD`).
@@ -17751,9 +17751,9 @@ The agent retried `phantom_create_*_worker` 4-5 times per scenario in some sessi
 
 Both ends of the chain needed work: the agent needed an enumerated whitelist up front, and the error response needed to surface the per-field "Did you mean" detail when validation failed.
 
-### Fix #1 — `phantom_get_field_info` returns the enumerated whitelist
+### Fix #1 — `guardian_get_field_info` returns the enumerated whitelist
 
-[bundles/spark/connectors/xlog/src/field_info.py](bundles/spark/connectors/xlog/src/field_info.py): `phantom_get_field_info(request={})` (no `log_type` argument) now returns an `available_fields` block with both forms of the rosetta field whitelist:
+[bundles/spark/connectors/xlog/src/field_info.py](bundles/spark/connectors/xlog/src/field_info.py): `guardian_get_field_info(request={})` (no `log_type` argument) now returns an `available_fields` block with both forms of the rosetta field whitelist:
 
 ```json
 {
@@ -17804,7 +17804,7 @@ The simplification is regex-based and pass-through-safe for messages that don't 
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `phantom-agent` rebuilds (it embeds the bundled MCP skill text + the xlog connector code + the xsiam connector code); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` all retag from v0.3.4 with identical content digests. caldera red-team operation state, xlog streaming workers, browser cache, updater state all preserved. Skills volume retains operator-edited skills via the v0.3.2 marker-driven auto-merge.
+PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `guardian-agent` rebuilds (it embeds the bundled MCP skill text + the xlog connector code + the xsiam connector code); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` all retag from v0.3.4 with identical content digests. caldera red-team operation state, xlog streaming workers, browser cache, updater state all preserved. Skills volume retains operator-edited skills via the v0.3.2 marker-driven auto-merge.
 
 ### Files changed
 
@@ -17830,9 +17830,9 @@ The "position 2" in the error message was a coincidence of the message text star
 
 **Fix:** rename the wrapper's parameter from `name` → `file_path` to match the underlying function. Add a comprehensive docstring explaining the bug class so this doesn't regress. Also update the wrapper to JSON-parse the underlying `skills_crud.skills_delete` result (which returns a JSON-encoded string) so the gate's caller gets a structured dict consistent with the other Phase-11 gated wrappers in `self_mod_tools.py` (`jobs_delete`, `settings_reset`, etc.).
 
-**Architectural sub-fix exposed by the parameter rename:** with the validator no longer rejecting the call, execution reached `gate_and_execute()` — which then blocked for the gate's default 5-minute timeout waiting on operator approval that never came (the operator was sitting at the UI Delete button, not at the `/approvals` queue). Empirically confirmed on phantom-vm: post-fix the SSE stream emitted `: ping - ...` keep-alives for 5 minutes, then returned `{"error":"tool 'skills_delete' approval timeout (approval_id=...)"}`. New error was parseable JSON (bug #1's symptom went away) but the UX was strictly worse than the original — a 5-minute spinner replaced the instant error.
+**Architectural sub-fix exposed by the parameter rename:** with the validator no longer rejecting the call, execution reached `gate_and_execute()` — which then blocked for the gate's default 5-minute timeout waiting on operator approval that never came (the operator was sitting at the UI Delete button, not at the `/approvals` queue). Empirically confirmed on guardian-vm: post-fix the SSE stream emitted `: ping - ...` keep-alives for 5 minutes, then returned `{"error":"tool 'skills_delete' approval timeout (approval_id=...)"}`. New error was parseable JSON (bug #1's symptom went away) but the UX was strictly worse than the original — a 5-minute spinner replaced the instant error.
 
-The first attempt at fixing this (commit `b6900e8`, since superseded) sent `X-Phantom-Approval-Bypass: 1` from the Next.js side, relying on `bundles/spark/mcp/src/api/trigger_context.py:TriggerContextMiddleware` to set a contextvar that `gate_and_execute` would then read. **Empirically the contextvar does NOT propagate from the Starlette middleware into the FastMCP streamable-HTTP tool dispatcher** — the agent's INFO log showed `approval bypass active for this request (trigger=ui:skills:delete)` from the middleware, then immediately afterward `ApprovalsBus.request id=... origin=unknown` from the gate, meaning `get_current_approval_bypass()` returned False inside the tool's async context. Suspected cause: FastMCP spawns the tool execution in a child asyncio task whose context was captured BEFORE the middleware ran, but the precise FastMCP-internal mechanism wasn't worth deep-diving since a cleaner architectural fix exists.
+The first attempt at fixing this (commit `b6900e8`, since superseded) sent `X-Guardian-Approval-Bypass: 1` from the Next.js side, relying on `bundles/spark/mcp/src/api/trigger_context.py:TriggerContextMiddleware` to set a contextvar that `gate_and_execute` would then read. **Empirically the contextvar does NOT propagate from the Starlette middleware into the FastMCP streamable-HTTP tool dispatcher** — the agent's INFO log showed `approval bypass active for this request (trigger=ui:skills:delete)` from the middleware, then immediately afterward `ApprovalsBus.request id=... origin=unknown` from the gate, meaning `get_current_approval_bypass()` returned False inside the tool's async context. Suspected cause: FastMCP spawns the tool execution in a child asyncio task whose context was captured BEFORE the middleware ran, but the precise FastMCP-internal mechanism wasn't worth deep-diving since a cleaner architectural fix exists.
 
 **The cleaner fix — REST endpoint that bypasses the gate by design.** Other resources (jobs, instances, providers, settings, personality, hooks, tasks, audit, KB) all expose dual surfaces on the MCP:
 
@@ -17867,33 +17867,33 @@ Both surfaced during the same v0.3.3 smoke session on bupa-engine, both touch th
 
 ### Migration impact
 
-PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `phantom-agent` rebuilds (it embeds both the page.tsx UI fix AND the bundled MCP wrapper signature fix); `xlog`, `caldera`, `phantom-browser`, `phantom-updater` all retag from v0.3.3 with identical content digests. caldera red-team operation state, xlog streaming workers, browser CDP cache, updater state all preserved across the upgrade. In-flight chat sessions are dropped on the phantom-agent recreation; skills + jobs + connectors + secret store + KEK persist (volume-backed).
+PATCH release. SELECTIVE recreation per the v0.3.0 digest-pinning architecture: only `guardian-agent` rebuilds (it embeds both the page.tsx UI fix AND the bundled MCP wrapper signature fix); `xlog`, `caldera`, `guardian-browser`, `guardian-updater` all retag from v0.3.3 with identical content digests. caldera red-team operation state, xlog streaming workers, browser CDP cache, updater state all preserved across the upgrade. In-flight chat sessions are dropped on the guardian-agent recreation; skills + jobs + connectors + secret store + KEK persist (volume-backed).
 
 ---
 
 ## [v0.3.3] — 2026-05-10
 
-A targeted patch to the `reset-ui-password.sh` recovery tool — fixes the silent-bug class that surfaced during v0.3.2 smoke testing on bupa-engine: **the script defaulted to the hardcoded username `phantom`, which is wrong for any install whose configured `UI_USER` is something else** (which is essentially every production install, since the setup wizard prompts for an operator username during first-run). The result was a successful-looking reset (audit event landed, hash written) followed by a failed login (the agent's login route enforces single-user mode by rejecting any username that doesn't match the configured `UI_USER`, returning 401 before checking the password hash). Also: the script now prints a prominent username banner before the password prompt so an operator can abort if the resolved username doesn't match the account they log in with.
+A targeted patch to the `reset-ui-password.sh` recovery tool — fixes the silent-bug class that surfaced during v0.3.2 smoke testing on bupa-engine: **the script defaulted to the hardcoded username `guardian`, which is wrong for any install whose configured `UI_USER` is something else** (which is essentially every production install, since the setup wizard prompts for an operator username during first-run). The result was a successful-looking reset (audit event landed, hash written) followed by a failed login (the agent's login route enforces single-user mode by rejecting any username that doesn't match the configured `UI_USER`, returning 401 before checking the password hash). Also: the script now prints a prominent username banner before the password prompt so an operator can abort if the resolved username doesn't match the account they log in with.
 
-The reset tool is the only file that changes. No image rebuilds. The fix lands in the next phantom-installer binary published by `release.yml` + the `reset-ui-password.sh` standalone Release asset.
+The reset tool is the only file that changes. No image rebuilds. The fix lands in the next guardian-installer binary published by `release.yml` + the `reset-ui-password.sh` standalone Release asset.
 
 ### What the bug looked like
 
 A real customer-state install (bupa-engine, `UI_USER=ayman`):
 
 ```
-$ sudo /opt/phantom/reset-ui-password.sh
-UI username [phantom]: ←enter (defaulted to phantom)
+$ sudo /opt/guardian/reset-ui-password.sh
+UI username [guardian]: ←enter (defaulted to guardian)
 New password: ••••••••••
 Confirm password: ••••••••••
-✓ Password reset complete for user 'phantom'.
+✓ Password reset complete for user 'guardian'.
 ```
 
 Then in the browser:
-- Username: `ayman` (the configured operator) → 401 Invalid credentials (because `phantom`'s hash got reset, not `ayman`'s)
-- Username: `phantom` (the script's default) → 401 Invalid credentials (because the agent's login route rejects any non-`UI_USER` username before hash check)
+- Username: `ayman` (the configured operator) → 401 Invalid credentials (because `guardian`'s hash got reset, not `ayman`'s)
+- Username: `guardian` (the script's default) → 401 Invalid credentials (because the agent's login route rejects any non-`UI_USER` username before hash check)
 
-The audit log showed a successful `ui_password_set` event for `user:phantom` — making it look like the reset worked. The login failure looked like a typo. Diagnostic took ~10 minutes of forward-tracing the auth code path.
+The audit log showed a successful `ui_password_set` event for `user:guardian` — making it look like the reset worked. The login failure looked like a typo. Diagnostic took ~10 minutes of forward-tracing the auth code path.
 
 ### Fix shape
 
@@ -17901,7 +17901,7 @@ Two architectural surfaces have to align for password reset to work:
 1. **MCP side** stores hashes by username under `/app/data/secrets/ui/auth/<user>/password_hash` (multi-user-ready schema)
 2. **Next.js login route** enforces single-user — username must equal the configured `UI_USER` from `setup.json`, otherwise 401 before any hash check
 
-The reset tool's hardcoded `phantom` default came from the platform name, not from the configured operator. The fix: read `UI_USER` from the same `setup.json` the agent reads, with layered fallbacks.
+The reset tool's hardcoded `guardian` default came from the platform name, not from the configured operator. The fix: read `UI_USER` from the same `setup.json` the agent reads, with layered fallbacks.
 
 ### Username resolution (new behavior)
 
@@ -17910,20 +17910,20 @@ Resolution order:
 1. `--user <name>` on the command line (explicit override)
 2. `UI_USER` from `/app/runtime/setup.json` inside the container (the canonical source — same file the agent's auth code reads)
 3. `UI_USER` from the container's env (legacy fallback for installs that pre-date setup.json's `UI_USER` field)
-4. Hardcoded `phantom` (last resort; warned about loudly because it almost never matches a real install's configured operator)
+4. Hardcoded `guardian` (last resort; warned about loudly because it almost never matches a real install's configured operator)
 
 The resolved username + its source is printed in a **prominent banner** before the password prompt:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Resolving Phantom UI account to reset...                       │
+│  Resolving Guardian UI account to reset...                       │
 │                                                                 │
 │    Username : ayman
 │    Source   : setup.json UI_USER
-│    Container: phantom_agent
+│    Container: guardian_agent
 │                                                                 │
 │  IMPORTANT: this MUST match the username you log into the       │
-│  Phantom UI with. The agent's login route rejects any other     │
+│  Guardian UI with. The agent's login route rejects any other     │
 │  username with 401 BEFORE checking the password — single-user   │
 │  enforcement, not a hash mismatch. If the resolved username     │
 │  above is not the account you log in with, hit Ctrl-C now and   │
@@ -17942,26 +17942,26 @@ The post-reset banner now shows resolved username + source + hash file path + th
 
     Username    : ayman
     Source      : setup.json UI_USER
-    Hash file   : /app/data/secrets/ui/auth/ayman/password_hash (inside phantom_agent)
+    Hash file   : /app/data/secrets/ui/auth/ayman/password_hash (inside guardian_agent)
     Audit event : ui_password_set (visible in /observability/events)
 
 Next steps:
-  1. Open the Phantom UI in your browser.
+  1. Open the Guardian UI in your browser.
   2. Sign in with username 'ayman' and the password you just set.
      (Use a private/incognito window if your browser cached an old
-     phantom_auth cookie or has stale autofill from before the reset.)
+     guardian_auth cookie or has stale autofill from before the reset.)
   3. Optionally rotate again from /profile after sign-in...
 ```
 
 ### Migration impact
 
-- **No image rebuilds.** The reset tool is shipped as: (a) a heredoc embedded in the `phantom-installer` binary, (b) a standalone Release asset, (c) a file in the install kit tarball. v0.3.3's `release.yml` regenerates all three with the fixed script. Customers downloading v0.3.3+ get the fix automatically.
+- **No image rebuilds.** The reset tool is shipped as: (a) a heredoc embedded in the `guardian-installer` binary, (b) a standalone Release asset, (c) a file in the install kit tarball. v0.3.3's `release.yml` regenerates all three with the fixed script. Customers downloading v0.3.3+ get the fix automatically.
 - **No customer state to migrate.** Existing installs keep whatever password they have. The fix only affects future invocations of the reset tool.
-- **Operators on v0.3.x with the old reset script** can update by either re-running the v0.3.3 phantom-installer (which refreshes `/opt/phantom/reset-ui-password.sh`) or downloading just the `reset-ui-password.sh` Release asset and dropping it in place.
+- **Operators on v0.3.x with the old reset script** can update by either re-running the v0.3.3 guardian-installer (which refreshes `/opt/guardian/reset-ui-password.sh`) or downloading just the `reset-ui-password.sh` Release asset and dropping it in place.
 
 ### Why this lands as v0.3.3
 
-The fix is small (one file, ~80 lines net), surgical (no image rebuilds, no schema changes, no operator-facing breaking changes), and ships an operator-experience repair for a bug class that's been latent in every release since the script first landed in v0.1.35. Selective recreation under v0.3.x's digest-pinning architecture means: only the regenerated `phantom-installer` binary changes; xlog/caldera/agent/browser/updater all retag from v0.3.2 with identical digests. v0.3.2 → v0.3.3 is effectively zero-downtime for customer in-memory state.
+The fix is small (one file, ~80 lines net), surgical (no image rebuilds, no schema changes, no operator-facing breaking changes), and ships an operator-experience repair for a bug class that's been latent in every release since the script first landed in v0.1.35. Selective recreation under v0.3.x's digest-pinning architecture means: only the regenerated `guardian-installer` binary changes; xlog/caldera/agent/browser/updater all retag from v0.3.2 with identical digests. v0.3.2 → v0.3.3 is effectively zero-downtime for customer in-memory state.
 
 ---
 
@@ -17973,15 +17973,15 @@ A release-discipline patch focused on **upgrade ergonomics**. Three customer-exp
 2. The `FORCE_SKILLS_SYNC=1` operator override documented in CLAUDE.md was wired into the dev compose at v0.2.5 but never propagated to the customer compose at `installer/docker-compose.yml`. Customers couldn't use the documented path.
 3. The new `cortex-docs` connector shipped in v0.3.1 wasn't visible in the operator's `/marketplace` UI — the marketplace endpoint hand-curates its connector list and the new entry was missing.
 
-All three are operator-visible papercuts on the upgrade path; v0.3.2 fixes them. No new features. No breaking changes. v0.3.0 → v0.3.1 → v0.3.2 hops are selective per the digest-pinning architecture: only `phantom-agent` recreates (it embeds the entrypoint change + the new marketplace entry); xlog/caldera/browser/updater retain in-memory state.
+All three are operator-visible papercuts on the upgrade path; v0.3.2 fixes them. No new features. No breaking changes. v0.3.0 → v0.3.1 → v0.3.2 hops are selective per the digest-pinning architecture: only `guardian-agent` recreates (it embeds the entrypoint change + the new marketplace entry); xlog/caldera/browser/updater retain in-memory state.
 
 ### Skills auto-merge: per-release marker in the volume
 
-`entrypoint.sh` §1 (the skills bootstrap) is refactored to use a `phantom_mcp_skills/.seeded_version` marker file. Boot logic:
+`entrypoint.sh` §1 (the skills bootstrap) is refactored to use a `guardian_mcp_skills/.seeded_version` marker file. Boot logic:
 
 | Volume state | Action |
 |---|---|
-| `FORCE_SKILLS_SYNC=1` set | Always merge; stamp marker with running `PHANTOM_VERSION` |
+| `FORCE_SKILLS_SYNC=1` set | Always merge; stamp marker with running `GUARDIAN_VERSION` |
 | Volume empty (fresh install) | Seed; stamp marker |
 | Marker missing OR marker version != running version | **Merge image defaults; stamp marker** — the new auto-rollout path |
 | Marker matches running version | No-op (operator deletions stick) |
@@ -18003,12 +18003,12 @@ What this changes per upgrade type:
 
 ### `FORCE_SKILLS_SYNC` finally wired through customer compose
 
-The `phantom-agent` service's `environment:` block in [`installer/docker-compose.yml`](installer/docker-compose.yml) gains a bare-name `- FORCE_SKILLS_SYNC` entry. Customers using the documented operator override now actually flow the env value into the container:
+The `guardian-agent` service's `environment:` block in [`installer/docker-compose.yml`](installer/docker-compose.yml) gains a bare-name `- FORCE_SKILLS_SYNC` entry. Customers using the documented operator override now actually flow the env value into the container:
 
 ```bash
 # This now works on customer installs (was a no-op pre-v0.3.2):
-sudo FORCE_SKILLS_SYNC=1 docker compose -f /opt/phantom/docker-compose.yml \
-  up -d --force-recreate phantom-agent
+sudo FORCE_SKILLS_SYNC=1 docker compose -f /opt/guardian/docker-compose.yml \
+  up -d --force-recreate guardian-agent
 ```
 
 With the marker-driven auto-merge above, this override is rarely needed — its primary use case is "operator manually deleted a default skill on v0.3.x and wants it back without waiting for a new release." Documented in CLAUDE.md's force-reseed section.
@@ -18023,7 +18023,7 @@ The new entry surfaces the standard install flow: operator opens `/marketplace`,
 
 ### Migration impact
 
-- **v0.3.1 → v0.3.2**: selective recreation (only `phantom-agent` rebuilds, embeds entrypoint + marketplace changes). Skills auto-merge fires on first boot of v0.3.2 — operator sees their `/skills` page populate with any skills they were missing from previous releases (without losing customer-created ones). cortex-docs becomes findable in `/marketplace`.
+- **v0.3.1 → v0.3.2**: selective recreation (only `guardian-agent` rebuilds, embeds entrypoint + marketplace changes). Skills auto-merge fires on first boot of v0.3.2 — operator sees their `/skills` page populate with any skills they were missing from previous releases (without losing customer-created ones). cortex-docs becomes findable in `/marketplace`.
 - **v0.2.x or v0.1.x → v0.3.2**: same one-time container recreation as the v0.2.x → v0.3.x boundary in v0.3.0. Volumes preserved. Skills auto-merge fires on first boot. Operator finds cortex-docs in `/marketplace`, decides whether to install.
 - **Customers already on bupa-engine-style state** (v0.3.1 + manual `docker exec` skill merge from a prior conversation): the v0.3.2 marker file gets written on next boot regardless of whether the merge "needs" to happen, so the auto-merge path picks up cleanly going forward.
 
@@ -18032,10 +18032,10 @@ The new entry surfaces the standard install flow: operator opens `/marketplace`,
 | File | Change |
 |---|---|
 | `mcp/agent/entrypoint.sh` | Skills bootstrap refactored to marker-driven auto-merge (one-time refactor; ~60 lines including comments) |
-| `installer/docker-compose.yml` | Added `- FORCE_SKILLS_SYNC` to phantom-agent env block |
+| `installer/docker-compose.yml` | Added `- FORCE_SKILLS_SYNC` to guardian-agent env block |
 | `mcp/agent/app/api/marketplace/connectors/route.ts` | Added cortex-docs entry (109 lines: 6 tools + 3 config fields + setup guide + version history) |
 
-No image rebuilds beyond `phantom-agent` are needed (its source changed). caldera/xlog/browser/updater retain v0.3.1 digests via release.yml's conditional rebuild logic.
+No image rebuilds beyond `guardian-agent` are needed (its source changed). caldera/xlog/browser/updater retain v0.3.1 digests via release.yml's conditional rebuild logic.
 
 ---
 
@@ -18043,11 +18043,11 @@ No image rebuilds beyond `phantom-agent` are needed (its source changed). calder
 
 First feature release on the v0.3.x baseline. Adds the **`cortex-docs` tool connector** + the **`cortex_xql_query_authoring` foundation skill** — together, the agent now searches and looks up Palo Alto Networks Cortex public documentation (XDR / XSIAM / XSOAR / Cortex Cloud / AgentiX / Xpanse / XQL) to ground XQL query authoring in authoritative syntax docs.
 
-This is also the **first release that exercises the v0.3.0 digest-pinning pipeline for a brand-new connector image** — no special handling, just an additional `phantom-connector-cortex-docs` line in the manifest. The new connector retains in-memory state across subsequent upgrades exactly the way caldera and xlog do; the architecture pays off on the very next connector we add.
+This is also the **first release that exercises the v0.3.0 digest-pinning pipeline for a brand-new connector image** — no special handling, just an additional `guardian-connector-cortex-docs` line in the manifest. The new connector retains in-memory state across subsequent upgrades exactly the way caldera and xlog do; the architecture pays off on the very next connector we add.
 
 ### New tool connector — `cortex-docs`
 
-A module-style Python connector wrapping four upstream scripts from the operator's `cortex-deep-search_sharable` skill kit (preserved verbatim under the connector's `src/` directory). The originals were authored as standalone CLIs; the connector layer adds a thin wrapper that catches `SystemExit` raised by the scripts' `sys.exit(1)` HTTP-error paths so a transient docs-API outage produces a structured error return instead of taking down phantom-agent.
+A module-style Python connector wrapping four upstream scripts from the operator's `cortex-deep-search_sharable` skill kit (preserved verbatim under the connector's `src/` directory). The originals were authored as standalone CLIs; the connector layer adds a thin wrapper that catches `SystemExit` raised by the scripts' `sys.exit(1)` HTTP-error paths so a transient docs-API outage produces a structured error return instead of taking down guardian-agent.
 
 Six tools exposed under the `cortex-docs/` namespace:
 
@@ -18081,29 +18081,29 @@ The skill is also clear about what it doesn't do: when the operator's KB has no 
 
 - `toolConnectors[]` extended with `cortex-docs` (`required: false` — agent functions without it; query authoring just falls back to operator-KB-only mode with a confidence note).
 - `tools.allow` extended with `cortex-docs.*` — read-only, no approval-gating.
-- 15 unit tests in `bundles/spark/connectors/cortex-docs/tests/test_connector.py` cover the SystemExit-translation wrapper contract (agents see `{ok: false, error}` instead of phantom-agent dying), the success-path payload shapes, and the `__all__` surface check. Live-API smoke ran during development against the public Cortex docs API and returned canonical `dedup` / `filter` / `arrayindexof` topics with full URLs in <2 seconds.
+- 15 unit tests in `bundles/spark/connectors/cortex-docs/tests/test_connector.py` cover the SystemExit-translation wrapper contract (agents see `{ok: false, error}` instead of guardian-agent dying), the success-path payload shapes, and the `__all__` surface check. Live-API smoke ran during development against the public Cortex docs API and returned canonical `dedup` / `filter` / `arrayindexof` topics with full URLs in <2 seconds.
 
 ### Release pipeline (digest manifest extension)
 
 `release.yml` now publishes 11 image digests instead of 10:
 
 ```ini
-PHANTOM_VERSION=0.3.1
-DIGEST_PHANTOM_AGENT=...
+GUARDIAN_VERSION=0.3.1
+DIGEST_GUARDIAN_AGENT=...
 ... (5 stack)
-DIGEST_PHANTOM_CONNECTOR_RUNTIME=...
-DIGEST_PHANTOM_CONNECTOR_XLOG=...
-DIGEST_PHANTOM_CONNECTOR_XSIAM=...
-DIGEST_PHANTOM_CONNECTOR_CALDERA=...
-DIGEST_PHANTOM_CONNECTOR_WEB=...
-DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=...      # NEW
+DIGEST_GUARDIAN_CONNECTOR_RUNTIME=...
+DIGEST_GUARDIAN_CONNECTOR_XLOG=...
+DIGEST_GUARDIAN_CONNECTOR_XSIAM=...
+DIGEST_GUARDIAN_CONNECTOR_CALDERA=...
+DIGEST_GUARDIAN_CONNECTOR_WEB=...
+DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=...      # NEW
 ```
 
-The new key flows through the standard pipeline: written into the embedded manifest in `phantom-installer`, attached as a Release asset, and applied to `/opt/phantom/.env` at install time. The customer compose forwards it to `phantom-updater`'s environment block; the updater's `KNOWN_CONNECTORS` set was extended to recognize `cortex-docs` for the future container-mode flip.
+The new key flows through the standard pipeline: written into the embedded manifest in `guardian-installer`, attached as a Release asset, and applied to `/opt/guardian/.env` at install time. The customer compose forwards it to `guardian-updater`'s environment block; the updater's `KNOWN_CONNECTORS` set was extended to recognize `cortex-docs` for the future container-mode flip.
 
 ### Migration impact
 
-- **Customers on v0.3.0 → v0.3.1**: download the v0.3.1 phantom-installer binary, run it. Selective recreation kicks in: `phantom-agent` is the only stack-tier service whose source changed (it embeds the new connector code), so it gets recreated; xlog, caldera, browser, updater retain their content digests and **stay running with their in-memory state intact**. This is the digest-pinning architecture paying off in the first non-baseline release.
+- **Customers on v0.3.0 → v0.3.1**: download the v0.3.1 guardian-installer binary, run it. Selective recreation kicks in: `guardian-agent` is the only stack-tier service whose source changed (it embeds the new connector code), so it gets recreated; xlog, caldera, browser, updater retain their content digests and **stay running with their in-memory state intact**. This is the digest-pinning architecture paying off in the first non-baseline release.
 - **Customers on v0.2.x or earlier**: see the v0.3.0 entry's migration impact + [`installer/MIGRATION-FROM-V02X.md`](installer/MIGRATION-FROM-V02X.md). The migration is a one-time hop; once on v0.3.0 baseline, v0.3.0 → v0.3.1 is the selective form above.
 - **Source-of-truth note**: the upstream scripts in `/Users/ayman/Documents/Coding/myworkassistant/cortex-deep-search_sharable/` are NOT modified by this release. The connector keeps a verbatim copy under `bundles/spark/connectors/cortex-docs/src/` so future upstream re-syncs are a `cp -f` away.
 
@@ -18117,25 +18117,25 @@ By the v0.3.0 release-discipline rule (one breaking-change boundary, no follow-u
 
 End-to-end **image digest pinning** replaces tag-based image references for the customer-facing stack. Container recreation now tracks **image content** (sha256), not version label — caldera + xlog + browser + updater retain in-memory state across upgrades that don't touch their source.
 
-This is a backward-incompatible change: pre-v0.3.0 phantom-installer binaries cannot install or upgrade to v0.3.0+. Customers download a new v0.3.x installer (sealed to a single version because the digest manifest is embedded at build time) and run a one-time migration. Subsequent v0.3.x → v0.3.x+1 upgrades are selective and content-aware.
+This is a backward-incompatible change: pre-v0.3.0 guardian-installer binaries cannot install or upgrade to v0.3.0+. Customers download a new v0.3.x installer (sealed to a single version because the digest manifest is embedded at build time) and run a one-time migration. Subsequent v0.3.x → v0.3.x+1 upgrades are selective and content-aware.
 
 The v0.2.5 work prepared during the v0.2.4 → v0.2.5 cycle (FORCE_SKILLS_SYNC compose plumbing, doc cleanups, enterprise-discipline mandates, IAP tunnel port mappings) folds into this release — those commits are on main, never tagged independently, and ship under the v0.3.0 banner.
 
 ### Headline change: digest pinning
 
-Pre-v0.3.0, every release recreated all five containers because the compose file's `image: foo:${PHANTOM_VERSION}` string changed even when release.yml's conditional-rebuild logic had retagged caldera/xlog/browser from the previous version's same-byte image. Compose treated the version-tag swap as a spec change and recreated the container regardless of whether image bytes had moved.
+Pre-v0.3.0, every release recreated all five containers because the compose file's `image: foo:${GUARDIAN_VERSION}` string changed even when release.yml's conditional-rebuild logic had retagged caldera/xlog/browser from the previous version's same-byte image. Compose treated the version-tag swap as a spec change and recreated the container regardless of whether image bytes had moved.
 
 v0.3.0 swaps the entire stack to digest pinning:
 
 ```yaml
 # Before (v0.2.x):
-image: ghcr.io/kite-production/phantom-caldera:${PHANTOM_VERSION:-VERSION_DEFAULT}
+image: ghcr.io/kite-production/guardian-caldera:${GUARDIAN_VERSION:-VERSION_DEFAULT}
 
 # After (v0.3.0+):
-image: ghcr.io/kite-production/phantom-caldera@${DIGEST_PHANTOM_CALDERA:-sha256:invalid_digest_run_installer_first}
+image: ghcr.io/kite-production/guardian-caldera@${DIGEST_GUARDIAN_CALDERA:-sha256:invalid_digest_run_installer_first}
 ```
 
-When release.yml retags caldera from the previous version's digest (because no source changed), the digest in the new manifest equals the digest in the old manifest. The customer's `.env` `DIGEST_PHANTOM_CALDERA` value doesn't change. Compose's spec hash for caldera doesn't change. **Caldera doesn't recreate.** Same logic for xlog, phantom-browser, phantom-updater. Only services whose image content actually moved get touched.
+When release.yml retags caldera from the previous version's digest (because no source changed), the digest in the new manifest equals the digest in the old manifest. The customer's `.env` `DIGEST_GUARDIAN_CALDERA` value doesn't change. Compose's spec hash for caldera doesn't change. **Caldera doesn't recreate.** Same logic for xlog, guardian-browser, guardian-updater. Only services whose image content actually moved get touched.
 
 The fail-loud fallback (`:-sha256:invalid_digest_run_installer_first`) is intentional — when an operator's `.env` is missing a `DIGEST_*` value, docker compose fails immediately with a clear hint pointing at the installer rather than silently pulling a wrong image.
 
@@ -18144,36 +18144,36 @@ The fail-loud fallback (`:-sha256:invalid_digest_run_installer_first`) is intent
 Each release publishes a `release-manifest-vX.Y.Z.env` file as a GitHub Release asset:
 
 ```ini
-PHANTOM_VERSION=0.3.0
-DIGEST_PHANTOM_AGENT=sha256:abc...
-DIGEST_PHANTOM_XLOG=sha256:def...
-DIGEST_PHANTOM_CALDERA=sha256:ghi...
-DIGEST_PHANTOM_UPDATER=sha256:jkl...
-DIGEST_PHANTOM_BROWSER=sha256:mno...
-DIGEST_PHANTOM_CONNECTOR_RUNTIME=sha256:pqr...
-DIGEST_PHANTOM_CONNECTOR_XLOG=sha256:stu...
-DIGEST_PHANTOM_CONNECTOR_XSIAM=sha256:vwx...
-DIGEST_PHANTOM_CONNECTOR_CALDERA=sha256:yz0...
-DIGEST_PHANTOM_CONNECTOR_WEB=sha256:123...
+GUARDIAN_VERSION=0.3.0
+DIGEST_GUARDIAN_AGENT=sha256:abc...
+DIGEST_GUARDIAN_XLOG=sha256:def...
+DIGEST_GUARDIAN_CALDERA=sha256:ghi...
+DIGEST_GUARDIAN_UPDATER=sha256:jkl...
+DIGEST_GUARDIAN_BROWSER=sha256:mno...
+DIGEST_GUARDIAN_CONNECTOR_RUNTIME=sha256:pqr...
+DIGEST_GUARDIAN_CONNECTOR_XLOG=sha256:stu...
+DIGEST_GUARDIAN_CONNECTOR_XSIAM=sha256:vwx...
+DIGEST_GUARDIAN_CONNECTOR_CALDERA=sha256:yz0...
+DIGEST_GUARDIAN_CONNECTOR_WEB=sha256:123...
 ```
 
-Same content is **embedded into the phantom-installer binary** at build time (via a new `__INSTALLER_DIGEST_MANIFEST__` substitution marker in [`installer/build-phantom-installer.sh`](installer/build-phantom-installer.sh)). The installer is fully self-contained — no runtime fetch from GitHub Releases needed during fresh installs. The Release asset exists separately so the phantom-updater service can fetch it during in-app upgrades, and so external automation (customer's deployment pipeline, audit tools) can pin to specific digests programmatically.
+Same content is **embedded into the guardian-installer binary** at build time (via a new `__INSTALLER_DIGEST_MANIFEST__` substitution marker in [`installer/build-guardian-installer.sh`](installer/build-guardian-installer.sh)). The installer is fully self-contained — no runtime fetch from GitHub Releases needed during fresh installs. The Release asset exists separately so the guardian-updater service can fetch it during in-app upgrades, and so external automation (customer's deployment pipeline, audit tools) can pin to specific digests programmatically.
 
-### Each phantom-installer is sealed to one version
+### Each guardian-installer is sealed to one version
 
 Pre-v0.3.0, one installer binary could install any version (because tag refs let you pull any tag). v0.3.0+ each binary contains ONE manifest, so it can install ONE version. The `--upgrade-to N.N.N` flag now errors out with a clear pointer when N.N.N doesn't match the binary's stamp:
 
 ```
 ERROR: --upgrade-to v0.3.1 doesn't match this binary's version (v0.3.0).
 
-In v0.3.0+ each phantom-installer binary is sealed to a single version
+In v0.3.0+ each guardian-installer binary is sealed to a single version
 because it embeds the digest manifest for that version's images. To
 install v0.3.1, download the v0.3.1 installer binary…
 ```
 
 Customers download the right binary for the version they want. The mental model becomes: "one binary = one installable version", consistent with how production-grade container deployments (Kubernetes, ECS, Nomad) treat image references.
 
-### Phantom-updater redesign
+### Guardian-updater redesign
 
 The in-app updater (used by the "Update now" button in the agent UI sidebar) now drives a manifest-based upgrade flow:
 
@@ -18181,11 +18181,11 @@ The in-app updater (used by the "Update now" button in the agent UI sidebar) now
 2. Fetch `release-manifest-vTARGET.env` from that Release.
 3. Compare each managed service's current digest vs. the manifest's target digest. If a service's digest is unchanged, skip it (no recreate).
 4. Pull each changed image by digest (`docker pull foo@sha256:...`).
-5. Apply the manifest to `/host/.env` (strip stale `PHANTOM_VERSION` + `DIGEST_PHANTOM_*` lines, append the new manifest as a clean block — same logic the installer uses for fresh-install/upgrade paths).
+5. Apply the manifest to `/host/.env` (strip stale `GUARDIAN_VERSION` + `DIGEST_GUARDIAN_*` lines, append the new manifest as a clean block — same logic the installer uses for fresh-install/upgrade paths).
 6. `docker compose up -d --no-deps <changed services>`. Compose sees the new digests in `.env`, recreates only those services. Containers whose digest didn't change keep running.
 7. Wait for healthy.
 
-Per-instance connector containers (the v0.2 design) also use digest pinning. The updater's `_connector_image_ref()` reads `DIGEST_PHANTOM_CONNECTOR_<ID>` from its environment when starting a new instance container — so each instance is reproducibly bound to a specific image-byte hash. Tag-pinning is a fail-loud fallback (operators see a yellow "tag (legacy)" badge in `/observability/connectors` if any container is in fallback mode).
+Per-instance connector containers (the v0.2 design) also use digest pinning. The updater's `_connector_image_ref()` reads `DIGEST_GUARDIAN_CONNECTOR_<ID>` from its environment when starting a new instance container — so each instance is reproducibly bound to a specific image-byte hash. Tag-pinning is a fail-loud fallback (operators see a yellow "tag (legacy)" badge in `/observability/connectors` if any container is in fallback mode).
 
 ### Operator-visible surfaces
 
@@ -18193,11 +18193,11 @@ Three new/extended UI surfaces:
 
 - **`/observability/connectors`** gains an "Image digests" panel above the connector state-machine list. Two sub-tables: 5 stack-tier service rows (with pinned/legacy badge + 12-char-truncated digest + full digest in tooltip), and per-instance connector rows (variable). Operators can audit at a glance which exact image bytes each container is running.
 - **`/api/agent/version`** extended to return an optional `digests` map. Backward-compatible: pre-v0.3.0 callers reading only `.version` still work.
-- **`/api/agent/digests`** (new endpoint) — comprehensive view: stack-tier digest list (synchronous env-only) + per-instance connector digest list (proxied to phantom-updater's new `/api/v1/connectors/digests`). Used by the observability panel; canonical incident-response endpoint for "exactly which image bytes is each running container?".
+- **`/api/agent/digests`** (new endpoint) — comprehensive view: stack-tier digest list (synchronous env-only) + per-instance connector digest list (proxied to guardian-updater's new `/api/v1/connectors/digests`). Used by the observability panel; canonical incident-response endpoint for "exactly which image bytes is each running container?".
 
 ### Migration impact
 
-- **Fresh installs (v0.3.0+):** download the v0.3.x phantom-installer, run it. The binary embeds the v0.3.0 manifest; install proceeds normally. Operators see the new "Image digests" panel in `/observability/connectors` after first login.
+- **Fresh installs (v0.3.0+):** download the v0.3.x guardian-installer, run it. The binary embeds the v0.3.0 manifest; install proceeds normally. Operators see the new "Image digests" panel in `/observability/connectors` after first login.
 - **Upgrade from v0.2.x:** **one-time recreation of all containers.** The compose file's image-ref shape changes from tag-based to digest-based, so docker compose treats every service as a spec change and recreates them. Volumes preserved (operator data, secrets store, KEK, on-disk caldera + xlog state). In-memory state lost during this single hop — caldera red-team operations, xlog streaming workers, in-flight chat sessions. Subsequent v0.3.x → v0.3.x+1 upgrades retain in-memory state for unchanged services.
 
   See [installer/MIGRATION-FROM-V02X.md](installer/MIGRATION-FROM-V02X.md) for the step-by-step migration guide.
@@ -18208,9 +18208,9 @@ Three new/extended UI surfaces:
 
 The following work was prepared during the v0.2.4 → v0.2.5 cycle but never tagged as v0.2.5 — it ships under v0.3.0:
 
-- **`FORCE_SKILLS_SYNC=1` now flows through to the container.** Pre-fix, [CLAUDE.md](CLAUDE.md) and the v0.2.4 migration impact section both promised that operators could run `FORCE_SKILLS_SYNC=1 docker compose up -d --force-recreate phantom-agent` to merge fresh image-baked skill templates into the live `/app/skills/` volume — but the variable was declared in `entrypoint.sh` and never wired into the compose `environment:` block, so the documented re-seed path was a silent no-op. v0.3.0 wires it through (one-line compose addition + comment block) for both the dev compose and the customer compose. The bug existed since v0.1.33 (when the agent-image-baked skill volume landed); the documented path now works as advertised.
+- **`FORCE_SKILLS_SYNC=1` now flows through to the container.** Pre-fix, [CLAUDE.md](CLAUDE.md) and the v0.2.4 migration impact section both promised that operators could run `FORCE_SKILLS_SYNC=1 docker compose up -d --force-recreate guardian-agent` to merge fresh image-baked skill templates into the live `/app/skills/` volume — but the variable was declared in `entrypoint.sh` and never wired into the compose `environment:` block, so the documented re-seed path was a silent no-op. v0.3.0 wires it through (one-line compose addition + comment block) for both the dev compose and the customer compose. The bug existed since v0.1.33 (when the agent-image-baked skill volume landed); the documented path now works as advertised.
 - **`.env.vm` no longer spews `command not found` on source.** The repo-root `.env.vm` (operator-local credentials, gitignored) had been structured with a multi-line JSON value for `GOOGLE_APPLICATION_CREDENTIALS`. bash's `set -a && source .env.vm` parses line-by-line as shell assignments, so each indented JSON line tripped on the colon and emitted `command not found` errors. v0.3.0 documents the canonical Google Cloud SDK pattern (env var holds a path, not the JSON itself) with the JSON stored at `.gcp/service-account.json` (gitignored, mode 0600).
-- **`VM_REMOTE_REPO` documented to point at the runner workspace.** Operator-local `.env.vm`'s `VM_REMOTE_REPO` had drifted to a stale legacy directory; the live runner workspace is `/home/ayman/actions-runner/_work/phantom/phantom`. CLAUDE.md now documents the correct path with a `docker inspect ... working_dir` recipe for verifying.
+- **`VM_REMOTE_REPO` documented to point at the runner workspace.** Operator-local `.env.vm`'s `VM_REMOTE_REPO` had drifted to a stale legacy directory; the live runner workspace is `/home/ayman/actions-runner/_work/guardian/guardian`. CLAUDE.md now documents the correct path with a `docker inspect ... working_dir` recipe for verifying.
 - **Approval-gates table + IAP tunnel recipes.** CLAUDE.md was unclear about which actions need approval (build = no, smoke test = no, release tag = yes). v0.3.0 adds an explicit approval-gates table at the top of "Remote-first workflow" and the canonical IAP service-port tunnel mappings (3000→3001 with +1 offset, MCP 8080→8081, Caldera 8888→8889, xlog 8999→9000) with bring-up-if-down recipes.
 - **Enterprise discipline mandates** in CLAUDE.md: three new sections — pre-build context refresh (read these docs before any non-trivial build), quality-first principle (5 rules + anti-patterns list), observability verification during smoke test (what you smoke-test must be visible in `/observability/*`).
 
@@ -18234,7 +18234,7 @@ The skill seeds each dataset in the operator's technology stack with ~100 events
 
 What it does, end-to-end:
 
-1. Reads the operator's stack via `phantom_get_technology_stack`
+1. Reads the operator's stack via `guardian_get_technology_stack`
 2. For each (vendor, product, category) entry, picks the matching field template (curated per-class lists embedded in the skill body — firewall, EDR, NDR, proxy, email-gateway, DNS, WAF, load-balancer, VPN, cloud, SaaS)
 3. Fires `xlog.create_data_worker` once per stack entry, all in parallel — `count: 100`, `interval: 0.1`, `duration_seconds: 10`
 4. Total wall-clock time: ~10 seconds regardless of stack size
@@ -18340,10 +18340,10 @@ Pre-v0.2.4 the skills used arrow-and-hyphen technical descriptions like `Brute f
 ### Migration impact
 
 - **Fresh installs (v0.2.4+)** ship 13 skills total in the image, all realistic for current xlog (1 foundation utility + 12 attack scenarios; the 12 includes the 10 v0.2.2 vendor-agnostic chains + the 2 new standalone analytics-rules-coverage scenarios)
-- **Existing installs upgrading** retain whatever's seeded in their `phantom_mcp_skills` named volume; the 12 deletions don't auto-remove from populated volumes. Operators wanting a clean slate have three options:
+- **Existing installs upgrading** retain whatever's seeded in their `guardian_mcp_skills` named volume; the 12 deletions don't auto-remove from populated volumes. Operators wanting a clean slate have three options:
   - `docker compose down -v` (destructive — drops other state too)
-  - `docker exec phantom_agent rm /app/skills/scenarios/<file>.md` for surgical removal of specific old skills
-  - `docker compose up -d --force-recreate -e FORCE_SKILLS_SYNC=1 phantom-agent` — re-seeds /app/skills from /app/mcp/skills-default. **NOTE:** this is a MERGE not a REPLACE — it copies image defaults into the volume but does not remove files NOT in the image. So old scenarios stay unless surgically removed first.
+  - `docker exec guardian_agent rm /app/skills/scenarios/<file>.md` for surgical removal of specific old skills
+  - `docker compose up -d --force-recreate -e FORCE_SKILLS_SYNC=1 guardian-agent` — re-seeds /app/skills from /app/mcp/skills-default. **NOTE:** this is a MERGE not a REPLACE — it copies image defaults into the volume but does not remove files NOT in the image. So old scenarios stay unless surgically removed first.
 
 The display-name refresh is automatic on upgrade — the agent reads the updated frontmatter from disk on every `skills_list_all` call.
 
@@ -18351,11 +18351,11 @@ The display-name refresh is automatic on upgrade — the agent reads the updated
 
 ## [v0.2.3] — 2026-05-09
 
-Two operator-reported issues. Truncation in chat responses + missing wire events in session exports — both surfaced during v0.2.2 attack-chain skill execution on `bupa-engine`. Diagnostic discipline: cross-referenced against the working `Trevor_-_Bot.yml` Slack integration that also runs on Vertex/Gemini with heavy tool-calling traffic; the only architectural difference was a hardcoded `maxOutputTokens: 4096` cap in Phantom's chat handler.
+Two operator-reported issues. Truncation in chat responses + missing wire events in session exports — both surfaced during v0.2.2 attack-chain skill execution on `bupa-engine`. Diagnostic discipline: cross-referenced against the working `Trevor_-_Bot.yml` Slack integration that also runs on Vertex/Gemini with heavy tool-calling traffic; the only architectural difference was a hardcoded `maxOutputTokens: 4096` cap in Guardian's chat handler.
 
 ### Truncation fix — `maxOutputTokens` cap removed entirely
 
-The Phantom chat handler hardcoded `maxOutputTokens: 4096` on every Gemini API call (in three callsites in [mcp/agent/app/api/chat/route.ts](mcp/agent/app/api/chat/route.ts) — main loop at line 928, partial-summary fallback at line 2606 with `2048` (even smaller), retry path at line 2668). Gemini 3.1 Pro Preview's natural output ceiling is 65,536 tokens. Phantom was capping at 6.25% of that. Multi-step responses with rich tool-output narration — the v0.1.36 backup/restore plan, the v0.2.2 attack-chain skill executions, anything with multiple stages of explanation — routinely hit the cap mid-sentence. Operators saw `finishReason: MAX_TOKENS` in telemetry but no operator-actionable error, just truncated content.
+The Guardian chat handler hardcoded `maxOutputTokens: 4096` on every Gemini API call (in three callsites in [mcp/agent/app/api/chat/route.ts](mcp/agent/app/api/chat/route.ts) — main loop at line 928, partial-summary fallback at line 2606 with `2048` (even smaller), retry path at line 2668). Gemini 3.1 Pro Preview's natural output ceiling is 65,536 tokens. Guardian was capping at 6.25% of that. Multi-step responses with rich tool-output narration — the v0.1.36 backup/restore plan, the v0.2.2 attack-chain skill executions, anything with multiple stages of explanation — routinely hit the cap mid-sentence. Operators saw `finishReason: MAX_TOKENS` in telemetry but no operator-actionable error, just truncated content.
 
 v0.2.3 removes the cap entirely at all three callsites (the `generationConfig` field is now optional in the type and unset in every call). Gemini decides its own output length. The model writes as much as the response naturally needs. Same approach as the working `Trevor_-_Bot` integration which never set the cap.
 
@@ -18412,7 +18412,7 @@ A scenario-skill overhaul. The 12 v0.1.33 advanced attack-scenario skills (`rans
 
 ### What's new — 10 vendor-agnostic attack-scenario skills
 
-Each speaks data-source CLASSES (firewall, EDR, NDR, proxy, email-gateway, DNS, WAF, VPN, SaaS, cloud) and resolves to the operator's specific vendor/product at runtime via `phantom_get_technology_stack`. The same skill works on any customer's stack — Palo Alto + F5 + Vectra + MDE on one deployment, CrowdStrike + Fortinet + ExtraHop + Defender on the next, no skill body changes needed.
+Each speaks data-source CLASSES (firewall, EDR, NDR, proxy, email-gateway, DNS, WAF, VPN, SaaS, cloud) and resolves to the operator's specific vendor/product at runtime via `guardian_get_technology_stack`. The same skill works on any customer's stack — Palo Alto + F5 + Vectra + MDE on one deployment, CrowdStrike + Fortinet + ExtraHop + Defender on the next, no skill body changes needed.
 
 | Skill | Attack chain | Triggers XSIAM rules |
 |---|---|---|
@@ -18435,7 +18435,7 @@ Each speaks data-source CLASSES (firewall, EDR, NDR, proxy, email-gateway, DNS, 
 - **Narrative thread block**: shared IPs/hosts/users/sessions across all stages so analysts pivoting in the SIEM can follow the chain end-to-end
 - **Verification table**: per-skill objective checklist for "did all expected alerts fire?" with troubleshooting branches when any didn't
 - **"If missing from stack" branches**: graceful degradation when the operator's tech-stack lacks a class the skill depends on (e.g. NDR missing → substitute firewall east-west events)
-- **Pre-flight reminder**: every skill instructs the agent to call `phantom_get_technology_stack` once at start and build the category lookup before any stage executes
+- **Pre-flight reminder**: every skill instructs the agent to call `guardian_get_technology_stack` once at start and build the category lookup before any stage executes
 - **Tear-down + adapting-per-deployment footers**: `xlog.list_workers` / `xlog.kill_worker` cleanup + a note on swapping illustrative IPs/users for customer-specific values
 
 ### XSIAM analytics coverage
@@ -18451,7 +18451,7 @@ The `validation/xsiam_top20_coverage.md` skill stays at its v0.1.33 form for now
 ### Migration impact
 
 - **Fresh installs (v0.2.2+):** 22 skills total in the image (24 - 12 + 10), all of which are realistic for xlog
-- **Existing installs upgrading:** their `phantom_mcp_skills` named volume still has whatever was originally seeded; the 12 v0.1.33 deletions in this release don't auto-remove anything from a populated volume. Operators who specifically want to retire the v0.1.33 scenarios from their volume should `docker compose down -v` (drops volume — destructive) or manually `docker exec phantom_agent rm /app/skills/scenarios/<file>.md`. **Most operators won't need to do this** — the 12 v0.1.33 skills still work in the volume, they're just no longer the recommended attack-simulation surface.
+- **Existing installs upgrading:** their `guardian_mcp_skills` named volume still has whatever was originally seeded; the 12 v0.1.33 deletions in this release don't auto-remove anything from a populated volume. Operators who specifically want to retire the v0.1.33 scenarios from their volume should `docker compose down -v` (drops volume — destructive) or manually `docker exec guardian_agent rm /app/skills/scenarios/<file>.md`. **Most operators won't need to do this** — the 12 v0.1.33 skills still work in the volume, they're just no longer the recommended attack-simulation surface.
 
 ### Skill bodies
 
@@ -18461,12 +18461,12 @@ Every skill body is ~230-410 lines of structured runbook with explicit per-field
 
 ## [v0.2.1] — 2026-05-09
 
-A targeted follow-up to v0.1.36 closing one upgrade-path gap. The v0.1.36 phantom-installer started shipping `reset-ui-password.sh` via an embedded heredoc — but customers who upgrade their stack with `phantom-installer --upgrade-to 0.1.36` using their existing OLDER (pre-v0.1.36) installer binary do not get the script extracted, because the older binary's template lacks the heredoc block. They get every container-side feature (backup/restore, sidebar reorg, connector refactor) but no on-disk recovery tool. v0.2.1 makes that recoverable in three layered ways without requiring a re-download of the installer binary.
+A targeted follow-up to v0.1.36 closing one upgrade-path gap. The v0.1.36 guardian-installer started shipping `reset-ui-password.sh` via an embedded heredoc — but customers who upgrade their stack with `guardian-installer --upgrade-to 0.1.36` using their existing OLDER (pre-v0.1.36) installer binary do not get the script extracted, because the older binary's template lacks the heredoc block. They get every container-side feature (backup/restore, sidebar reorg, connector refactor) but no on-disk recovery tool. v0.2.1 makes that recoverable in three layered ways without requiring a re-download of the installer binary.
 
 ### Recovery tool delivered via the agent image (in-product self-heal)
 
-- **`/api/agent/recovery/reset-ui-password`** — new agent-side endpoint, cookie-auth gated, serves the canonical `reset-ui-password.sh` bytes. Baked into the phantom-agent image at `/app/tools/reset-ui-password.sh` (Dockerfile `COPY installer/reset-ui-password.sh /app/tools/...`). Anyone who upgrades the agent image to v0.2.1+ via any path — fresh installer, `--upgrade-to`, manual `docker compose pull` — gets this endpoint.
-- **UI affordance** — `/settings/backup-restore` grew a "Recovery tools" section with a **Download `reset-ui-password.sh`** button. Click → browser saves the file → operator copies to `/opt/phantom/` (the page shows the `install -m 755 ...` one-liner). One-click recovery for anyone who skipped the heredoc-extraction path.
+- **`/api/agent/recovery/reset-ui-password`** — new agent-side endpoint, cookie-auth gated, serves the canonical `reset-ui-password.sh` bytes. Baked into the guardian-agent image at `/app/tools/reset-ui-password.sh` (Dockerfile `COPY installer/reset-ui-password.sh /app/tools/...`). Anyone who upgrades the agent image to v0.2.1+ via any path — fresh installer, `--upgrade-to`, manual `docker compose pull` — gets this endpoint.
+- **UI affordance** — `/settings/backup-restore` grew a "Recovery tools" section with a **Download `reset-ui-password.sh`** button. Click → browser saves the file → operator copies to `/opt/guardian/` (the page shows the `install -m 755 ...` one-liner). One-click recovery for anyone who skipped the heredoc-extraction path.
 
 ### Installer template self-check (GitHub release fallback)
 
@@ -18482,7 +18482,7 @@ if [[ ! -s "$INSTALL_DIR/reset-ui-password.sh" ]] || \
 fi
 ```
 
-This is forward-looking insurance: any future template change that accidentally breaks the substitution (e.g. dropping `__INSTALLER_RESET_PASSWORD_SH__` from `markers` in `build-phantom-installer.sh`) auto-heals from the GitHub release. In offline/air-gapped environments where curl fails, the operator gets a clear hint pointing at the in-product UI fallback (Settings → Backup & Restore → Recovery tools → Download), which doesn't need external network.
+This is forward-looking insurance: any future template change that accidentally breaks the substitution (e.g. dropping `__INSTALLER_RESET_PASSWORD_SH__` from `markers` in `build-guardian-installer.sh`) auto-heals from the GitHub release. In offline/air-gapped environments where curl fails, the operator gets a clear hint pointing at the in-product UI fallback (Settings → Backup & Restore → Recovery tools → Download), which doesn't need external network.
 
 ### Standalone release asset
 
@@ -18490,8 +18490,8 @@ This is forward-looking insurance: any future template change that accidentally 
 
 ```bash
 curl -L -o reset-ui-password.sh \
-  https://github.com/kite-production/phantom/releases/download/v0.2.1/reset-ui-password.sh
-sudo install -m 755 reset-ui-password.sh /opt/phantom/
+  https://github.com/kite-production/guardian/releases/download/v0.2.1/reset-ui-password.sh
+sudo install -m 755 reset-ui-password.sh /opt/guardian/
 ```
 
 ### Why three layers
@@ -18510,14 +18510,14 @@ Customers who upgraded v0.1.34 → v0.1.36 with their old installer binary shoul
 
 ## [v0.1.36] — 2026-05-09
 
-A wide release. Five deliverables: (1) caldera + xsiam connector tool-call paths now read from the InstanceStore at runtime, completing the single-source-of-truth migration that v0.1.34 started for xlog; (2) a customer-facing CLI for resetting a forgotten Phantom UI password, shipped in the install kit; (3) a pre-deploy drift check that compares the VM's `docker-compose.yml` to the canonical local file so silent drift can never mask a sync; (4) the operator UI's admin pages (Models, Providers, plus the new Backup & Restore) consolidated under the **Settings** group in the sidebar; (5) **a complete backup and restore feature** — one zip captures personality, connector instances + cleartext secrets, runtime jobs, memory entries, all skills, and knowledge bundle docs; restore replays them onto a destination deployment in dependency order.
+A wide release. Five deliverables: (1) caldera + xsiam connector tool-call paths now read from the InstanceStore at runtime, completing the single-source-of-truth migration that v0.1.34 started for xlog; (2) a customer-facing CLI for resetting a forgotten Guardian UI password, shipped in the install kit; (3) a pre-deploy drift check that compares the VM's `docker-compose.yml` to the canonical local file so silent drift can never mask a sync; (4) the operator UI's admin pages (Models, Providers, plus the new Backup & Restore) consolidated under the **Settings** group in the sidebar; (5) **a complete backup and restore feature** — one zip captures personality, connector instances + cleartext secrets, runtime jobs, memory entries, all skills, and knowledge bundle docs; restore replays them onto a destination deployment in dependency order.
 
 ### Backup & Restore (`/settings/backup-restore`)
 
-Operators get a single **Download backup** button that produces `phantom-backup-<timestamp>.zip` containing the deployment's complete operator-owned state. Companion **Restore** flow accepts the same zip on any deployment (the same one, a fresh install, a different host with a different `PHANTOM_SECRET_KEK`) and replays each section.
+Operators get a single **Download backup** button that produces `guardian-backup-<timestamp>.zip` containing the deployment's complete operator-owned state. Companion **Restore** flow accepts the same zip on any deployment (the same one, a fresh install, a different host with a different `GUARDIAN_SECRET_KEK`) and replays each section.
 
 What's in the zip:
-- `manifest.json` — schema_version, phantom_version, created_at, section counts, restore order, plaintext-secrets warning
+- `manifest.json` — schema_version, guardian_version, created_at, section counts, restore order, plaintext-secrets warning
 - `personality.json` — the SqlitePersonalityStore blob
 - `instances.json` — InstanceStore rows + **cleartext** connector secrets (so the destination's KEK can re-encrypt on restore)
 - `memory.json` — Memory entries with embedding BLOBs **stripped** (they're dim-bound; the destination re-embeds on next semantic search)
@@ -18525,17 +18525,17 @@ What's in the zip:
 - `skills/<category>/<file>.md` — every operator skill MD preserving category structure
 - `knowledge/<kb-name>/<doc-id>.md` — knowledge bundle doc content for reference (read-only at runtime)
 
-Restore order: personality → instances+secrets → skills → memory → knowledge (no-op) → jobs. The order matters because runtime jobs may reference connector tools (e.g. `phantom_create_data_worker`) that need their instance to exist + be enabled before the first cron tick. Personality goes first because it has no dependencies and applies cleanly even if a later section fails.
+Restore order: personality → instances+secrets → skills → memory → knowledge (no-op) → jobs. The order matters because runtime jobs may reference connector tools (e.g. `guardian_create_data_worker`) that need their instance to exist + be enabled before the first cron tick. Personality goes first because it has no dependencies and applies cleanly even if a later section fails.
 
 API surface:
-- `GET /api/agent/backup` — auth-gated via `phantom_auth` cookie; assembles zip and streams it as a download. Server-side calls `/api/v1/instances?include_secrets=true` (a v0.1.36-introduced MCP flag, bearer-gated, mirroring v0.1.34's ProviderStore detail-endpoint pattern) plus `/api/v1/personality`, `/api/v1/memories`, `/api/v1/jobs`, `/api/v1/kbs`, and the `skills_list_all` + `skills_read` MCP tools. Per-section try/catch — one failing section emits a `backup_warnings[]` entry in the manifest rather than killing the whole backup.
+- `GET /api/agent/backup` — auth-gated via `guardian_auth` cookie; assembles zip and streams it as a download. Server-side calls `/api/v1/instances?include_secrets=true` (a v0.1.36-introduced MCP flag, bearer-gated, mirroring v0.1.34's ProviderStore detail-endpoint pattern) plus `/api/v1/personality`, `/api/v1/memories`, `/api/v1/jobs`, `/api/v1/kbs`, and the `skills_list_all` + `skills_read` MCP tools. Per-section try/catch — one failing section emits a `backup_warnings[]` entry in the manifest rather than killing the whole backup.
 - `POST /api/agent/restore` — multipart upload, optional `?dry_run=true` to preview, optional `?force=true` to overwrite name collisions (default = skip). Returns `{applied: {section: count}, skipped: {...}, errors: [...], warnings: [...]}`. Personality is always overwritten; everything else is upsert-or-skip.
 
 UI: `/settings/backup-restore` page with three sections — Download, Restore (file picker → preview manifest + section counts → Apply with optional force checkbox), and Caveats (memory embeddings stripped, knowledge read-only at runtime, manifest jobs not exported, etc).
 
 Idempotence + safety:
 - Cleartext secrets in the zip → operator-sensitive; manifest carries an explicit warning, UI surfaces it next to the download button.
-- `PHANTOM_SECRET_KEK` does NOT need to match across source and destination — the zip carries cleartext, the destination's SecretStore re-encrypts under its own KEK on write.
+- `GUARDIAN_SECRET_KEK` does NOT need to match across source and destination — the zip carries cleartext, the destination's SecretStore re-encrypts under its own KEK on write.
 - 100 MB upload cap on restore (size check before parsing — bouncing fast on giant uploads beats parser hangs).
 - Schema version pin in the manifest; restore rejects unknown schemas with a clear "supported: [N]" error rather than crashing on a future format.
 
@@ -18570,24 +18570,24 @@ Net effect: a `/connectors` edit on caldera baseUrl/apiKey, or any of the six xs
 
 ### Forgot-UI-password CLI (`reset-ui-password.sh`)
 
-Customers who forget their Phantom UI password used to have an unpleasant recovery path: either `docker compose down -v` (which also wipes job history, audit log, instance configs, marketplace state) or manual SQLite surgery on the SecretStore. Both are nuclear options for a routine credential lapse.
+Customers who forget their Guardian UI password used to have an unpleasant recovery path: either `docker compose down -v` (which also wipes job history, audit log, instance configs, marketplace state) or manual SQLite surgery on the SecretStore. Both are nuclear options for a routine credential lapse.
 
-`reset-ui-password.sh` is a small shell script shipped in the customer install kit alongside `phantom-installer`. Run it on the VM where the stack lives; it:
+`reset-ui-password.sh` is a small shell script shipped in the customer install kit alongside `guardian-installer`. Run it on the VM where the stack lives; it:
 
 1. **Prompts for username + new password** (interactively, with confirmation), or accepts `--username` and `--password-file` for non-interactive use. The password is read via `read -s` (no echo to terminal) and is never passed via argv/env.
-2. **Reads `MCP_TOKEN` from the running phantom-agent container's `/proc/1/environ`** rather than asking the operator to supply it. The token is per-boot random by default, so the operator may not have it; the script fishes it out of the container's environment block over `docker exec` so it lives in the script's process memory only for the duration of the curl call.
+2. **Reads `MCP_TOKEN` from the running guardian-agent container's `/proc/1/environ`** rather than asking the operator to supply it. The token is per-boot random by default, so the operator may not have it; the script fishes it out of the container's environment block over `docker exec` so it lives in the script's process memory only for the duration of the curl call.
 3. **POSTs to the MCP's `/api/v1/ui/auth/password` endpoint** via curl, piping the JSON body via stdin (`--data-binary @-`) so the password never appears on the command line.
 4. **Verifies the new hash landed** by checking the response code + a follow-up read of the SecretStore path.
 
 Result: the operator can sign in with the new password immediately, every other piece of stack state is untouched, and `history | grep <password>` returns nothing because the password was never in argv or env-var form.
 
-The script is embedded into the customer single-file installer via the same `__INSTALLER_*__` placeholder pattern that the compose YAML uses ([installer/build-phantom-installer.sh](installer/build-phantom-installer.sh) gained a third marker `__INSTALLER_RESET_PASSWORD_SH__` plus a dedicated heredoc terminator `_PHANTOM_RESET_PASSWORD_HEREDOC_END_` so the embedded payloads can't collide). Multi-file kit packing in `release.yml` also picks up the script via `cp installer/reset-ui-password.sh "$KIT/reset-ui-password.sh"` so the kit-format users get the same recovery path.
+The script is embedded into the customer single-file installer via the same `__INSTALLER_*__` placeholder pattern that the compose YAML uses ([installer/build-guardian-installer.sh](installer/build-guardian-installer.sh) gained a third marker `__INSTALLER_RESET_PASSWORD_SH__` plus a dedicated heredoc terminator `_GUARDIAN_RESET_PASSWORD_HEREDOC_END_` so the embedded payloads can't collide). Multi-file kit packing in `release.yml` also picks up the script via `cp installer/reset-ui-password.sh "$KIT/reset-ui-password.sh"` so the kit-format users get the same recovery path.
 
 Documentation lands in `/help/user` as Scenario 3d — Forgot UI password (CLI reset, v0.1.36+).
 
 ### VM compose drift check (pre-deploy gate, MANDATORY)
 
-The v0.1.34 TLS smoke test caught a stale VM compose by accident: `docker-compose.yml` on phantom-vm had drifted from the canonical local file by weeks — xlog and caldera lacked the `/tls` volume mount despite the local file having it. `docker compose up -d --force-recreate` didn't help because the VM's spec was stale. The drift was invisible until the smoke test happened to surface it.
+The v0.1.34 TLS smoke test caught a stale VM compose by accident: `docker-compose.yml` on guardian-vm had drifted from the canonical local file by weeks — xlog and caldera lacked the `/tls` volume mount despite the local file having it. `docker compose up -d --force-recreate` didn't help because the VM's spec was stale. The drift was invisible until the smoke test happened to surface it.
 
 `scripts/check-vm-compose.sh` makes the check explicit:
 
@@ -18662,7 +18662,7 @@ Implementation: `skills_crud.py::get_all_skills` walks `plugins/<vendor>/*.md` a
 
 - **Live counts.** The Total / Enabled / Categories widgets at the top of `/skills` were hardcoded `{total: 11, ...}` and quietly wrong any time the on-disk skill count drifted. Now derived live from the `/api/skills` response via `useMemo` over `skills.length`, `skills.filter(enabled)`, and `unique(category)`.
 - **Import skill** — new button next to **Create Skill** in the page header. Drag a `.md` file (or pick via dialog), the client parses YAML frontmatter, posts to `/api/skills`, and the new skill appears in the list immediately. Imports always land under the category declared in the frontmatter; for plugin imports, place the file under `plugins/<vendor>/` first and the path-authoritative rule kicks in.
-- **Production-Cluster-Alpha workspace selector removed** — that menu belonged to Spark workspaces, not to a single-instance Phantom agent. The chip never had any backend semantics on this surface.
+- **Production-Cluster-Alpha workspace selector removed** — that menu belonged to Spark workspaces, not to a single-instance Guardian agent. The chip never had any backend semantics on this surface.
 
 ### Skill detail panel — auto-load body
 
@@ -18675,7 +18675,7 @@ Both `/help/architecture` and `/help/user` were capped at `max-w-[920px]` / `max
 Three coordinated changes:
 - **Full viewport width**: container bumped to `max-w-[1400px]` with `px-10` padding. Content now uses the screen on a 27" monitor.
 - **Larger fonts**: sidebar items `text-sm` (was `text-[11px]`), group labels `text-xs` (was `text-[10px]`), descriptions `text-sm`, page heading `text-xl` (was `text-base`). Content scroll container has an explicit `text-base` baseline.
-- **Collapsible nav rail**: chevron toggle in the sidebar header collapses to a 40px rail with chevron-right to expand. State persists in localStorage (separate keys per page: `phantom.help.architecture.sidebar-collapsed`, `phantom.help.user.sidebar-collapsed`). **Stays on the same page** — no route navigation. The "Help index" backlink is preserved as a separate route-navigation affordance.
+- **Collapsible nav rail**: chevron toggle in the sidebar header collapses to a 40px rail with chevron-right to expand. State persists in localStorage (separate keys per page: `guardian.help.architecture.sidebar-collapsed`, `guardian.help.user.sidebar-collapsed`). **Stays on the same page** — no route navigation. The "Help index" backlink is preserved as a separate route-navigation affordance.
 
 ### Pre-deploy gate (3-step build verification)
 
@@ -18699,7 +18699,7 @@ Transitive bonus from the refactor: Project ID and Region now auto-populate on `
 
 The same architectural principle the setup refactor applied to providers + connectors — single source of truth, no silent self-healing — has been extended to connector URL resolution. v0.1.34 brings the xlog connector fully onto this pattern:
 
-- **MCP-side**: `bundles/spark/mcp/src/service/phantom_mcp/server.py` lifespan now exposes a `get_xlog_url()` callable that hits `InstanceStore.list_for("xlog")` and reads `config.baseUrl` on every tool invocation. All 13 xlog tool call sites (workers, scenarios, observables, simulation_runs, field_info, data_faker) updated from `lifespan_context["xlog_url"]` (pinned at boot) to `lifespan_context["get_xlog_url"]()` (resolved live).
+- **MCP-side**: `bundles/spark/mcp/src/service/guardian_mcp/server.py` lifespan now exposes a `get_xlog_url()` callable that hits `InstanceStore.list_for("xlog")` and reads `config.baseUrl` on every tool invocation. All 13 xlog tool call sites (workers, scenarios, observables, simulation_runs, field_info, data_faker) updated from `lifespan_context["xlog_url"]` (pinned at boot) to `lifespan_context["get_xlog_url"]()` (resolved live).
 - **Agent-side**: new `mcp/agent/lib/xlog-url.ts::resolveXlogUrlFromStore()` calls MCP `/api/v1/instances?connector_id=xlog` and returns the live baseUrl. `getEffectiveRuntimeConfig().XLOG_URL` uses this resolver first, falling back to env only when no instance is configured (pre-setup window). The /api/agent/health probe and /api/agent/reports proxy both pick up the InstanceStore value automatically — both were previously reading `process.env.XLOG_URL` directly.
 - **Removed workaround**: `entrypoint.sh` previously did a probe-then-flip of `XLOG_URL` at agent boot — quietly mutating process env to whichever scheme xlog answered on. That masked TLS rollouts and config drift behind silent magic. Block removed; XLOG_URL in env now stays as compose declares it, and only the InstanceStore is mutable post-setup (via /connectors).
 - **Removed workaround**: the xlog probe in `connector_probes.py` previously did its own probe-then-flip when the configured URL failed connection. Removed in the same release; the probe now sends one request and surfaces the verbatim httpx error (e.g. `RemoteProtocolError: Server disconnected`) so operators see the real failure and update via /connectors.
@@ -18730,9 +18730,9 @@ Fixed by:
 
 ### TLS deployment hygiene (smoke-test findings, no code change)
 
-A full TLS smoke test on phantom-vm surfaced — and fixed — a deployment-only gotcha: when `docker-compose.yml` adds a *volume mount* to a service, plain `docker compose up -d` keeps the existing containers and silently skips the new mount. The agent had been running with a `/tls/cert.pem` in its container overlay layer (auto-generated at boot) that didn't match the `/tls/cert.pem` xlog and caldera mounted from the shared `phantom_tls` volume — same path, two different files. Node's `NODE_EXTRA_CA_CERTS=/tls/cert.pem` was correctly set but pointed at the wrong cert, so `fetch` to `https://xlog:8000` failed with `DEPTH_ZERO_SELF_SIGNED_CERT` even with the trust override.
+A full TLS smoke test on guardian-vm surfaced — and fixed — a deployment-only gotcha: when `docker-compose.yml` adds a *volume mount* to a service, plain `docker compose up -d` keeps the existing containers and silently skips the new mount. The agent had been running with a `/tls/cert.pem` in its container overlay layer (auto-generated at boot) that didn't match the `/tls/cert.pem` xlog and caldera mounted from the shared `guardian_tls` volume — same path, two different files. Node's `NODE_EXTRA_CA_CERTS=/tls/cert.pem` was correctly set but pointed at the wrong cert, so `fetch` to `https://xlog:8000` failed with `DEPTH_ZERO_SELF_SIGNED_CERT` even with the trust override.
 
-Fix is operational, not code: `docker compose up -d --force-recreate` after any compose change that touches volume mounts. Also confirmed the local repo's compose has the right mounts on all three services — the bug was that the VM's compose file had drifted from the canonical local copy (the VM is not a git repo, so changes have to be `scp`-ed). After sync + `--force-recreate xlog caldera phantom-agent`, all three services are on TLS, the cert is consistent across `/tls` mounts, and `agent → xlog` over HTTPS works end-to-end through the connector.
+Fix is operational, not code: `docker compose up -d --force-recreate` after any compose change that touches volume mounts. Also confirmed the local repo's compose has the right mounts on all three services — the bug was that the VM's compose file had drifted from the canonical local copy (the VM is not a git repo, so changes have to be `scp`-ed). After sync + `--force-recreate xlog caldera guardian-agent`, all three services are on TLS, the cert is consistent across `/tls` mounts, and `agent → xlog` over HTTPS works end-to-end through the connector.
 
 ---
 
@@ -18743,13 +18743,13 @@ Fix is operational, not code: `docker compose up -d --force-recreate` after any 
 
 ## Known issues
 
-- Same Vertex placeholder credential issue carried over from v0.1.33 on the canonical phantom-vm, but now surfaces as a clear "credentials look like a template" error in `job-run-failed` notifications instead of a decoder traceback. Operator action: set a real `GEMINI_API_KEY` or replace the placeholder JSON with a real GCP service-account key.
+- Same Vertex placeholder credential issue carried over from v0.1.33 on the canonical guardian-vm, but now surfaces as a clear "credentials look like a template" error in `job-run-failed` notifications instead of a decoder traceback. Operator action: set a real `GEMINI_API_KEY` or replace the placeholder JSON with a real GCP service-account key.
 
 ---
 
 ## [v0.1.33] — 2026-05-09
 
-A skills overhaul. Phantom's MD runbooks under `bundles/spark/mcp/skills/` graduate from a static catalog with hardcoded UI metadata into a fully dynamic, operator-editable, model-aware system. Plus the operator-experience fixes from the v0.1.32 series that never got their own tag — jobs export/import, /profile sign-out, password change polish, the EnvSecretStore overlay, and a fully edit-able job form.
+A skills overhaul. Guardian's MD runbooks under `bundles/spark/mcp/skills/` graduate from a static catalog with hardcoded UI metadata into a fully dynamic, operator-editable, model-aware system. Plus the operator-experience fixes from the v0.1.32 series that never got their own tag — jobs export/import, /profile sign-out, password change polish, the EnvSecretStore overlay, and a fully edit-able job form.
 
 ### Skills v0.1.33 — five-phase rework
 
@@ -18797,11 +18797,11 @@ The checklist runs **before** asking for release approval, parallel to the build
 - **/profile page** with cookie-based auth, password change backed by `SecretStore`, and a Sign-out section. The sign-out card uses theme-aware `color-mix` amber so it reads correctly on both light and dark themes; sign-out redirects to `/` (was incorrectly going to `/login` which doesn't exist).
 - **Change-password → re-login flow**: form fields now have `autoComplete="username"` / `current-password"` / `new-password` so password managers reflect the change. Server-side `_normalize_password()` strips whitespace symmetrically in `set_password()` AND `verify()` so a copy-paste with trailing space doesn't lock the operator out.
 - **Jobs export + import** as separate flows. Two export options under the kebab — **Export definition (.json)** (definition only, importable as-is) and **Export runs (.json)** (definition + every run from the run-history table; for forensic snapshots — runs are NOT importable as run history per the policy that run history is read-only ground truth). Import button accepts either shape; if the file came from `-with-runs.json`, the runs array is silently dropped.
-- **Job action types collapsed** to `{prompt, tool_call}`. Pre-v0.1.32 there was a third type `log` that bypassed the chat pipeline by calling `phantom_create_data_worker` directly. The boot migration normalizes existing rows: `chat → prompt` (rename), `log → tool_call(phantom_create_data_worker, request=…)` (lift the log-shortcut keys into a tool_call request). Idempotent; runs every boot so re-imports of pre-v0.1.32 jobs are also normalized.
+- **Job action types collapsed** to `{prompt, tool_call}`. Pre-v0.1.32 there was a third type `log` that bypassed the chat pipeline by calling `guardian_create_data_worker` directly. The boot migration normalizes existing rows: `chat → prompt` (rename), `log → tool_call(guardian_create_data_worker, request=…)` (lift the log-shortcut keys into a tool_call request). Idempotent; runs every boot so re-imports of pre-v0.1.32 jobs are also normalized.
 - **Edit job** added to the kebab menu (between Pause and Duplicate). Opens the new-job form with every field pre-populated from the existing row — schedule (loaded as Custom + raw cron), timezone, action type and body, enabled flag, approval bypass. Name is locked (rename = delete + create new); manifest-source jobs accept the patch but the next reconciliation reverts it.
 - **EnvSecretStore overlay** — pre-bake secrets via env vars without overwriting the at-rest `SecretStore`. At read time, env values shadow stored secrets so operators can override per-deployment without touching the encrypted store. Useful for pinning a connector instance to a specific API key per environment.
 - **xlog kill_worker** MCP tool — stop a running synthetic-log worker by ID. Pre-v0.1.32 the only way to halt was `docker compose restart xlog` which dropped every worker indiscriminately; this tool is precise.
-- **Approval card UX** — preamble before the card + always-visible key args. Pre-v0.1.32 the operator saw "Approve `phantom_create_data_worker`?" with the args collapsed; now the agent's preamble explains *why* it's calling the tool and the most relevant args (count, vendor, destination) render up-top so the operator can make a decision without expanding the JSON.
+- **Approval card UX** — preamble before the card + always-visible key args. Pre-v0.1.32 the operator saw "Approve `guardian_create_data_worker`?" with the args collapsed; now the agent's preamble explains *why* it's calling the tool and the most relevant args (count, vendor, destination) render up-top so the operator can make a decision without expanding the JSON.
 - **Marketplace install** decoupled from instances. Pre-fix, "installed" derived from "has at least one instance"; the fix introduces an explicit install state per connector that's persisted independently. **Uninstall** got its own button with loading state + toast feedback. **Create Instance** form now seeds `configValues` from `defaultValue` so the Create button is enabled out of the gate (was disabled until every field was touched, even if all defaults were valid).
 
 ---
@@ -18816,7 +18816,7 @@ A few audit findings from the broader backend↔UI sync survey were intentionall
 
 ## Known issues
 
-- **Vertex/Gemini placeholder credentials** on the canonical phantom-vm cause `error:1E08010C:DECODER routines::unsupported` on every job run that dispatches a chat. Environmental, not code — operator must set a real `GEMINI_API_KEY` or replace the placeholder `GOOGLE_APPLICATION_CREDENTIALS` JSON with a real GCP service-account key. Until then, `job-run-failed` notifications fire every job tick.
+- **Vertex/Gemini placeholder credentials** on the canonical guardian-vm cause `error:1E08010C:DECODER routines::unsupported` on every job run that dispatches a chat. Environmental, not code — operator must set a real `GEMINI_API_KEY` or replace the placeholder `GOOGLE_APPLICATION_CREDENTIALS` JSON with a real GCP service-account key. Until then, `job-run-failed` notifications fire every job tick.
 
 ---
 

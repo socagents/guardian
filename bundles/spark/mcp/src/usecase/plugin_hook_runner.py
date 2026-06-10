@@ -3,13 +3,13 @@
 v0.5.31 introduced entry-point discovery; v0.5.44 + v0.5.47 made
 discovery + lifecycle visible at /observability/plugins. v0.5.48
 finally closes the loop: plugin-contributed handlers in the
-`phantom.hooks` entry-point group become CALLABLE from the agent's
+`guardian.hooks` entry-point group become CALLABLE from the agent's
 hook-runner via an HTTP bridge.
 
 Handler contract for plugin authors:
 
     # pyproject.toml
-    [project.entry-points."phantom.hooks"]
+    [project.entry-points."guardian.hooks"]
     my-handler = "my_pkg.hooks:my_handler"
 
     # my_pkg/hooks.py
@@ -55,7 +55,7 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Any, Callable
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 @dataclass(frozen=True)
@@ -83,21 +83,21 @@ _EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="plugin-hook")
 
 
 def _discover_handlers() -> dict[str, PluginHookHandler]:
-    """Walk phantom.hooks entry-points and return name → handler.
+    """Walk guardian.hooks entry-points and return name → handler.
     Imports each handler's module (resolving the entry-point) and
     caches the result.
 
     Plugin authors register via:
-        [project.entry-points."phantom.hooks"]
+        [project.entry-points."guardian.hooks"]
         my-handler = "my_pkg.hooks:my_handler"
     """
     out: dict[str, PluginHookHandler] = {}
     try:
-        eps = metadata.entry_points(group="phantom.hooks")
+        eps = metadata.entry_points(group="guardian.hooks")
     except TypeError:
-        # Older importlib.metadata API. Phantom ships 3.12 so this
+        # Older importlib.metadata API. Guardian ships 3.12 so this
         # path is defensive only.
-        eps = metadata.entry_points().get("phantom.hooks", [])  # type: ignore[attr-defined]
+        eps = metadata.entry_points().get("guardian.hooks", [])  # type: ignore[attr-defined]
 
     for ep in eps:
         dist = getattr(ep, "dist", None)

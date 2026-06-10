@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom Persistent Stores & Audit Trail.
+ * Guardian Persistent Stores & Audit Trail.
  *
  * Hourglass composition: 8 SQLite stores at the top all converge on a
  * hero `audit_log` row in the middle, which fans out to 6 derivative

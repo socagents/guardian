@@ -2,7 +2,7 @@
 
 The MCP's primary auth is the bundle-internal `MCP_TOKEN` (see api/auth.py)
 which the agent UI uses on every internal call. That works for the
-phantom-agent ↔ embedded MCP path but is wrong for external callers:
+guardian-agent ↔ embedded MCP path but is wrong for external callers:
 
   * external SOC tools polling the audit log for SIEM ingestion
   * cross-host integrations (external tooling on another machine
@@ -18,9 +18,9 @@ when not pinned in `.env`).
 
 Plaintext API keys returned to callers look like:
 
-    phantom_ak_<id>_<secret>
+    guardian_ak_<id>_<secret>
 
-  * `phantom_ak_` prefix — distinguishes from MCP_TOKEN at the
+  * `guardian_ak_` prefix — distinguishes from MCP_TOKEN at the
     auth layer; lets operators grep their secret managers.
   * `<id>` — 8 hex chars, the api_keys.id row primary key. Allows
     O(1) lookup without scanning all rows.
@@ -56,7 +56,7 @@ the same set as our manifest's audit.events plus a few coarse roles:
 
 # Verify path
 
-Callers present `Authorization: Bearer phantom_ak_<id>_<secret>`. We
+Callers present `Authorization: Bearer guardian_ak_<id>_<secret>`. We
 parse out `<id>`, fetch the row, sha256 the presented `<secret>`, and
 constant-time compare against `hash`. Match → update last_used_at,
 return the row's scopes. Miss/revoked → 401.
@@ -77,11 +77,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 
-API_KEY_PREFIX = "phantom_ak_"
+API_KEY_PREFIX = "guardian_ak_"
 ID_LEN = 8         # hex chars
 SECRET_LEN = 32    # hex chars
 

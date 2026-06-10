@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Guardian A2UI Events",
+  "type": "object",
+  "required": ["event", "payload"],
+  "properties": {
+    "event": {
+      "type": "string",
+      "enum": [
+        "guardian.setup.save",
+        "guardian.chat.send",
+        "guardian.navigation.select",
+        "guardian.workflow.run",
+        "guardian.skill.open",
+        "guardian.bundle.refresh",
+        "guardian.bundle.export",
+        "guardian.report.export",
+        "guardian.coverage.selectTechnique"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

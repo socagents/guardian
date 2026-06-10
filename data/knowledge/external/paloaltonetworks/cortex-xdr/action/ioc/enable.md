@@ -27,4 +27,4 @@ Re-enable previously disabled IoCs. Mirror of `xdr_ioc_disable` — same argumen
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_ioc_enable`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_ioc_enable`

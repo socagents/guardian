@@ -4,7 +4,7 @@
  * DebugPanel — right-side collapsible telemetry view for the chat.
  *
  * Renders the tool-call timeline + raw SSE event stream + run/session
- * metadata for the active chat. Styled with phantom's Ocean Navy +
+ * metadata for the active chat. Styled with guardian's Ocean Navy +
  * glassmorphism aesthetic to match /jobs and /providers.
  *
  * Layout: ~360px wide column, sibling to the message list. The parent

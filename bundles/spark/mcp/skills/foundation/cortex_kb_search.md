@@ -303,6 +303,6 @@ Use `product` to scope searches to a specific product. The connector translates 
 
 ## Cross-references
 
-- **Source skill**: ported from operator's personal workassistant `cortex-assistant/cortex-docs-search/SKILL.md` (Mar 2026 authoring; v0.5.69 port to Phantom).
-- **Related Phantom skills**: `cortex_xql_query_authoring` (pairs this skill with the operator's internal XQL example KB for query authoring); `cortex_kb_search_patterns` (lazy-loaded query shaping + fallback strategies); `cortex_kb_api_reference` (lazy-loaded raw Fluid Topics API spec for advanced filter authoring).
+- **Source skill**: ported from operator's personal workassistant `cortex-assistant/cortex-docs-search/SKILL.md` (Mar 2026 authoring; v0.5.69 port to Guardian).
+- **Related Guardian skills**: `cortex_xql_query_authoring` (pairs this skill with the operator's internal XQL example KB for query authoring); `cortex_kb_search_patterns` (lazy-loaded query shaping + fallback strategies); `cortex_kb_api_reference` (lazy-loaded raw Fluid Topics API spec for advanced filter authoring).
 - **Connector**: `cortex-docs` — wraps the Fluid Topics public API. See `bundles/spark/connectors/cortex-docs/`.

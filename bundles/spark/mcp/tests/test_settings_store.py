@@ -52,7 +52,7 @@ def test_set_rejects_non_overridable_keys(store: SqliteSettingsStore) -> None:
     # Attempting to set a key that ISN'T in the manifest's overridable
     # list must raise — the bundle author marked it as build-time only.
     with pytest.raises(PermissionError):
-        store.set("setupUiUser", "phantom-admin")
+        store.set("setupUiUser", "guardian-admin")
 
 
 def test_set_rejects_keys_completely_unknown_to_manifest(store: SqliteSettingsStore) -> None:

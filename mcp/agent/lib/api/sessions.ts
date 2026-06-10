@@ -81,9 +81,9 @@ export function listChatSessions(
  * because the export endpoint returns raw text (YAML/Markdown), not a JSON
  * envelope. The standard apiRequest would fail trying to JSON.parse the body.
  *
- * Path goes through `/api/agent/sessions/:id/export` — the phantom-agent
+ * Path goes through `/api/agent/sessions/:id/export` — the guardian-agent
  * proxy, *not* the Spark `/api/proxy/v1/...` shape this used to use.
- * (Phantom doesn't run an api-gateway hop; everything is proxied directly
+ * (Guardian doesn't run an api-gateway hop; everything is proxied directly
  * by the Next.js route handlers.)
  *
  * v0.2.3 — added `events` format. Returns a JSON array of wire-event-
@@ -185,7 +185,7 @@ export interface SessionEvent {
 /**
  * Fetch the full message transcript for a session.
  *
- * The phantom MCP doesn't expose a `/transcript` endpoint (Spark did);
+ * The guardian MCP doesn't expose a `/transcript` endpoint (Spark did);
  * we hit `/api/v1/sessions/:id/messages` instead and map the MCP's
  * Message shape (`{id, session_id, ts, role, content, tool_call_id, meta}`)
  * into the simpler `{role, content, timestamp}` the chat hook expects.

@@ -4,7 +4,7 @@ Spawns the server exactly as `.mcp.json` would, completes the MCP handshake,
 lists tools, and actually calls all three — proving the server does real
 AST-based structured search end to end, not just that the file imports.
 
-Phantom-specific: the call-time assertions reference real symbols that live
+Guardian-specific: the call-time assertions reference real symbols that live
 in `bundles/spark/mcp/src/api/marketplace.py` so any regression in the
 codebase-search index gets caught.
 
@@ -82,7 +82,7 @@ def main() -> int:
                 "params": {
                     "protocolVersion": "2025-06-18",
                     "capabilities": {},
-                    "clientInfo": {"name": "phantom-validate", "version": "1.0"},
+                    "clientInfo": {"name": "guardian-validate", "version": "1.0"},
                 },
             }
         )

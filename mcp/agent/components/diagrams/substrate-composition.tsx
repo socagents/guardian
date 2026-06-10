@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom Substrate Composition.
+ * Guardian Substrate Composition.
  *
  * Foundation substrates (bottom row) are reused by composite features
  * (top row) rather than duplicated. The visual argument: features are

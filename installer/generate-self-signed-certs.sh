@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Generates a self-signed TLS certificate + private key suitable for
-# Phantom's self-signed mode. The cert covers every hostname + IP an
+# Guardian's self-signed mode. The cert covers every hostname + IP an
 # operator might use to reach the stack:
 #
 #   * localhost, 127.0.0.1            (local browser access)
 #   * the host machine's hostname     (from `hostname`)
 #   * the host machine's primary IP   (from `hostname -I`)
-#   * phantom-agent, phantom-updater  (compose-internal DNS names)
+#   * guardian-agent, guardian-updater  (compose-internal DNS names)
 #
 # Output formats (controlled by --format):
 #   files       — writes cert.pem + key.pem to --out-dir (default: ./certs/)
@@ -16,12 +16,12 @@
 #   both        — writes files AND prints envvar to stdout
 #
 # Default format is `both`. Validity is 365 days. The cert is generated
-# fresh each run; do NOT call this on an installed Phantom unless you
+# fresh each run; do NOT call this on an installed Guardian unless you
 # intend to rotate certs (active TLS connections will be invalidated).
 #
 # Usage:
 #   ./installer/generate-self-signed-certs.sh
-#   ./installer/generate-self-signed-certs.sh --out-dir /opt/phantom/certs
+#   ./installer/generate-self-signed-certs.sh --out-dir /opt/guardian/certs
 #   ./installer/generate-self-signed-certs.sh --format envvar > /tmp/ssl.env
 #   eval "$(./installer/generate-self-signed-certs.sh --format envvar)"
 
@@ -31,7 +31,7 @@ OUT_DIR="./certs"
 FORMAT="both"
 DAYS=365
 KEY_BITS=4096
-CN="phantom"
+CN="guardian"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -76,7 +76,7 @@ command -v openssl >/dev/null 2>&1 \
 HOSTNAME_VAL="$(hostname 2>/dev/null || echo "")"
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")"
 
-SANS="DNS:localhost,DNS:phantom-agent,DNS:phantom-updater,IP:127.0.0.1"
+SANS="DNS:localhost,DNS:guardian-agent,DNS:guardian-updater,IP:127.0.0.1"
 [[ -n "$HOSTNAME_VAL" ]] && SANS="$SANS,DNS:$HOSTNAME_VAL"
 [[ -n "$HOST_IP" ]]      && SANS="$SANS,IP:$HOST_IP"
 
@@ -97,7 +97,7 @@ openssl req -x509 \
   -days "$DAYS" \
   -keyout "$KEY_FILE" \
   -out "$CERT_FILE" \
-  -subj "/CN=$CN/O=Phantom/OU=Self-signed" \
+  -subj "/CN=$CN/O=Guardian/OU=Self-signed" \
   -addext "subjectAltName=$SANS" \
   -addext "basicConstraints=CA:FALSE" \
   -addext "keyUsage=digitalSignature,keyEncipherment" \
@@ -119,13 +119,13 @@ esac
 case "$FORMAT" in
   envvar|both)
     # Convert multi-line PEM into a single line with literal \n
-    # escapes — the form that `${PHANTOM_VAR:-}` in compose interpolates
+    # escapes — the form that `${GUARDIAN_VAR:-}` in compose interpolates
     # cleanly AND the form the MCP's normalize_pem() function expects.
     cert_escaped=$(awk 'BEGIN{ORS="\\n"} {print}' "$CERT_FILE" | sed 's/\\n$//')
     key_escaped=$(awk  'BEGIN{ORS="\\n"} {print}' "$KEY_FILE"  | sed 's/\\n$//')
     if [[ "$FORMAT" == "both" ]]; then
       echo "" >&2
-      echo "→ Add these to /opt/phantom/.env (or eval them):" >&2
+      echo "→ Add these to /opt/guardian/.env (or eval them):" >&2
       echo "" >&2
     fi
     printf 'SSL_CERT_PEM="%s"\n' "$cert_escaped"

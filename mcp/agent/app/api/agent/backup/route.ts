@@ -36,7 +36,7 @@
  * secrets. The backup zip is operator-sensitive — the manifest
  * carries an explicit warning so downstream tooling can also flag
  * it. On restore the destination's SecretStore re-encrypts under
- * the destination's PHANTOM_SECRET_KEK, so the zip is portable
+ * the destination's GUARDIAN_SECRET_KEK, so the zip is portable
  * across deployments with different KEKs.
  *
  * Embedding handling: memory entries' raw embedding BLOBs are
@@ -49,7 +49,7 @@ import { NextResponse } from "next/server";
 
 import JSZip from "jszip";
 
-import { PhantomMCPClient } from "@/lib/mcp-client";
+import { GuardianMCPClient } from "@/lib/mcp-client";
 import {
   deriveMcpBaseUrl,
   getEffectiveRuntimeConfig,
@@ -79,7 +79,7 @@ async function _resolveMcp(): Promise<McpResolved | NextResponse> {
   const streamUrl =
     (cfg.MCP_URL || "").trim() ||
     process.env.MCP_URL?.trim() ||
-    "http://phantom-mcp:8080/api/v1/stream/mcp";
+    "http://guardian-mcp:8080/api/v1/stream/mcp";
   const base = deriveMcpBaseUrl(streamUrl);
   if (!base) {
     return NextResponse.json({ error: "bad MCP URL" }, { status: 500 });
@@ -162,7 +162,7 @@ export async function GET() {
   // cleartext secrets — the session-cookie gate that runs before this
   // handler ever fires is the canonical defense. Pre-v0.9.1 this route
   // tried to enforce auth via a local cookie check that referenced the
-  // pre-v0.4.0 cookie name (`phantom_auth`) and always returned 401,
+  // pre-v0.4.0 cookie name (`guardian_auth`) and always returned 401,
   // making Backup completely broken for every operator on v0.4.0+. The
   // middleware fix in v0.9.1 closes both bugs.
 
@@ -173,7 +173,7 @@ export async function GET() {
   // TypeScript "could be NextResponse" union check on every reference.
   const mcp: McpResolved = resolved;
   const auth = { Authorization: `Bearer ${mcp.token}` };
-  const mcpClient = new PhantomMCPClient(mcp.streamUrl, mcp.token);
+  const mcpClient = new GuardianMCPClient(mcp.streamUrl, mcp.token);
 
   /** Fetch a /api/v1/* JSON resource with bearer auth. */
   async function mcpJson<T = unknown>(path: string): Promise<T> {
@@ -421,9 +421,9 @@ export async function GET() {
     // ── Manifest (last so section_counts is fully populated) ─────────
     const manifest = {
       schema_version: SCHEMA_VERSION,
-      phantom_version:
-        process.env.PHANTOM_VERSION ||
-        process.env.NEXT_PUBLIC_PHANTOM_VERSION ||
+      guardian_version:
+        process.env.GUARDIAN_VERSION ||
+        process.env.NEXT_PUBLIC_GUARDIAN_VERSION ||
         "unknown",
       created_at: new Date().toISOString(),
       sections: [
@@ -474,7 +474,7 @@ export async function GET() {
       .toISOString()
       .slice(0, 19)
       .replace(/[:.]/g, "-");
-    const filename = `phantom-backup-${stamp}.zip`;
+    const filename = `guardian-backup-${stamp}.zip`;
 
     return new NextResponse(bytes, {
       status: 200,
@@ -482,7 +482,7 @@ export async function GET() {
         "Content-Type": "application/zip",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
-        "X-Phantom-Backup-Schema": String(SCHEMA_VERSION),
+        "X-Guardian-Backup-Schema": String(SCHEMA_VERSION),
       },
     });
   } catch (err) {

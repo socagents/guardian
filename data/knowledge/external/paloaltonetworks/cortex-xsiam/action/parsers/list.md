@@ -2,7 +2,7 @@
 
 **HTTP**: `POST /public_api/v1/parser/get_parsers/`
 **MCP tool**: `xsiam_parsers_list`
-**Phantom connector**: `xsiam`
+**Guardian connector**: `xsiam`
 
 ## Purpose
 

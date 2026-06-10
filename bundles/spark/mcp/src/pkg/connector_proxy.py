@@ -7,7 +7,7 @@ loader (`connector_loader.py`) registers a proxy callable for each
 tool instead of importing the connector module in-process. The proxy
 forwards each tool call over MCP-over-HTTP to the connector
 container's own MCP server (which runs FastMCP on port 9000 by
-default — see phantom-connector-runtime/runtime/entrypoint.py).
+default — see guardian-connector-runtime/runtime/entrypoint.py).
 
 # Per-call connection model (Phase 1 simplification)
 
@@ -31,7 +31,7 @@ API surface stays unchanged; only this module's internals.
 
   - **Container unreachable** (DNS resolution fails, TCP refused):
     raises ConnectorProxyError with the resolved URL + the
-    underlying exception type. phantom-updater will detect dead
+    underlying exception type. guardian-updater will detect dead
     containers via Docker healthcheck + restart per its
     `restart: unless-stopped` policy. The agent's chat handler
     surfaces the error to the operator.
@@ -58,7 +58,7 @@ from typing import Any
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
-logger = logging.getLogger("Phantom MCP.connector-proxy")
+logger = logging.getLogger("Guardian MCP.connector-proxy")
 
 
 class ConnectorProxyError(RuntimeError):
@@ -90,7 +90,7 @@ def _flatten_content(content_list: list[Any]) -> Any:
     callable. Fallback: pass the block through as-is (covers
     ImageContent, EmbeddedResource, plus future MCP content types).
 
-    Multi-block results — rare for phantom's tools but allowed by
+    Multi-block results — rare for guardian's tools but allowed by
     the MCP spec — are flattened to a list of {type, text|data}
     dicts. This is a lossy projection; tools that genuinely need
     multi-block responses (e.g. stream of partial JSON) should
@@ -131,12 +131,12 @@ async def proxy_call_tool(
 
     Args:
         container_url: scheme+host+port of the connector container,
-            e.g. "http://phantom-connector-web-acme:9000". The /mcp
+            e.g. "http://guardian-connector-web-acme:9000". The /mcp
             path is appended internally.
         tool_name: bare tool name as registered by the connector
             container's FastMCP server. Per the runtime contract,
-            this is the name WITHOUT any `phantom_<id>_` /
-            `<id>_` / `phantom_` prefix (the runtime entrypoint
+            this is the name WITHOUT any `guardian_<id>_` /
+            `<id>_` / `guardian_` prefix (the runtime entrypoint
             strips those at registration time).
         args: keyword arguments to pass to the tool. Empty dict is
             valid; None is treated as empty.
@@ -219,7 +219,7 @@ async def health_check(container_url: str) -> bool:
     Returns True iff the endpoint responds 200 within ~5 seconds.
     Exists as a separate path from MCP because /health is cheaper
     (no MCP initialize + tools/list), suitable for high-frequency
-    polling by phantom-updater's status endpoint or the agent UI's
+    polling by guardian-updater's status endpoint or the agent UI's
     /connectors instance-status indicator.
     """
     import httpx

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Combined phantom-agent image — ships the Next.js UI AND the bundle's
+# Combined guardian-agent image — ships the Next.js UI AND the bundle's
 # embedded MCP server in a single container. This matches the spark-
 # agents v1.2 bundle design where `embeddedMcp` is part of the agent's
 # trust boundary, not a sibling docker-compose service.
@@ -114,7 +114,7 @@ RUN chmod +x /app/entrypoint.sh
 COPY mcp/agent/tls-proxy.js /app/tls-proxy.js
 
 # v0.4.0 — reset-admin CLI invoked from the host via
-# `docker exec -it phantom_agent node /app/cli/reset-admin.mjs`.
+# `docker exec -it guardian_agent node /app/cli/reset-admin.mjs`.
 # The host-side wrapper at scripts/reset_admin.sh shells out to this
 # Node ESM module. Pure ESM; no transpilation; uses the Node baked
 # into the agent image already.
@@ -134,7 +134,7 @@ RUN chmod +x /app/cli/reset-admin.mjs
 # DELIBERATELY NOT set here: the Settings class's stdio default is
 # what bare-runtime tests assert against, and the docker-compose
 # layer is the right place to set streamable-http for the running
-# stack (see docker-compose.yml's phantom-agent.environment with
+# stack (see docker-compose.yml's guardian-agent.environment with
 # `MCP_TRANSPORT=${MCP_TRANSPORT:-streamable-http}`).
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -146,7 +146,7 @@ ENV DATA_ROOT=/app/data
 # code) AND /app/bundle (so the bundle's connector source resolves
 # as `connectors.<id>.src.connector` per connector.yaml's
 # source.entrypoint format). Mirrors what bundles/spark/mcp/Dockerfile
-# used to set when phantom-mcp was its own container.
+# used to set when guardian-mcp was its own container.
 ENV PYTHONPATH=/app/mcp/src:/app/bundle
 ENV PYTHONUNBUFFERED=1
 

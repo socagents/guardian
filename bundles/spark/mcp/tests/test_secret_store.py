@@ -72,7 +72,7 @@ def test_no_kek_no_escape_hatch_raises(tmp_path, monkeypatch) -> None:
     construct in that scenario; operator either generates a KEK or
     explicitly acknowledges the risk via the escape hatch."""
     monkeypatch.delenv(KEK_ENV_VAR, raising=False)
-    monkeypatch.delenv("PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT", raising=False)
+    monkeypatch.delenv("GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT", raising=False)
     with pytest.raises(SecretStoreError, match="is required but not set"):
         SecretStore(data_root=tmp_path)
 
@@ -83,10 +83,10 @@ def test_plaintext_round_trip_with_escape_hatch(tmp_path, monkeypatch) -> None:
     cases where the operator has knowingly accepted the risk (e.g.
     isolated test environments). The startup warning still fires."""
     monkeypatch.delenv(KEK_ENV_VAR, raising=False)
-    monkeypatch.setenv("PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT", "1")
+    monkeypatch.setenv("GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT", "1")
     s = SecretStore(data_root=tmp_path)
-    s.write("/agents/phantom/connectors/abc/api_key", "sk_live_xyz")
-    assert s.read("/agents/phantom/connectors/abc/api_key") == "sk_live_xyz"
+    s.write("/agents/guardian/connectors/abc/api_key", "sk_live_xyz")
+    assert s.read("/agents/guardian/connectors/abc/api_key") == "sk_live_xyz"
 
 
 def test_plaintext_file_is_actually_plaintext_on_disk(tmp_path, monkeypatch) -> None:
@@ -96,11 +96,11 @@ def test_plaintext_file_is_actually_plaintext_on_disk(tmp_path, monkeypatch) -> 
     earlier release stays readable after v0.3.7 if the operator sets
     the escape-hatch env var."""
     monkeypatch.delenv(KEK_ENV_VAR, raising=False)
-    monkeypatch.setenv("PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT", "1")
+    monkeypatch.setenv("GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT", "1")
     s = SecretStore(data_root=tmp_path)
-    s.write("/agents/phantom/connectors/abc/api_key", "sk_live_xyz")
+    s.write("/agents/guardian/connectors/abc/api_key", "sk_live_xyz")
     on_disk = (
-        tmp_path / "secrets" / "agents" / "phantom"
+        tmp_path / "secrets" / "agents" / "guardian"
         / "connectors" / "abc" / "api_key"
     ).read_bytes()
     assert on_disk == b"sk_live_xyz"
@@ -119,8 +119,8 @@ def kek_set(monkeypatch):
 
 def test_encrypted_round_trip(tmp_path, kek_set) -> None:
     s = SecretStore(data_root=tmp_path)
-    s.write("/agents/phantom/connectors/abc/api_key", "sk_live_xyz")
-    assert s.read("/agents/phantom/connectors/abc/api_key") == "sk_live_xyz"
+    s.write("/agents/guardian/connectors/abc/api_key", "sk_live_xyz")
+    assert s.read("/agents/guardian/connectors/abc/api_key") == "sk_live_xyz"
 
 
 def test_encrypted_file_is_NOT_plaintext_on_disk(tmp_path, kek_set) -> None:
@@ -128,9 +128,9 @@ def test_encrypted_file_is_NOT_plaintext_on_disk(tmp_path, kek_set) -> None:
     anywhere — that's the whole point of the encryption layer."""
     s = SecretStore(data_root=tmp_path)
     secret_value = "very-secret-token-91823"
-    s.write("/agents/phantom/connectors/abc/api_key", secret_value)
+    s.write("/agents/guardian/connectors/abc/api_key", secret_value)
     on_disk = (
-        tmp_path / "secrets" / "agents" / "phantom"
+        tmp_path / "secrets" / "agents" / "guardian"
         / "connectors" / "abc" / "api_key"
     ).read_bytes()
     assert secret_value.encode("utf-8") not in on_disk
@@ -215,19 +215,19 @@ def test_tampered_ciphertext_fails_decrypt(tmp_path, kek_set) -> None:
 
 def test_legacy_plaintext_file_migrates_on_first_read(tmp_path, kek_set) -> None:
     """Operator upgrades a deploy that has plaintext secrets:
-       1. They set PHANTOM_SECRET_KEK + restart.
+       1. They set GUARDIAN_SECRET_KEK + restart.
        2. The next read of each secret detects the legacy file,
           re-writes it as encrypted, and returns the same value.
        3. Subsequent reads see the encrypted form."""
     # Simulate a legacy file by writing plaintext directly.
-    secrets_dir = tmp_path / "secrets" / "agents" / "phantom"
+    secrets_dir = tmp_path / "secrets" / "agents" / "guardian"
     secrets_dir.mkdir(parents=True, exist_ok=True)
     legacy_file = secrets_dir / "legacy_token"
     legacy_file.write_text("legacy-plaintext-value", encoding="utf-8")
 
     s = SecretStore(data_root=tmp_path)
     # First read: detects plaintext + migrates.
-    assert s.read("/agents/phantom/legacy_token") == "legacy-plaintext-value"
+    assert s.read("/agents/guardian/legacy_token") == "legacy-plaintext-value"
 
     # On-disk file is now base64'd ciphertext, no longer plaintext.
     on_disk = legacy_file.read_bytes()
@@ -235,7 +235,7 @@ def test_legacy_plaintext_file_migrates_on_first_read(tmp_path, kek_set) -> None
     assert base64.b64decode(on_disk).startswith(ENVELOPE_HEADER)
 
     # Second read still returns the original value.
-    assert s.read("/agents/phantom/legacy_token") == "legacy-plaintext-value"
+    assert s.read("/agents/guardian/legacy_token") == "legacy-plaintext-value"
 
 
 def test_encrypted_file_with_kek_unset_refuses_to_decrypt(
@@ -253,7 +253,7 @@ def test_encrypted_file_with_kek_unset_refuses_to_decrypt(
     s1.write("/p", "value")
 
     monkeypatch.delenv(KEK_ENV_VAR, raising=False)
-    monkeypatch.setenv("PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT", "1")
+    monkeypatch.setenv("GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT", "1")
     s2 = SecretStore(data_root=tmp_path)
     with pytest.raises(SecretStoreError, match="encrypted but"):
         s2.read("/p")

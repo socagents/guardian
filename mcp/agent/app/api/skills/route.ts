@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { PhantomMCPClient } from "@/lib/mcp-client";
+import { GuardianMCPClient } from "@/lib/mcp-client";
 import { proxyToMcp } from "@/lib/mcp-proxy";
 import { getEffectiveRuntimeConfig } from "@/lib/runtime-config";
 
@@ -22,7 +22,7 @@ const parseToolResult = <T,>(result: { content: Array<{ text: string }> }): T =>
 export async function GET(request: NextRequest) {
   try {
     const runtimeConfig = await getEffectiveRuntimeConfig();
-    const mcpClient = new PhantomMCPClient(runtimeConfig.MCP_URL, runtimeConfig.MCP_TOKEN);
+    const mcpClient = new GuardianMCPClient(runtimeConfig.MCP_URL, runtimeConfig.MCP_TOKEN);
     const { searchParams } = new URL(request.url);
     const filePath = searchParams.get("file_path");
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     const runtimeConfig = await getEffectiveRuntimeConfig();
-    const mcpClient = new PhantomMCPClient(runtimeConfig.MCP_URL, runtimeConfig.MCP_TOKEN);
+    const mcpClient = new GuardianMCPClient(runtimeConfig.MCP_URL, runtimeConfig.MCP_TOKEN);
     const result = await mcpClient.callTool("skills_create", {
       category,
       filename,
@@ -85,7 +85,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const runtimeConfig = await getEffectiveRuntimeConfig();
-    const mcpClient = new PhantomMCPClient(runtimeConfig.MCP_URL, runtimeConfig.MCP_TOKEN);
+    const mcpClient = new GuardianMCPClient(runtimeConfig.MCP_URL, runtimeConfig.MCP_TOKEN);
     const result = await mcpClient.callTool("skills_update", {
       file_path,
       content,

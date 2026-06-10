@@ -96,7 +96,7 @@ export function ImportJobButton() {
 
         // Schema-version sanity check. Bumping the version in the
         // future means we either translate v1 → vN at this layer
-        // or refuse with a "produced by an older Phantom; please
+        // or refuse with a "produced by an older Guardian; please
         // re-export" message. Today there's only v1.
         if (
           envelope.schema_version !== undefined &&

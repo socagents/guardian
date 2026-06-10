@@ -2,9 +2,9 @@
  * Hook framework — Round-15 / Phase H.
  *
  * Lifecycle policy hooks for the chat handler. Adapted from SnowAgent's
- * `coreTypes.ts:HOOK_EVENTS` (`/Users/ayman/Documents/Coding/phantom/
+ * `coreTypes.ts:HOOK_EVENTS` (`/Users/ayman/Documents/Coding/guardian/
  * snow-agent-complete/snow-agent/10-hooks/coreTypes.ts`), filtered to
- * the events Phantom's chat-route actually fires today.
+ * the events Guardian's chat-route actually fires today.
  *
  * Why hooks (vs. modifying tools):
  *
@@ -173,13 +173,13 @@ export type HookTransport =
     }
   | {
       type: "plugin";
-      /** Name of a plugin-contributed handler in the `phantom.hooks`
+      /** Name of a plugin-contributed handler in the `guardian.hooks`
        *  entry-point group. Resolved + invoked server-side in MCP
        *  via `POST /api/v1/plugin-hooks/{name}/invoke` — see v0.5.48
        *  and `usecase/plugin_hook_runner.py`. Plugin authors register
        *  these via their `pyproject.toml`:
        *
-       *    [project.entry-points."phantom.hooks"]
+       *    [project.entry-points."guardian.hooks"]
        *    my-handler = "my_pkg.hooks:my_handler"
        *
        *  Discovery: GET /api/v1/plugin-hooks lists currently
@@ -219,7 +219,7 @@ export type HookFailurePolicy =
 export interface HookMatcher {
   /** Comma-separated glob patterns over tool names. PreToolUse +
    *  PostToolUse only. Examples: `xsiam_*`, `xdr_*`,
-   *  `phantom_web_*`. */
+   *  `guardian_web_*`. */
   toolGlob?: string;
   /** Substring match on the trigger header (e.g. "job:scheduled-hunt"
    *  matches "job:*"). For policy that only applies to scheduled

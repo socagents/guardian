@@ -1,1 +1,1 @@
-"""Service layer for Phantom MCP Server."""
+"""Service layer for Guardian MCP Server."""

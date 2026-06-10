@@ -43,15 +43,15 @@ EXPECTED_SUBDIR_CLAUDE_MDS = {
 PLUGIN_SYNC_PAIRS = [
     (
         ROOT / ".claude/hooks/propose_claude_md.py",
-        ROOT / "tooling/phantom-ai-layer/hooks/propose_claude_md.py",
+        ROOT / "tooling/guardian-ai-layer/hooks/propose_claude_md.py",
     ),
     (
         ROOT / ".claude/hooks/reflect_claude_md.py",
-        ROOT / "tooling/phantom-ai-layer/hooks/reflect_claude_md.py",
+        ROOT / "tooling/guardian-ai-layer/hooks/reflect_claude_md.py",
     ),
     (
         ROOT / "tooling/mcp/codebase_search.py",
-        ROOT / "tooling/phantom-ai-layer/mcp/codebase_search.py",
+        ROOT / "tooling/guardian-ai-layer/mcp/codebase_search.py",
     ),
 ]
 
@@ -70,14 +70,14 @@ SILENT_DROP_GUARDS = [
 
 EXPECTED_PLUGIN_FILES = [
     "tooling/.claude-plugin/marketplace.json",
-    "tooling/phantom-ai-layer/.claude-plugin/plugin.json",
-    "tooling/phantom-ai-layer/README.md",
-    "tooling/phantom-ai-layer/agents/explorer.md",
-    "tooling/phantom-ai-layer/hooks/hooks.json",
-    "tooling/phantom-ai-layer/hooks/propose_claude_md.py",
-    "tooling/phantom-ai-layer/hooks/reflect_claude_md.py",
-    "tooling/phantom-ai-layer/mcp/codebase_search.py",
-    "tooling/phantom-ai-layer/skills/scoped-tests/SKILL.md",
+    "tooling/guardian-ai-layer/.claude-plugin/plugin.json",
+    "tooling/guardian-ai-layer/README.md",
+    "tooling/guardian-ai-layer/agents/explorer.md",
+    "tooling/guardian-ai-layer/hooks/hooks.json",
+    "tooling/guardian-ai-layer/hooks/propose_claude_md.py",
+    "tooling/guardian-ai-layer/hooks/reflect_claude_md.py",
+    "tooling/guardian-ai-layer/mcp/codebase_search.py",
+    "tooling/guardian-ai-layer/skills/scoped-tests/SKILL.md",
 ]
 
 
@@ -339,19 +339,19 @@ def check_settings_json() -> Check:
 
 
 def check_subagent_readonly() -> Check:
-    """phantom-explorer subagent has NO Write/Edit/Bash tools."""
-    agent = ROOT / ".claude/agents/phantom-explorer.md"
+    """guardian-explorer subagent has NO Write/Edit/Bash tools."""
+    agent = ROOT / ".claude/agents/guardian-explorer.md"
     if not agent.is_file():
-        return Check("phantom-explorer subagent", False, "missing")
+        return Check("guardian-explorer subagent", False, "missing")
     text = agent.read_text(encoding="utf-8")
     fm_match = re.match(r"---\n(.*?)\n---", text, re.DOTALL)
     if not fm_match:
-        return Check("phantom-explorer subagent", False, "missing frontmatter")
+        return Check("guardian-explorer subagent", False, "missing frontmatter")
     frontmatter = fm_match.group(1)
     tools_line_match = re.search(r"^tools:\s*(.+)$", frontmatter, re.MULTILINE)
     if not tools_line_match:
         return Check(
-            "phantom-explorer subagent",
+            "guardian-explorer subagent",
             False,
             "frontmatter missing 'tools:' key",
         )
@@ -359,7 +359,7 @@ def check_subagent_readonly() -> Check:
     forbidden = {"Write", "Edit", "Bash", "MultiEdit"} & tools
     if forbidden:
         return Check(
-            "phantom-explorer subagent",
+            "guardian-explorer subagent",
             False,
             f"FORBIDDEN write tools granted: {sorted(forbidden)} — "
             "the article's split-exploration pattern requires read-only",
@@ -367,12 +367,12 @@ def check_subagent_readonly() -> Check:
     expected = {"Read", "Grep", "Glob"}
     if tools != expected:
         return Check(
-            "phantom-explorer subagent",
+            "guardian-explorer subagent",
             False,
             f"unexpected tool set {sorted(tools)} (expected {sorted(expected)})",
         )
     return Check(
-        "phantom-explorer subagent",
+        "guardian-explorer subagent",
         True,
         "read-only (Read, Grep, Glob); no Write/Edit/Bash",
     )
@@ -409,7 +409,7 @@ def check_skills_have_paths() -> Check:
     skills_dir = ROOT / ".claude/skills"
     if not skills_dir.is_dir():
         return Check(".claude/skills/", False, "directory missing")
-    expected_phantom_skills = {
+    expected_guardian_skills = {
         "connector-add",
         "mcp-tool-add",
         "release-tag-flow",
@@ -417,7 +417,7 @@ def check_skills_have_paths() -> Check:
         "agent-page-add",
     }
     failures = []
-    for skill_name in expected_phantom_skills:
+    for skill_name in expected_guardian_skills:
         skill_md = skills_dir / skill_name / "SKILL.md"
         if not skill_md.is_file():
             failures.append(f"{skill_name}: missing SKILL.md")
@@ -434,7 +434,7 @@ def check_skills_have_paths() -> Check:
     return Check(
         ".claude/skills/ paths-scoping",
         True,
-        f"{len(expected_phantom_skills)} skills, all have `paths:` frontmatter",
+        f"{len(expected_guardian_skills)} skills, all have `paths:` frontmatter",
     )
 
 
@@ -512,11 +512,11 @@ def check_plugin_marketplace() -> Check:
     if not plugins:
         return Check("plugin marketplace.json", False, "no plugins declared")
     names = {p.get("name") for p in plugins}
-    if "phantom-ai-layer" not in names:
+    if "guardian-ai-layer" not in names:
         return Check(
             "plugin marketplace.json",
             False,
-            f"phantom-ai-layer not registered (found {names})",
+            f"guardian-ai-layer not registered (found {names})",
         )
     return Check(
         "plugin marketplace.json",
@@ -616,7 +616,7 @@ def _references_dropped_request(node: ast.AST) -> bool:
     NOT bound anywhere in its tree. This catches the incomplete-flatten class:
     when a tool's signature is flattened off the pre-v0.17.92 `request: Model`
     envelope but the body still references `request` (the v0.17.114
-    phantom_kill_worker bug: `payload.get("worker", request.worker_id)` after the
+    guardian_kill_worker bug: `payload.get("worker", request.worker_id)` after the
     signature lost `request` → `NameError` on every call).
 
     Nested-function params count as bound (a Playwright `_route_handler(route,
@@ -656,7 +656,7 @@ def check_connector_tool_args_flat() -> Check:
     connector.yaml args. No tool may take a single `request: Model` parameter,
     and every connector.yaml arg name must appear as a function parameter. This
     keeps the central MCP's tool-calling uniform — the v0.17.77
-    phantom_create_data_worker shape — so the agent never has to guess whether
+    guardian_create_data_worker shape — so the agent never has to guess whether
     a tool wants flat args or a {request:{...}} wrapper.
 
     v0.17.115 — also fails if a tool's body references a `request` the flattened
@@ -712,7 +712,7 @@ def check_connector_tool_args_flat() -> Check:
                 continue
             yargs = {a.get("name") for a in (tool.get("args") or []) if a.get("name")}
             # Connector tool funcs are named <prefix>_<tool> (the dispatched
-            # name, e.g. phantom_/xsiam_/cortex_) or bare <tool>. Prefer the
+            # name, e.g. guardian_/xsiam_/cortex_) or bare <tool>. Prefer the
             # PREFIXED function over a bare-named internal helper that happens
             # to share the tool name (else the helper shadows the real tool).
             cand = next(
@@ -799,7 +799,7 @@ def check_factory_default_clean_slate() -> Check:
 
 
 def _print_results(checks: list[Check]) -> bool:
-    print(f"\nphantom AI Layer validation — {len(checks)} checks\n")
+    print(f"\nguardian AI Layer validation — {len(checks)} checks\n")
     passed = sum(1 for c in checks if c.ok)
     width = max(len(c.name) for c in checks)
     for check in checks:

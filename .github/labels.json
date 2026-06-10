@@ -9,7 +9,7 @@
   { "name": "status:in-progress",         "color": "FBCA04", "description": "Implementation underway; commits reference this issue" },
   { "name": "status:dev-built",           "color": "1D76DB", "description": "Dev image published to GHCR; dev-latest prerelease updated" },
   { "name": "status:ready-for-testing",   "color": "0E8A16", "description": "Agent's headless smoke (API + UI) passed; operator's hands-on smoke pending. ISSUE STAYS OPEN — see CLAUDE.md ready-for-testing discipline" },
-  { "name": "status:testing-complete",    "color": "0E8A16", "description": "Operator finished manual smoke test on phantom-vm" },
+  { "name": "status:testing-complete",    "color": "0E8A16", "description": "Operator finished manual smoke test on guardian-vm" },
   { "name": "status:release-approved",    "color": "F4B400", "description": "Operator approved customer release (chat or label)" },
   { "name": "status:released",            "color": "5319E7", "description": "Released to customers; issue closed" },
 
@@ -18,9 +18,9 @@
     "_comment2": "Multiple allowed per issue.",
     "_comment3": "Mirrors the per-service path-filter contract in docs/CICD.md."
   },
-  { "name": "component:agent",       "color": "1F6FEB", "description": "phantom-agent (mcp/agent/** or bundles/spark/**)" },
-  { "name": "component:connectors",  "color": "1F6FEB", "description": "per-instance connectors (bundles/spark/connectors/** or phantom-connector-runtime/**)" },
-  { "name": "component:installer",   "color": "1F6FEB", "description": "phantom-installer template / build script (installer/**)" },
+  { "name": "component:agent",       "color": "1F6FEB", "description": "guardian-agent (mcp/agent/** or bundles/spark/**)" },
+  { "name": "component:connectors",  "color": "1F6FEB", "description": "per-instance connectors (bundles/spark/connectors/** or guardian-connector-runtime/**)" },
+  { "name": "component:installer",   "color": "1F6FEB", "description": "guardian-installer template / build script (installer/**)" },
   { "name": "component:workflows",   "color": "1F6FEB", "description": "GitHub Actions workflows + composite actions (.github/workflows/, .github/actions/)" },
   { "name": "component:docs",        "color": "1F6FEB", "description": "docs/, CLAUDE.md, CHANGELOG.md, release-notes.ts" },
   { "name": "component:help-pages",  "color": "1F6FEB", "description": "in-product help (mcp/agent/app/help/**)" },
@@ -49,9 +49,9 @@
   { "name": "area:backup-restore",  "color": "14B8A6", "description": "/settings/backup-restore · export / import flows" },
   { "name": "area:rest-api",        "color": "14B8A6", "description": "/api/agent/* REST surface (auth · schemas · contracts)" },
   { "name": "area:profile",         "color": "14B8A6", "description": "/profile page · password change flow" },
-  { "name": "area:factory-reset",   "color": "14B8A6", "description": "phantom-factory-reset script + flow" },
-  { "name": "area:password-reset",  "color": "14B8A6", "description": "phantom-reset-admin-password script + in-container CLI" },
-  { "name": "area:auth",            "color": "14B8A6", "description": "login · session · phantom_auth cookie · SecretStore password hash" },
+  { "name": "area:factory-reset",   "color": "14B8A6", "description": "guardian-factory-reset script + flow" },
+  { "name": "area:password-reset",  "color": "14B8A6", "description": "guardian-reset-admin-password script + in-container CLI" },
+  { "name": "area:auth",            "color": "14B8A6", "description": "login · session · guardian_auth cookie · SecretStore password hash" },
 
   {
     "_comment": "SCENARIO LABELS — classify per docs/CICD.md § Change scenarios.",

@@ -2,21 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { PhantomLogo } from "@/components/sidebar";
+import { GuardianLogo } from "@/components/sidebar";
 
 /**
- * Phantom personality page — ported from spark/services/ui's
+ * Guardian personality page — ported from spark/services/ui's
  * /command/agent. Adaptations:
  *   - Spark's auto-save was cosmetic-only (a setTimeout that flipped
- *     the indicator without persisting). This wires it to phantom's
+ *     the indicator without persisting). This wires it to guardian's
  *     real /api/agent/settings PUT, debounced 600ms after the last
  *     change so a slider drag doesn't flood the MCP. Initial load on
  *     mount via the matching GET.
- *   - MODEL_OPTIONS narrowed to phantom's Vertex Gemini catalog
+ *   - MODEL_OPTIONS narrowed to guardian's Vertex Gemini catalog
  *     (Anthropic + OpenAI are WIP — see /providers).
  *
  * The settings keys we read/write are namespaced under `personality.*`
- * in the phantom MCP's settings_store so they don't collide with other
+ * in the guardian MCP's settings_store so they don't collide with other
  * runtime tunables.
  */
 
@@ -78,7 +78,7 @@ interface AgentConfig {
   /** Round-13 / Phase 6 — enable Vertex cachedContents for the
    *  stable system prompt (~25% billing on cached portions).
    *  Off by default until per-model gating is reliable (the
-   *  88e0ae5 fix made this opt-in via PHANTOM_VERTEX_CACHE=1; this
+   *  88e0ae5 fix made this opt-in via GUARDIAN_VERTEX_CACHE=1; this
    *  setting is the operator-friendly equivalent). */
   vertexCacheEnabled: boolean;
   /** Round-13 / Phase 5 — minimum messages-dropped count below
@@ -135,9 +135,9 @@ const DEFAULT_CONFIG: AgentConfig = {
   autoCompactMinDropped: 5,
   memoryMmrLambda: 0.7,
   memoryTemporalDecayLambda: 0.01,
-  personalityMd: `# Phantom Personality
+  personalityMd: `# Guardian Personality
 
-You are Phantom, an AI incident-response agent for Cortex XSIAM and
+You are Guardian, an AI incident-response agent for Cortex XSIAM and
 Cortex XDR. You triage cases and issues, hunt with XQL, and ground
 your answers in the operator's tenant data and the official Cortex
 documentation.
@@ -162,7 +162,7 @@ documentation.
 `,
 };
 
-// Phantom's chat path is Vertex Gemini only today (Anthropic + OpenAI
+// Guardian's chat path is Vertex Gemini only today (Anthropic + OpenAI
 // are WIP — see /providers). This list mirrors /api/agent/models.
 const MODEL_OPTIONS = [
   { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (preview)" },
@@ -288,7 +288,7 @@ export default function PersonalityPage() {
               </h1>
             </div>
             <p className="text-sm text-on-surface-variant ml-9">
-              Fine-tune how Phantom thinks, responds, and operates.
+              Fine-tune how Guardian thinks, responds, and operates.
             </p>
           </div>
           <div className="flex items-center gap-3">

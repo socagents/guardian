@@ -10,7 +10,7 @@
  *
  * The page is a CRUD form over `/api/agent/hooks` (which proxies
  * to the MCP's `/api/v1/hooks`). Hooks are stored MCP-side so
- * everyone hitting the same Phantom deploy sees the same policy.
+ * everyone hitting the same Guardian deploy sees the same policy.
  *
  * Common patterns the form helps with:
  *
@@ -1128,7 +1128,7 @@ function BuiltinConfigField({
 /**
  * Plugin-handler transport config UI (v0.5.48).
  *
- * Plugin handlers come from the entry-point system (phantom.hooks
+ * Plugin handlers come from the entry-point system (guardian.hooks
  * group). Schema is plugin-defined — we can't introspect a Python
  * entry-point's config shape from TS, so we ship a generic JSON
  * editor + a dropdown of discovered handlers. The plugin author
@@ -1231,7 +1231,7 @@ function PluginHandlerConfigSection({
         ) : handlers.length === 0 ? (
           <div className="rounded border border-outline/20 bg-surface-container-low/40 p-2 text-xs text-on-surface-variant/70">
             No plugin handlers discovered. Install a package targeting the{" "}
-            <code className="font-mono">phantom.hooks</code> entry-point group
+            <code className="font-mono">guardian.hooks</code> entry-point group
             at{" "}
             <a
               href="/observability/plugins"

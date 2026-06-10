@@ -3,7 +3,7 @@
 > **Audience**: maintainers of `kite-production/spark-agents/docs/spec.md`.
 > This file is a draft upstream-PR for `spec.md` v1.3 clarifying the
 > storage convention for runtime jobs. It also serves as authoritative
-> documentation for phantom's implementation while the upstream PR
+> documentation for guardian's implementation while the upstream PR
 > is in flight.
 
 ## Context
@@ -75,7 +75,7 @@ mirrored on every CRUD operation**, in addition to the SQLite row.
 ### YAML schema (definition fields only)
 
 ```yaml
-# Phantom runtime job definition (source='runtime').
+# Guardian runtime job definition (source='runtime').
 # Edit + restart agent-runtime to apply. SQLite holds runtime state
 # (last_fired_at, next_due_at) which is computed from this file at boot.
 name: nightly-coverage-rollup
@@ -164,7 +164,7 @@ medium that suits its access pattern.
 ## Reference implementation
 
 See `bundles/spark/mcp/src/usecase/job_scheduler.py` in the
-`kite-production/phantom` repo:
+`kite-production/guardian` repo:
 
 - `_write_job_yaml(row)` — atomic YAML write with the banner
 - `_remove_job_yaml(name)` — delete the on-disk file

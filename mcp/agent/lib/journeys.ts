@@ -1,17 +1,17 @@
 /**
- * Phantom user journeys — operator-facing walkthroughs.
+ * Guardian user journeys — operator-facing walkthroughs.
  *
  * Modeled after spark_ui/lib/testing/journeys.ts (1,800 LoC of typed
  * journey definitions rendered as an in-app help/testing surface). Two
  * differences from the spark pattern, deliberately:
  *
- *   1. Phantom is a chat-first agent. spark_ui's journeys are
- *      page-by-page click paths; phantom's primary surface is the chat
+ *   1. Guardian is a chat-first agent. spark_ui's journeys are
+ *      page-by-page click paths; guardian's primary surface is the chat
  *      itself, so each journey carries a `prompts` array (the literal
  *      text to paste into the chat) AND an `apis` array (for scripted
  *      / curl-driven equivalents).
  *
- *   2. Phantom journeys carry `toolsExercised` — the MCP tool names the
+ *   2. Guardian journeys carry `toolsExercised` — the MCP tool names the
  *      agent SHOULD invoke when the prompt is correct. This is the
  *      assertion shape: an operator can run the prompt, watch the audit
  *      log via `/observability/events`, and verify the same tool names
@@ -132,7 +132,7 @@ export interface Journey {
   /**
    * IDs of journeys the operator should run BEFORE this one for the
    * walkthrough to make sense. Rendered as a "Prerequisites" section
-   * on the detail page. Purely guidance — Phantom does NOT block
+   * on the detail page. Purely guidance — Guardian does NOT block
    * execution if the prerequisite hasn't been completed; the field
    * exists so an operator landing on a journey cold sees what setup
    * they're likely missing. Directional (prerequisites are upstream),
@@ -227,7 +227,7 @@ export const CATEGORY_META: Record<
     label: "Data Sources",
     icon: "dataset",
     description:
-      "Install vendor log-schema packs from the marketplace; preview field inventories; upload custom data_source.yaml; manage the installed cohort that Phantom uses for vendor-faithful log simulation.",
+      "Install vendor log-schema packs from the marketplace; preview field inventories; upload custom data_source.yaml; manage the installed cohort that Guardian uses for vendor-faithful log simulation.",
   },
 };
 
@@ -474,12 +474,12 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open a fresh chat at the Phantom UI.",
+      "Open a fresh chat at the Guardian UI.",
       "Paste the prompt and submit.",
-      "Read the response — should enumerate Phantom log/sim tools, XSIAM, CALDERA, Memory, Skills.",
+      "Read the response — should enumerate Guardian log/sim tools, XSIAM, CALDERA, Memory, Skills.",
     ],
     expectedResult:
-      "Multi-paragraph response with grouped tool list (Phantom / XSIAM / CALDERA / Memory & Knowledge). The agent should mention `memory_store`, `memory_search`, `phantom_update_technology_stack` — proving the latest system prompt is loaded.",
+      "Multi-paragraph response with grouped tool list (Guardian / XSIAM / CALDERA / Memory & Knowledge). The agent should mention `memory_store`, `memory_search`, `guardian_update_technology_stack` — proving the latest system prompt is loaded.",
     verifyVia: [
       "GET /api/agent/audit?action=tool_call&limit=5 — should show NO new tool_call rows for this turn.",
       "Session sidebar should show this conversation auto-titled with the prompt's first 60 chars.",
@@ -509,12 +509,12 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/chat",
         description:
-          "Call with `Authorization: Bearer phantom_ak_…` instead of the session cookie — runs a real turn.",
+          "Call with `Authorization: Bearer guardian_ak_…` instead of the session cookie — runs a real turn.",
       },
     ],
     howToTest: [
       "Go to /api-keys, click Create Key, choose scope agent:write (or agent:*), copy the key.",
-      "curl -sk -H \"Authorization: Bearer phantom_ak_…\" https://<host>/api/chat -d '{\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' — expect a 200 SSE stream.",
+      "curl -sk -H \"Authorization: Bearer guardian_ak_…\" https://<host>/api/chat -d '{\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' — expect a 200 SSE stream.",
       "curl the same key against /api/agent/providers/config — expect 403 (credential routes are session-only).",
       "Revoke the key in /api-keys; the next call returns 401 within ~30s.",
     ],
@@ -539,11 +539,11 @@ export const JOURNEYS: Journey[] = [
     prompts: [
       {
         text: "Our SOC stack uses Fortinet FortiGate for firewalls and CrowdStrike Falcon for EDR. Send all simulated logs to udp:10.10.0.8:514 by default.",
-        note: "Agent should call phantom_update_technology_stack AND memory_store at least 3 times (firewall, EDR, default sink).",
+        note: "Agent should call guardian_update_technology_stack AND memory_store at least 3 times (firewall, EDR, default sink).",
       },
     ],
     toolsExercised: [
-      "phantom_update_technology_stack",
+      "guardian_update_technology_stack",
       "memory_store",
     ],
     apis: [
@@ -596,7 +596,7 @@ export const JOURNEYS: Journey[] = [
         newSession: true,
       },
     ],
-    toolsExercised: ["memory_search", "phantom_get_technology_stack"],
+    toolsExercised: ["memory_search", "guardian_get_technology_stack"],
     apis: [
       {
         method: "POST",
@@ -609,11 +609,11 @@ export const JOURNEYS: Journey[] = [
       "Ensure 'configure-tech-stack' has been run earlier (creates the EDR memory).",
       "Click 'New Chat' in the sidebar to get a fresh session_id.",
       "Paste the prompt and submit.",
-      "Watch the agent's first tool call — must be memory_search BEFORE any phantom_get_technology_stack call.",
+      "Watch the agent's first tool call — must be memory_search BEFORE any guardian_get_technology_stack call.",
       "Read the response — should cite CrowdStrike Falcon (and likely the destination udp:10.10.0.8:514) without you ever mentioning them in this session.",
     ],
     expectedResult:
-      "memory_search returns the stored EDR memory with cosine ≥0.4 (paraphrase score). Agent then verifies via phantom_get_technology_stack and cites CrowdStrike by name. NEW session_id ≠ the original write session — proving cross-session retrieval.",
+      "memory_search returns the stored EDR memory with cosine ≥0.4 (paraphrase score). Agent then verifies via guardian_get_technology_stack and cites CrowdStrike by name. NEW session_id ≠ the original write session — proving cross-session retrieval.",
     verifyVia: [
       "Audit feed at /observability/events — sequence: tool:memory.search → tool:xlog.get_technology_stack within ~2s.",
       "Session sidebar should show TWO sessions: the original write session + this fresh recall session.",
@@ -643,10 +643,10 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     toolsExercised: [
-      "phantom_get_technology_stack",
-      "phantom_get_field_info",
-      "phantom_generate_observables",
-      "phantom_create_data_worker",
+      "guardian_get_technology_stack",
+      "guardian_get_field_info",
+      "guardian_generate_observables",
+      "guardian_create_data_worker",
       "memory_store",
       "memory_search",
     ],
@@ -695,11 +695,11 @@ export const JOURNEYS: Journey[] = [
     toolsExercised: [
       "memory_search",
       "load_simulation_skills",
-      "phantom_get_technology_stack",
-      "phantom_get_field_info",
-      "phantom_generate_observables",
+      "guardian_get_technology_stack",
+      "guardian_get_field_info",
+      "guardian_generate_observables",
       "log_destinations_list",
-      "phantom_create_data_worker",
+      "guardian_create_data_worker",
       "memory_store",
     ],
     apis: [
@@ -707,7 +707,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/workers",
         description:
-          "(Internally, MCP creates the worker via xlog GraphQL). The agent's tool call is `phantom_create_data_worker`.",
+          "(Internally, MCP creates the worker via xlog GraphQL). The agent's tool call is `guardian_create_data_worker`.",
       },
     ],
     howToTest: [
@@ -748,9 +748,9 @@ export const JOURNEYS: Journey[] = [
     ],
     toolsExercised: [
       "log_destinations_list",
-      "phantom_get_field_info",
-      "phantom_generate_observables",
-      "phantom_create_data_worker",
+      "guardian_get_field_info",
+      "guardian_generate_observables",
+      "guardian_create_data_worker",
     ],
     apis: [
       {
@@ -769,9 +769,9 @@ export const JOURNEYS: Journey[] = [
     expectedResult:
       "Worker streams to the chosen configured destination. The agent never invents a hardcoded address — it passes a logdest:<id> reference and the platform resolves it (injecting credentials for an XSIAM HTTP destination, which the agent never sees).",
     verifyVia: [
-      "Audit feed: log_destinations_list precedes phantom_create_data_worker; the worker's destination metadata is the configured target.",
+      "Audit feed: log_destinations_list precedes guardian_create_data_worker; the worker's destination metadata is the configured target.",
       "tcpdump on the syslog receiver shows the logs flowing.",
-      "For an xsiam_http destination: query `dataset = phantom_logs_raw | sort desc _time | limit 20` — records arrive without you ever pasting the webhook key into chat.",
+      "For an xsiam_http destination: query `dataset = guardian_logs_raw | sort desc _time | limit 20` — records arrive without you ever pasting the webhook key into chat.",
     ],
     related: ["generate-firewall-logs", "run-port-scan-scenario"],
     prerequisites: [],
@@ -794,10 +794,10 @@ export const JOURNEYS: Journey[] = [
     ],
     toolsExercised: [
       "load_simulation_skills",
-      "phantom_get_technology_stack",
-      "phantom_get_field_info",
-      "phantom_generate_observables",
-      "phantom_create_scenario_worker",
+      "guardian_get_technology_stack",
+      "guardian_get_field_info",
+      "guardian_generate_observables",
+      "guardian_create_scenario_worker",
       "memory_store",
     ],
     apis: [
@@ -816,7 +816,7 @@ export const JOURNEYS: Journey[] = [
     expectedResult:
       "Scenario worker runs through the port_scan skill's defined steps. Logs simulate attackers from many IPs hitting one target across multiple ports, with mostly DENY/DROP outcomes.",
     verifyVia: [
-      "Audit feed: load_simulation_skills + phantom_create_scenario_worker, status=success.",
+      "Audit feed: load_simulation_skills + guardian_create_scenario_worker, status=success.",
       "/memory: new sim:port_scan:10.10.20.5:<date> entry summarizing the run.",
       "If your SIEM is wired up: query for `destinationIp=10.10.20.5 AND action=deny` in the relevant time window.",
     ],
@@ -833,7 +833,7 @@ export const JOURNEYS: Journey[] = [
     category: "data-sources",
     title: "Install a vendor data source from the marketplace",
     summary:
-      "Browse the Data Sources marketplace, preview a vendor's wire-format schema (field names, types, examples), then install it so Phantom can simulate vendor-faithful logs and the agent can reason about that vendor's events.",
+      "Browse the Data Sources marketplace, preview a vendor's wire-format schema (field names, types, examples), then install it so Guardian can simulate vendor-faithful logs and the agent can reason about that vendor's events.",
     difficulty: "starter",
     durationMin: 2,
     icon: "dataset",
@@ -1042,18 +1042,18 @@ export const JOURNEYS: Journey[] = [
     prompts: [
       {
         text: "Simulate 50 FortiGate traffic logs",
-        note: "Agent should match the simulate_vendor_logs skill, call data_sources_list(filter='fortigate') first to confirm the install, then data_sources_get_schema, then phantom_generate_fake_data_v2. The response should cite vendor field names (srcip, dstport, sentbyte) — not generic placeholders.",
+        note: "Agent should match the simulate_vendor_logs skill, call data_sources_list(filter='fortigate') first to confirm the install, then data_sources_get_schema, then guardian_generate_fake_data_v2. The response should cite vendor field names (srcip, dstport, sentbyte) — not generic placeholders.",
       },
       {
         text: "Send 100 Okta sign-in events to udp:10.10.0.8:514",
-        note: "Agent should match simulate_vendor_logs + the destination clause, call data_sources_get_schema for Okta, then phantom_create_data_worker with the schema_override + UDP destination. Each emitted record carries Okta's eventType, actor.alternateId, client.userAgent.* keys.",
+        note: "Agent should match simulate_vendor_logs + the destination clause, call data_sources_get_schema for Okta, then guardian_create_data_worker with the schema_override + UDP destination. Each emitted record carries Okta's eventType, actor.alternateId, client.userAgent.* keys.",
       },
     ],
     toolsExercised: [
       "data_sources_list",
       "data_sources_get_schema",
-      "phantom_generate_fake_data_v2",
-      "phantom_create_data_worker",
+      "guardian_generate_fake_data_v2",
+      "guardian_create_data_worker",
     ],
     apis: [
       {
@@ -1066,20 +1066,20 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/data-sources/{vendor}/{product}/schema",
         description:
-          "Returns the full field inventory. The agent uses this to build the schema_override payload for phantom_generate_fake_data_v2 (or phantom_create_data_worker for UDP-bound flows).",
+          "Returns the full field inventory. The agent uses this to build the schema_override payload for guardian_generate_fake_data_v2 (or guardian_create_data_worker for UDP-bound flows).",
       },
     ],
     howToTest: [
       "Prerequisite: FortiGate (or any vendor) is already installed — complete the `install-data-source` journey first.",
       "Open chat → paste 'Simulate 50 FortiGate traffic logs'.",
-      "Watch tool calls — should be data_sources_list → data_sources_get_schema → phantom_generate_fake_data_v2.",
+      "Watch tool calls — should be data_sources_list → data_sources_get_schema → guardian_generate_fake_data_v2.",
       "Read the response — sample records should have srcip / dstip / srcport / dstport / proto / action / user / sentbyte / rcvdbyte as top-level keys with plausible IPv4 / port / action-enum / byte-count values.",
-      "For the UDP destination variant, the agent calls phantom_create_data_worker with destination=udp://... — watch /observability/workers for the spawn + records sent.",
+      "For the UDP destination variant, the agent calls guardian_create_data_worker with destination=udp://... — watch /observability/workers for the spawn + records sent.",
     ],
     expectedResult:
-      "phantom_generate_fake_data_v2 returns schemaApplied: true, vendorFieldCount > 0 (matches the vendor's non-meta field count), fallbackReason: null. The agent's response includes a sample record with vendor field names visible — copy-pasteable into any vendor-aware ingest pipeline.",
+      "guardian_generate_fake_data_v2 returns schemaApplied: true, vendorFieldCount > 0 (matches the vendor's non-meta field count), fallbackReason: null. The agent's response includes a sample record with vendor field names visible — copy-pasteable into any vendor-aware ingest pipeline.",
     verifyVia: [
-      "Audit feed (/observability/events) shows the 3-call sequence (data_sources_list → data_sources_get_schema → phantom_generate_fake_data_v2 OR phantom_create_data_worker).",
+      "Audit feed (/observability/events) shows the 3-call sequence (data_sources_list → data_sources_get_schema → guardian_generate_fake_data_v2 OR guardian_create_data_worker).",
       "Sample record top-level keys match the vendor's schema (NOT Rosetta's local_ip / remote_port generics).",
       "For UDP-destination variants: /observability/workers shows a Spark worker bound to the UDP target with records-sent counter incrementing.",
     ],
@@ -1098,14 +1098,14 @@ export const JOURNEYS: Journey[] = [
     prompts: [
       {
         text: "Simulate 20 AcmeCorp events to udp:10.10.0.8:514",
-        note: "After upload + install, the agent should match simulate_vendor_logs, call data_sources_list(filter='acmecorp'), data_sources_get_schema, then phantom_create_data_worker with schema_override and the UDP destination. Records emitted carry the 5 AcmeCorp fields the operator declared.",
+        note: "After upload + install, the agent should match simulate_vendor_logs, call data_sources_list(filter='acmecorp'), data_sources_get_schema, then guardian_create_data_worker with schema_override and the UDP destination. Records emitted carry the 5 AcmeCorp fields the operator declared.",
       },
     ],
     toolsExercised: [
       "data_sources_list",
       "data_sources_get_schema",
       "data_sources_install",
-      "phantom_create_data_worker",
+      "guardian_create_data_worker",
     ],
     apis: [
       {
@@ -1139,7 +1139,7 @@ export const JOURNEYS: Journey[] = [
       "Click Preview. Status block shows uploaded_vendor=AcmeCorp, an accept_token, and an empty similarity_matches array (new vendor, no matches).",
       "Click Commit upload. Green success banner top-right; catalog refreshes; the new AcmeCorp vendor card appears in Browse with a tertiary-colored 'User upload' badge alongside the category badges.",
       "Click the AcmeCorp card → tray expands → click the data-source row → drawer opens in Preview mode → Install. After install, the row flips to installed; the 5 fields (src_ip, dst_ip, username, event_action, timestamp_ms) show in the field list.",
-      "Open chat → 'Simulate 20 AcmeCorp events to udp:10.10.0.8:514'. Agent matches simulate_vendor_logs, calls phantom_create_data_worker with schema_override. The records sent to the UDP destination carry exactly the 5 AcmeCorp field names.",
+      "Open chat → 'Simulate 20 AcmeCorp events to udp:10.10.0.8:514'. Agent matches simulate_vendor_logs, calls guardian_create_data_worker with schema_override. The records sent to the UDP destination carry exactly the 5 AcmeCorp field names.",
       "TYPO TEST: edit the YAML's vendor field to 'Forinet' and re-preview. similarity_matches now lists 'Fortinet' (Levenshtein distance=2). The dialog offers Create new vs Group under Fortinet — pick Group under, commit, and the new source shows up under the Fortinet vendor card.",
     ],
     expectedResult:
@@ -1285,7 +1285,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/log-destinations",
         description:
-          "Operator-only (REST). Body: {name, type_id, config, secrets?, is_default?}. Returns 201 + row with secrets redacted. Secrets persisted to SecretStore at /agents/phantom/log_destinations/<id>/<slot>.",
+          "Operator-only (REST). Body: {name, type_id, config, secrets?, is_default?}. Returns 201 + row with secrets redacted. Secrets persisted to SecretStore at /agents/guardian/log_destinations/<id>/<slot>.",
       },
       {
         method: "POST",
@@ -1302,7 +1302,7 @@ export const JOURNEYS: Journey[] = [
       "Fill in host=127.0.0.1, port=5514, protocol=udp, leave framing=rfc5424 default.",
       "Click Save. The slide-over closes and 'corp-syslog' appears in the Syslog group.",
       "Start a UDP listener on 5514 in another terminal: `nc -ul 5514` (or use the e2e battery's threaded listener).",
-      "Click Test on the corp-syslog row. The probe handler sends an RFC5424-shaped 'phantom test message' to 127.0.0.1:5514. The button shows a green 'OK · Nms' badge for ~6s and the row's status dot turns green.",
+      "Click Test on the corp-syslog row. The probe handler sends an RFC5424-shaped 'guardian test message' to 127.0.0.1:5514. The button shows a green 'OK · Nms' badge for ~6s and the row's status dot turns green.",
       "Check the listener — it should have received the test message.",
     ],
     expectedResult:
@@ -1359,14 +1359,14 @@ export const JOURNEYS: Journey[] = [
       "In the CALDERA UI: navigate to Plugins → Sandcat → Download. Pick platform (Linux/Windows/macOS). The binary is built on demand against the running CALDERA's URL — no manual configuration needed.",
       "Copy the binary to a target box (a test VM, your laptop, or even a docker container).",
       "**CRITICAL — install as a persistent service, NOT a foreground process.** The PowerShell snippet served by CALDERA's UI uses `Start-Process -WindowStyle Hidden` which dies the moment the spawning logon session ends (RDP disconnect, reboot, idle logoff). Wrap it as a Windows scheduled task running as SYSTEM, or a Linux systemd unit. See the persistence patterns below.",
-      "Windows persistence: register two scheduled tasks as SYSTEM — one `AtStartup` to launch sandcat, one `RepetitionInterval=5min` watchdog to relaunch if `Get-Process phantomd` returns nothing. Tasks survive logoff, reboot, RDP drop. The bundled `/help/user#sandcat-persistence` section has the full PowerShell snippet (~30 lines, idempotent).",
+      "Windows persistence: register two scheduled tasks as SYSTEM — one `AtStartup` to launch sandcat, one `RepetitionInterval=5min` watchdog to relaunch if `Get-Process guardiand` returns nothing. Tasks survive logoff, reboot, RDP drop. The bundled `/help/user#sandcat-persistence` section has the full PowerShell snippet (~30 lines, idempotent).",
       "Linux persistence: drop a systemd unit at `/etc/systemd/system/sandcat.service` with `Restart=always` and `User=root`, then `systemctl enable --now sandcat`. The agent runs detached from any shell session.",
       "In another shell or chat session, paste the second prompt above. The agent should now report at least one connected agent — and importantly, `last_seen` should keep ticking (`(now - last_seen) < 60s` while you're not logged in).",
     ],
     expectedResult:
       "`caldera_get_all_agents` returns a non-empty list. Each entry has `paw` (agent ID), `host`, `platform`, `last_seen`. The CALDERA UI's Agents pane shows the same entries with green status pills. Critically: `last_seen` keeps refreshing every minute even after you disconnect from the host — that's the signal the agent is durable, not transient.",
     verifyVia: [
-      "Direct: `curl -H \"KEY: $CALDERA_API_KEY\" http://caldera:8888/api/v2/agents` from inside the phantom-agent container — should return your agents.",
+      "Direct: `curl -H \"KEY: $CALDERA_API_KEY\" http://caldera:8888/api/v2/agents` from inside the guardian-agent container — should return your agents.",
       "/observability/events filtered by target=tool:caldera.* — recent caldera_get_all_agents call should show a non-empty result.",
       "CALDERA UI's Operations pane: now lets you create a new operation (the dropdown was disabled before any agent existed).",
     ],
@@ -1472,13 +1472,13 @@ export const JOURNEYS: Journey[] = [
     icon: "fact_check",
     prompts: [
       {
-        text: "Run a coverage report so I can see recent simulation IDs, then call phantom_run_detection_validation against the most recent T1078 (Valid Accounts) simulation with expected={\"alert\":\"Valid Accounts\",\"technique_id\":\"T1078\"}",
-        note: "phantom_run_detection_validation requires a `simulation_id` (NOT a raw technique_id). Run a sim first if none exist; the agent will pull the id from the coverage report.",
+        text: "Run a coverage report so I can see recent simulation IDs, then call guardian_run_detection_validation against the most recent T1078 (Valid Accounts) simulation with expected={\"alert\":\"Valid Accounts\",\"technique_id\":\"T1078\"}",
+        note: "guardian_run_detection_validation requires a `simulation_id` (NOT a raw technique_id). Run a sim first if none exist; the agent will pull the id from the coverage report.",
       },
     ],
     toolsExercised: [
-      "phantom_generate_coverage_report",
-      "phantom_run_detection_validation",
+      "guardian_generate_coverage_report",
+      "guardian_run_detection_validation",
       "memory_store",
     ],
     apis: [
@@ -1519,7 +1519,7 @@ export const JOURNEYS: Journey[] = [
         text: "Generate a coverage report for the last 7 days of validation runs",
       },
     ],
-    toolsExercised: ["phantom_generate_coverage_report"],
+    toolsExercised: ["guardian_generate_coverage_report"],
     apis: [
       {
         method: "POST",
@@ -1568,7 +1568,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/jobs/{name}/run",
         description:
-          "Manually fire the prompt job out-of-band. The MCP scheduler POSTs to /api/chat with the message + an X-Phantom-Trigger: job:<name> header, harvests the SSE response, and records {session_id, run_id, response, tool_calls} in job_runs.result.",
+          "Manually fire the prompt job out-of-band. The MCP scheduler POSTs to /api/chat with the message + an X-Guardian-Trigger: job:<name> header, harvests the SSE response, and records {session_id, run_id, response, tool_calls} in job_runs.result.",
       },
       {
         method: "GET",
@@ -1591,7 +1591,7 @@ export const JOURNEYS: Journey[] = [
       "GET /api/agent/jobs/<name>/runs → recent runs with status=success and `result.session_id` populated.",
       "Open the chat sidebar — the session created by the scheduled fire is browseable like any other.",
       "GET /api/agent/audit?trigger=job:<name> → audit rows for every tool the scheduled chat invoked.",
-      "Restart phantom-agent (`docker compose restart phantom-agent`) — runtime job survives; cron resumes from next match.",
+      "Restart guardian-agent (`docker compose restart guardian-agent`) — runtime job survives; cron resumes from next match.",
     ],
     related: [
       "schedule-tool-call-job",
@@ -1631,14 +1631,14 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Visit /jobs/new.",
       "Identity: name='weekly-coverage-rollup'.",
-      "Action: type='tool_call', tool name='phantom_generate_coverage_report', arguments JSON='{\"include_simulations\": true, \"limit\": 100}'.",
+      "Action: type='tool_call', tool name='guardian_generate_coverage_report', arguments JSON='{\"include_simulations\": true, \"limit\": 100}'.",
       "Schedule: Weekly, Mondays at 09:00.",
       "Submit. Then click 'Run Now' on the job row to fire immediately.",
     ],
     expectedResult:
       "Job fires via the MCP tool registry directly (no Gemini / chat round-trip). result_json contains the tool's structured output (the same coverage report shape the agent gets when it calls the tool interactively).",
     verifyVia: [
-      "GET /api/agent/jobs/<name>/runs → run row's result_json should match the shape of phantom_generate_coverage_report's response (summary + attack_coverage[] + simulations[]).",
+      "GET /api/agent/jobs/<name>/runs → run row's result_json should match the shape of guardian_generate_coverage_report's response (summary + attack_coverage[] + simulations[]).",
       "Audit feed: action='tool_call' row with target='tool:xlog.generate_coverage_report' and trigger='job:<name>'.",
       "Compare to the chat-action equivalent (schedule-runtime-job): tool_call jobs run in ~50-200ms; chat jobs run in ~3-30s because they go through the model loop.",
     ],
@@ -1654,7 +1654,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Schedule recurring log generation (via tool_call)",
     summary:
-      "Schedule periodic synthetic log workers — e.g. 'every hour generate 50 firewall logs to keep the SIEM warm.' Log generation runs as a tool_call to phantom_create_data_worker.",
+      "Schedule periodic synthetic log workers — e.g. 'every hour generate 50 firewall logs to keep the SIEM warm.' Log generation runs as a tool_call to guardian_create_data_worker.",
     difficulty: "intermediate",
     durationMin: 4,
     icon: "data_object",
@@ -1665,20 +1665,20 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/jobs",
         description:
-          "Body: {name, cron, action: {type: 'tool_call', name: 'phantom_create_data_worker', args: {request: {vendor, product, type: format, count, destination}}}, enabled, run_once: false}. Only prompt + tool_call action types exist.",
+          "Body: {name, cron, action: {type: 'tool_call', name: 'guardian_create_data_worker', args: {request: {vendor, product, type: format, count, destination}}}, enabled, run_once: false}. Only prompt + tool_call action types exist.",
       },
     ],
     howToTest: [
       "Visit /jobs/new.",
       "Identity: name='hourly-firewall-keepalive'.",
-      "Action: pick 'Tool Call'. tool name='phantom_create_data_worker'. Arguments JSON='{\"request\":{\"vendor\":\"Fortinet\",\"product\":\"FortiGate\",\"type\":\"CEF\",\"count\":50,\"destination\":\"udp:10.10.0.8:514\"}}' (or omit destination to use the technology stack default).",
+      "Action: pick 'Tool Call'. tool name='guardian_create_data_worker'. Arguments JSON='{\"request\":{\"vendor\":\"Fortinet\",\"product\":\"FortiGate\",\"type\":\"CEF\",\"count\":50,\"destination\":\"udp:10.10.0.8:514\"}}' (or omit destination to use the technology stack default).",
       "Schedule: Hourly, every 1h, minute=:00.",
       "Submit. Click 'Run Now' on the row to test out-of-band.",
     ],
     expectedResult:
-      "Each fire creates a phantom_create_data_worker invocation directly via the MCP tool registry — no LLM round-trip. Fast, deterministic, cheap. result captures the worker_id and its status (Running / Connection Error / etc). The data worker streams logs to the configured destination for roughly count×interval seconds.",
+      "Each fire creates a guardian_create_data_worker invocation directly via the MCP tool registry — no LLM round-trip. Fast, deterministic, cheap. result captures the worker_id and its status (Running / Connection Error / etc). The data worker streams logs to the configured destination for roughly count×interval seconds.",
     verifyVia: [
-      "GET /api/agent/jobs/<name>/runs → run rows with action.name='phantom_create_data_worker' and result containing the worker descriptor.",
+      "GET /api/agent/jobs/<name>/runs → run rows with action.name='guardian_create_data_worker' and result containing the worker descriptor.",
       "Call xlog.list_workers (or click 'List active workers' in chat) → recent fire's worker appears.",
       "tcpdump on the syslog receiver: each fire produces a burst of `count` logs.",
       "All jobs use prompt or tool_call action types. Legacy `log` action shapes have been migrated to tool_call at boot.",
@@ -1805,19 +1805,19 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Create any runtime job via /jobs/new (e.g. a Run Now or Daily chat job).",
-      "SSH into the phantom-agent container: `docker exec phantom_agent ls /app/data/jobs/` — should list a `<name>.yaml` file matching what you just created.",
-      "Cat it: `docker exec phantom_agent cat /app/data/jobs/<name>.yaml`. The first 4 lines are a comment banner; the rest is plain YAML (name/cron/timezone/enabled/run_once/action).",
+      "SSH into the guardian-agent container: `docker exec guardian_agent ls /app/data/jobs/` — should list a `<name>.yaml` file matching what you just created.",
+      "Cat it: `docker exec guardian_agent cat /app/data/jobs/<name>.yaml`. The first 4 lines are a comment banner; the rest is plain YAML (name/cron/timezone/enabled/run_once/action).",
       "Edit a job via the UI's Pause/Resume/PATCH path — `cat` the YAML again to see the change reflected.",
       "Delete the job — `ls /app/data/jobs/` shows the file gone.",
-      "(Disaster recovery test) Wipe the SQLite DB: `docker exec phantom_agent rm /app/data/jobs.db && docker compose restart phantom-agent`. Boot reads /app/data/jobs/*.yaml and recreates every runtime job. Manifest jobs come back from manifest.yaml; runtime jobs come back from disk.",
+      "(Disaster recovery test) Wipe the SQLite DB: `docker exec guardian_agent rm /app/data/jobs.db && docker compose restart guardian-agent`. Boot reads /app/data/jobs/*.yaml and recreates every runtime job. Manifest jobs come back from manifest.yaml; runtime jobs come back from disk.",
     ],
     expectedResult:
       "<data_root>/jobs/ contains one .yaml per runtime job. Files are diff-friendly (definition only, no churning runtime state). git init + git add . + git commit lets you track changes over time. After a SQLite wipe, boot replay restores every YAML-defined job to the same enabled/cron/action state.",
     verifyVia: [
-      "`docker exec phantom_agent ls -la /app/data/jobs/` — file count matches the count of source='runtime' rows in jobs.db.",
-      "`docker exec phantom_agent cat /app/data/jobs/<name>.yaml` — definition shape: `name:`, `cron:`, `timezone:`, `enabled:`, `run_once:`, `action:`. NO `next_due_at` / `last_status` (those stay in SQLite).",
+      "`docker exec guardian_agent ls -la /app/data/jobs/` — file count matches the count of source='runtime' rows in jobs.db.",
+      "`docker exec guardian_agent cat /app/data/jobs/<name>.yaml` — definition shape: `name:`, `cron:`, `timezone:`, `enabled:`, `run_once:`, `action:`. NO `next_due_at` / `last_status` (those stay in SQLite).",
       "Manifest jobs (e.g. `daily-soc-coverage-summary`) have NO YAML file — their canonical def lives in `bundles/spark/manifest.yaml`. Verifies the source-aware mirroring logic.",
-      "Boot logs (`docker compose logs phantom-agent | grep YAML`) show `YAML mirror loaded N runtime job(s)` after each restart.",
+      "Boot logs (`docker compose logs guardian-agent | grep YAML`) show `YAML mirror loaded N runtime job(s)` after each restart.",
     ],
     related: [
       "schedule-runtime-job",
@@ -1990,13 +1990,13 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/setup",
         description:
-          "Persists the provider config + secrets via the SecretStore (encrypted via PHANTOM_SECRET_KEK).",
+          "Persists the provider config + secrets via the SecretStore (encrypted via GUARDIAN_SECRET_KEK).",
       },
     ],
     howToTest: [
       "Create a GCP service account with roles: Vertex AI User + Service Usage Consumer.",
       "Generate + download the JSON key.",
-      "Visit /providers in the Phantom UI.",
+      "Visit /providers in the Guardian UI.",
       "In the Google Vertex AI (Gemini) card: paste the JSON into 'Service Account JSON' (textarea is masked with bullets — paste auto-reveals), enter project_id, region (us-central1 for embeddings or 'global' for Gemini-3 chat).",
       "Click Save.",
     ],
@@ -2285,7 +2285,7 @@ export const JOURNEYS: Journey[] = [
       "Paste #7. The agent should pick a specific technique from the silent bucket, propose a matching scenario from the simulation skills catalog (port_scan / ransomware_attack / credential_theft_apt are the v1 candidates), and ask for confirmation before launching.",
     ],
     expectedResult:
-      "Phantom maintains an operational inventory that grows monotonically with each sync. Coverage gaps are surfaced automatically — the agent doesn't ask you to investigate where you're weak, it tells you. Snapshots create a versioned audit trail of coverage state, and drift between snapshots becomes the operator-facing signal for 'something changed in your detection posture'.",
+      "Guardian maintains an operational inventory that grows monotonically with each sync. Coverage gaps are surfaced automatically — the agent doesn't ask you to investigate where you're weak, it tells you. Snapshots create a versioned audit trail of coverage state, and drift between snapshots becomes the operator-facing signal for 'something changed in your detection posture'.",
     verifyVia: [
       "GET /api/agent/detections — confirm at least the rules from your fires are listed.",
       "GET /api/agent/detections/coverage/techniques — confirm T-codes are extracted from the issues' mitre_technique_id_and_name field (or its variants).",
@@ -3025,7 +3025,7 @@ export const JOURNEYS: Journey[] = [
     category: "chat",
     title: "Verify Vertex prompt-caching is active (cyan dot)",
     summary:
-      "When the runtime is configured for Vertex (GOOGLE_APPLICATION_CREDENTIALS + PHANTOM_VERTEX_CACHE=1) and the system prompt is large enough to qualify, subsequent turns reuse the cached prompt. The model-selector chip shows a cyan dot for ~25% billing on cached portions.",
+      "When the runtime is configured for Vertex (GOOGLE_APPLICATION_CREDENTIALS + GUARDIAN_VERTEX_CACHE=1) and the system prompt is large enough to qualify, subsequent turns reuse the cached prompt. The model-selector chip shows a cyan dot for ~25% billing on cached portions.",
     difficulty: "intermediate",
     durationMin: 3,
     icon: "bolt",
@@ -3050,7 +3050,7 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Verify the deploy uses Vertex (Settings → Services should show Vertex AI configured) and PHANTOM_VERTEX_CACHE=1 in the agent container env.",
+      "Verify the deploy uses Vertex (Settings → Services should show Vertex AI configured) and GUARDIAN_VERTEX_CACHE=1 in the agent container env.",
       "Open Settings → Personality → Tuning → 'Vertex prompt caching' should be ON (or set it to ON).",
       "Open a fresh chat session. Send turn 1 (any short prompt).",
       "Open the wire-events panel. The first turn does NOT fire cache_hit (cache is being created).",
@@ -3062,7 +3062,7 @@ export const JOURNEYS: Journey[] = [
       "Per-turn cache reuse signal in the UI. Helps the operator confirm caching is engaged (vs silently failing). The chat_cache_hit audit row's metadata.savings_tokens_est = cached × 0.75 lets the operator chart cumulative savings via /observability/events queries.",
     verifyVia: [
       "GET /api/agent/audit?action=chat_cache_hit → rows accumulate. Sum metadata.savings_tokens_est for cumulative ROI.",
-      "If you NEVER see cache_hit: check 1) PHANTOM_VERTEX_CACHE=1, 2) GOOGLE_APPLICATION_CREDENTIALS is valid, 3) the model supports cachedContents (some preview models reject the cachedContent reference even after accepting cachedContents.create — caching is gated behind the env flag for that reason).",
+      "If you NEVER see cache_hit: check 1) GUARDIAN_VERTEX_CACHE=1, 2) GOOGLE_APPLICATION_CREDENTIALS is valid, 3) the model supports cachedContents (some preview models reject the cachedContent reference even after accepting cachedContents.create — caching is gated behind the env flag for that reason).",
     ],
     related: ["observability-vertex-cache-savings", "settings-toggle-vertex-cache"],
     components: ["chat", "vertex-cache", "models"],
@@ -3288,7 +3288,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Toggle Vertex prompt caching on/off",
     summary:
-      "Vertex prompt caching is gated behind PHANTOM_VERTEX_CACHE=1 + a per-workspace toggle. The UI surfaces the toggle so operators don't have to redeploy to change the gate's state.",
+      "Vertex prompt caching is gated behind GUARDIAN_VERTEX_CACHE=1 + a per-workspace toggle. The UI surfaces the toggle so operators don't have to redeploy to change the gate's state.",
     difficulty: "starter",
     durationMin: 2,
     icon: "bolt",
@@ -3511,7 +3511,7 @@ export const JOURNEYS: Journey[] = [
       "Open /observability/events → filter action=tool_denied_by_policy. Confirm every denied dispatch appears with matched_list + matched_pattern metadata.",
       "Chat with the agent: 'restrict the test-job to only allow xlog tools'. Confirm the agent calls jobs_update with permission_policy.allowed_tools=['xlog_*'].",
       "Clear ALL THREE permission policy fields → save. Confirm the next dispatch is unrestricted (policy effectively cleared via the {} sentinel).",
-      "CLI verify schema: docker exec phantom_agent sqlite3 /app/data/jobs.db 'PRAGMA table_info(jobs)' → permission_policy_json TEXT column present.",
+      "CLI verify schema: docker exec guardian_agent sqlite3 /app/data/jobs.db 'PRAGMA table_info(jobs)' → permission_policy_json TEXT column present.",
       "Verify pre-migration jobs.db: copy an older jobs.db to /tmp, point the agent at it, restart. Confirm the column gets ALTER TABLE'd on boot (no manual migration needed).",
     ],
     expectedResult:
@@ -3570,7 +3570,7 @@ export const JOURNEYS: Journey[] = [
       "GET /api/agent/jobs/<name> → returns job with model_id + thinking_enabled fields populated",
       "GET /api/agent/audit?action=chat_dispatched → metadata.model_override reflects the per-job override when set",
       "/observability/cost → per-model breakdown shows Flash vs Pro spend split by job",
-      "docker exec phantom_agent sqlite3 /app/data/jobs.db 'PRAGMA table_info(jobs)' → columns include model_id (TEXT) + thinking_enabled (INTEGER)",
+      "docker exec guardian_agent sqlite3 /app/data/jobs.db 'PRAGMA table_info(jobs)' → columns include model_id (TEXT) + thinking_enabled (INTEGER)",
     ],
     related: ["ops-install-builtin-hook"],
     components: ["jobs", "models", "cost", "chat", "audit"],
@@ -3612,7 +3612,7 @@ export const JOURNEYS: Journey[] = [
       "Confirm the list row shows a 'built-in' badge in the transport column.",
       "In chat, ask the agent to start a CALDERA operation. Slack #soc-ops gets a message with Approve/Deny buttons.",
       "Click Approve — tool call proceeds. Click Deny on a follow-up — chat thread surfaces the analyst's reason.",
-      "Compare latency vs the legacy http-transport slack-approval: the builtin runs in-process so the round-trip cost is just the receiver call (no extra HTTP layer between Phantom and the receiver).",
+      "Compare latency vs the legacy http-transport slack-approval: the builtin runs in-process so the round-trip cost is just the receiver call (no extra HTTP layer between Guardian and the receiver).",
     ],
     expectedResult:
       "Operator installs the Slack approval flow with zero code edits, zero subprocess management. /settings/hooks dropdown lists every builtin shipped in the agent image; future releases add more (Issues #25, #27, #29, #31). The builtin transport coexists with command/http/agent — none replaced, each picked by what the policy needs.",
@@ -3684,12 +3684,12 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/hooks",
         description:
-          "Body for a command-transport hook: {name, event:'PreToolUse', matcher:{toolGlob:'caldera_*'}, transport:{type:'command', command:'/etc/phantom/policy/check-target.sh', env:{POLICY_DENY_LIST:'production'}}, failurePolicy:'block'}. The hook script reads JSON from stdin, returns JSON to stdout.",
+          "Body for a command-transport hook: {name, event:'PreToolUse', matcher:{toolGlob:'caldera_*'}, transport:{type:'command', command:'/etc/guardian/policy/check-target.sh', env:{POLICY_DENY_LIST:'production'}}, failurePolicy:'block'}. The hook script reads JSON from stdin, returns JSON to stdout.",
       },
     ],
     howToTest: [
       "Write a small shell script (or any executable). Read JSON from stdin. Inspect payload.args.adversary_id / payload.args.target_groups. If 'production' appears, output {\"decision\":\"deny\",\"reason\":\"Production targets require ops director approval\"}. Else output {} (no-op).",
-      "Make the script executable and place it on the phantom-agent container's filesystem (/etc/phantom/policy/check-target.sh — mount via docker compose volume, or bake into the bundle).",
+      "Make the script executable and place it on the guardian-agent container's filesystem (/etc/guardian/policy/check-target.sh — mount via docker compose volume, or bake into the bundle).",
       "Open /settings/hooks → Add hook with the configuration above.",
       "Save. failurePolicy='block' = if your script errors / times out, treat as deny. Strict.",
       "In chat: ask the agent to start a CALDERA operation against the playground. Tool call proceeds — no production marker.",
@@ -3697,7 +3697,7 @@ export const JOURNEYS: Journey[] = [
       "Audit row hook_dispatched logs the per-hook decision in metadata.",
     ],
     expectedResult:
-      "Customer-side policy lives outside the chat-route code. Operators can update the policy script without redeploying phantom. failurePolicy='block' ensures a buggy script DENIES rather than silently passing through.",
+      "Customer-side policy lives outside the chat-route code. Operators can update the policy script without redeploying guardian. failurePolicy='block' ensures a buggy script DENIES rather than silently passing through.",
     verifyVia: [
       "GET /api/agent/audit?action=hook_dispatched → metadata.decision='deny' + per_hook[].reason",
       "Tool result in chat shows 'Tool call blocked by a PreToolUse hook' with the policy script's reason",
@@ -3738,7 +3738,7 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Set up: deliberately rotate the XSIAM API key in the upstream tenant (or wait for it to expire) WITHOUT updating phantom's stored credential.",
+      "Set up: deliberately rotate the XSIAM API key in the upstream tenant (or wait for it to expire) WITHOUT updating guardian's stored credential.",
       "Send the prompt above. The xsiam.list_rules tool returns 401.",
       "Watch the chat: a connector_auth_required SSE event fires.",
       "Visit /observability/connectors. The xsiam connector shows state='needs-auth' with the last_error truncated.",
@@ -3838,7 +3838,7 @@ export const JOURNEYS: Journey[] = [
       "Edit a plugin-contributed memory in /memory → operator edit. Reload plugin again — your edit survives (the seeder skips existing keys).",
     ],
     expectedResult:
-      "Phantom is now a platform: vendor-specific scenarios + skills + memory seeds + agent definitions + (future) MCP connectors all flow through one declarative manifest. No code changes needed for new vendor support.",
+      "Guardian is now a platform: vendor-specific scenarios + skills + memory seeds + agent definitions + (future) MCP connectors all flow through one declarative manifest. No code changes needed for new vendor support.",
     verifyVia: [
       "GET /api/agent/plugins → vendor-x in the list with seeded_count showing how many seeds were ACTUALLY written (vs already existed)",
       "GET /api/agent/audit?action=plugins_reloaded → audit row with plugins_count + total_seeded",
@@ -3855,7 +3855,7 @@ export const JOURNEYS: Journey[] = [
     title:
       "Wire a plugin-contributed hook handler from /settings/hooks (entry-point bridge)",
     summary:
-      "v0.5.48 closes the cross-language hook-handler bridge: plugin handlers in the phantom.hooks entry-point group are now invocable from the agent's hook-runner via a new 'plugin' transport. End-to-end: pip install a plugin → discover its handler → wire into /settings/hooks → handler fires on matching events.",
+      "v0.5.48 closes the cross-language hook-handler bridge: plugin handlers in the guardian.hooks entry-point group are now invocable from the agent's hook-runner via a new 'plugin' transport. End-to-end: pip install a plugin → discover its handler → wire into /settings/hooks → handler fires on matching events.",
     difficulty: "intermediate",
     durationMin: 8,
     icon: "extension",
@@ -3866,7 +3866,7 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/plugin-hooks",
         description:
-          "List discovered handlers in the phantom.hooks group. Add ?refresh=1 to force re-walk (used after install). Bearer auth via MCP_TOKEN.",
+          "List discovered handlers in the guardian.hooks group. Add ?refresh=1 to force re-walk (used after install). Bearer auth via MCP_TOKEN.",
       },
       {
         method: "POST",
@@ -3882,7 +3882,7 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Have a published or local plugin that targets phantom.hooks entry-point group. Reference plugin author contract: pyproject.toml [project.entry-points.\"phantom.hooks\"] my-handler = \"my_pkg.hooks:my_handler\". Handler function signature: def my_handler(payload: dict, config: dict) -> dict | None.",
+      "Have a published or local plugin that targets guardian.hooks entry-point group. Reference plugin author contract: pyproject.toml [project.entry-points.\"guardian.hooks\"] my-handler = \"my_pkg.hooks:my_handler\". Handler function signature: def my_handler(payload: dict, config: dict) -> dict | None.",
       "Visit /observability/plugins. Type your spec into the install form (pypi name, git+https://..., or local path). Click Install. Wait for success.",
       "Visit /settings/hooks. Click Add hook.",
       "Pick event: e.g. PreToolUse. Pick transport: 'Plugin handler (entry-point)'. If the handler dropdown is empty, click Refresh — that bumps ?refresh=1 on the discovery call and re-walks entry-points.",
@@ -3921,7 +3921,7 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/plugin-entries",
         description:
-          "List discovered entry-point plugins by group (phantom.skills / connectors / hooks / scanners / providers). Side-effect-free. Bearer auth via MCP_TOKEN.",
+          "List discovered entry-point plugins by group (guardian.skills / connectors / hooks / scanners / providers). Side-effect-free. Bearer auth via MCP_TOKEN.",
       },
       {
         method: "POST",
@@ -3933,26 +3933,26 @@ export const JOURNEYS: Journey[] = [
         method: "DELETE",
         path: "/api/agent/plugin-entries/{dist_name}",
         description:
-          "Runs pip uninstall -y. Same audit pattern. Restart phantom-agent afterward to flush in-process plugin caches.",
+          "Runs pip uninstall -y. Same audit pattern. Restart guardian-agent afterward to flush in-process plugin caches.",
       },
     ],
     howToTest: [
-      "Visit /observability/plugins via tunneled https://localhost:3001. Confirm five group sections render: phantom.skills, phantom.connectors, phantom.hooks, phantom.scanners, phantom.providers.",
+      "Visit /observability/plugins via tunneled https://localhost:3001. Confirm five group sections render: guardian.skills, guardian.connectors, guardian.hooks, guardian.scanners, guardian.providers.",
       "Confirm install form is at the top with input + Install button.",
       "Type a public test package (e.g. 'pip-search' or any small pure-python lib) into the spec input. Click Install.",
-      "Wait — button shows 'Installing…'. On success, the result panel below shows 'Installed <spec>. Restart phantom-agent to load contributed builtins.'",
-      "Catalog refreshes; if the installed package targets none of the phantom.* groups, the sections show counts unchanged but the package IS installed in the container (visible via docker exec phantom_agent pip list | grep <name>).",
+      "Wait — button shows 'Installing…'. On success, the result panel below shows 'Installed <spec>. Restart guardian-agent to load contributed builtins.'",
+      "Catalog refreshes; if the installed package targets none of the guardian.* groups, the sections show counts unchanged but the package IS installed in the container (visible via docker exec guardian_agent pip list | grep <name>).",
       "Open /observability/events. Filter action=plugin_install. Confirm an audit row exists with target='plugin:<spec>' and status='success'.",
       "Click Uninstall on any row in the catalog (or against a manually-installed package via API). Confirm the confirm() prompt fires; accept it.",
       "Wait — button shows 'Uninstalling…'. On success, catalog refreshes and the row disappears.",
       "/observability/events?action=plugin_uninstall shows the corresponding audit row.",
     ],
     expectedResult:
-      "Plugin lifecycle (install + discovery + uninstall) works end-to-end from UI without docker exec. Newly-installed packages with entry-points targeting phantom.* groups appear in the right section after the next refresh. Contributed handlers themselves don't become callable until phantom-agent restarts (handler-invocation bridge ships in v0.5.48).",
+      "Plugin lifecycle (install + discovery + uninstall) works end-to-end from UI without docker exec. Newly-installed packages with entry-points targeting guardian.* groups appear in the right section after the next refresh. Contributed handlers themselves don't become callable until guardian-agent restarts (handler-invocation bridge ships in v0.5.48).",
     verifyVia: [
       "GET /api/agent/plugin-entries → installed package appears in its target group",
       "GET /api/agent/audit?action=plugin_install → audit row with metadata.spec + return_code=0",
-      "docker exec phantom_agent pip list | grep <dist_name> → confirms pip-side state",
+      "docker exec guardian_agent pip list | grep <dist_name> → confirms pip-side state",
       "Uninstall via UI → /api/agent/audit?action=plugin_uninstall row + pip list no longer shows the package",
     ],
     related: ["ops-install-vendor-plugin"],
@@ -4039,7 +4039,7 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/agent-definitions/by-name/blue-team-validator",
         description:
-          "tools_allowed=['xsiam_execute_xql_query','xsiam_get_dataset_metadata','xsiam_list_rules','memory_search','memory_list','phantom_get_required_fields','phantom_get_field_info'], max_turns=12, system prompt focused on detection-coverage validation.",
+          "tools_allowed=['xsiam_execute_xql_query','xsiam_get_dataset_metadata','xsiam_list_rules','memory_search','memory_list','guardian_get_required_fields','guardian_get_field_info'], max_turns=12, system prompt focused on detection-coverage validation.",
       },
     ],
     howToTest: [
@@ -4084,7 +4084,7 @@ export const JOURNEYS: Journey[] = [
       "caldera.get_operation",
       "xsiam.execute_xql_query",
       "xsiam.list_rules",
-      "phantom.list_scenarios",
+      "guardian.list_scenarios",
     ],
     apis: [
       {
@@ -4220,7 +4220,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Browse a knowledge base",
     summary:
-      "Navigate to /knowledge, pick a KB, search semantically, and read an entry. The bundled phantom-soc + xql-examples KBs are curated reference content.",
+      "Navigate to /knowledge, pick a KB, search semantically, and read an entry. The bundled guardian-soc + xql-examples KBs are curated reference content.",
     difficulty: "starter",
     durationMin: 2,
     icon: "menu_book",
@@ -4240,8 +4240,8 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /knowledge. Two cards render — phantom-soc + xql-examples.",
-      "Click phantom-soc. Entry list renders, sorted by entry id.",
+      "Open /knowledge. Two cards render — guardian-soc + xql-examples.",
+      "Click guardian-soc. Entry list renders, sorted by entry id.",
       "Click any entry. Full markdown renders in a drawer.",
       "Use the search bar at the top. Type 'compaction'. Results re-rank by similarity.",
       "Switch to xql-examples. The drawer renders XQL with syntax highlighting.",
@@ -4320,7 +4320,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/auth/change-password",
         description:
-          "Cookie-gated (phantom_session). Validates current_password as a second factor — a stolen cookie alone can't lock you out. Proxies to MCP for the actual mutation.",
+          "Cookie-gated (guardian_session). Validates current_password as a second factor — a stolen cookie alone can't lock you out. Proxies to MCP for the actual mutation.",
       },
       {
         method: "POST",
@@ -4342,7 +4342,7 @@ export const JOURNEYS: Journey[] = [
     expectedResult:
       "The password lives ONLY at /app/data/secrets/ui/auth/admin/password_hash. No setup.json, no env var, no fallback — touching any other file has zero effect on login. Every successful rotation emits a password_changed_ui audit row + N session_revoked rows (one per killed session) + a /notifications entry 'Your password was changed at <ts>' as a canary if someone else ever rotates.",
     verifyVia: [
-      "docker exec phantom_agent ls /app/data/secrets/ui/auth/admin/ → password_hash + credentials_changed",
+      "docker exec guardian_agent ls /app/data/secrets/ui/auth/admin/ → password_hash + credentials_changed",
       "GET /api/agent/audit → password_changed_ui row + session_revoked rows + a notification_published row for the security canary",
       "Second tab gets bounced to sign-in within 30s of rotation (positive-validation cache TTL)",
     ],
@@ -4359,7 +4359,7 @@ export const JOURNEYS: Journey[] = [
     category: "auth",
     title: "Sign out of the UI",
     summary:
-      "End the current session via the Sign out button on /profile. The phantom_session cookie is cleared server-side AND the session row is revoked in auth_sessions.db; other tabs / devices get 401 within the 30s positive-cache window.",
+      "End the current session via the Sign out button on /profile. The guardian_session cookie is cleared server-side AND the session row is revoked in auth_sessions.db; other tabs / devices get 401 within the 30s positive-cache window.",
     difficulty: "starter",
     durationMin: 1,
     icon: "logout",
@@ -4370,7 +4370,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/auth/logout",
         description:
-          "Server-side route that clears the phantom_session cookie (Max-Age=0, HttpOnly, Secure, SameSite=Strict) and posts to MCP /api/agent/ui/auth/logout to mark the session row revoked. Returns {success:true}.",
+          "Server-side route that clears the guardian_session cookie (Max-Age=0, HttpOnly, Secure, SameSite=Strict) and posts to MCP /api/agent/ui/auth/logout to mark the session row revoked. Returns {success:true}.",
       },
       {
         method: "GET",
@@ -4395,9 +4395,9 @@ export const JOURNEYS: Journey[] = [
       "Multi-tab: sign in on two tabs. Sign out from tab A. Tab B keeps working for up to 30s (positive-validation cache); then its next API call returns 401 and it bounces too. Per-tab, not per-device — the cookie is the same so both tabs revoke together.",
     ],
     expectedResult:
-      "Sign-out has TWO effects, not one: the cookie is cleared client-side (Set-Cookie: phantom_session=; Max-Age=0; HttpOnly; Secure; SameSite=Strict), AND the session row is marked revoked_at_ms server-side in auth_sessions.db. Either alone would be a hole — cookie-only means a stolen token still works server-side; server-only means the browser thinks it's still signed in. Both happen atomically.",
+      "Sign-out has TWO effects, not one: the cookie is cleared client-side (Set-Cookie: guardian_session=; Max-Age=0; HttpOnly; Secure; SameSite=Strict), AND the session row is marked revoked_at_ms server-side in auth_sessions.db. Either alone would be a hole — cookie-only means a stolen token still works server-side; server-only means the browser thinks it's still signed in. Both happen atomically.",
     verifyVia: [
-      "Browser DevTools → Application → Cookies: no phantom_session entry (or it's expired).",
+      "Browser DevTools → Application → Cookies: no guardian_session entry (or it's expired).",
       "GET /api/auth/status with stale cookie → {authenticated:false}.",
       "Audit: GET /api/agent/audit → logout row + (within the same second) session_deleted row.",
       "Replaying the OLD cookie via curl after sign-out → 401 (proves the server-side revocation, not just client-side cookie clear).",
@@ -4424,7 +4424,7 @@ export const JOURNEYS: Journey[] = [
     category: "auth",
     title: "First-time login + forced password change",
     summary:
-      "Fresh installs generate a random admin password into PHANTOM_DEFAULT_ADMIN_PASSWORD in /opt/phantom/.env (no credential is baked into any phantom image). The installer's epilogue prints the value; first-boot docker logs also print it once. Sign in with admin + that value; the UI auto-redirects to /profile with a non-dismissible banner; you can't navigate anywhere else until you rotate. This journey walks the new-operator path from fresh install to a personal password set + sessions in a known state.",
+      "Fresh installs generate a random admin password into GUARDIAN_DEFAULT_ADMIN_PASSWORD in /opt/guardian/.env (no credential is baked into any guardian image). The installer's epilogue prints the value; first-boot docker logs also print it once. Sign in with admin + that value; the UI auto-redirects to /profile with a non-dismissible banner; you can't navigate anywhere else until you rotate. This journey walks the new-operator path from fresh install to a personal password set + sessions in a known state.",
     difficulty: "starter",
     durationMin: 3,
     icon: "rocket_launch",
@@ -4435,7 +4435,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/auth/login",
         description:
-          "Body: {username:'admin', password:<value of PHANTOM_DEFAULT_ADMIN_PASSWORD from .env>}. Enforces a single fixed admin username. Successful login response carries credentials_changed:false so the UI knows to force-redirect to /profile. The default password is per-install random.",
+          "Body: {username:'admin', password:<value of GUARDIAN_DEFAULT_ADMIN_PASSWORD from .env>}. Enforces a single fixed admin username. Successful login response carries credentials_changed:false so the UI knows to force-redirect to /profile. The default password is per-install random.",
       },
       {
         method: "GET",
@@ -4447,26 +4447,26 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/auth/change-password",
         description:
-          "First post-default rotation. Body: {current_password:<value of PHANTOM_DEFAULT_ADMIN_PASSWORD>, new_password:<chosen>}. Flips credentials_changed=true server-side, revokes all sessions, clears the cookie. Operator re-signs in with the new password.",
+          "First post-default rotation. Body: {current_password:<value of GUARDIAN_DEFAULT_ADMIN_PASSWORD>, new_password:<chosen>}. Flips credentials_changed=true server-side, revokes all sessions, clears the cookie. Operator re-signs in with the new password.",
       },
     ],
     howToTest: [
-      "Fresh install (or fresh-volume reset). Capture PHANTOM_DEFAULT_ADMIN_PASSWORD from one of three places: the installer's epilogue banner, the agent's first-boot docker logs, or `grep PHANTOM_DEFAULT_ADMIN_PASSWORD /opt/phantom/.env`.",
+      "Fresh install (or fresh-volume reset). Capture GUARDIAN_DEFAULT_ADMIN_PASSWORD from one of three places: the installer's epilogue banner, the agent's first-boot docker logs, or `grep GUARDIAN_DEFAULT_ADMIN_PASSWORD /opt/guardian/.env`.",
       "Open https://<host>:3000 in the browser — accept the self-signed cert warning if it's the default install.",
       "Sign-in screen appears (spark-style animated UI: WavyBackground + robot character + the three-column form|divider|description grid).",
-      "Enter username 'admin' + the captured PHANTOM_DEFAULT_ADMIN_PASSWORD value.",
+      "Enter username 'admin' + the captured GUARDIAN_DEFAULT_ADMIN_PASSWORD value.",
       "Login succeeds. Browser redirects to /profile with a non-dismissible amber banner: 'You're signed in with the default credentials. Choose a new password to continue.'",
       "Try clicking another sidebar item (e.g. /chat). You bounce back to /profile — AuthGate enforces credentials_changed=true as the precondition for ALL other routes.",
-      "Fill the Change password form on /profile: current = <PHANTOM_DEFAULT_ADMIN_PASSWORD value>, new = <your choice, ≥8 chars>, confirm = same. Submit.",
+      "Fill the Change password form on /profile: current = <GUARDIAN_DEFAULT_ADMIN_PASSWORD value>, new = <your choice, ≥8 chars>, confirm = same. Submit.",
       "On success: cookie is cleared, browser hard-navigates back to the sign-in screen. Sign in with the NEW password — no banner this time, normal dashboard.",
       "Negative: skip the rotation and try curling /api/agent/version directly. AuthGate's middleware-level check rejects because credentials_changed=false; you get bounced to /profile.",
-      "Negative: try logging in as 'phantom' or 'root' or any other username. 401 — single-admin enforced at the route level, BEFORE the hash check.",
-      "Audit step: confirm no Phantom image ships a baked admin password. `docker exec phantom_agent grep -r phantom-admin-CHANGE-ME /app 2>/dev/null` → no matches.",
+      "Negative: try logging in as 'guardian' or 'root' or any other username. 401 — single-admin enforced at the route level, BEFORE the hash check.",
+      "Audit step: confirm no Guardian image ships a baked admin password. `docker exec guardian_agent grep -r guardian-admin-CHANGE-ME /app 2>/dev/null` → no matches.",
     ],
     expectedResult:
       "After this journey, the SecretStore contains /ui/auth/admin/password_hash (the operator's chosen password) + credentials_changed=true. The original default password no longer works (rotation rewrote the hash). The banner is gone, AuthGate stops force-redirecting, and the operator can navigate freely. The whole flow is auditable: login_success → password_changed_ui → session_revoked × N → login_success (with the new password).",
     verifyVia: [
-      "docker exec phantom_agent ls /app/data/secrets/ui/auth/admin/ → password_hash + credentials_changed",
+      "docker exec guardian_agent ls /app/data/secrets/ui/auth/admin/ → password_hash + credentials_changed",
       "GET /api/agent/audit?action=login_success → one row for the default-creds login, one for the post-rotation login",
       "GET /api/agent/audit?action=password_changed_ui → the rotation event",
       "GET /api/agent/audit?action=session_revoked → at least one row (the session you used to do the rotation)",
@@ -4485,7 +4485,7 @@ export const JOURNEYS: Journey[] = [
     category: "auth",
     title: "Reset a forgotten admin password via the host utility",
     summary:
-      "If you forget the admin password and can't sign in, reset from the host shell — no browser, no email recovery, no current-password needed. A host-side script (sudo /opt/phantom/phantom-reset-admin-password) wraps the in-container CLI for ergonomics consistency with phantom-factory-reset. Trust boundary: anyone with host shell access already has docker access, which is root-equivalent for the container. The wrapper handles the docker-exec + TTY plumbing so operators don't have to memorize the invocation under stress.",
+      "If you forget the admin password and can't sign in, reset from the host shell — no browser, no email recovery, no current-password needed. A host-side script (sudo /opt/guardian/guardian-reset-admin-password) wraps the in-container CLI for ergonomics consistency with guardian-factory-reset. Trust boundary: anyone with host shell access already has docker access, which is root-equivalent for the container. The wrapper handles the docker-exec + TTY plumbing so operators don't have to memorize the invocation under stress.",
     difficulty: "intermediate",
     durationMin: 3,
     icon: "lock_reset",
@@ -4501,29 +4501,29 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Pre-arrange a 'lost password' state. Simplest: rotate the password to something you immediately forget, OR sign out and pretend.",
-      "On the host running phantom-agent: `sudo /opt/phantom/phantom-reset-admin-password`. (The wrapper ships with the installer and lives at /opt/phantom/ alongside the installer binary.)",
-      "The script validates the agent container is running (clean error if down), then exec-replaces itself with `docker exec -it phantom_agent node /app/cli/reset-admin.mjs`. From here forward the operator sees the in-container CLI's ceremony banner.",
+      "On the host running guardian-agent: `sudo /opt/guardian/guardian-reset-admin-password`. (The wrapper ships with the installer and lives at /opt/guardian/ alongside the installer binary.)",
+      "The script validates the agent container is running (clean error if down), then exec-replaces itself with `docker exec -it guardian_agent node /app/cli/reset-admin.mjs`. From here forward the operator sees the in-container CLI's ceremony banner.",
       "Prompt: 'Type RESET to continue, or anything else to cancel:'. Type RESET (in caps) and Enter.",
       "Next prompt: 'New admin password:' — input is masked (typed chars echo as asterisks). Then 'Confirm new password:' — must match.",
-      "On success: `✓ Done. N sessions revoked.` + `Restart the agent so any in-memory caches re-read from disk: docker compose restart phantom-agent`.",
+      "On success: `✓ Done. N sessions revoked.` + `Restart the agent so any in-memory caches re-read from disk: docker compose restart guardian-agent`.",
       "Run the restart. Then sign in with the new password — should succeed.",
       "Negative: type 'reset' (lowercase) at the confirm prompt. CLI exits 'Cancelled. No changes were made.'",
       "Negative: type non-matching passwords at the confirm step. CLI exits 'ERROR: passwords did not match.' — no partial state.",
       "Negative: type a password <8 chars. CLI exits 'ERROR: password must be at least 8 characters.'",
-      "Negative: stop the agent (docker compose stop phantom-agent), then re-run the host utility. Wrapper exits with a clear error pointing at docker compose up -d — it can't reset while the container is offline (by design; the in-container CLI does the actual write).",
+      "Negative: stop the agent (docker compose stop guardian-agent), then re-run the host utility. Wrapper exits with a clear error pointing at docker compose up -d — it can't reset while the container is offline (by design; the in-container CLI does the actual write).",
       "Forensic: `history | grep <new-password>` — should return nothing. The CLI reads input via interactive TTY (process.stdin raw mode), never from argv or env, so passwords don't leak into shell history or `ps` output.",
-      "Direct invocation also works: `docker exec -it phantom_agent node /app/cli/reset-admin.mjs` is the path the wrapper delegates to, so operators with muscle memory for that form still get the right behavior — they just don't have to type the long command.",
+      "Direct invocation also works: `docker exec -it guardian_agent node /app/cli/reset-admin.mjs` is the path the wrapper delegates to, so operators with muscle memory for that form still get the right behavior — they just don't have to type the long command.",
     ],
     expectedResult:
-      "The forgotten-password path works in seconds without docker compose down -v (which would also wipe job history, audit log, instance configs), without SQLite surgery, and without any external file. The wrapper script is embedded into the phantom-installer binary via heredoc (same pattern as the compose YAML) so it lives at /opt/phantom/ on every fresh install. The post-restart agent loads the new hash, all old sessions are dead, and the audit log captures everything: password_changed_cli (with actor=cli:<hostname>) + session_revoked × N + a notification_published canary.",
+      "The forgotten-password path works in seconds without docker compose down -v (which would also wipe job history, audit log, instance configs), without SQLite surgery, and without any external file. The wrapper script is embedded into the guardian-installer binary via heredoc (same pattern as the compose YAML) so it lives at /opt/guardian/ on every fresh install. The post-restart agent loads the new hash, all old sessions are dead, and the audit log captures everything: password_changed_cli (with actor=cli:<hostname>) + session_revoked × N + a notification_published canary.",
     verifyVia: [
-      "After running `sudo /opt/phantom/phantom-reset-admin-password`, login with the new password succeeds via /api/auth/login",
+      "After running `sudo /opt/guardian/guardian-reset-admin-password`, login with the new password succeeds via /api/auth/login",
       "GET /api/agent/audit?action=password_changed_cli → row with actor=cli:<short-hostname>",
       "GET /api/agent/audit?action=session_revoked → N rows (one per session that was active at reset time)",
       "GET /notifications → entry 'Your password was changed at <ts>' as the canary if anyone else ever runs the CLI",
       "history | grep <new-password> → nothing (passwords never on argv)",
       "Confirm OLD password no longer works: POST /api/auth/login with the old password → 401",
-      "/opt/phantom/phantom-reset-admin-password exists + is executable (770 file mode at minimum); re-running the installer refreshes it to the current version",
+      "/opt/guardian/guardian-reset-admin-password exists + is executable (770 file mode at minimum); re-running the installer refreshes it to the current version",
     ],
     related: [
       "auth-first-time-login",
@@ -4537,39 +4537,39 @@ export const JOURNEYS: Journey[] = [
   {
     id: "ops-factory-reset-host-utility",
     category: "ops",
-    title: "Return Phantom to fresh-shipped state via the factory-reset utility",
+    title: "Return Guardian to fresh-shipped state via the factory-reset utility",
     summary:
-      "Wipe every operator-state volume + bring the stack back up with shipped defaults. Use this when you want to start over with a customer-fresh install — same blank-canvas state a brand-new install boots into. The script is host-side by physical necessity (a container can't delete the volume it's mounting) and preserves .env so PHANTOM_SECRET_KEK + registry credentials survive across the reset.",
+      "Wipe every operator-state volume + bring the stack back up with shipped defaults. Use this when you want to start over with a customer-fresh install — same blank-canvas state a brand-new install boots into. The script is host-side by physical necessity (a container can't delete the volume it's mounting) and preserves .env so GUARDIAN_SECRET_KEK + registry credentials survive across the reset.",
     difficulty: "intermediate",
     durationMin: 5,
     icon: "factory",
     prompts: [],
     toolsExercised: [],
     // Host shell script (not an HTTP API). Invocation:
-    //   sudo /opt/phantom/phantom-factory-reset [--yes|--dry-run|--help]
-    // Reads PHANTOM_INSTALL_DIR (default /opt/phantom) + PHANTOM_VOLUME_PREFIX
-    // (default phantom_) for non-standard installs.
+    //   sudo /opt/guardian/guardian-factory-reset [--yes|--dry-run|--help]
+    // Reads GUARDIAN_INSTALL_DIR (default /opt/guardian) + GUARDIAN_VOLUME_PREFIX
+    // (default guardian_) for non-standard installs.
     apis: [],
     howToTest: [
       "Pre-arrange operator state. Add a memory entry at /memory, install a connector at /connectors → /marketplace, create an instance, mint an API key at /api-keys. The volumes now hold real operator state.",
-      "From the host: `sudo /opt/phantom/phantom-factory-reset --dry-run`. The script lists every phantom_* volume it would delete with an approximate size for each. No mutation happens.",
-      "Run for real: `sudo /opt/phantom/phantom-factory-reset`. It prints the same listing + 'Type FACTORY RESET exactly to proceed'. Type it (caps + space). Enter.",
+      "From the host: `sudo /opt/guardian/guardian-factory-reset --dry-run`. The script lists every guardian_* volume it would delete with an approximate size for each. No mutation happens.",
+      "Run for real: `sudo /opt/guardian/guardian-factory-reset`. It prints the same listing + 'Type FACTORY RESET exactly to proceed'. Type it (caps + space). Enter.",
       "Watch the script: docker compose down --remove-orphans → docker volume rm (one per volume) → installer re-runs → stack comes back up → 'Factory reset complete in Ns'.",
-      "Open https://localhost:3000/. Sign in with admin / <value of PHANTOM_DEFAULT_ADMIN_PASSWORD from /opt/phantom/.env> — your old password is wiped from SecretStore but the env-var default survives the reset (preserved with .env).",
+      "Open https://localhost:3000/. Sign in with admin / <value of GUARDIAN_DEFAULT_ADMIN_PASSWORD from /opt/guardian/.env> — your old password is wiped from SecretStore but the env-var default survives the reset (preserved with .env).",
       "Verify zero state: /memory shows 0 of 0; /api-keys shows 'No API keys yet'; /notifications shows 0 of 0; /connectors instances tab shows empty.",
-      "Confirm preservation: cat /opt/phantom/.env | grep -E 'PHANTOM_SECRET_KEK|PHANTOM_REGISTRY|PHANTOM_DEFAULT_ADMIN_PASSWORD' → all three still present with the same values they had before the reset (KEK + registry creds + the bootstrap default that the post-reset seed consumes).",
-      "Negative: `sudo /opt/phantom/phantom-factory-reset` and type 'factory reset' (lowercase) at the prompt → 'Aborted. No volumes were deleted.' Exit code non-zero.",
-      "Negative: `sudo /opt/phantom/phantom-factory-reset` while a container is in a weird state that locks its volume → the per-volume removal step reports which volume failed; the script exits non-zero pointing at `docker ps -a` so the operator can clean up the lingering container.",
-      "Negative (install integrity): `sudo rm /opt/phantom/phantom-installer*` to simulate a corrupted install, then run `sudo /opt/phantom/phantom-factory-reset --dry-run` → script HARD-FAILS with 'Phantom installer binary missing from /opt/phantom/.' + recovery instructions (download fresh installer from gh releases, run it to self-install, re-run factory-reset). Exit code non-zero. NO volume wipe happens. Same behavior in real-run mode — there's no bypass flag.",
-      "--yes path: `sudo /opt/phantom/phantom-factory-reset --yes` runs end-to-end without any prompt. For scripted use only — the prompt is the standard guardrail against accident.",
+      "Confirm preservation: cat /opt/guardian/.env | grep -E 'GUARDIAN_SECRET_KEK|GUARDIAN_REGISTRY|GUARDIAN_DEFAULT_ADMIN_PASSWORD' → all three still present with the same values they had before the reset (KEK + registry creds + the bootstrap default that the post-reset seed consumes).",
+      "Negative: `sudo /opt/guardian/guardian-factory-reset` and type 'factory reset' (lowercase) at the prompt → 'Aborted. No volumes were deleted.' Exit code non-zero.",
+      "Negative: `sudo /opt/guardian/guardian-factory-reset` while a container is in a weird state that locks its volume → the per-volume removal step reports which volume failed; the script exits non-zero pointing at `docker ps -a` so the operator can clean up the lingering container.",
+      "Negative (install integrity): `sudo rm /opt/guardian/guardian-installer*` to simulate a corrupted install, then run `sudo /opt/guardian/guardian-factory-reset --dry-run` → script HARD-FAILS with 'Guardian installer binary missing from /opt/guardian/.' + recovery instructions (download fresh installer from gh releases, run it to self-install, re-run factory-reset). Exit code non-zero. NO volume wipe happens. Same behavior in real-run mode — there's no bypass flag.",
+      "--yes path: `sudo /opt/guardian/guardian-factory-reset --yes` runs end-to-end without any prompt. For scripted use only — the prompt is the standard guardrail against accident.",
     ],
     expectedResult:
-      "The script ships in every installer (embedded into the single-file phantom-installer via heredoc, packed into the multi-file kit via direct file copy in release.yml). Operators have one well-known invocation for factory reset that mirrors the password-reset utility's shape. State wipe is total (all phantom_* volumes), but .env + the installer binary + the docker images on disk all survive, so the recovery installer re-run is fast (no image pulls, no secret regeneration).",
+      "The script ships in every installer (embedded into the single-file guardian-installer via heredoc, packed into the multi-file kit via direct file copy in release.yml). Operators have one well-known invocation for factory reset that mirrors the password-reset utility's shape. State wipe is total (all guardian_* volumes), but .env + the installer binary + the docker images on disk all survive, so the recovery installer re-run is fast (no image pulls, no secret regeneration).",
     verifyVia: [
       "After the script: /memory, /api-keys, /notifications, /connectors instances tab all read empty",
-      "cat /opt/phantom/.env | head -5 still shows the operator's KEK + registry token (preserved, not regenerated)",
-      "docker volume ls --filter name=phantom_ shows the recreated set (different volume IDs from before — they're fresh)",
-      "The installer re-run produced the standard 'Phantom is running' epilogue",
+      "cat /opt/guardian/.env | head -5 still shows the operator's KEK + registry token (preserved, not regenerated)",
+      "docker volume ls --filter name=guardian_ shows the recreated set (different volume IDs from before — they're fresh)",
+      "The installer re-run produced the standard 'Guardian is running' epilogue",
       "Negative: a journey-tested mark set before the reset is now gone (operator-state DB wiped) — confirms /help/journeys server-backed marks correctly clear with volume wipe",
     ],
     related: [
@@ -4618,7 +4618,7 @@ export const JOURNEYS: Journey[] = [
       "Filter by action: 'logout'. You should see one row corresponding to your sign-out.",
       "Change your password from /profile. Refresh /observability/events. New rows: password_changed_ui (target user:admin), session_revoked (N rows — one per active session at rotation time including the one you used).",
       "Check /notifications — there's a fresh 'Your password was changed at <ts>' entry. This is the security canary that fires on EVERY password change (UI or CLI). If you ever see one you didn't make, that's the signal to investigate.",
-      "Run the CLI reset (docker exec phantom_agent node /app/cli/reset-admin.mjs). Refresh /observability/events. New row: password_changed_cli with actor=cli:<hostname> instead of user:admin.",
+      "Run the CLI reset (docker exec guardian_agent node /app/cli/reset-admin.mjs). Refresh /observability/events. New row: password_changed_cli with actor=cli:<hostname> instead of user:admin.",
       "Interpretation: a password_changed_cli with an UNFAMILIAR hostname (not your own machine) = somebody else SSH'd into the box. That's a host-compromise signal — investigate immediately.",
       "Type a wrong password 6 times at the login screen. Refresh /observability/events. Five login_failed rows + an audit row marking the rate-limit kick (5 failures / 60s → 60s lockout).",
     ],
@@ -4705,7 +4705,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Pre-bake a connector secret via env var (CI / K8s / IaC)",
     summary:
-      "Skip the setup form for one or more secret slots by providing PHANTOM_SECRET__... env vars at container start. The SecretStore's env-overlay reads them transparently — no behavior change for any secret consumer.",
+      "Skip the setup form for one or more secret slots by providing GUARDIAN_SECRET__... env vars at container start. The SecretStore's env-overlay reads them transparently — no behavior change for any secret consumer.",
     difficulty: "advanced",
     durationMin: 5,
     icon: "vpn_key",
@@ -4720,16 +4720,16 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Pick a secret path. Connector secrets live at /agents/phantom/connectors/<instance_id>/<slot>; provider secrets at /agents/phantom/providers/<instance_id>/<slot>.",
-      "Compute the env var name: prefix='PHANTOM_SECRET__', segments uppercased and joined with '__'. Example: /ui/auth/admin/password_hash → PHANTOM_SECRET__UI__AUTH__ADMIN__PASSWORD_HASH.",
-      "Set the env var on phantom-agent. For dev compose, edit .env or pass via `docker compose run -e ...`. For K8s, mount a Secret as env vars.",
-      "Restart phantom-agent. Boot log shows: 'SecretStore env-overlay: 1 secret(s) sourced from env vars: PHANTOM_SECRET__... → /...path'.",
+      "Pick a secret path. Connector secrets live at /agents/guardian/connectors/<instance_id>/<slot>; provider secrets at /agents/guardian/providers/<instance_id>/<slot>.",
+      "Compute the env var name: prefix='GUARDIAN_SECRET__', segments uppercased and joined with '__'. Example: /ui/auth/admin/password_hash → GUARDIAN_SECRET__UI__AUTH__ADMIN__PASSWORD_HASH.",
+      "Set the env var on guardian-agent. For dev compose, edit .env or pass via `docker compose run -e ...`. For K8s, mount a Secret as env vars.",
+      "Restart guardian-agent. Boot log shows: 'SecretStore env-overlay: 1 secret(s) sourced from env vars: GUARDIAN_SECRET__... → /...path'.",
       "Trigger a tool call that reads the secret (e.g. xsiam.run_xql_query for the xsiam apiToken).",
       "Audit the read: GET /api/agent/audit?action=secret:read → row with metadata.source='env'.",
-      "Toggle off: set PHANTOM_ENV_SECRETS_DISABLED=1, restart, repeat the call → audit row metadata.source='file' (or SecretStoreError if the file isn't there).",
+      "Toggle off: set GUARDIAN_ENV_SECRETS_DISABLED=1, restart, repeat the call → audit row metadata.source='file' (or SecretStoreError if the file isn't there).",
     ],
     expectedResult:
-      "The env var overrides the file-backed value transparently. has(path) returns True, read(path) returns the env value. Writes still go to the file (env vars are read-only sources — you can't push back to a Kubernetes Secret from inside the container). PHANTOM_ENV_SECRETS_DISABLED=1 disables the overlay entirely; behavior reverts to file-only.",
+      "The env var overrides the file-backed value transparently. has(path) returns True, read(path) returns the env value. Writes still go to the file (env vars are read-only sources — you can't push back to a Kubernetes Secret from inside the container). GUARDIAN_ENV_SECRETS_DISABLED=1 disables the overlay entirely; behavior reverts to file-only.",
     verifyVia: [
       "Boot log: 'SecretStore env-overlay: N secret(s) sourced from env vars' with the path mappings.",
       "GET /api/agent/audit?action=secret:read&limit=20 → metadata.source field on each read distinguishes env vs file.",
@@ -4817,7 +4817,7 @@ export const JOURNEYS: Journey[] = [
       "Try old plaintext explicitly via curl → 401.",
     ],
     expectedResult:
-      "Atomic-from-the-script's-view rotation: at no point is the script unable to reach Phantom. The disabled v1 key stays in the table for audit but won't authenticate.",
+      "Atomic-from-the-script's-view rotation: at no point is the script unable to reach Guardian. The disabled v1 key stays in the table for audit but won't authenticate.",
     verifyVia: [
       "GET /api/agent/api-keys → v1 listed with disabled=true, v2 enabled",
       "GET /api/agent/audit?action=api_key_disabled → records the rotation",
@@ -5059,7 +5059,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/marketplace/{id}/uninstall",
         description:
-          "Removes the install marker. Refuses with 409 instances_count if any instances exist (operator must delete them via /connectors → Instances first — instance deletion is a credential operation and runs the container teardown via phantom-updater).",
+          "Removes the install marker. Refuses with 409 instances_count if any instances exist (operator must delete them via /connectors → Instances first — instance deletion is a credential operation and runs the container teardown via guardian-updater).",
       },
     ],
     howToTest: [
@@ -5078,7 +5078,7 @@ export const JOURNEYS: Journey[] = [
       "POST /api/agent/marketplace/<id>/uninstall while instance exists → 409 with instances_count",
       "Try POST /api/agent/instances for an uninstalled connector → 409 connector_not_installed (the install gate)",
       "GET /api/agent/audit?action=marketplace_install OR marketplace_uninstall → both events captured",
-      "docker exec phantom_agent sqlite3 /app/data/marketplace.db 'SELECT * FROM marketplace_installs' → the install row",
+      "docker exec guardian_agent sqlite3 /app/data/marketplace.db 'SELECT * FROM marketplace_installs' → the install row",
     ],
     related: ["ops-recover-connector-needs-auth", "manage-job-lifecycle", "ops-create-web-container-instance", "ops-upload-user-connector", "ops-agent-marketplace-install"],
     components: ["marketplace", "connectors", "audit"],
@@ -5116,11 +5116,11 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "PREREQ: publish your connector container image to any registry the host's docker can pull from. The image must run the phantom-connector-runtime entrypoint (FROM ghcr.io/kite-production/phantom-connector-runtime:latest). See bundles/spark/connectors/_runtime/Dockerfile for the minimal pattern.",
+      "PREREQ: publish your connector container image to any registry the host's docker can pull from. The image must run the guardian-connector-runtime entrypoint (FROM ghcr.io/kite-production/guardian-connector-runtime:latest). See bundles/spark/connectors/_runtime/Dockerfile for the minimal pattern.",
       "Write your connector.yaml. Required fields per bundles/spark/connectors/connector.schema.json: id (kebab-case, must not collide with bundle ids), version (semver), description, source.{language, entrypoint}, runtimeMapping.style: container (only container is valid), image: <OCI ref>, configSchema, secretSlots, spec.tools.",
       "Upload via curl: `curl -F connector_yaml=@my-connector.yaml -H \"Authorization: Bearer $MCP_TOKEN\" https://<host>:8080/api/agent/marketplace/upload`. Expect 201 with {ok: true, connector: {...}, next_step}. The YAML lands at /app/data/user_connectors/<id>/connector.yaml.",
       "Refresh /connectors → Marketplace. Your connector appears with origin: user.",
-      "Click Install on your connector. Then go to Instances → Add Instance → pick your connector → fill in the config + secrets per the connector.yaml's configSchema / secretSlots → submit. phantom-updater pulls the image ref you declared, starts the per-instance container, MCP routes tool calls to it.",
+      "Click Install on your connector. Then go to Instances → Add Instance → pick your connector → fill in the config + secrets per the connector.yaml's configSchema / secretSlots → submit. guardian-updater pulls the image ref you declared, starts the per-instance container, MCP routes tool calls to it.",
       "Negative: upload a YAML with an id matching a bundle connector (e.g. 'xlog') → 409 id_collides_with_bundle. Upload a YAML with no image field → 400 image_ref_required. Upload a YAML with runtimeMapping.style: module → 400 (schema validator rejects).",
       "Cleanup: delete instances first, then DELETE /api/agent/marketplace/<your-id>. Connector + install row + on-disk directory all removed.",
     ],
@@ -5129,8 +5129,8 @@ export const JOURNEYS: Journey[] = [
     verifyVia: [
       "POST /api/agent/marketplace/upload → 201 with the parsed connector summary",
       "GET /api/agent/marketplace/<your-id> → returns origin: user",
-      "ls /app/data/user_connectors/<your-id>/connector.yaml inside phantom_agent → file exists",
-      "After install + instance create + tool call: phantom-updater logs show 'pulling <your image ref>'; tool dispatches over MCP-over-HTTP to the per-instance container",
+      "ls /app/data/user_connectors/<your-id>/connector.yaml inside guardian_agent → file exists",
+      "After install + instance create + tool call: guardian-updater logs show 'pulling <your image ref>'; tool dispatches over MCP-over-HTTP to the per-instance container",
       "DELETE /api/agent/marketplace/<your-id> while instance exists → 409 has_instances",
       "GET /api/agent/audit?action=connector_uploaded → the upload event with origin=user + image ref recorded",
       "DELETE on a bundle connector id (e.g. xlog) → 403 cannot_delete_bundle (regardless of instance state)",
@@ -5196,7 +5196,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Create a web-connector instance (per-instance container)",
     summary:
-      "Walk the per-instance-container lifecycle end-to-end: create a web-connector instance → phantom-updater pulls the connector image → starts a per-instance container → calls back with container_url → agent re-binds proxy closures → tool calls route over MCP-over-HTTP.",
+      "Walk the per-instance-container lifecycle end-to-end: create a web-connector instance → guardian-updater pulls the connector image → starts a per-instance container → calls back with container_url → agent re-binds proxy closures → tool calls route over MCP-over-HTTP.",
     difficulty: "advanced",
     durationMin: 5,
     icon: "apps",
@@ -5207,13 +5207,13 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/instances",
         description:
-          "Body: {connector_id: 'web', name, config: {cdp_url}, secrets}. The MCP creates the row, then because connector.yaml has runtimeMapping.style='container', POSTs to phantom-updater /api/agent/connectors/web/instances/<name>/start.",
+          "Body: {connector_id: 'web', name, config: {cdp_url}, secrets}. The MCP creates the row, then because connector.yaml has runtimeMapping.style='container', POSTs to guardian-updater /api/agent/connectors/web/instances/<name>/start.",
       },
       {
         method: "POST",
         path: "/api/agent/connectors/web/instances/{name}/start",
         description:
-          "On phantom-updater. Pulls phantom-connector-web:<VERSION> from GHCR (with up-to-5 retries + cache fallback), starts a container named phantom-connector-web-<name>, attaches it to the compose default network, mounts the data volume read-only, then calls back to the agent's PUT /api/agent/instances/{id}/container_url with the URL.",
+          "On guardian-updater. Pulls guardian-connector-web:<VERSION> from GHCR (with up-to-5 retries + cache fallback), starts a container named guardian-connector-web-<name>, attaches it to the compose default network, mounts the data volume read-only, then calls back to the agent's PUT /api/agent/instances/{id}/container_url with the URL.",
       },
       {
         method: "PUT",
@@ -5223,18 +5223,18 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Confirm phantom-browser is running (it's profile-gated): `docker compose --profile browser up -d phantom-browser`. Without it, web.navigate calls fail at the chromedp connection step.",
+      "Confirm guardian-browser is running (it's profile-gated): `docker compose --profile browser up -d guardian-browser`. Without it, web.navigate calls fail at the chromedp connection step.",
       "Open /connectors → Marketplace. Find Web Browser, click Install (operator ack — does NOT create an instance).",
-      "Switch to Instances. Click 'Add Instance' for Web Browser. Name='primary'. cdp_url='http://phantom-browser:9222' (the default).",
-      "Submit. Watch the response: runtime_style='container', container_start.status='started'. After a few seconds, `docker ps` shows phantom-connector-web-primary up + healthy.",
+      "Switch to Instances. Click 'Add Instance' for Web Browser. Name='primary'. cdp_url='http://guardian-browser:9222' (the default).",
+      "Submit. Watch the response: runtime_style='container', container_start.status='started'. After a few seconds, `docker ps` shows guardian-connector-web-primary up + healthy.",
       "Read /api/agent/instances/<id> → container_url field is populated.",
-      "Trigger a tool: in chat, 'Open https://example.com and tell me the page title'. The agent calls web.navigate → routes through the proxy → through MCP-over-HTTP → connector container → CDP → phantom-browser → real fetch → result returns up the chain.",
-      "Negative: stop the connector container directly via `docker stop phantom-connector-web-primary`. Next web.navigate call → tool error 'connector container unreachable'. Use phantom-updater /api/agent/connectors/web/instances/primary/restart to recover.",
+      "Trigger a tool: in chat, 'Open https://example.com and tell me the page title'. The agent calls web.navigate → routes through the proxy → through MCP-over-HTTP → connector container → CDP → guardian-browser → real fetch → result returns up the chain.",
+      "Negative: stop the connector container directly via `docker stop guardian-connector-web-primary`. Next web.navigate call → tool error 'connector container unreachable'. Use guardian-updater /api/agent/connectors/web/instances/primary/restart to recover.",
     ],
     expectedResult:
-      "The per-instance-container lifecycle exercises four moving parts: agent (creates instance), phantom-updater (starts the container), the per-instance connector container (loads instance config + secrets via SecretStoreReader, registers tools with FastMCP), and the agent's tool-dispatch loader (synthesizes proxy callables that forward to the container's MCP). The routing happens under the hood.",
+      "The per-instance-container lifecycle exercises four moving parts: agent (creates instance), guardian-updater (starts the container), the per-instance connector container (loads instance config + secrets via SecretStoreReader, registers tools with FastMCP), and the agent's tool-dispatch loader (synthesizes proxy callables that forward to the container's MCP). The routing happens under the hood.",
     verifyVia: [
-      "`docker ps` shows phantom-connector-web-<name> running.",
+      "`docker ps` shows guardian-connector-web-<name> running.",
       "GET /api/agent/instances/<id>/test → probes the connector's /health endpoint and reports container_running:true.",
       "GET /api/agent/audit?target_prefix=tool:web. → tool calls show the same shape as in-process connector calls; the proxy is transparent at the audit layer.",
       "Boot log: 'web (primary, 10 tools)' confirms the connector advertises its tools after the container_url propagates.",
@@ -5326,7 +5326,7 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Open /skills. Confirm the four summary widgets (Total Skills / Active / Categories / Invocations) render LIVE values derived from the loaded skills array. Total should match `find /app/skills -name '*.md' | wc -l`.",
-      "Confirm the page header carries Import + Create Skill — Phantom is single-tenant, no workspace selector.",
+      "Confirm the page header carries Import + Create Skill — Guardian is single-tenant, no workspace selector.",
       "Click any unlocked scenario card. Detail panel opens with Download / Save / Delete in the header.",
       "Click 'Download'. Browser downloads <name>.md with the live body (frontmatter + body).",
       "Click into the body textarea. Body lazy-loads from skills_read. Edit something. The 'Save' button enables; an 'Unsaved changes' indicator appears.",
@@ -5365,7 +5365,7 @@ export const JOURNEYS: Journey[] = [
     toolsExercised: [
       "skills_list_all",
       "skills_read",
-      "phantom_create_data_worker",
+      "guardian_create_data_worker",
     ],
     apis: [
       {
@@ -5473,8 +5473,8 @@ export const JOURNEYS: Journey[] = [
       "Open /providers. Confirm the Vertex section auto-populates Project ID + Region from the ProviderStore, and the service-account JSON shows masked bullets.",
       "Click on the JSON textarea — it's editable. Paste a fresh Vertex service-account JSON. Save Changes activates.",
       "Click Save. Response: { ok: true, mcp_sync: { success: true, updated: '<id>', action: 'update' } } (or 'create' on first install).",
-      "Cross-check setup.json is NOT touched: docker exec phantom_agent stat -c '%y' /app/runtime/setup.json before and after — mtime should be identical.",
-      "Cross-check the ProviderStore got the update: curl -ks -H 'Authorization: Bearer $MCP_TOKEN' https://phantom-vm:8080/api/agent/providers?provider_id=vertex → returns the updated config with the new project_id.",
+      "Cross-check setup.json is NOT touched: docker exec guardian_agent stat -c '%y' /app/runtime/setup.json before and after — mtime should be identical.",
+      "Cross-check the ProviderStore got the update: curl -ks -H 'Authorization: Bearer $MCP_TOKEN' https://guardian-vm:8080/api/agent/providers?provider_id=vertex → returns the updated config with the new project_id.",
       "Trigger a chat dispatch. The chat handler resolves Vertex creds via getEffectiveRuntimeConfig → vertex-credentials.ts → MCP /api/agent/providers/{id}?include_secrets=true (cleartext). Authenticates cleanly with the new key.",
       "Negative: paste a placeholder JSON ({...private_key:'fake'...}) and save. PUT succeeds (the agent doesn't validate JSON shape); the chat handler's detectPlaceholderCredential guard catches it at next chat dispatch with the operator-actionable error.",
     ],
@@ -5483,8 +5483,8 @@ export const JOURNEYS: Journey[] = [
     verifyVia: [
       "PUT /api/agent/providers/config response.mcp_sync.success === true with action 'update' or 'create'",
       "GET /api/agent/providers/config after save returns the new vertexProjectId; sensitive fields stay redacted",
-      "docker exec phantom_agent stat /app/runtime/setup.json — mtime UNCHANGED across the PUT (new path doesn't touch it)",
-      "docker exec phantom_agent grep -c 'detectPlaceholderCredential' /app/.next/server/app/api/chat/route.js > 0 (placeholder guard still deployed)",
+      "docker exec guardian_agent stat /app/runtime/setup.json — mtime UNCHANGED across the PUT (new path doesn't touch it)",
+      "docker exec guardian_agent grep -c 'detectPlaceholderCredential' /app/.next/server/app/api/chat/route.js > 0 (placeholder guard still deployed)",
     ],
     related: ["ops-override-connector-via-instances", "ops-override-ui-password-via-profile"],
     components: ["secrets", "chat"],
@@ -5572,7 +5572,7 @@ export const JOURNEYS: Journey[] = [
         method: "PATCH",
         path: "/api/agent/instances/{id}",
         description:
-          "Update the caldera instance's config (baseUrl) or secrets (apiKey). InstanceStore writes immediately; SecretStore re-encrypts the apiKey at rest with PHANTOM_SECRET_KEK.",
+          "Update the caldera instance's config (baseUrl) or secrets (apiKey). InstanceStore writes immediately; SecretStore re-encrypts the apiKey at rest with GUARDIAN_SECRET_KEK.",
       },
       {
         method: "GET",
@@ -5593,7 +5593,7 @@ export const JOURNEYS: Journey[] = [
     verifyVia: [
       "GET /api/agent/instances/<caldera-instance-id> reflects the edit",
       "Audit feed: tool:caldera.get_all_agents call after the edit shows the call resolved to the new URL",
-      "Container logs: docker exec phantom_agent grep 'caldera' inside the MCP log shows the resolved baseUrl on each call",
+      "Container logs: docker exec guardian_agent grep 'caldera' inside the MCP log shows the resolved baseUrl on each call",
       "Negative case: a misconfigured instance produces 'caldera instance has no apiKey configured' (not a generic 500, not a silent retry)",
     ],
     related: [
@@ -5677,7 +5677,7 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/backup",
         description:
-          "Auth-gated via the phantom_session cookie at middleware.ts. Streams a zip download with Content-Disposition attachment + a stamped filename. Per-section try/catch — if one MCP endpoint fails, the manifest carries a backup_warnings[] entry rather than killing the whole backup. Server-side calls /api/agent/instances?include_secrets=true (a bearer-gated MCP flag) to get cleartext secrets so the destination's KEK can re-encrypt on restore.",
+          "Auth-gated via the guardian_session cookie at middleware.ts. Streams a zip download with Content-Disposition attachment + a stamped filename. Per-section try/catch — if one MCP endpoint fails, the manifest carries a backup_warnings[] entry rather than killing the whole backup. Server-side calls /api/agent/instances?include_secrets=true (a bearer-gated MCP flag) to get cleartext secrets so the destination's KEK can re-encrypt on restore.",
       },
       {
         method: "POST",
@@ -5699,22 +5699,22 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /settings/backup-restore. Click Download backup (.zip). Browser saves phantom-backup-<timestamp>.zip — open it locally to inspect: manifest.json with section_counts, personality.json, instances.json (cleartext secrets visible — DO commit this is sensitive), memory.json (no embedding fields), jobs.json (runtime jobs only), skills/ tree, knowledge/ tree.",
+      "Open /settings/backup-restore. Click Download backup (.zip). Browser saves guardian-backup-<timestamp>.zip — open it locally to inspect: manifest.json with section_counts, personality.json, instances.json (cleartext secrets visible — DO commit this is sensitive), memory.json (no embedding fields), jobs.json (runtime jobs only), skills/ tree, knowledge/ tree.",
       "On the same deployment: Restore section → file picker → select the zip → Preview restore plan. The plan shows manifest version, section counts, and the restore order. Click Apply. Check the result: the applied counts match what was in the zip (personality: 1, instances: N, etc), no errors. Skipped counts may be non-zero if entries already exist.",
       "Tick the \"Overwrite existing entries (force)\" checkbox and re-run Apply. Now the skipped counts go to zero — every entry is overwritten in place.",
-      "Cross-deployment test: install Phantom on a second VM with a DIFFERENT PHANTOM_SECRET_KEK. Upload the zip there → Apply. Confirm the connector instances come back functional (probe them via /connectors or trigger a tool call). The KEK mismatch is fine — the destination re-encrypts under its own KEK on restore.",
+      "Cross-deployment test: install Guardian on a second VM with a DIFFERENT GUARDIAN_SECRET_KEK. Upload the zip there → Apply. Confirm the connector instances come back functional (probe them via /connectors or trigger a tool call). The KEK mismatch is fine — the destination re-encrypts under its own KEK on restore.",
       "Caveat verification: confirm memory.json has no `embedding` field on any entry. Confirm knowledge docs in the zip do NOT actually overwrite the destination's KB content (the manifest section_counts.knowledge will be 0 in the restore result; warnings[] will say \"X knowledge doc(s) ignored — knowledge bundles are image-baked\").",
       "Negative: upload a corrupt zip (truncate the file) → Preview returns 400 \"not a valid zip\". Upload a zip with no manifest.json → 400 \"missing manifest.json\". Upload a zip with schema_version: 999 → 400 \"unsupported schema_version\".",
-      "Negative: cookie/auth — POST /api/agent/restore (or GET /api/agent/backup) without phantom_session cookie → 401. The auth gate is the middleware.ts edge layer so unauthenticated callers can't pull cleartext secrets.",
+      "Negative: cookie/auth — POST /api/agent/restore (or GET /api/agent/backup) without guardian_session cookie → 401. The auth gate is the middleware.ts edge layer so unauthenticated callers can't pull cleartext secrets.",
     ],
     expectedResult:
       "A complete-state backup is reproducible across deployments — every operator-owned section restores to a functional state on a destination with a different KEK, secrets re-encrypt cleanly, runtime jobs come back without re-creation, memory entries land (re-embedded on first semantic search), personality + skills round-trip exactly. Knowledge bundles correctly NO-op (image-baked). The 100 MB upload cap + schema_version pin protect against corrupt or future-version zips.",
     verifyVia: [
-      "GET /api/agent/backup → 200, application/zip body, Content-Disposition attachment with filename pattern phantom-backup-<ISO-stamp>.zip",
+      "GET /api/agent/backup → 200, application/zip body, Content-Disposition attachment with filename pattern guardian-backup-<ISO-stamp>.zip",
       "POST /api/agent/restore?dry_run=true → 200, JSON body with {dry_run:true, manifest, sections_present}",
       "POST /api/agent/restore → 200, JSON body with {ok:true, applied:{...}}",
       "Audit log captures restore activity (one row per section's POST/PUT to its respective MCP endpoint)",
-      "Cross-KEK restore works — source's PHANTOM_SECRET_KEK doesn't have to match the destination's",
+      "Cross-KEK restore works — source's GUARDIAN_SECRET_KEK doesn't have to match the destination's",
     ],
     related: [
       "ops-edit-caldera-via-connectors-v0135",
@@ -5773,7 +5773,7 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open a fresh chat at the Phantom UI.",
+      "Open a fresh chat at the Guardian UI.",
       "Paste the first prompt and submit.",
       "Watch the wire-event trace — should show 5-10 cortex-docs/xql_lookup tool calls + their results, then a synthesized query with citations.",
       "Open /observability/connectors and confirm cortex-docs is listed and healthy.",
@@ -5844,7 +5844,7 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Ensure a Cortex XDR instance is configured at /instances (or /connectors — connector instance management UI).",
-      "Open a fresh chat at the Phantom UI.",
+      "Open a fresh chat at the Guardian UI.",
       "Paste prompt 1 (datasets) — confirm the response includes a list of 10+ datasets with exists/missing breakdown.",
       "Paste prompt 2 (mitre tactics) — confirm the agent retrieved XQL-795 from the KB (visible in tool-call trace) and ran the query against live XDR. Result should be a tactic-count table.",
       "Paste prompt 3 (CVEs) — confirm same retrieval+execute pattern for va_cves dataset.",

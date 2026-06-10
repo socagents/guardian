@@ -44,4 +44,4 @@ The agent dispatches via `cortex-xdr/run_xql_query` (issue #36). For incident-sh
 
 ## Source
 
-Pattern derived from the Cortex XDR Public API + Cortex XQL documentation (queryable via Phantom's `cortex-docs/search`, `product=xdr`). Validate against your tenant's `xdr_data` schema before relying on field names — multi-tenant deployments may surface custom alert fields.
+Pattern derived from the Cortex XDR Public API + Cortex XQL documentation (queryable via Guardian's `cortex-docs/search`, `product=xdr`). Validate against your tenant's `xdr_data` schema before relying on field names — multi-tenant deployments may surface custom alert fields.

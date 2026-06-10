@@ -102,7 +102,7 @@ def test_set_emits_log_signal(caplog):
     installed' at INFO. Smoke tests grep for this line to confirm
     the singleton is wired post-deploy; a log-message refactor that
     drops it breaks operator dashboards."""
-    caplog.set_level(logging.INFO, logger="Phantom MCP")
+    caplog.set_level(logging.INFO, logger="Guardian MCP")
 
     async def _fake(name: str, kwargs: dict[str, Any]) -> Any:
         return None
@@ -124,7 +124,7 @@ def test_clear_emits_log_signal(caplog):
     # Install first so the subsequent None-set actually transitions.
     tool_dispatcher_module.set_tool_dispatcher(_fake)
     caplog.clear()
-    caplog.set_level(logging.INFO, logger="Phantom MCP")
+    caplog.set_level(logging.INFO, logger="Guardian MCP")
     tool_dispatcher_module.set_tool_dispatcher(None)
     assert any(
         "tool_dispatcher cleared" in r.message

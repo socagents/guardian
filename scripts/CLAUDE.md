@@ -1,6 +1,6 @@
 # `scripts/` — maintainer research + build tooling
 
-This directory contains **maintainer-side scripts**. They are NOT part of the customer-facing Phantom runtime, NOT installed on customer machines, and NOT triggered by any customer action.
+This directory contains **maintainer-side scripts**. They are NOT part of the customer-facing Guardian runtime, NOT installed on customer machines, and NOT triggered by any customer action.
 
 **Repo-wide rules live in the [root CLAUDE.md](../CLAUDE.md)**. This file holds only conventions LOCAL to `scripts/`.
 
@@ -29,10 +29,10 @@ If the answer is *"only if the operator runs it manually"* — still `scripts/`.
 | Script | Purpose | Cadence |
 |---|---|---|
 | `agent_lifecycle.sh` | Compose lifecycle wrapper: start/stop/restart/status/health/logs/apply-setup | Manual, dev loop |
-| `backup_phantom.sh` | Archive `phantom_mcp_data` + `phantom_mcp_skills` volumes + the `.phantom-agent/` runtime dir into a manifest-carrying tarball | Manual, before risky upgrades |
-| `restore_phantom.sh` | Restore a `backup_phantom.sh` tarball onto this or another host | Manual, disaster recovery |
-| `check-vm-compose.sh` | Diff local `docker-compose.yml` against the copy deployed on phantom-vm — catches silent VM drift before a sync | Manual, pre-sync gate |
-| `phantom_tunnels.sh` | Manage the IAP tunnels to phantom-vm (ssh 22, agent 3000, mcp 8080) with start/stop/status/smoke | Manual, dev loop |
+| `backup_guardian.sh` | Archive `guardian_mcp_data` + `guardian_mcp_skills` volumes + the `.guardian-agent/` runtime dir into a manifest-carrying tarball | Manual, before risky upgrades |
+| `restore_guardian.sh` | Restore a `backup_guardian.sh` tarball onto this or another host | Manual, disaster recovery |
+| `check-vm-compose.sh` | Diff local `docker-compose.yml` against the copy deployed on guardian-vm — catches silent VM drift before a sync | Manual, pre-sync gate |
+| `guardian_tunnels.sh` | Manage the IAP tunnels to guardian-vm (ssh 22, agent 3000, mcp 8080) with start/stop/status/smoke | Manual, dev loop |
 | `ci_bootstrap_setup_body.py` | Build the placeholder JSON body CI POSTs to `/api/v1/setup` (XSIAM + Vertex placeholders, non-destructive `replace: false`) | Auto, CI bootstrap |
 | `e2e_xdr_tools_battery.py` | Catalog-presence + toggle-filter battery against the deployed cortex-xdr connector tools | Per-release, manual |
 | `e2e_xsiam_tools_battery.py` | Same battery shape for the xsiam connector tools | Per-release, manual |

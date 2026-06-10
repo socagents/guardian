@@ -94,11 +94,11 @@ function endpointToOperation(e: ApiEndpoint): Record<string, unknown> {
   }
   op.responses = responses;
 
-  // Phase-11 metadata as x-phantom-* extensions so OpenAPI consumers
+  // Phase-11 metadata as x-guardian-* extensions so OpenAPI consumers
   // can render UI hints (color-code destructive ops, surface
   // approval-required badges) without needing the catalog directly.
-  if (e.riskTier) op["x-phantom-risk-tier"] = e.riskTier;
-  if (e.requiresApproval) op["x-phantom-requires-approval"] = true;
+  if (e.riskTier) op["x-guardian-risk-tier"] = e.riskTier;
+  if (e.requiresApproval) op["x-guardian-requires-approval"] = true;
 
   return op;
 }
@@ -132,15 +132,15 @@ export function generateOpenApiSpec(opts?: {
   return {
     openapi: "3.0.3",
     info: {
-      title: "Phantom Agent API",
+      title: "Guardian Agent API",
       version,
       description:
-        "Operator-facing REST surface for the Phantom incident-response " +
+        "Operator-facing REST surface for the Guardian incident-response " +
         "agent. The agent UI proxies (`/api/agent/*`) attach the bundle's " +
         "MCP_TOKEN server-side and forward to the embedded MCP at " +
         "`/api/v1/*`. Everything documented here goes through the proxy " +
         "(no token needed in the browser).",
-      contact: { name: "kite-production", url: "https://github.com/kite-production/phantom" },
+      contact: { name: "kite-production", url: "https://github.com/kite-production/guardian" },
       license: { name: "Apache-2.0" },
     },
     servers: [{ url: serverUrl, description: "Local agent UI" }],

@@ -1,4 +1,4 @@
-"""Configuration settings for Phantom MCP Server.
+"""Configuration settings for Guardian MCP Server.
 
 v1.2 stage 3A: per-call instance config injection via contextvar.
 
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     mcp_path: str = Field("/api/v1/stream/mcp", validation_alias="MCP_PATH")
 
     # --- SSL Settings ---
-    # PHANTOM_TLS_CERT_FILE / PHANTOM_TLS_KEY_FILE are the preferred env
+    # GUARDIAN_TLS_CERT_FILE / GUARDIAN_TLS_KEY_FILE are the preferred env
     # names. We previously used SSL_CERT_FILE / SSL_KEY_FILE, but those
     # collide with OpenSSL/Python's outbound-trust semantics: setting
     # SSL_CERT_FILE in the process env causes Python's ssl module to use
@@ -43,15 +43,15 @@ class Settings(BaseSettings):
     # outbound HTTPS call (Vertex AI embeddings, Gemini, etc.) with
     # CERTIFICATE_VERIFY_FAILED. AliasChoices keeps SSL_CERT_FILE
     # readable as a fallback for legacy installs that still set it,
-    # but new deployments should use the PHANTOM_-prefixed names which
+    # but new deployments should use the GUARDIAN_-prefixed names which
     # the entrypoint script now exports.
     ssl_cert_file: str | None = Field(
         None,
-        validation_alias=AliasChoices("PHANTOM_TLS_CERT_FILE", "SSL_CERT_FILE"),
+        validation_alias=AliasChoices("GUARDIAN_TLS_CERT_FILE", "SSL_CERT_FILE"),
     )
     ssl_key_file: str | None = Field(
         None,
-        validation_alias=AliasChoices("PHANTOM_TLS_KEY_FILE", "SSL_KEY_FILE"),
+        validation_alias=AliasChoices("GUARDIAN_TLS_KEY_FILE", "SSL_KEY_FILE"),
     )
     ssl_cert_pem: str | None = Field(None, validation_alias="SSL_CERT_PEM")
     ssl_key_pem: str | None = Field(None, validation_alias="SSL_KEY_PEM")

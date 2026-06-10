@@ -13,7 +13,7 @@
 >      content at runtime) compose with the existing manifest-shipped
 >      Tier-1+2 KBs, and what does it mean for the on-disk layout?
 >
-> Also serves as authoritative documentation for phantom's
+> Also serves as authoritative documentation for guardian's
 > implementation while the upstream PR is in flight.
 
 ## Context
@@ -54,9 +54,9 @@ deployment topology, optional 700 KB extension that adds HNSW.
 ```yaml
 knowledge:
   bundled:
-    - name: "phantom-soc"
-      path: "./kbs/phantom-soc/"
-      schema: "./kbs/phantom-soc/schema.json"
+    - name: "guardian-soc"
+      path: "./kbs/guardian-soc/"
+      schema: "./kbs/guardian-soc/schema.json"
       # New v1.3 field. Default: "brute". Bundle authors opt in
       # per-KB based on row-count budget.
       vector_index: "hnsw"
@@ -183,7 +183,7 @@ Boot reconciliation rules:
 
 ```yaml
 capabilities:
-  kbReads: ["phantom-soc", "xql-examples"]
+  kbReads: ["guardian-soc", "xql-examples"]
   kbWrites:
     - "operator-runbooks"   # Tier-3 KB; agent can write here
 ```
@@ -194,7 +194,7 @@ preserved.
 
 ## Proposal D: Operator-facing UI conventions
 
-v1.2 ships no operator UI for KBs. Phantom is filling the gap — the
+v1.2 ships no operator UI for KBs. Guardian is filling the gap — the
 agent has a `/knowledge` route with two read-only tabs (Entries +
 Try search) and stubs for two future tabs (Import + Settings) gated
 on Tier-3. Spec should document the convention so other bundles
@@ -230,7 +230,7 @@ POST   /api/v1/kbs/{name}/imports       # bulk: CSV / JSONL / MD dir
 
 ## Reference implementation
 
-In `kite-production/phantom`:
+In `kite-production/guardian`:
 
 - `bundles/spark/mcp/src/usecase/kb_store.py` — `SqliteKnowledgeBase`
   (multi-KB, brute-force cosine, source-hash change detection)

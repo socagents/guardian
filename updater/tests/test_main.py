@@ -1,9 +1,9 @@
 """
-Smoke tests for phantom-updater.
+Smoke tests for guardian-updater.
 
 These exercise the auth middleware + version-parsing helpers. Tests
 that need a real docker daemon or GHCR access are gated behind
-PHANTOM_TEST_E2E=1 and skipped by default — they're meant for the
+GUARDIAN_TEST_E2E=1 and skipped by default — they're meant for the
 on-VM smoke run, not unit CI.
 """
 
@@ -94,28 +94,28 @@ def test_post_update_rejects_no_auth():
     [
         # Full GHCR ref
         (
-            "ghcr.io/kite-production/phantom-agent:1.2.0",
-            ("ghcr.io", "kite-production/phantom-agent", "1.2.0"),
+            "ghcr.io/kite-production/guardian-agent:1.2.0",
+            ("ghcr.io", "kite-production/guardian-agent", "1.2.0"),
         ),
         # Docker Hub-style
         (
-            "aymanam/phantom-browser:5.3.0",
-            ("", "aymanam/phantom-browser", "5.3.0"),
+            "aymanam/guardian-browser:5.3.0",
+            ("", "aymanam/guardian-browser", "5.3.0"),
         ),
         # Bare image name
         (
-            "phantom-agent",
-            ("", "phantom-agent", "latest"),
+            "guardian-agent",
+            ("", "guardian-agent", "latest"),
         ),
         # Image name with tag, no registry
         (
-            "phantom-browser:latest",
-            ("", "phantom-browser", "latest"),
+            "guardian-browser:latest",
+            ("", "guardian-browser", "latest"),
         ),
         # Image with digest-style tag (uncommon but valid)
         (
-            "ghcr.io/kite-production/phantom-agent:1.2",
-            ("ghcr.io", "kite-production/phantom-agent", "1.2"),
+            "ghcr.io/kite-production/guardian-agent:1.2",
+            ("ghcr.io", "kite-production/guardian-agent", "1.2"),
         ),
     ],
 )
@@ -147,13 +147,13 @@ def test_semver_gt(a, b, expected):
 
 
 # ─── E2E (gated) ─────────────────────────────────────────────────────
-# Only runs when PHANTOM_TEST_E2E=1 — needs a real docker daemon AND a
+# Only runs when GUARDIAN_TEST_E2E=1 — needs a real docker daemon AND a
 # real GHCR token. Use this on the VM after deploying a release.
 
 
 _e2e_skip = pytest.mark.skipif(
-    os.environ.get("PHANTOM_TEST_E2E") != "1",
-    reason="set PHANTOM_TEST_E2E=1 to run end-to-end tests",
+    os.environ.get("GUARDIAN_TEST_E2E") != "1",
+    reason="set GUARDIAN_TEST_E2E=1 to run end-to-end tests",
 )
 
 
@@ -166,7 +166,7 @@ def test_e2e_version_current():
     assert r.status_code == 200
     body = r.json()
     # All managed services should be present.
-    assert set(body.keys()) == {"phantom-agent"}
+    assert set(body.keys()) == {"guardian-agent"}
 
 
 @_e2e_skip
@@ -185,7 +185,7 @@ def test_e2e_version_check():
 
 
 def _stub_subprocess_and_project(monkeypatch):
-    """Shared test fixture: pin the project-name resolver to "phantom"
+    """Shared test fixture: pin the project-name resolver to "guardian"
     and capture the next subprocess.run cmd, returning the captured
     dict for assertions."""
     from src import main as updater_main
@@ -202,7 +202,7 @@ def _stub_subprocess_and_project(monkeypatch):
 
         return R()
 
-    monkeypatch.setattr(updater_main, "_COMPOSE_PROJECT_NAME", "phantom")
+    monkeypatch.setattr(updater_main, "_COMPOSE_PROJECT_NAME", "guardian")
     monkeypatch.setattr(updater_main.subprocess, "run", fake_run)
     return updater_main, captured
 
@@ -216,21 +216,21 @@ def test_compose_up_services_passes_project_name(monkeypatch):
     Without --project-name, compose derives the project from the
     compose-file's directory ("/host" inside the updater container)
     and tries to CREATE new containers under that project, hitting
-    a 409 on the container_name pin (e.g. "/phantom_agent"). The fix
+    a 409 on the container_name pin (e.g. "/guardian_agent"). The fix
     reads the updater's own com.docker.compose.project label and
     passes it explicitly.
     """
     main, captured = _stub_subprocess_and_project(monkeypatch)
 
-    rc, _ = main._compose_up_services(["phantom-agent"])
+    rc, _ = main._compose_up_services(["guardian-agent"])
     assert rc == 0
     cmd = captured["cmd"]
     assert "--project-name" in cmd, f"--project-name missing from {cmd!r}"
     pn_idx = cmd.index("--project-name")
-    assert cmd[pn_idx + 1] == "phantom", f"unexpected project: {cmd[pn_idx + 1]!r}"
+    assert cmd[pn_idx + 1] == "guardian", f"unexpected project: {cmd[pn_idx + 1]!r}"
     # up flow uses `up -d`
     assert "up" in cmd and "-d" in cmd
-    assert "phantom-agent" in cmd
+    assert "guardian-agent" in cmd
 
 
 def test_compose_restart_service_uses_restart_verb(monkeypatch):
@@ -240,7 +240,7 @@ def test_compose_restart_service_uses_restart_verb(monkeypatch):
     a healthy container with unchanged config — compose sees no
     diff and exits 0 without bouncing anything. We need the entrypoint
     to actually re-run (so the service re-reads mounted files, e.g.
-    phantom-agent picking up regenerated TLS material), which
+    guardian-agent picking up regenerated TLS material), which
     requires a real restart (SIGTERM the main process, relaunch).
 
     Pre-v0.1.19 the restart endpoint reused _compose_up_services,
@@ -250,7 +250,7 @@ def test_compose_restart_service_uses_restart_verb(monkeypatch):
     """
     main, captured = _stub_subprocess_and_project(monkeypatch)
 
-    rc, _ = main._compose_restart_service("phantom-agent")
+    rc, _ = main._compose_restart_service("guardian-agent")
     assert rc == 0
     cmd = captured["cmd"]
     # Must use the restart subcommand, NOT up
@@ -259,6 +259,6 @@ def test_compose_restart_service_uses_restart_verb(monkeypatch):
     # Project name is still required
     assert "--project-name" in cmd
     pn_idx = cmd.index("--project-name")
-    assert cmd[pn_idx + 1] == "phantom"
+    assert cmd[pn_idx + 1] == "guardian"
     # The targeted service is the last positional arg
-    assert cmd[-1] == "phantom-agent"
+    assert cmd[-1] == "guardian-agent"

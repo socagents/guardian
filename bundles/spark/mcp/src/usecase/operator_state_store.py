@@ -5,7 +5,7 @@ should follow them across devices + survive volume operations:
 
   * tested_journeys — which journey ids the operator has marked tested
     on /help/journeys. Pre-v0.5.1 lived in localStorage under
-    `phantom.help.tested-journeys`; survived volume wipes and didn't
+    `guardian.help.tested-journeys`; survived volume wipes and didn't
     sync across browsers, violating both the operator's mental model
     and v0.4.0's canonical-state discipline (Rule 1: one state surface
     = one storage home).
@@ -49,7 +49,7 @@ concern. Each hook documents what shape it stores.
 
 # Multi-user readiness
 
-Today phantom is single-user (one admin per v0.4.0). The schema has
+Today guardian is single-user (one admin per v0.4.0). The schema has
 no `user_id` column because there's exactly one user. When multi-user
 lands (v0.4.0 roadmap), add `user_id TEXT NOT NULL DEFAULT 'admin'` +
 move PRIMARY KEY to `(user_id, key)`. All existing rows migrate
@@ -76,7 +76,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 

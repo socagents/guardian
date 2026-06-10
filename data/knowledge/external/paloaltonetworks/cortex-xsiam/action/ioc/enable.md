@@ -27,4 +27,4 @@ Re-enable previously disabled IoCs. Mirror of `xsiam_ioc_disable` — same argum
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_ioc_enable`
+- Guardian tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_ioc_enable`

@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Phantom State Machines Atlas.
+ * Guardian State Machines Atlas.
  *
  * Three side-by-side state machines: Task · Connector · Session. The
- * point is the architectural symmetry — Phantom uses the same
+ * point is the architectural symmetry — Guardian uses the same
  * persistence + state-transition pattern (single row per entity,
  * audit row on every transition) across multiple subsystems.
  */

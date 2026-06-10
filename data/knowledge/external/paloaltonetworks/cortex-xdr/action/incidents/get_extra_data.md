@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/incidents/get_incident_extra_data/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_incidents_get_extra_data`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api/cortex-xdr-apis/incident-management/get-extra-incident-data.html
 
@@ -43,5 +43,5 @@ Returns a GetExtraIncidentDataResponse object if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_incidents_get_extra_data`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_incidents_get_extra_data`
 - Source mapping: `ebarti/cortex_xdr_client/api/incidents_api.py` → `get_incident_extra_data`

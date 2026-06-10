@@ -2,7 +2,7 @@
  * Builtin hook registry — Issue #26 (v0.5.21).
  *
  * Single source of truth for which builtin handlers ship with this
- * phantom-agent image. Lookup is by `name` (the value of
+ * guardian-agent image. Lookup is by `name` (the value of
  * `transport.name` on a registered builtin-transport hook).
  *
  * Why a const Record vs. dynamic import / discovery:

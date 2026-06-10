@@ -1,1 +1,1 @@
-"""Use case layer for Phantom MCP Server."""
+"""Use case layer for Guardian MCP Server."""

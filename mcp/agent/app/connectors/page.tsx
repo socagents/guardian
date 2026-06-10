@@ -2641,7 +2641,7 @@ function InstancesTab({
                           <span className="material-symbols-outlined text-xl">download</span>
                         </button>
 
-                        {/* Workspace assignment removed in v0.1.15 — phantom is
+                        {/* Workspace assignment removed in v0.1.15 — guardian is
                             single-tenant; the workspace concept ported from
                             Spark's multi-agent UI doesn't apply here. */}
 
@@ -4056,7 +4056,7 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
             </section>
           )}
 
-          {/* Workspace Assignment removed for phantom standalone — single
+          {/* Workspace Assignment removed for guardian standalone — single
               tenant, no workspace concept. The per-instance config panel
               above is now the only place credentials live. */}
 
@@ -4589,7 +4589,7 @@ export default function ConnectorsPage() {
     [],
   );
 
-  // Phantom is single-tenant standalone — there are no workspaces to
+  // Guardian is single-tenant standalone — there are no workspaces to
   // assign connectors to. The Workspaces tab from Spark is dropped;
   // the Workspace Assignment panel inside an instance's detail view is
   // also dropped (see PanelSection below).
@@ -4680,7 +4680,7 @@ export default function ConnectorsPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Workspace selector removed in v0.1.15 — phantom is single-
+            {/* Workspace selector removed in v0.1.15 — guardian is single-
                 tenant, the dropdown only ever showed "All Workspaces" or
                 "Playground" with no functional impact. */}
             <button

@@ -40,7 +40,7 @@ from usecase.audit_log import (
 from usecase.connector_probes import PROBE_IMPLEMENTED, real_probe
 from usecase.instance_store import InstanceStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 # Probes moved to usecase/connector_probes.py so /api/v1/instances/{id}/test
@@ -199,7 +199,7 @@ def register_connector_routes(
         """Internal endpoint — chat-route calls after a successful
         tool dispatch. Marks the connector connected, resets
         consecutive_failures. Underscore prefix flags it as an
-        intra-Phantom call (operators wouldn't trigger this from
+        intra-Guardian call (operators wouldn't trigger this from
         the UI directly)."""
         if (resp := require_bearer(request)) is not None:
             return resp
@@ -296,7 +296,7 @@ def register_connector_routes(
                 # secrets so the probe tests the operator-configured
                 # endpoint rather than the env-var defaults. With the
                 # 1:1 instance↔connector mapping in single-tenant
-                # Phantom there's typically one instance per connector;
+                # Guardian there's typically one instance per connector;
                 # if multiple exist we just probe the first (the
                 # /instances/{id}/test endpoint is the per-instance
                 # surface for finer control).

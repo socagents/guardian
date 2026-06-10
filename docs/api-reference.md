@@ -1,9 +1,9 @@
-# Phantom — API Reference
+# Guardian — API Reference
 
 The embedded MCP exposes admin + integration HTTP routes at `/api/v1/*` on port `8080`. All routes require `Authorization: Bearer <token>` unless otherwise noted, where `<token>` is either:
 
 - **MCP_TOKEN** — bundle-internal admin token. Generated at container start (or pinned in `.env`). The Next.js UI uses this for every internal call.
-- **API key** (`phantom_ak_<id>_<secret>`) — operator-minted, scoped, revocable. See `/api/v1/api_keys` to mint.
+- **API key** (`guardian_ak_<id>_<secret>`) — operator-minted, scoped, revocable. See `/api/v1/api_keys` to mint.
 
 Routes that are intentionally unauthenticated (Prometheus exposition, MCP JSON-RPC entrypoint) are marked **(unauth)**.
 
@@ -105,8 +105,8 @@ underscores, name is uppercased.
 
 | Manifest target | Env var |
 |---|---|
-| `channel:soc` | `PHANTOM_NOTIFICATION_CHANNEL_SOC` |
-| `channel:purple-team` | `PHANTOM_NOTIFICATION_CHANNEL_PURPLE_TEAM` |
+| `channel:soc` | `GUARDIAN_NOTIFICATION_CHANNEL_SOC` |
+| `channel:purple-team` | `GUARDIAN_NOTIFICATION_CHANNEL_PURPLE_TEAM` |
 
 The dispatcher POSTs JSON `{topic, severity, target, id, created_at, payload}` to the URL.
 Channels with no URL configured skip silently (`dispatch_status="failed"`,

@@ -65,14 +65,14 @@ env:
 jobs:
   release:
     name: Build & push images, pack install kit
-    # We use GitHub-hosted runners (not the self-hosted phantom VM) for
+    # We use GitHub-hosted runners (not the self-hosted guardian VM) for
     # releases specifically. The self-hosted runner sits behind GCP
     # Cloud NAT, which throttles concurrent egress connections — when
     # docker push fans out parallel HEAD probes to ghcr.io for blob
     # existence checks (one per layer), the NAT runs out of source-
     # port allocations and individual probes time out. We confirmed
     # this empirically: the v0.1.0 first attempt failed at the
-    # phantom-agent push, and after setting max-concurrent-uploads=1
+    # guardian-agent push, and after setting max-concurrent-uploads=1
     # on the self-hosted dockerd, the agent push succeeded but the
     # next image's push then failed at the HEAD-probe stage (HEAD
     # probes aren't covered by max-concurrent-uploads — they're
@@ -149,18 +149,18 @@ jobs:
         # stays running).
         #
         # Source path mapping (must stay in sync with the build steps):
-        #   phantom-agent              → mcp/agent/, bundles/spark/
-        #   phantom-updater            → updater/
-        #   phantom-browser            → phantom-browser/
-        #   phantom-connector-runtime  → phantom-connector-runtime/
+        #   guardian-agent              → mcp/agent/, bundles/spark/
+        #   guardian-updater            → updater/
+        #   guardian-browser            → guardian-browser/
+        #   guardian-connector-runtime  → guardian-connector-runtime/
         #     (added v0.1.30 — base image every per-connector container
         #      inherits from; see docs/spec-per-instance-connector-containers.md)
-        #   phantom-connector-xsiam      → bundles/spark/connectors/xsiam/
-        #     PLUS rebuilds whenever phantom-connector-runtime rebuilds,
+        #   guardian-connector-xsiam      → bundles/spark/connectors/xsiam/
+        #     PLUS rebuilds whenever guardian-connector-runtime rebuilds,
         #     because the FROM in its Dockerfile points at the base image's
         #     digest. Same OR-logic for the other connectors below.
-        #   phantom-connector-web        → bundles/spark/connectors/web/
-        #   phantom-connector-cortex-docs → bundles/spark/connectors/cortex-docs/  (v0.3.1+)
+        #   guardian-connector-web        → bundles/spark/connectors/web/
+        #   guardian-connector-cortex-docs → bundles/spark/connectors/cortex-docs/  (v0.3.1+)
         #     Module-style today; image exists for v0.2 container-mode
         #     future. Same FROM-runtime force-rebuild logic as the other
         #     per-connector images.
@@ -233,8 +233,8 @@ jobs:
 
             AGENT=$(changed mcp/agent/ bundles/spark/)
             UPDATER=$(changed updater/)
-            BROWSER=$(changed phantom-browser/)
-            CONNECTOR_RUNTIME=$(changed phantom-connector-runtime/)
+            BROWSER=$(changed guardian-browser/)
+            CONNECTOR_RUNTIME=$(changed guardian-connector-runtime/)
             # Per-connector images: rebuild when their source changed
             # OR when the runtime base rebuilt (FROM dependency).
             CONNECTOR_XSIAM=$(changed bundles/spark/connectors/xsiam/)
@@ -250,7 +250,7 @@ jobs:
             # never updated to include it in the digest manifest). The
             # gap surfaced in v0.6.20 when an operator restart of a
             # cortex-xdr instance fell to tag-pinning and tried to pull
-            # `:dev-<sha>` which doesn't exist; phantom-updater's image
+            # `:dev-<sha>` which doesn't exist; guardian-updater's image
             # resolution NEEDS digest-pinning to work. v0.6.20 closes
             # the plumbing gap retroactively.
             CONNECTOR_CORTEX_XDR=$(changed bundles/spark/connectors/cortex-xdr/)
@@ -261,7 +261,7 @@ jobs:
               CONNECTOR_XSIAM=1; CONNECTOR_WEB=1
               CONNECTOR_CORTEX_DOCS=1; CONNECTOR_CORTEX_CONTENT=1
               CONNECTOR_CORTEX_XDR=1  # v0.6.20+
-              echo "::notice::phantom-connector-runtime rebuilt — forcing rebuild of all 5 per-connector images (FROM dependency)"
+              echo "::notice::guardian-connector-runtime rebuilt — forcing rebuild of all 5 per-connector images (FROM dependency)"
             fi
           fi
 
@@ -295,9 +295,9 @@ jobs:
               else
                 action="🏷️  retag $PREV_VERSION"
               fi
-              echo "| phantom-$svc | $ch | $action |"
+              echo "| guardian-$svc | $ch | $action |"
             done
-            # phantom-connector-runtime uses a separate var name (not
+            # guardian-connector-runtime uses a separate var name (not
             # uppercase-of-svc) because the underscore would conflict
             # with the eval expansion. Render it explicitly.
             if [ "$CONNECTOR_RUNTIME" = "1" ]; then
@@ -305,7 +305,7 @@ jobs:
             else
               cr_action="🏷️  retag $PREV_VERSION"
             fi
-            echo "| phantom-connector-runtime | $CONNECTOR_RUNTIME | $cr_action |"
+            echo "| guardian-connector-runtime | $CONNECTOR_RUNTIME | $cr_action |"
             # Per-connector images. Same render pattern as runtime.
             # The hyphenated cortex-docs name needs a separate iteration
             # because the env-var conversion (csvc → uppercase) only
@@ -318,7 +318,7 @@ jobs:
               else
                 action="🏷️  retag $PREV_VERSION"
               fi
-              echo "| phantom-connector-$csvc | $ch | $action |"
+              echo "| guardian-connector-$csvc | $ch | $action |"
             done
             # cortex-docs (hyphenated): explicit row, var name has _.
             if [ "$CONNECTOR_CORTEX_DOCS" = "1" ]; then
@@ -326,7 +326,7 @@ jobs:
             else
               cd_action="🏷️  retag $PREV_VERSION"
             fi
-            echo "| phantom-connector-cortex-docs | $CONNECTOR_CORTEX_DOCS | $cd_action |"
+            echo "| guardian-connector-cortex-docs | $CONNECTOR_CORTEX_DOCS | $cd_action |"
             # cortex-content (also hyphenated, also missed from the
             # for-loop above). Pre-v0.6.20 this row was missing from
             # the summary table — the rebuild decision still HAPPENED,
@@ -337,14 +337,14 @@ jobs:
             else
               cc_action="🏷️  retag $PREV_VERSION"
             fi
-            echo "| phantom-connector-cortex-content | $CONNECTOR_CORTEX_CONTENT | $cc_action |"
+            echo "| guardian-connector-cortex-content | $CONNECTOR_CORTEX_CONTENT | $cc_action |"
             # cortex-xdr (v0.5.61+, plumbed retroactively in v0.6.20).
             if [ "$CONNECTOR_CORTEX_XDR" = "1" ]; then
               cx_action="🔨 rebuild"
             else
               cx_action="🏷️  retag $PREV_VERSION"
             fi
-            echo "| phantom-connector-cortex-xdr | $CONNECTOR_CORTEX_XDR | $cx_action |"
+            echo "| guardian-connector-cortex-xdr | $CONNECTOR_CORTEX_XDR | $cx_action |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Log in to GHCR
@@ -373,7 +373,7 @@ jobs:
       # across routine updates — the explicit goal of v0.1.29.
       # ──────────────────────────────────────────────────────────────
 
-      - name: Build or retag phantom-agent
+      - name: Build or retag guardian-agent
         # All push steps use .github/scripts/push-with-retry.sh which
         # retries up to 5 times on transient i/o timeouts — a common
         # failure mode on this self-hosted runner where Cloud NAT
@@ -385,9 +385,9 @@ jobs:
           CHANGED: ${{ steps.changed.outputs.agent }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/phantom-agent"
+          IMG="$REGISTRY/$OWNER/guardian-agent"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-agent source changed — rebuilding"
+            echo "::notice::guardian-agent source changed — rebuilding"
             # --pull guarantees the base layers (node:20-alpine, python:3.12-slim)
             # are fresh; otherwise the runner's local cache could ship a
             # stale base image with known CVEs.
@@ -398,7 +398,7 @@ jobs:
               -t "$IMG:latest" \
               .
           else
-            echo "::notice::phantom-agent source unchanged — retagging $PREV_V → $V/$MM/latest"
+            echo "::notice::guardian-agent source unchanged — retagging $PREV_V → $V/$MM/latest"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -407,9 +407,9 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
-      - name: Build or retag phantom-updater
+      - name: Build or retag guardian-updater
         # On-prem update sidecar. Lives in its own image so it can
-        # keep running while phantom-agent (and others) are being
+        # keep running while guardian-agent (and others) are being
         # replaced during a customer-triggered update. See updater/
         # for source + Dockerfile.
         env:
@@ -418,16 +418,16 @@ jobs:
           CHANGED: ${{ steps.changed.outputs.updater }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/phantom-updater"
+          IMG="$REGISTRY/$OWNER/guardian-updater"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-updater source changed — rebuilding"
+            echo "::notice::guardian-updater source changed — rebuilding"
             docker build --pull \
               -t "$IMG:$V" \
               -t "$IMG:$MM" \
               -t "$IMG:latest" \
               updater/
           else
-            echo "::notice::phantom-updater source unchanged — retagging $PREV_V → $V/$MM/latest"
+            echo "::notice::guardian-updater source unchanged — retagging $PREV_V → $V/$MM/latest"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -436,30 +436,30 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
-      - name: Build or retag phantom-browser
+      - name: Build or retag guardian-browser
         # v0.1.27 — headless-browser sidecar for the `web` connector.
         # Profile-gated in compose (operators bring it up explicitly with
-        # `docker compose --profile browser up -d phantom-browser`), but
+        # `docker compose --profile browser up -d guardian-browser`), but
         # we still publish it on every release so installers can pull
         # the matched-version image without building locally. Image is
-        # ~150MB (chromedp/headless-shell base + Phantom-specific
-        # Chromium flags baked in via ./phantom-browser/Dockerfile).
+        # ~150MB (chromedp/headless-shell base + Guardian-specific
+        # Chromium flags baked in via ./guardian-browser/Dockerfile).
         env:
           V: ${{ steps.ver.outputs.version }}
           MM: ${{ steps.ver.outputs.minor }}
           CHANGED: ${{ steps.changed.outputs.browser }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/phantom-browser"
+          IMG="$REGISTRY/$OWNER/guardian-browser"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-browser source changed — rebuilding"
+            echo "::notice::guardian-browser source changed — rebuilding"
             docker build --pull \
               -t "$IMG:$V" \
               -t "$IMG:$MM" \
               -t "$IMG:latest" \
-              phantom-browser/
+              guardian-browser/
           else
-            echo "::notice::phantom-browser source unchanged — retagging $PREV_V → $V/$MM/latest"
+            echo "::notice::guardian-browser source unchanged — retagging $PREV_V → $V/$MM/latest"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -468,7 +468,7 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
-      - name: Build or retag phantom-connector-runtime
+      - name: Build or retag guardian-connector-runtime
         # v0.1.30 — base image every per-instance connector container
         # inherits from. See docs/spec-per-instance-connector-containers.md
         # for the full design. Phase 1 ships this image but no
@@ -480,7 +480,7 @@ jobs:
         #
         # Why this step is positioned here: the per-connector images
         # in subsequent build steps (added in P1.4)
-        # all `FROM ghcr.io/$OWNER/phantom-connector-runtime:<version>`,
+        # all `FROM ghcr.io/$OWNER/guardian-connector-runtime:<version>`,
         # so this base must be PUSHED before they build. GitHub Actions
         # runs steps sequentially within a job, so positioning matters.
         env:
@@ -489,16 +489,16 @@ jobs:
           CHANGED: ${{ steps.changed.outputs.connector_runtime }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/phantom-connector-runtime"
+          IMG="$REGISTRY/$OWNER/guardian-connector-runtime"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-connector-runtime source changed — rebuilding"
+            echo "::notice::guardian-connector-runtime source changed — rebuilding"
             docker build --pull \
               -t "$IMG:$V" \
               -t "$IMG:$MM" \
               -t "$IMG:latest" \
-              phantom-connector-runtime/
+              guardian-connector-runtime/
           else
-            echo "::notice::phantom-connector-runtime source unchanged — retagging $PREV_V → $V/$MM/latest"
+            echo "::notice::guardian-connector-runtime source unchanged — retagging $PREV_V → $V/$MM/latest"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -509,8 +509,8 @@ jobs:
 
       # ──────────────────────────────────────────────────────────────
       # Per-connector images (v0.1.30+). Each `FROM
-      # ghcr.io/$OWNER/phantom-connector-runtime:$V` (passed via
-      # --build-arg PHANTOM_RUNTIME_VERSION). The runtime base step
+      # ghcr.io/$OWNER/guardian-connector-runtime:$V` (passed via
+      # --build-arg GUARDIAN_RUNTIME_VERSION). The runtime base step
       # above just pushed $V to the registry, so these builds can
       # resolve the FROM image without registry-propagation races.
       #
@@ -519,25 +519,25 @@ jobs:
       # and need that path visible in the build context.
       # ──────────────────────────────────────────────────────────────
 
-      - name: Build or retag phantom-connector-xsiam
+      - name: Build or retag guardian-connector-xsiam
         env:
           V: ${{ steps.ver.outputs.version }}
           MM: ${{ steps.ver.outputs.minor }}
           CHANGED: ${{ steps.changed.outputs.connector_xsiam }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/phantom-connector-xsiam"
+          IMG="$REGISTRY/$OWNER/guardian-connector-xsiam"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-connector-xsiam rebuilding (source or runtime base changed)"
+            echo "::notice::guardian-connector-xsiam rebuilding (source or runtime base changed)"
             docker build \
-              --build-arg PHANTOM_RUNTIME_VERSION="$V" \
+              --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
               -f bundles/spark/connectors/xsiam/Dockerfile \
               -t "$IMG:$V" \
               -t "$IMG:$MM" \
               -t "$IMG:latest" \
               .
           else
-            echo "::notice::phantom-connector-xsiam source unchanged — retagging $PREV_V → $V/$MM/latest"
+            echo "::notice::guardian-connector-xsiam source unchanged — retagging $PREV_V → $V/$MM/latest"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -546,25 +546,25 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
-      - name: Build or retag phantom-connector-web
+      - name: Build or retag guardian-connector-web
         env:
           V: ${{ steps.ver.outputs.version }}
           MM: ${{ steps.ver.outputs.minor }}
           CHANGED: ${{ steps.changed.outputs.connector_web }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/phantom-connector-web"
+          IMG="$REGISTRY/$OWNER/guardian-connector-web"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-connector-web rebuilding (source or runtime base changed)"
+            echo "::notice::guardian-connector-web rebuilding (source or runtime base changed)"
             docker build \
-              --build-arg PHANTOM_RUNTIME_VERSION="$V" \
+              --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
               -f bundles/spark/connectors/web/Dockerfile \
               -t "$IMG:$V" \
               -t "$IMG:$MM" \
               -t "$IMG:latest" \
               .
           else
-            echo "::notice::phantom-connector-web source unchanged — retagging $PREV_V → $V/$MM/latest"
+            echo "::notice::guardian-connector-web source unchanged — retagging $PREV_V → $V/$MM/latest"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -573,7 +573,7 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
-      - name: Build or retag phantom-connector-cortex-docs
+      - name: Build or retag guardian-connector-cortex-docs
         # v0.3.1+ — Cortex public-documentation search/lookup connector.
         # v0.5.0: flipped to container-style alongside the rest of the
         # universal container-mode migration (xsiam/web/
@@ -584,18 +584,18 @@ jobs:
           CHANGED: ${{ steps.changed.outputs.connector_cortex_docs }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/phantom-connector-cortex-docs"
+          IMG="$REGISTRY/$OWNER/guardian-connector-cortex-docs"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-connector-cortex-docs rebuilding (source or runtime base changed)"
+            echo "::notice::guardian-connector-cortex-docs rebuilding (source or runtime base changed)"
             docker build \
-              --build-arg PHANTOM_RUNTIME_VERSION="$V" \
+              --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
               -f bundles/spark/connectors/cortex-docs/Dockerfile \
               -t "$IMG:$V" \
               -t "$IMG:$MM" \
               -t "$IMG:latest" \
               .
           else
-            echo "::notice::phantom-connector-cortex-docs source unchanged — retagging $PREV_V → $V/$MM/latest"
+            echo "::notice::guardian-connector-cortex-docs source unchanged — retagging $PREV_V → $V/$MM/latest"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -604,7 +604,7 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
-      - name: Build or retag phantom-connector-cortex-content
+      - name: Build or retag guardian-connector-cortex-content
         # v0.5.0+ — Cortex Content marketplace fetch connector. New
         # image for the universal container-mode migration; the
         # connector source pre-existed (v0.3.7+) but ran in-process
@@ -616,18 +616,18 @@ jobs:
           CHANGED: ${{ steps.changed.outputs.connector_cortex_content }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/phantom-connector-cortex-content"
+          IMG="$REGISTRY/$OWNER/guardian-connector-cortex-content"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-connector-cortex-content rebuilding (source or runtime base changed)"
+            echo "::notice::guardian-connector-cortex-content rebuilding (source or runtime base changed)"
             docker build \
-              --build-arg PHANTOM_RUNTIME_VERSION="$V" \
+              --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
               -f bundles/spark/connectors/cortex-content/Dockerfile \
               -t "$IMG:$V" \
               -t "$IMG:$MM" \
               -t "$IMG:latest" \
               .
           else
-            echo "::notice::phantom-connector-cortex-content source unchanged — retagging $PREV_V → $V/$MM/latest"
+            echo "::notice::guardian-connector-cortex-content source unchanged — retagging $PREV_V → $V/$MM/latest"
             docker pull "$IMG:$PREV_V"
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
@@ -636,13 +636,13 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
-      - name: Build or retag phantom-connector-cortex-xdr
+      - name: Build or retag guardian-connector-cortex-xdr
         # v0.5.61+ — Cortex XDR connector for detection-engineering
         # round-trip workflows. build-connectors.yml has built this
         # image since v0.5.61, but release.yml was never updated to
         # include it in the digest-pinning manifest. v0.6.20 closes
         # the plumbing gap retroactively. Same shape as cortex-content
-        # and cortex-docs; depends on the same phantom-connector-
+        # and cortex-docs; depends on the same guardian-connector-
         # runtime base.
         env:
           V: ${{ steps.ver.outputs.version }}
@@ -650,11 +650,11 @@ jobs:
           CHANGED: ${{ steps.changed.outputs.connector_cortex_xdr }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/phantom-connector-cortex-xdr"
+          IMG="$REGISTRY/$OWNER/guardian-connector-cortex-xdr"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::phantom-connector-cortex-xdr rebuilding (source or runtime base changed)"
+            echo "::notice::guardian-connector-cortex-xdr rebuilding (source or runtime base changed)"
             docker build \
-              --build-arg PHANTOM_RUNTIME_VERSION="$V" \
+              --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
               -f bundles/spark/connectors/cortex-xdr/Dockerfile \
               -t "$IMG:$V" \
               -t "$IMG:$MM" \
@@ -668,15 +668,15 @@ jobs:
             # PREV pull fails, build from source instead so we have a
             # tagged version under this release. The next release can
             # retag normally.
-            echo "::notice::phantom-connector-cortex-xdr source unchanged — retagging $PREV_V → $V/$MM/latest (or building if PREV pull fails)"
+            echo "::notice::guardian-connector-cortex-xdr source unchanged — retagging $PREV_V → $V/$MM/latest (or building if PREV pull fails)"
             if docker pull "$IMG:$PREV_V"; then
               docker tag  "$IMG:$PREV_V" "$IMG:$V"
               docker tag  "$IMG:$PREV_V" "$IMG:$MM"
               docker tag  "$IMG:$PREV_V" "$IMG:latest"
             else
-              echo "::warning::phantom-connector-cortex-xdr has no $PREV_V tag (first release with cortex-xdr in the manifest). Building from source instead so this release has a tagged image to pin."
+              echo "::warning::guardian-connector-cortex-xdr has no $PREV_V tag (first release with cortex-xdr in the manifest). Building from source instead so this release has a tagged image to pin."
               docker build \
-                --build-arg PHANTOM_RUNTIME_VERSION="$V" \
+                --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
                 -f bundles/spark/connectors/cortex-xdr/Dockerfile \
                 -t "$IMG:$V" \
                 -t "$IMG:$MM" \
@@ -694,9 +694,9 @@ jobs:
       # is only populated post-push), capture the digest each image was
       # published under and write a manifest file. The manifest:
       #   - Attaches to the GitHub Release as `release-manifest-vX.Y.Z.env`
-      #     so customers (and the phantom-updater service) can fetch it
+      #     so customers (and the guardian-updater service) can fetch it
       #     out-of-band when needed.
-      #   - Embeds into the phantom-installer binary at build time so the
+      #   - Embeds into the guardian-installer binary at build time so the
       #     installer is fully self-contained and reproducible offline.
       #   - Bundles into the customer install kit tarball.
       #
@@ -725,24 +725,24 @@ jobs:
           # the cleanup step at the end of this file and the customer
           # compose service order, both for diff-readability.
           IMAGES=(
-            phantom-agent
-            phantom-updater
-            phantom-browser
-            phantom-connector-runtime
-            phantom-connector-xsiam
-            phantom-connector-web
-            phantom-connector-cortex-docs
-            phantom-connector-cortex-content
-            phantom-connector-cortex-xdr
+            guardian-agent
+            guardian-updater
+            guardian-browser
+            guardian-connector-runtime
+            guardian-connector-xsiam
+            guardian-connector-web
+            guardian-connector-cortex-docs
+            guardian-connector-cortex-content
+            guardian-connector-cortex-xdr
           )
 
           {
-            echo "# Phantom v${V} — image digest manifest"
+            echo "# Guardian v${V} — image digest manifest"
             echo "# Generated $(date -u +%FT%TZ) by release.yml run ${{ github.run_id }}"
             echo "# from commit ${{ github.sha }}."
             echo "#"
-            echo "# This file is read by the phantom-installer at install/upgrade"
-            echo "# time and written verbatim into /opt/phantom/.env. The customer"
+            echo "# This file is read by the guardian-installer at install/upgrade"
+            echo "# time and written verbatim into /opt/guardian/.env. The customer"
             echo "# docker-compose.yml references each image as @\${DIGEST_<SVC>},"
             echo "# so missing or stale DIGEST_* values cause compose-up to fail"
             echo "# loudly with an invalid-digest error rather than silently"
@@ -753,7 +753,7 @@ jobs:
             echo "# existing DIGEST_* lines from .env before appending the new"
             echo "# ones, so transitions are clean."
             echo ""
-            echo "PHANTOM_VERSION=${V}"
+            echo "GUARDIAN_VERSION=${V}"
 
             for img in "${IMAGES[@]}"; do
               IMG_REF="$REGISTRY/$OWNER/$img:$V"
@@ -769,8 +769,8 @@ jobs:
               # file. Result: "sha256:abc..."
               DIGEST="${FULL##*@}"
               # Convert the package name to an env-var name.
-              # phantom-agent → DIGEST_PHANTOM_AGENT
-              # phantom-connector-xsiam → DIGEST_PHANTOM_CONNECTOR_XSIAM
+              # guardian-agent → DIGEST_GUARDIAN_AGENT
+              # guardian-connector-xsiam → DIGEST_GUARDIAN_CONNECTOR_XSIAM
               VAR_NAME="DIGEST_$(echo "$img" | tr 'a-z-' 'A-Z_')"
               echo "${VAR_NAME}=${DIGEST}"
             done
@@ -785,15 +785,15 @@ jobs:
           ( cd dist/installer && sha256sum "release-manifest-v${V}.env" \
               > "release-manifest-v${V}.env.sha256" )
 
-      - name: Build single-file phantom-installer
-        # Combines installer/phantom-installer.template.sh +
+      - name: Build single-file guardian-installer
+        # Combines installer/guardian-installer.template.sh +
         # installer/docker-compose.yml + the digest manifest above into
         # a single executable file that customers download, chmod +x,
         # and run. Single source of truth: the compose YAML lives in
         # installer/docker-compose.yml and gets injected into the script
-        # at build time. See installer/build-phantom-installer.sh.
+        # at build time. See installer/build-guardian-installer.sh.
         #
-        # v0.3.0+: build-phantom-installer.sh also reads the digest
+        # v0.3.0+: build-guardian-installer.sh also reads the digest
         # manifest and substitutes it into the __INSTALLER_DIGEST_MANIFEST__
         # placeholder so the installer ships fully self-contained — no
         # runtime fetch from GitHub Releases at install time.
@@ -805,8 +805,8 @@ jobs:
           VERSION="$V" \
             MANIFEST_PATH="$MANIFEST_PATH" \
             OUTPUT_DIR="$(pwd)/dist/installer" \
-            ./installer/build-phantom-installer.sh
-          ls -lh dist/installer/phantom-installer*
+            ./installer/build-guardian-installer.sh
+          ls -lh dist/installer/guardian-installer*
 
       - name: Pack customer install kit
         # Builds a self-contained tarball customers extract on their
@@ -818,14 +818,14 @@ jobs:
         # so the install.sh script in this tarball MUST source the
         # bundled release-manifest-v${V}.env into .env before running
         # docker compose up. See installer/install.sh for the kit-mode
-        # implementation; the single-file phantom-installer (above) has
+        # implementation; the single-file guardian-installer (above) has
         # the manifest embedded in the binary itself.
         env:
           V: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
           STAGE="$(mktemp -d)"
-          KIT="$STAGE/phantom-installer-$V"
+          KIT="$STAGE/guardian-installer-$V"
           mkdir -p "$KIT"
 
           # Copy the digest-pinned customer compose verbatim. v0.2.x's
@@ -846,17 +846,17 @@ jobs:
 
           # v0.5.3+ — host-side recovery utilities. Two scripts ship in
           # the kit alongside the installer:
-          #   • phantom-factory-reset            (wipes phantom_* volumes
+          #   • guardian-factory-reset            (wipes guardian_* volumes
           #                                       + re-runs install.sh)
-          #   • phantom-reset-admin-password     (host wrapper around the
+          #   • guardian-reset-admin-password     (host wrapper around the
           #                                       in-container CLI)
-          # Both end up at /opt/phantom/ when the operator extracts the
-          # kit + runs install.sh. The single-file phantom-installer
+          # Both end up at /opt/guardian/ when the operator extracts the
+          # kit + runs install.sh. The single-file guardian-installer
           # path embeds them via heredoc instead — see installer/
-          # build-phantom-installer.sh markers.
-          cp installer/phantom-factory-reset.sh           "$KIT/phantom-factory-reset"
-          cp installer/phantom-reset-admin-password.sh    "$KIT/phantom-reset-admin-password"
-          chmod +x "$KIT/phantom-factory-reset" "$KIT/phantom-reset-admin-password"
+          # build-guardian-installer.sh markers.
+          cp installer/guardian-factory-reset.sh           "$KIT/guardian-factory-reset"
+          cp installer/guardian-reset-admin-password.sh    "$KIT/guardian-reset-admin-password"
+          chmod +x "$KIT/guardian-factory-reset" "$KIT/guardian-reset-admin-password"
 
           # Sanity-check: the digest-pinned compose must be valid YAML
           # AND resolve all image refs (digests included) without
@@ -868,17 +868,17 @@ jobs:
               && docker compose --env-file .env.tmp config --quiet \
               && rm .env.tmp )
 
-          tar -C "$STAGE" -czf "phantom-installer-$V.tar.gz" "phantom-installer-$V"
-          ls -lh "phantom-installer-$V.tar.gz"
+          tar -C "$STAGE" -czf "guardian-installer-$V.tar.gz" "guardian-installer-$V"
+          ls -lh "guardian-installer-$V.tar.gz"
           # Move into a known location for the upload-artifact step.
           mkdir -p dist/installer
-          mv "phantom-installer-$V.tar.gz" dist/installer/
+          mv "guardian-installer-$V.tar.gz" dist/installer/
           # Compute SHA-256 so customers can verify the tarball matches
           # what your release notes claim (defense against MITM during
           # the email handoff).
-          sha256sum "dist/installer/phantom-installer-$V.tar.gz" \
-            > "dist/installer/phantom-installer-$V.tar.gz.sha256"
-          cat "dist/installer/phantom-installer-$V.tar.gz.sha256"
+          sha256sum "dist/installer/guardian-installer-$V.tar.gz" \
+            > "dist/installer/guardian-installer-$V.tar.gz.sha256"
+          cat "dist/installer/guardian-installer-$V.tar.gz.sha256"
 
       - name: Upload installer artifact
         # Backup copy on GitHub Actions storage in case something goes
@@ -898,8 +898,8 @@ jobs:
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: phantom-installer-${{ steps.ver.outputs.version }}
-          path: dist/installer/phantom-installer-${{ steps.ver.outputs.version }}.tar.gz*
+          name: guardian-installer-${{ steps.ver.outputs.version }}
+          path: dist/installer/guardian-installer-${{ steps.ver.outputs.version }}.tar.gz*
           if-no-files-found: error
           retention-days: 7
 
@@ -921,66 +921,66 @@ jobs:
           # through shell quoting.
           NOTES="$(mktemp)"
           {
-            echo "Phantom $V — see CHANGELOG.md for details."
+            echo "Guardian $V — see CHANGELOG.md for details."
             echo ""
             echo "## Customer install (recommended — single file)"
             echo ""
             echo "    # On a fresh Linux VM:"
-            echo "    gh release download v$V --repo kite-production/phantom --pattern phantom-installer"
-            echo "    chmod +x phantom-installer"
-            echo "    sudo ./phantom-installer"
+            echo "    gh release download v$V --repo kite-production/guardian --pattern guardian-installer"
+            echo "    chmod +x guardian-installer"
+            echo "    sudo ./guardian-installer"
             echo ""
             echo "Auto-installs Docker if missing, prompts for the GHCR token, generates"
             echo "all runtime secrets, and brings the stack up at http://<vm-ip>:3000."
             echo ""
             echo "## Customer install (alternative — multi-file kit)"
-            echo "Download phantom-installer-$V.tar.gz, extract, edit .env, run ./install.sh."
+            echo "Download guardian-installer-$V.tar.gz, extract, edit .env, run ./install.sh."
             echo ""
             echo "## Images"
             echo "All images are private — pulling requires a registry token (provisioned per customer)."
             echo ""
             echo "v0.3.0+ pins images by content digest, not by tag. The release manifest"
             echo "([release-manifest-v$V.env](release-manifest-v$V.env)) maps each image to"
-            echo "its sha256 digest; the phantom-installer reads that manifest and writes"
+            echo "its sha256 digest; the guardian-installer reads that manifest and writes"
             echo "the digests into customer .env so docker compose recreates a service iff"
             echo "its image content actually changed."
             echo ""
             echo "Tag form (also published, for ad-hoc inspection):"
-            echo "- ghcr.io/$OWNER/phantom-agent:$V"
-            echo "- ghcr.io/$OWNER/phantom-updater:$V"
-            echo "- ghcr.io/$OWNER/phantom-browser:$V (v0.1.27+, profile-gated)"
-            echo "- ghcr.io/$OWNER/phantom-connector-runtime:$V (v0.1.30+, base for per-connector containers; not directly run)"
-            echo "- ghcr.io/$OWNER/phantom-connector-xsiam:$V (v0.1.30+, dormant unless an instance has runtime: container)"
-            echo "- ghcr.io/$OWNER/phantom-connector-web:$V (v0.1.30+, dormant)"
-            echo "- ghcr.io/$OWNER/phantom-connector-cortex-docs:$V (v0.3.1+, module-style today; image exists for v0.2 container-mode future)"
+            echo "- ghcr.io/$OWNER/guardian-agent:$V"
+            echo "- ghcr.io/$OWNER/guardian-updater:$V"
+            echo "- ghcr.io/$OWNER/guardian-browser:$V (v0.1.27+, profile-gated)"
+            echo "- ghcr.io/$OWNER/guardian-connector-runtime:$V (v0.1.30+, base for per-connector containers; not directly run)"
+            echo "- ghcr.io/$OWNER/guardian-connector-xsiam:$V (v0.1.30+, dormant unless an instance has runtime: container)"
+            echo "- ghcr.io/$OWNER/guardian-connector-web:$V (v0.1.30+, dormant)"
+            echo "- ghcr.io/$OWNER/guardian-connector-cortex-docs:$V (v0.3.1+, module-style today; image exists for v0.2 container-mode future)"
           } > "$NOTES"
 
           # v0.4.0 — reset-ui-password.sh standalone asset retired. The
           # script was deleted from the repo when the forgot-password
           # path moved to the image-baked /app/cli/reset-admin.mjs. No
           # external download is needed: the new CLI is always present
-          # in every phantom-agent image, invoked via
-          # `docker exec -it phantom_agent node /app/cli/reset-admin.mjs`.
+          # in every guardian-agent image, invoked via
+          # `docker exec -it guardian_agent node /app/cli/reset-admin.mjs`.
           # See journey ops-cli-reset-admin-password + architecture
           # page #authentication for the contract.
 
           # v0.3.0 — attach the digest manifest + checksum as standalone
-          # release assets. The phantom-installer binary already has the
+          # release assets. The guardian-installer binary already has the
           # manifest embedded for offline installs, but exposing the
           # manifest as a release asset means:
-          #   - phantom-updater can fetch it at update time without
+          #   - guardian-updater can fetch it at update time without
           #     needing to download a whole installer binary
           #   - operators can audit which digests v0.3.X published
           #     without extracting them from the installer
           #   - external automation (e.g. customer's own deployment
           #     pipeline) can pin to specific digests programmatically
           gh release create "v$V" \
-            --title "Phantom v$V" \
+            --title "Guardian v$V" \
             --notes-file "$NOTES" \
-            "dist/installer/phantom-installer" \
-            "dist/installer/phantom-installer.sha256" \
-            "dist/installer/phantom-installer-$V.tar.gz" \
-            "dist/installer/phantom-installer-$V.tar.gz.sha256" \
+            "dist/installer/guardian-installer" \
+            "dist/installer/guardian-installer.sha256" \
+            "dist/installer/guardian-installer-$V.tar.gz" \
+            "dist/installer/guardian-installer-$V.tar.gz.sha256" \
             "dist/installer/release-manifest-v$V.env" \
             "dist/installer/release-manifest-v$V.env.sha256"
 
@@ -1029,10 +1029,10 @@ jobs:
           V: ${{ steps.ver.outputs.version }}
           MM: ${{ steps.ver.outputs.minor }}
         run: |
-          for img in phantom-agent phantom-updater phantom-browser \
-                     phantom-connector-runtime \
-                     phantom-connector-xsiam phantom-connector-web \
-                     phantom-connector-cortex-docs; do
+          for img in guardian-agent guardian-updater guardian-browser \
+                     guardian-connector-runtime \
+                     guardian-connector-xsiam guardian-connector-web \
+                     guardian-connector-cortex-docs; do
             docker image rm -f \
               "$REGISTRY/$OWNER/$img:$V" \
               "$REGISTRY/$OWNER/$img:$MM" 2>/dev/null || true

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom Full-Platform Topology — embedded SVG diagram.
+ * Guardian Full-Platform Topology — embedded SVG diagram.
  *
  * Source SVG converted to JSX. Theme colour tokens live in the shared
  * _diagram-theme module; the toggle in the agent sidebar writes
@@ -19,9 +19,9 @@ export function FullPlatformTopology() {
     <div className="dgm-root">
       <style>{STYLES}</style>
       <svg viewBox="0 0 1280 920" role="img" aria-labelledby="fpt-diagram-title fpt-diagram-desc">
-      <title id="fpt-diagram-title">Phantom platform full-platform topology</title>
+      <title id="fpt-diagram-title">Guardian platform full-platform topology</title>
       <desc id="fpt-diagram-desc">
-        Dark-themed topology diagram showing Phantom clients, agent, MCP server, connector backends, sinks,
+        Dark-themed topology diagram showing Guardian clients, agent, MCP server, connector backends, sinks,
         and all authenticated edges across the platform.
       </desc>
 
@@ -102,7 +102,7 @@ export function FullPlatformTopology() {
       <rect x="0" y="0" width="1280" height="920" fill="url(#fpt-dot-grid)" />
 
       
-      <text x="170" y="38" className="title" fontSize="24">Phantom Platform Topology</text>
+      <text x="170" y="38" className="title" fontSize="24">Guardian Platform Topology</text>
       <text x="170" y="60" className="detail" fontSize="13">Continuous SOC simulation stack · Docker Compose services · external model, PAPI, and webhook integrations</text>
 
       
@@ -113,7 +113,7 @@ export function FullPlatformTopology() {
 
       
       <text className="lane-label" x="42" y="125">CLIENTS</text>
-      <text className="lane-label" x="42" y="300">PHANTOM AGENT</text>
+      <text className="lane-label" x="42" y="300">GUARDIAN AGENT</text>
       <text className="lane-label" x="42" y="488">MCP SERVER</text>
       <text className="lane-label" x="42" y="670">CONNECTOR BACKENDS</text>
       <text className="lane-label" x="42" y="823">SINKS</text>
@@ -215,7 +215,7 @@ export function FullPlatformTopology() {
         <rect className="node-shape" x="0" y="0" width="470" height="110" rx="22" />
         <circle className="badge" cx="38" cy="38" r="20" />
         <use href="#fpt-icon-browser" className="icon" x="25" y="25" width="26" height="26" />
-        <text className="node-title" x="74" y="36">phantom-agent</text>
+        <text className="node-title" x="74" y="36">guardian-agent</text>
         <text className="node-subtitle" x="74" y="62">Next.js 15 · React 19 · :3000</text>
         <text className="node-detail" x="74" y="83">operator UI · chat handler</text>
         <text className="node-detail" x="74" y="101">server-side passthrough to MCP</text>
@@ -236,7 +236,7 @@ export function FullPlatformTopology() {
         <rect className="node-shape" x="0" y="0" width="720" height="108" rx="22" />
         <circle className="badge" cx="38" cy="38" r="20" />
         <use href="#fpt-icon-hub" className="icon" x="25" y="25" width="26" height="26" />
-        <text className="node-title" x="74" y="36">phantom-mcp</text>
+        <text className="node-title" x="74" y="36">guardian-mcp</text>
         <text className="node-subtitle" x="74" y="62">FastMCP · :8080 · streamable-http</text>
         <text className="node-detail" x="74" y="83">~80 tools · 6 SQLite stores</text>
         <text className="node-detail" x="74" y="101">runtime built-ins: memory · sessions · knowledge · skills · tasks · hooks</text>
@@ -247,7 +247,7 @@ export function FullPlatformTopology() {
         <rect className="node-shape" x="0" y="0" width="300" height="95" rx="18" />
         <circle className="badge" cx="34" cy="34" r="18" />
         <use href="#fpt-icon-bolt" className="icon" x="22" y="22" width="24" height="24" />
-        <text className="node-title-small" x="64" y="31">xlog (phantom)</text>
+        <text className="node-title-small" x="64" y="31">xlog (guardian)</text>
         <text className="node-subtitle" x="64" y="54">FastAPI + GraphQL · :8000</text>
         <text className="node-detail" x="64" y="75">synthetic logs · scenarios · workers</text>
       </g>

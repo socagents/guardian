@@ -1,4 +1,4 @@
-# Phantom — Architecture
+# Guardian — Architecture
 
 Three views: deployment topology, runtime data flow, and the CI/CD pipeline. All diagrams are mermaid — render in GitHub directly or `npx @mermaid-js/mermaid-cli -i this.md -o this.svg` for offline copies.
 
@@ -16,14 +16,14 @@ flowchart LR
 
   subgraph MachineA["Machine A (slim)<br/>or Single host (all-in-one)"]
     direction TB
-    subgraph PA["phantom-agent container<br/>(one image, two processes)"]
+    subgraph PA["guardian-agent container<br/>(one image, two processes)"]
       Next["Next.js UI<br/>:3000"]
       MCP["Embedded MCP<br/>Python + FastMCP<br/>:8080"]
       Next -. localhost .-> MCP
     end
-    Vol1[("phantom_mcp_data<br/>sqlite stores")]
-    Vol2[("phantom_mcp_skills<br/>skills library")]
-    Bind[/".phantom-agent/<br/>setup.json + .env.generated"/]
+    Vol1[("guardian_mcp_data<br/>sqlite stores")]
+    Vol2[("guardian_mcp_skills<br/>skills library")]
+    Bind[/".guardian-agent/<br/>setup.json + .env.generated"/]
     PA --- Vol1
     PA --- Vol2
     PA --- Bind
@@ -53,7 +53,7 @@ flowchart LR
 - The two compose recipes in the repo correspond to two arrangements of this diagram:
   - `docker-compose.yml` — Machine A and Machine B collapse into the same Docker network on one host (all-in-one).
   - `docker-compose.agent-only.yml` — Machine A only; Machine B is operated by another team and reached via HTTP at the URLs the operator types into the setup form.
-- Volumes (`phantom_mcp_data`, `phantom_mcp_skills`) survive container restarts AND `docker compose down`. Drop them only with `down -v` (destructive). The `./.phantom-agent/` bind-mount holds the setup form's submitted values.
+- Volumes (`guardian_mcp_data`, `guardian_mcp_skills`) survive container restarts AND `docker compose down`. Drop them only with `down -v` (destructive). The `./.guardian-agent/` bind-mount holds the setup form's submitted values.
 
 ---
 
@@ -146,7 +146,7 @@ flowchart TB
 
 - `concurrency: cancel-in-progress: true` means a new push to `main` cancels the previous run. Expected; you'll see "cancelled" entries in `gh run list` when a series of pushes lands within minutes.
 - `deploy-compose` only runs on `main` push or `workflow_dispatch` — PR validation stops at build/lint/test.
-- The runner is **self-hosted on the phantom VM** (per `CLAUDE.md` workflow). Image artifacts are tagged `ci-${{ github.sha }}`; the cleanup job prunes them to keep disk pressure bounded.
+- The runner is **self-hosted on the guardian VM** (per `CLAUDE.md` workflow). Image artifacts are tagged `ci-${{ github.sha }}`; the cleanup job prunes them to keep disk pressure bounded.
 - `REQUIRE_MCP_TOOL_SNAPSHOT=1` in the export steps means the snapshot generator must succeed (MCP must be reachable). `REQUIRE_FULL_TOOL_COVERAGE` is OFF by default — missing curated tools (typically because the runner's persistent state has partial connector instances) are warnings, not errors. Promote to `1` once CI programmatically bootstraps instance state.
 
 ---

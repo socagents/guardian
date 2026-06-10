@@ -380,7 +380,7 @@ function aggregate(rows: AuditRow[]) {
     out.byCallKind[kind].usd += usd;
     out.byCallKind[kind].calls += 1;
     // v0.5.40 — provider derived from model prefix (no explicit
-    // provider column; cheap heuristic matching Phantom's catalog).
+    // provider column; cheap heuristic matching Guardian's catalog).
     const provider = providerFromModel(model);
     if (!out.byProvider[provider]) out.byProvider[provider] = { usd: 0, calls: 0 };
     out.byProvider[provider].usd += usd;

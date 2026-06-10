@@ -236,7 +236,7 @@ const COGNITIVE: ApiEndpoint[] = [
     method: "GET",
     path: "/api/agent/memory/{key}",
     summary: "Get a memory by key",
-    description: "Phantom keys memory rows by `key` per (key, scope). The path-param `key` carries the URL-encoded key.",
+    description: "Guardian keys memory rows by `key` per (key, scope). The path-param `key` carries the URL-encoded key.",
     pathParams: [
       { name: "key", type: "string", description: "URL-encoded memory key.", example: "tech_stack:firewall" },
     ],
@@ -280,7 +280,7 @@ const COGNITIVE: ApiEndpoint[] = [
         description: "List of KBs.",
         example: {
           kbs: [
-            { name: "phantom-soc", doc_count: 3, latest_loaded_at: "2026-04-29T09:07:42Z" },
+            { name: "guardian-soc", doc_count: 3, latest_loaded_at: "2026-04-29T09:07:42Z" },
             { name: "xql-examples", doc_count: 161, latest_loaded_at: "2026-05-01T08:24:09Z" },
           ],
           count: 2,
@@ -568,7 +568,7 @@ const CONFIGURATION: ApiEndpoint[] = [
         description: "Persona document.",
         example: {
           personality: {
-            personalityMd: "# Phantom Personality\n\n- Reply concisely.\n- Cite case IDs when referencing investigations.\n",
+            personalityMd: "# Guardian Personality\n\n- Reply concisely.\n- Cite case IDs when referencing investigations.\n",
             actionPolicy: {
               askWhenUnsure: true,
               confirmLocalActions: "approve-card",
@@ -603,7 +603,7 @@ const CONFIGURATION: ApiEndpoint[] = [
       },
       example: {
         personality: {
-          personalityMd: "# Phantom Personality\n\n- Reply in three bullets when possible.\n",
+          personalityMd: "# Guardian Personality\n\n- Reply in three bullets when possible.\n",
         },
         actor: "user:operator",
       },
@@ -643,7 +643,7 @@ const CONFIGURATION: ApiEndpoint[] = [
     path: "/api/agent/providers/config",
     summary: "Materialize or update a provider instance",
     description:
-      "Operator submits creds (Vertex JSON, etc). Secrets land in the SecretStore (encrypted via PHANTOM_SECRET_KEK); the row stores paths.",
+      "Operator submits creds (Vertex JSON, etc). Secrets land in the SecretStore (encrypted via GUARDIAN_SECRET_KEK); the row stores paths.",
     body: {
       contentType: "application/json",
       schema: {
@@ -688,7 +688,7 @@ const CONFIGURATION: ApiEndpoint[] = [
         status: "200",
         description: "Manifest excerpt + runtime info.",
         example: {
-          name: "phantom-soc-agent",
+          name: "guardian-soc-agent",
           version: "0.2.0",
           runtime: { mode: "standalone-or-orchestrated", model: "gemini-3.1-pro-preview", setupRequired: false },
         },
@@ -1345,7 +1345,7 @@ const SELF_MOD: ApiEndpoint[] = [
     category: "self-modification",
     method: "GET",
     path: "/api/agent/plugins",
-    summary: "List installed Phantom plugins",
+    summary: "List installed Guardian plugins",
     description:
       "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
     responses: [{ status: "200", description: "OK" }],
@@ -1440,13 +1440,13 @@ const OBSERVABILITY: ApiEndpoint[] = [
     path: "/api/agent/metrics",
     summary: "Prometheus exposition",
     description:
-      "Standard /metrics scrape target. Includes phantom_embedder_* gauges (upstream_calls, cache_hits, errors_total, fallback_calls, cache_entries) refreshed at scrape time.",
+      "Standard /metrics scrape target. Includes guardian_embedder_* gauges (upstream_calls, cache_hits, errors_total, fallback_calls, cache_entries) refreshed at scrape time.",
     responses: [
       {
         status: "200",
         description: "text/plain Prometheus 0.0.4 exposition.",
         example:
-          "# HELP phantom_embedder_upstream_calls_total Vertex embed() calls...\nphantom_embedder_upstream_calls_total 4.0\n",
+          "# HELP guardian_embedder_upstream_calls_total Vertex embed() calls...\nguardian_embedder_upstream_calls_total 4.0\n",
       },
     ],
   },

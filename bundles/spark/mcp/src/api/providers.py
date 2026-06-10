@@ -29,7 +29,7 @@ from usecase.audit_log import reset_current_actor, set_current_actor
 from usecase.provider_loader import list_active_models
 from usecase.provider_store import ProviderInstance, ProviderStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _instance_to_dict(
@@ -58,7 +58,7 @@ def _instance_to_dict(
 
     v0.1.34 — pre-fix `secrets` returned secret_refs verbatim even on
     the include_secrets path, so the agent received the SecretStore
-    path string (e.g. /agents/phantom/providers/<id>/serviceAccountJson)
+    path string (e.g. /agents/guardian/providers/<id>/serviceAccountJson)
     and the chat handler's file-path-vs-JSON detector treated it as
     a file path → ENOENT on every chat dispatch.
     """
@@ -192,7 +192,7 @@ def register_provider_routes(mcp: FastMCP, store: ProviderStore) -> None:
                     # When the caller asked for cleartext, resolve secret_refs
                     # to actual values via the SecretStore. Without this the
                     # caller would receive the SecretStore PATHS (which look
-                    # like /agents/phantom/providers/<id>/<slot>) and code
+                    # like /agents/guardian/providers/<id>/<slot>) and code
                     # paths like the chat handler's parseCredentialsInput
                     # would treat them as file paths → ENOENT.
                     secret_store=store._secret_store if include_secrets else None,

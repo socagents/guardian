@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Phantom CI/CD Guide — /help/cicd
+ * Guardian CI/CD Guide — /help/cicd
  *
- * Operator-facing reference for how Phantom is built, released, and
+ * Operator-facing reference for how Guardian is built, released, and
  * upgraded. Distilled from docs/CICD.md (the engineering source of
  * truth — 1000+ lines of dense reference) into a diagram-driven
  * format readable in under 10 minutes.
@@ -196,7 +196,7 @@ export default function CicdGuide() {
 
         <h1 className="text-lg font-headline font-bold text-on-surface mb-1 tracking-tight">CI/CD Guide</h1>
         <p className="text-xs text-on-surface-variant mb-5 leading-relaxed">
-          How Phantom is built, released, and upgraded. Five diagrams.
+          How Guardian is built, released, and upgraded. Five diagrams.
         </p>
 
         <nav className="space-y-5">
@@ -239,7 +239,7 @@ export default function CicdGuide() {
           <p className="text-[11px] text-on-surface-variant/60 leading-relaxed">
             Engineering source of truth:{" "}
             <a
-              href="https://github.com/kite-production/phantom/blob/main/docs/CICD.md"
+              href="https://github.com/kite-production/guardian/blob/main/docs/CICD.md"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary/80 hover:text-primary underline-offset-2 hover:underline"
@@ -256,7 +256,7 @@ export default function CicdGuide() {
         <div className="max-w-5xl mx-auto p-8">
           <Section id="intro" icon="info" title="Introduction">
             <p>
-              Phantom ships as a Docker Compose stack of 5 containers plus per-instance
+              Guardian ships as a Docker Compose stack of 5 containers plus per-instance
               connector containers. The CI/CD pipeline produces two distinct artifacts:
               a <strong>dev installer</strong> (rebuilt on every push to main) and a{" "}
               <strong>customer installer</strong> (built on each <Code>vX.Y.Z</Code> release tag).
@@ -287,7 +287,7 @@ export default function CicdGuide() {
               For full reference material — workflow YAML internals, failure-mode catalog,
               PAT generation recipes, rollback procedure — read{" "}
               <a
-                href="https://github.com/kite-production/phantom/blob/main/docs/CICD.md"
+                href="https://github.com/kite-production/guardian/blob/main/docs/CICD.md"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary underline-offset-2 hover:underline"
@@ -300,9 +300,9 @@ export default function CicdGuide() {
 
           <Section id="two-installers" icon="deployed_code" title="The Two Installers">
             <p>
-              Phantom builds two installer binaries from the same source tree but on
+              Guardian builds two installer binaries from the same source tree but on
               different cadences. Both produce a self-extracting executable that, when run,
-              materializes the same compose stack at <Code>/opt/phantom</Code>.
+              materializes the same compose stack at <Code>/opt/guardian</Code>.
             </p>
             <p>
               The diagram below highlights the symmetry: every step of the install
@@ -335,8 +335,8 @@ export default function CicdGuide() {
                 </li>
                 <li>
                   <Code>release-manifest-vX.Y.Z.env</Code> — one{" "}
-                  <Code>DIGEST_PHANTOM_*</Code> line per image. Becomes{" "}
-                  <Code>/opt/phantom/.env</Code> at install time.
+                  <Code>DIGEST_GUARDIAN_*</Code> line per image. Becomes{" "}
+                  <Code>/opt/guardian/.env</Code> at install time.
                 </li>
                 <li>
                   <Code>manifest.sha256</Code> — integrity check.
@@ -364,7 +364,7 @@ export default function CicdGuide() {
 
             <SubSection icon="check_circle" title="Scenario 1 — code-only">
               <p>
-                Most patch releases land here. Customer&apos;s <Code>/opt/phantom/phantom-installer</Code>{" "}
+                Most patch releases land here. Customer&apos;s <Code>/opt/guardian/guardian-installer</Code>{" "}
                 still works — re-running it updates the digest pins in{" "}
                 <Code>.env</Code> and <Code>docker compose pull && up -d</Code> recreates
                 only the changed containers. Volumes preserved automatically because the
@@ -420,7 +420,7 @@ export default function CicdGuide() {
 
             <SubSection icon="warning" title="Updater + Browser don't rebuild on dev">
               <p>
-                <Code>phantom-updater</Code> and <Code>phantom-browser</Code> only rebuild
+                <Code>guardian-updater</Code> and <Code>guardian-browser</Code> only rebuild
                 on customer release tags. The dev installer pulls these digests from the
                 latest customer release manifest (a &quot;STABLE-ADVANCED&quot; carve-out).
                 A fix in <Code>updater/src/main.py</Code> is in <Code>main</Code> after a
@@ -460,7 +460,7 @@ export default function CicdGuide() {
             <SubSection icon="difference" title="1. Detect changed services">
               <p>
                 Diffs HEAD against the previous tag for each service&apos;s owned paths.
-                Output: a <Code>CHANGED_PHANTOM_*</Code> env var per service indicating
+                Output: a <Code>CHANGED_GUARDIAN_*</Code> env var per service indicating
                 whether to build or retag.
               </p>
             </SubSection>
@@ -481,12 +481,12 @@ export default function CicdGuide() {
                 Writes <Code>release-manifest-vX.Y.Z.env</Code> with one digest pin per
                 service:
               </p>
-              <Pre>{`DIGEST_PHANTOM_AGENT=sha256:abc...
-DIGEST_PHANTOM_XLOG=sha256:def...
-DIGEST_PHANTOM_CALDERA=sha256:ghi...
-DIGEST_PHANTOM_UPDATER=sha256:jkl...
-DIGEST_PHANTOM_BROWSER=sha256:mno...
-DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:pqr...
+              <Pre>{`DIGEST_GUARDIAN_AGENT=sha256:abc...
+DIGEST_GUARDIAN_XLOG=sha256:def...
+DIGEST_GUARDIAN_CALDERA=sha256:ghi...
+DIGEST_GUARDIAN_UPDATER=sha256:jkl...
+DIGEST_GUARDIAN_BROWSER=sha256:mno...
+DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:pqr...
 ...`}</Pre>
             </SubSection>
 
@@ -505,7 +505,7 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:pqr...
             <SubSection icon="cloud_upload" title="5. Publish GitHub release">
               <p>
                 Attaches the four release assets and creates the{" "}
-                <Code>Phantom vX.Y.Z</Code> release page customers browse to.
+                <Code>Guardian vX.Y.Z</Code> release page customers browse to.
               </p>
             </SubSection>
           </Section>
@@ -551,7 +551,7 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:pqr...
                 </li>
                 <li>
                   <Code>status:testing-complete</Code> — operator flips after their
-                  hands-on validation on phantom-vm passes.
+                  hands-on validation on guardian-vm passes.
                 </li>
                 <li>
                   <Code>status:release-approved</Code> — operator flips via chat approval
@@ -570,7 +570,7 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:pqr...
                 Before flipping <Code>status:ready-for-testing</Code>, the agent runs the
                 seven rules from the CLAUDE.md{" "}
                 <a
-                  href="https://github.com/kite-production/phantom/blob/main/CLAUDE.md#agent-side-headless-smoke-mandatory-before-statusready-for-testing--v0575-reckoning"
+                  href="https://github.com/kite-production/guardian/blob/main/CLAUDE.md#agent-side-headless-smoke-mandatory-before-statusready-for-testing--v0575-reckoning"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary underline-offset-2 hover:underline"
@@ -601,7 +601,7 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:pqr...
                 </li>
                 <li>
                   <strong>Dev-cycle gaps LEAD the matrix.</strong> If a fix touches{" "}
-                  <Code>updater/src/main.py</Code> or <Code>phantom-browser/</Code>, the
+                  <Code>updater/src/main.py</Code> or <Code>guardian-browser/</Code>, the
                   smoke matrix opens with that fact in bold. Never buried in prose.
                 </li>
                 <li>
@@ -710,7 +710,7 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:pqr...
             <SubSection icon="key" title="Image-digest pinning is the load-bearing trick">
               <p>
                 <Code>docker compose up -d</Code> reads each service&apos;s image digest from{" "}
-                <Code>/opt/phantom/.env</Code>. If a service&apos;s digest matches what&apos;s
+                <Code>/opt/guardian/.env</Code>. If a service&apos;s digest matches what&apos;s
                 already running, compose leaves the container alone — no recreate, no
                 state loss. Only services whose digest changed get pulled + recreated.
               </p>
@@ -718,19 +718,19 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:pqr...
                 This is why the &quot;untouched services preserve state&quot; invariant works
                 during an upgrade and why <Code>caldera</Code>&apos;s in-flight implant
                 tracking + <Code>xlog</Code>&apos;s active workers survive a release that
-                only touches <Code>phantom-agent</Code>.
+                only touches <Code>guardian-agent</Code>.
               </p>
             </SubSection>
 
             <SubSection icon="settings_backup_restore" title="Backups (operator-side, manual)">
               <p>
-                Phantom doesn&apos;t auto-backup before an upgrade. For Scenario 1 and 2 you
+                Guardian doesn&apos;t auto-backup before an upgrade. For Scenario 1 and 2 you
                 don&apos;t need to — volumes are preserved automatically. For Scenario 3, the
                 installer documentation explicitly tells the operator to back up named
                 volumes BEFORE running with <Code>WIPE_VOLUMES=true</Code>. Recipe:
               </p>
               <Pre>{`# Back up every named volume to a tarball, BEFORE you run the installer.
-for v in $(docker volume ls -q | grep '^phantom_'); do
+for v in $(docker volume ls -q | grep '^guardian_'); do
   docker run --rm \\
     -v "$v":/data:ro \\
     -v "$PWD/backups":/backup \\
@@ -742,19 +742,19 @@ done`}</Pre>
           <Section id="reference" icon="menu_book" title="Reference & Commands">
             <SubSection icon="play_arrow" title="Common operator commands">
               <Pre>{`# Re-run dev installer (Scenario 1 after a push to main)
-sudo /home/$USER/phantom-installer-dev
+sudo /home/$USER/guardian-installer-dev
 
 # Run customer installer (Scenario 2 + 3)
-sudo ./phantom-installer
+sudo ./guardian-installer
 
 # Force Scenario 3 wipe (USE WITH BACKUP)
-sudo WIPE_VOLUMES=true ./phantom-installer
+sudo WIPE_VOLUMES=true ./guardian-installer
 
 # Status of running stack
-docker compose -f /opt/phantom/docker-compose.yml ps
+docker compose -f /opt/guardian/docker-compose.yml ps
 
-# View phantom-updater logs (for customer-instance start/stop events)
-docker logs --tail 100 phantom_updater`}</Pre>
+# View guardian-updater logs (for customer-instance start/stop events)
+docker logs --tail 100 guardian_updater`}</Pre>
             </SubSection>
 
             <SubSection icon="extension" title="Adding a new connector — checklist">
@@ -764,7 +764,7 @@ docker logs --tail 100 phantom_updater`}</Pre>
                 Missing any one produces a partial state (visible but uninstallable, or
                 installable but container never spawns, etc.). Full table in{" "}
                 <a
-                  href="https://github.com/kite-production/phantom/blob/main/docs/CICD.md#adding-a-new-connector--checklist-avoid-silent-install-time-failures"
+                  href="https://github.com/kite-production/guardian/blob/main/docs/CICD.md#adding-a-new-connector--checklist-avoid-silent-install-time-failures"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary underline-offset-2 hover:underline"
@@ -780,7 +780,7 @@ docker logs --tail 100 phantom_updater`}</Pre>
                 When a workflow fails or an install fails in a way that doesn&apos;t
                 immediately reveal its cause, check{" "}
                 <a
-                  href="https://github.com/kite-production/phantom/blob/main/docs/CICD.md#cicd-failure-modes--recovery-playbook"
+                  href="https://github.com/kite-production/guardian/blob/main/docs/CICD.md#cicd-failure-modes--recovery-playbook"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary underline-offset-2 hover:underline"
@@ -800,7 +800,7 @@ docker logs --tail 100 phantom_updater`}</Pre>
                 pushing to GHCR + cutting releases) needs <Code>read:packages + write:packages + repo</Code>.
                 Step-by-step recipes for both classic + fine-grained tokens are in{" "}
                 <a
-                  href="https://github.com/kite-production/phantom/blob/main/docs/CICD.md#pat-recipes"
+                  href="https://github.com/kite-production/guardian/blob/main/docs/CICD.md#pat-recipes"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary underline-offset-2 hover:underline"
@@ -814,11 +814,11 @@ docker logs --tail 100 phantom_updater`}</Pre>
             <SubSection icon="undo" title="Rollback procedure">
               <p>
                 Customer-side rollback for Scenario 1 + 2: re-run the prior installer
-                (still on disk at <Code>/opt/phantom/phantom-installer</Code> if not
+                (still on disk at <Code>/opt/guardian/guardian-installer</Code> if not
                 overwritten). For Scenario 3: restore from backup. Full procedure +
                 operator-side yank (pulling a broken release from GHCR) in{" "}
                 <a
-                  href="https://github.com/kite-production/phantom/blob/main/docs/CICD.md#rollback-procedure"
+                  href="https://github.com/kite-production/guardian/blob/main/docs/CICD.md#rollback-procedure"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary underline-offset-2 hover:underline"

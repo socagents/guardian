@@ -110,9 +110,9 @@ export function LogDestinationsFlow() {
         <line className="lane-line" x1="60" y1="120" x2="1140" y2="120" />
         <text x="74" y="113" className="lane-label">BROWSER</text>
         <line className="lane-line" x1="60" y1="260" x2="1140" y2="260" />
-        <text x="74" y="253" className="lane-label">PHANTOM-AGENT · Next.js</text>
+        <text x="74" y="253" className="lane-label">GUARDIAN-AGENT · Next.js</text>
         <line className="lane-line" x1="60" y1="430" x2="1140" y2="430" />
-        <text x="74" y="423" className="lane-label">PHANTOM-AGENT · embedded MCP (Python FastMCP)</text>
+        <text x="74" y="423" className="lane-label">GUARDIAN-AGENT · embedded MCP (Python FastMCP)</text>
         <line className="lane-line" x1="60" y1="700" x2="1140" y2="700" />
         <text x="74" y="693" className="lane-label">CONTAINER FILESYSTEM + EXTERNAL</text>
 
@@ -249,7 +249,7 @@ export function LogDestinationsFlow() {
         <text x="720" y="770" textAnchor="middle" className="node-subtitle" style={{fontSize: 10.5}}>
           /app/data/secrets/
         </text>
-        <text x="620" y="796" className="node-detail-small mono">/agents/phantom/</text>
+        <text x="620" y="796" className="node-detail-small mono">/agents/guardian/</text>
         <text x="620" y="814" className="node-detail-small mono">  log_destinations/</text>
         <text x="620" y="832" className="node-detail-small mono">    {`<id>/<slot>`}</text>
         <text x="620" y="850" className="node-detail-small">AES-GCM at rest</text>

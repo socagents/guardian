@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/endpoints/file_retrieval/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_endpoints_retrieve_file`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api/cortex-xdr-apis/response-actions/retrieve-file.html
 
@@ -44,5 +44,5 @@ A ResponseActionResponse object if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_endpoints_retrieve_file`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_endpoints_retrieve_file`
 - Source mapping: `ebarti/cortex_xdr_client/api/endpoints_api.py` → `retrieve_file`

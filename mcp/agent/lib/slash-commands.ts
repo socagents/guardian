@@ -1,7 +1,7 @@
 /**
  * Slash command framework for the chat handler.
  *
- * Round-14 / Phase F. Phantom's chat already had one slash command
+ * Round-14 / Phase F. Guardian's chat already had one slash command
  * (/compress, shipped in round-13 / Phase 4.5) implemented as an
  * ad-hoc `if (message.trim() === '/compress')` check at the top of
  * the route handler. As we add more (/clear, /help, /model), an
@@ -49,7 +49,7 @@ export interface SlashCommandContext {
   /** Was this session created on this turn? Influences /clear
    *  semantics — clearing a brand-new session is a no-op. */
   isNewSession: boolean;
-  /** X-Phantom-Trigger header value, propagated to MCP audit rows. */
+  /** X-Guardian-Trigger header value, propagated to MCP audit rows. */
   trigger: string | undefined;
   /** Resolved runtime config (Gemini key, Vertex creds, MCP URL).
    *  Async-fetched once by route.ts before dispatch. */

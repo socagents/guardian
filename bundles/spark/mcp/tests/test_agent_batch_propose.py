@@ -574,9 +574,9 @@ def _counter_value(reg, name: str, **labels: str) -> float:
 
 def test_metrics_emitted_on_approve(tmp_path, monkeypatch):
     """v0.3.15: an approved batch increments
-    phantom_batch_proposals_total{approved=true} once + observes the
-    size in phantom_batch_size + increments
-    phantom_batch_actions_total{tool=...,result=success} per action."""
+    guardian_batch_proposals_total{approved=true} once + observes the
+    size in guardian_batch_size + increments
+    guardian_batch_actions_total{tool=...,result=success} per action."""
     _seed_manifest_with_gated(tmp_path, gated=["agent_batch_propose"])
 
     async def _fn(**_: Any) -> dict[str, Any]:
@@ -596,14 +596,14 @@ def test_metrics_emitted_on_approve(tmp_path, monkeypatch):
 
     reg = metrics_registry_module.metrics_registry()
     # Proposal counter: one inc at approved=true.
-    assert _counter_value(reg, "phantom_batch_proposals_total", approved="true") == 1
-    assert _counter_value(reg, "phantom_batch_proposals_total", approved="false") == 0
+    assert _counter_value(reg, "guardian_batch_proposals_total", approved="true") == 1
+    assert _counter_value(reg, "guardian_batch_proposals_total", approved="false") == 0
     # Action counter: 2× jobs_create / success.
     assert _counter_value(
-        reg, "phantom_batch_actions_total", tool="jobs_create", result="success",
+        reg, "guardian_batch_actions_total", tool="jobs_create", result="success",
     ) == 2
     # Histogram exists + has one observation (size=2).
-    h = reg.get("phantom_batch_size")
+    h = reg.get("guardian_batch_size")
     assert h is not None
     # The histogram's _data dict has one entry with count=1, sum=2.
     data = list(h._data.values())  # type: ignore[attr-defined]
@@ -614,8 +614,8 @@ def test_metrics_emitted_on_approve(tmp_path, monkeypatch):
 
 def test_metrics_emitted_on_deny(tmp_path, monkeypatch):
     """v0.3.15: a denied batch increments
-    phantom_batch_proposals_total{approved=false}. No
-    phantom_batch_actions_total increments (nothing ran).
+    guardian_batch_proposals_total{approved=false}. No
+    guardian_batch_actions_total increments (nothing ran).
     Size is still observed (operator denial of a 3-action batch is
     a meaningful data point)."""
     _seed_manifest_with_gated(tmp_path, gated=["agent_batch_propose"])
@@ -638,12 +638,12 @@ def test_metrics_emitted_on_deny(tmp_path, monkeypatch):
 
     reg = metrics_registry_module.metrics_registry()
     # Denial recorded.
-    assert _counter_value(reg, "phantom_batch_proposals_total", approved="false") == 1
-    assert _counter_value(reg, "phantom_batch_proposals_total", approved="true") == 0
+    assert _counter_value(reg, "guardian_batch_proposals_total", approved="false") == 1
+    assert _counter_value(reg, "guardian_batch_proposals_total", approved="true") == 0
     # NO action increments (executor never ran).
-    assert _counter_total(reg, "phantom_batch_actions_total") == 0
+    assert _counter_total(reg, "guardian_batch_actions_total") == 0
     # Size still observed.
-    h = reg.get("phantom_batch_size")
+    h = reg.get("guardian_batch_size")
     assert h is not None
     data = list(h._data.values())  # type: ignore[attr-defined]
     assert len(data) == 1
@@ -678,10 +678,10 @@ def test_action_metric_records_fail_on_error_dict(tmp_path, monkeypatch):
 
     reg = metrics_registry_module.metrics_registry()
     assert _counter_value(
-        reg, "phantom_batch_actions_total", tool="jobs_create", result="success",
+        reg, "guardian_batch_actions_total", tool="jobs_create", result="success",
     ) == 1
     assert _counter_value(
-        reg, "phantom_batch_actions_total", tool="jobs_update", result="fail",
+        reg, "guardian_batch_actions_total", tool="jobs_update", result="fail",
     ) == 1
 
 

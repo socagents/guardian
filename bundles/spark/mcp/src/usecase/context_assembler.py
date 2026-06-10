@@ -16,7 +16,7 @@ will join in Phase 10 — same pattern, different store.
 # Why an explicit assembler
 
 The naive approach is "shove the whole session history into the
-prompt and hope it fits". For Phantom that doesn't work: a SOC
+prompt and hope it fits". For Guardian that doesn't work: a SOC
 operator's session can run hundreds of messages over a multi-hour
 incident response. The assembler bounds the prompt size while still
 surfacing the most relevant history+memory for the current question.
@@ -62,7 +62,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 # A character-per-token heuristic. Real tokenizers vary by model
 # (GPT/Claude/Gemini all differ slightly), but ~4 chars/token holds

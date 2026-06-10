@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Phantom — minimal TLS-terminating reverse proxy.
+ * Guardian — minimal TLS-terminating reverse proxy.
  *
  * Used as a sidecar to Next.js when SSL is enabled. Listens on port
- * `PHANTOM_TLS_PORT` (default 3000) over HTTPS and forwards every
- * request unchanged to Next.js on `PHANTOM_TLS_BACKEND_PORT` (default
+ * `GUARDIAN_TLS_PORT` (default 3000) over HTTPS and forwards every
+ * request unchanged to Next.js on `GUARDIAN_TLS_BACKEND_PORT` (default
  * 3001) over plain HTTP on the loopback interface.
  *
  * Why a custom proxy instead of running Next.js directly with HTTPS:
@@ -31,15 +31,15 @@
  *   behavior — if the client is slow, the upstream socket pauses.
  *
  * SSL config — supports either:
- *   PHANTOM_TLS_CERT_FILE / PHANTOM_TLS_KEY_FILE  (paths, preferred)
+ *   GUARDIAN_TLS_CERT_FILE / GUARDIAN_TLS_KEY_FILE  (paths, preferred)
  *   SSL_CERT_FILE / SSL_KEY_FILE                  (legacy paths, fallback)
  *   SSL_CERT_PEM  / SSL_KEY_PEM                   (inline PEM with \n escapes)
  *
- * The PHANTOM_-prefixed names exist because SSL_CERT_FILE collides with
+ * The GUARDIAN_-prefixed names exist because SSL_CERT_FILE collides with
  * OpenSSL/Python's outbound-trust env semantics — exporting it forces
  * Python's ssl module to use that single PEM as the entire CA bundle,
  * breaking outbound HTTPS calls (Vertex embedder, Gemini, etc.). The
- * entrypoint exports PHANTOM_TLS_CERT_FILE only; SSL_CERT_FILE remains
+ * entrypoint exports GUARDIAN_TLS_CERT_FILE only; SSL_CERT_FILE remains
  * accepted here for back-compat with operator-supplied env files.
  */
 
@@ -47,9 +47,9 @@ const fs = require('node:fs');
 const http = require('node:http');
 const https = require('node:https');
 
-const TLS_PORT     = parseInt(process.env.PHANTOM_TLS_PORT     || '3000', 10);
-const BACKEND_PORT = parseInt(process.env.PHANTOM_TLS_BACKEND_PORT || '3001', 10);
-const BACKEND_HOST = process.env.PHANTOM_TLS_BACKEND_HOST || '127.0.0.1';
+const TLS_PORT     = parseInt(process.env.GUARDIAN_TLS_PORT     || '3000', 10);
+const BACKEND_PORT = parseInt(process.env.GUARDIAN_TLS_BACKEND_PORT || '3001', 10);
+const BACKEND_HOST = process.env.GUARDIAN_TLS_BACKEND_HOST || '127.0.0.1';
 
 // ─── PEM resolution ──────────────────────────────────────────────────
 // Order: file path first, then inline PEM. Inline PEM gets \n-escapes
@@ -76,10 +76,10 @@ function normalizePem(s) {
 }
 
 function loadPemMaterial() {
-  // PHANTOM_TLS_CERT_FILE is preferred; fall back to SSL_CERT_FILE for
+  // GUARDIAN_TLS_CERT_FILE is preferred; fall back to SSL_CERT_FILE for
   // legacy installs (see file-header doc on the env-name collision).
-  const certPath = process.env.PHANTOM_TLS_CERT_FILE || process.env.SSL_CERT_FILE;
-  const keyPath  = process.env.PHANTOM_TLS_KEY_FILE  || process.env.SSL_KEY_FILE;
+  const certPath = process.env.GUARDIAN_TLS_CERT_FILE || process.env.SSL_CERT_FILE;
+  const keyPath  = process.env.GUARDIAN_TLS_KEY_FILE  || process.env.SSL_KEY_FILE;
   const certPem  = process.env.SSL_CERT_PEM;
   const keyPem   = process.env.SSL_KEY_PEM;
 

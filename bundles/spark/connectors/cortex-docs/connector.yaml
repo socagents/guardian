@@ -11,7 +11,7 @@
 # wrapper layer in `src/connector.py` that catches SystemExit raised
 # by the scripts' `sys.exit(1)` HTTP-error paths so a transient
 # docs-API outage produces a structured error return instead of
-# taking down phantom-agent.
+# taking down guardian-agent.
 #
 # Why this connector exists: query authoring against Cortex (XDR /
 # XSIAM / XSOAR / Cortex Cloud / AgentiX / XQL) needs authoritative
@@ -46,7 +46,7 @@ source:
 # mode (per docs/spec-per-instance-connector-containers.md and
 # /help/architecture#image-pinning) but is not exercised by the
 # customer compose today; cortex-docs is not in the list of
-# per-instance connector containers managed by phantom-updater.
+# per-instance connector containers managed by guardian-updater.
 runtimeMapping:
   # v0.5.0: flipped to container — universal connector container model.
   # cortex-docs uses only stdlib (urllib + httpx already in the base

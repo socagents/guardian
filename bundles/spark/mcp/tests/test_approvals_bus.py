@@ -313,7 +313,7 @@ def test_request_persists_explicit_origin(tmp_path: Path) -> None:
 
 def test_request_reads_origin_from_trigger_contextvar(tmp_path: Path) -> None:
     """When no explicit origin is passed, request() picks up the
-    X-Phantom-Trigger contextvar that the request middleware sets.
+    X-Guardian-Trigger contextvar that the request middleware sets.
     Mirrors the runtime path: chat handler sets trigger, bus auto-tags.
 
     Module-path note: the bus uses `from usecase.audit_log import ...`

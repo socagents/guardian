@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * About Phantom — centered overlay modal showing version + runtime
+ * About Guardian — centered overlay modal showing version + runtime
  * metadata. Deliberately scoped to JUST the "what am I running"
  * question, modeled after the Cortex XSIAM About dialog.
  *
@@ -11,7 +11,7 @@
  * a modal they have to dismiss to keep working.
  *
  * Architecture: the running version comes from /api/agent/version
- * (compose-interpolated PHANTOM_VERSION). Static release-notes data
+ * (compose-interpolated GUARDIAN_VERSION). Static release-notes data
  * lives in lib/release-notes.ts so this works offline.
  *
  * Why we render via React Portal:
@@ -120,7 +120,7 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
           <section className="text-center">
             <h2 className="font-headline text-3xl font-bold text-on-surface">
-              Phantom
+              Guardian
             </h2>
             <p className="font-mono text-base text-primary mt-1">
               v{version ?? "—"}
@@ -140,7 +140,7 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
               Continuous SOC simulation platform: synthetic security log
               generation, scenario-based MITRE ATT&amp;CK telemetry, and
               AI-orchestrated red/blue workflows over MCP. Ships as a
-              Docker Compose stack (phantom-agent, phantom-mcp,
+              Docker Compose stack (guardian-agent, guardian-mcp,
               xlog, caldera).
             </p>
           </section>
@@ -182,12 +182,12 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
               Source
             </p>
             <a
-              href="https://github.com/kite-production/phantom"
+              href="https://github.com/kite-production/guardian"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[13px] text-primary hover:underline inline-flex items-center gap-1"
             >
-              github.com/kite-production/phantom
+              github.com/kite-production/guardian
               <span className="material-symbols-outlined text-[14px]">
                 open_in_new
               </span>

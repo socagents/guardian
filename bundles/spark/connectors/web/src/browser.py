@@ -1,10 +1,10 @@
 """Headless-browser tool implementations for the `web` connector.
 
 Talks to a remote Chromium over CDP (defaults to the
-`phantom-browser` sidecar in docker-compose). Playwright Python
+`guardian-browser` sidecar in docker-compose). Playwright Python
 handles the protocol; the sidecar provides the actual Chromium
 binary, keeping browser-binary weight (~250MB) out of the
-phantom-agent image.
+guardian-agent image.
 
 # Lifecycle model
 
@@ -22,7 +22,7 @@ phantom-agent image.
 
 # Why connect_over_cdp instead of launching Chromium in-process
 
-The phantom-agent container ships only the Playwright Python *library*
+The guardian-agent container ships only the Playwright Python *library*
 (no browser binaries). Spawning Chromium in-process would require
 `playwright install chromium` at image build time (+250MB) and the
 shared libraries needed by Chromium (libnss3, fontconfig, etc.).
@@ -48,7 +48,7 @@ import time
 from typing import Any
 from urllib.parse import urlparse
 
-logger = logging.getLogger("Phantom MCP.web")
+logger = logging.getLogger("Guardian MCP.web")
 
 # ─── Imports that may fail at import time ────────────────────────────
 # Playwright is REQUIRED — the connector is useless without it. If
@@ -86,7 +86,7 @@ except Exception as exc:  # noqa: BLE001
 # can't find the attribute (instance has no override AND Settings has
 # no fallback). Keep in sync with bundles/spark/connectors/web/connector.yaml
 # configSchema defaults.
-_DEFAULT_CDP_URL = "http://phantom-browser:9222"
+_DEFAULT_CDP_URL = "http://guardian-browser:9222"
 _DEFAULT_TIMEOUT_MS = 30_000
 _DEFAULT_EXTRACTOR_MODE = "readable"
 
@@ -168,8 +168,8 @@ def _resolve_cdp_url_to_ip(cdp_url: str) -> str:
 
     Why: Chromium's headless DevTools server enforces a Host-header
     check — it accepts only `localhost` or an IP address. When
-    Playwright connects via `http://phantom-browser:9222`, the
-    outbound `Host: phantom-browser:9222` fails the check and
+    Playwright connects via `http://guardian-browser:9222`, the
+    outbound `Host: guardian-browser:9222` fails the check and
     /json/version returns HTTP 500 with "Host header is specified
     and is not an IP address or localhost." The fix is to resolve
     the hostname to its container IP before handing the URL to
@@ -225,7 +225,7 @@ async def _ensure_browser() -> Browser:
 
     if _PLAYWRIGHT_IMPORT_ERROR is not None:
         raise RuntimeError(
-            "playwright not installed in phantom-agent. Add `playwright` to "
+            "playwright not installed in guardian-agent. Add `playwright` to "
             "bundles/spark/mcp/requirements.txt and rebuild the image. "
             f"(import error: {_PLAYWRIGHT_IMPORT_ERROR})"
         )
@@ -257,8 +257,8 @@ async def _ensure_browser() -> Browser:
         raise RuntimeError(
             f"could not connect to browser sidecar at {cdp_url_configured!r} "
             f"(resolved to {cdp_url!r}): {exc}. "
-            "Is the phantom-browser container up? Bring it up with: "
-            "`docker compose --profile browser up -d phantom-browser`"
+            "Is the guardian-browser container up? Bring it up with: "
+            "`docker compose --profile browser up -d guardian-browser`"
         ) from exc
 
     logger.info("web connector: connected to CDP at %s", cdp_url)
@@ -378,7 +378,7 @@ def _truncate(text: str, max_chars: int) -> tuple[str, bool]:
 # ────────────────────────────────────────────────────────────────────
 
 
-async def phantom_web_navigate(
+async def guardian_web_navigate(
     url: str,
     session_id: str | None = None,
     wait_until: str = "load",
@@ -424,7 +424,7 @@ async def phantom_web_navigate(
     }
 
 
-async def phantom_web_get_text(
+async def guardian_web_get_text(
     session_id: str,
     mode: str | None = None,
     max_chars: int | None = None,
@@ -495,7 +495,7 @@ async def phantom_web_get_text(
     }
 
 
-async def phantom_web_get_html(
+async def guardian_web_get_html(
     session_id: str,
     max_chars: int | None = None,
 ) -> dict[str, Any]:
@@ -524,7 +524,7 @@ async def phantom_web_get_html(
     }
 
 
-async def phantom_web_screenshot(
+async def guardian_web_screenshot(
     session_id: str,
     full_page: bool = True,
     format: str = "png",  # noqa: A002 — name matches connector.yaml schema
@@ -563,7 +563,7 @@ async def phantom_web_screenshot(
     }
 
 
-async def phantom_web_extract_links(
+async def guardian_web_extract_links(
     session_id: str,
     same_domain_only: bool = False,
     max_links: int | None = None,
@@ -615,7 +615,7 @@ async def phantom_web_extract_links(
     return {"links": links, "count": len(links)}
 
 
-async def phantom_web_click(
+async def guardian_web_click(
     session_id: str,
     selector: str,
     timeout_ms: int | None = None,
@@ -651,7 +651,7 @@ async def phantom_web_click(
     }
 
 
-async def phantom_web_fill(
+async def guardian_web_fill(
     session_id: str,
     selector: str,
     value: str,
@@ -683,7 +683,7 @@ async def phantom_web_fill(
     return {"filled": True, "selector": selector}
 
 
-async def phantom_web_wait_for(
+async def guardian_web_wait_for(
     session_id: str,
     selector: str,
     state: str = "visible",
@@ -718,7 +718,7 @@ async def phantom_web_wait_for(
     return {"found": True, "selector": selector}
 
 
-async def phantom_web_close_session(session_id: str) -> dict[str, Any]:
+async def guardian_web_close_session(session_id: str) -> dict[str, Any]:
     """Close a session (idempotent)."""
     if not session_id:
         return {"error": "session_id is required"}
@@ -733,7 +733,7 @@ async def phantom_web_close_session(session_id: str) -> dict[str, Any]:
     return {"closed": True, "was_open": True}
 
 
-async def phantom_web_list_sessions() -> dict[str, Any]:
+async def guardian_web_list_sessions() -> dict[str, Any]:
     """List all open sessions on this connector instance."""
     now = time.monotonic()
     out = []

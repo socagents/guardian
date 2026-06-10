@@ -43,7 +43,7 @@ from starlette.responses import JSONResponse, Response
 from api.auth import require_bearer
 from usecase.metrics_registry import MetricsRegistry
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_metrics_routes(mcp: FastMCP, registry: MetricsRegistry) -> None:
@@ -53,26 +53,26 @@ def register_metrics_routes(mcp: FastMCP, registry: MetricsRegistry) -> None:
     # registry only support inc(), and the source-of-truth lives in
     # the embedder — we mirror it at scrape time.
     g_upstream = registry.gauge(
-        "phantom_embedder_upstream_calls_total",
+        "guardian_embedder_upstream_calls_total",
         "Total Vertex embed() calls that hit the upstream API.",
     )
     g_cache_hits = registry.gauge(
-        "phantom_embedder_cache_hits_total",
+        "guardian_embedder_cache_hits_total",
         "Total Vertex embed() calls served from the LRU cache.",
     )
     g_fallback = registry.gauge(
-        "phantom_embedder_fallback_calls_total",
+        "guardian_embedder_fallback_calls_total",
         "Total Vertex embed() calls that fell back to TextHashEmbedder. "
         "Should always be 0 post-tightening — non-zero indicates an old "
         "build is running.",
     )
     g_errors = registry.gauge(
-        "phantom_embedder_errors_total",
+        "guardian_embedder_errors_total",
         "Total Vertex embed() calls that raised (provider error, malformed "
         "response, dim mismatch). Alert on rate(...) > 0 over 5m.",
     )
     g_cache_size = registry.gauge(
-        "phantom_embedder_cache_entries",
+        "guardian_embedder_cache_entries",
         "Current number of (text → vector) entries in the LRU cache.",
     )
 

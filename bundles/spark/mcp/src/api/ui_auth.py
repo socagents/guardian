@@ -1,4 +1,4 @@
-"""Phantom v0.4.0 UI auth HTTP surface — sessions + change + reset.
+"""Guardian v0.4.0 UI auth HTTP surface — sessions + change + reset.
 
 Five routes, all requiring the standard MCP_TOKEN bearer (so the
 Next.js side authenticates as the agent before relaying operator
@@ -37,13 +37,13 @@ input):
 The MCP_TOKEN bearer authenticates that the CALLER is the agent
 process (either the Next.js side proxying operator input, or the
 reset-admin CLI running inside the agent container). The token comes
-from /proc/1/environ inside the phantom_agent container.
+from /proc/1/environ inside the guardian_agent container.
 
 `/login` requires username + password — those are the operator's
 credentials, NOT a bearer. `/change_password` requires a valid
 session token AND the current password. `/admin_reset` only requires
 the MCP_TOKEN bearer — that's the CLI-trust path; anyone who can
-`docker exec` into phantom_agent can read the token from
+`docker exec` into guardian_agent can read the token from
 /proc/1/environ, so the CLI doesn't need an additional secret.
 
 # Audit events
@@ -99,7 +99,7 @@ from usecase.auth_store import auth_store
 from usecase.ui_auth import UiAuthError
 
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _hostname() -> str:
@@ -326,7 +326,7 @@ def register_ui_auth_routes(mcp: FastMCP) -> None:
         include_in_schema=False,
     )
     async def verify_key(request: Request) -> JSONResponse:
-        """Validate an API key (``phantom_ak_*``) for the Next.js agent
+        """Validate an API key (``guardian_ak_*``) for the Next.js agent
         middleware. MCP_TOKEN-gated internal loopback. Returns 200 with
         ``{valid: false}`` for unknown/revoked keys (not 401) — same
         contract as ``/session`` so the caller distinguishes "key

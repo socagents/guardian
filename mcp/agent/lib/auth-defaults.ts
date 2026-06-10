@@ -1,11 +1,11 @@
 /**
- * Phantom v0.4.0+ — admin auth constants compiled into the image.
+ * Guardian v0.4.0+ — admin auth constants compiled into the image.
  *
  * v0.5.5 — DEFAULT_ADMIN_PASSWORD was REMOVED from this file. The
  * default password no longer lives in the image at all. It's sourced
- * at agent boot from the PHANTOM_DEFAULT_ADMIN_PASSWORD env var,
+ * at agent boot from the GUARDIAN_DEFAULT_ADMIN_PASSWORD env var,
  * which the installer auto-generates per install and writes to
- * /opt/phantom/.env. See app/help/architecture#authentication for
+ * /opt/guardian/.env. See app/help/architecture#authentication for
  * the full canonical-state-discipline rationale ("no credentials in
  * any image, full stop"). The seed call still happens in
  * entrypoint.sh; only the SOURCE of the default password changed.
@@ -20,7 +20,7 @@
  *
  * On first container boot, the entrypoint asks the MCP auth_store
  * whether `auth.v1` is initialised. If not, the MCP writes the
- * PBKDF2 hash of $PHANTOM_DEFAULT_ADMIN_PASSWORD (sourced from .env)
+ * PBKDF2 hash of $GUARDIAN_DEFAULT_ADMIN_PASSWORD (sourced from .env)
  * to the SecretStore under `/ui/auth/admin/password_hash` and sets
  * `credentials_changed=false`.
  *
@@ -29,21 +29,21 @@
  * change your password" banner, redirects to /profile, changes the
  * password. The change writes the new hash AND sets
  * `credentials_changed=true`. The banner never appears again unless
- * the operator runs phantom-factory-reset.
+ * the operator runs guardian-factory-reset.
  *
  * # Discoverability
  *
  * The default credentials are documented in:
  *  - app/help/user/page.tsx#authentication ("First-Time Login" subsection)
- *  - The phantom-installer epilogue (prints the random per-install value)
- *  - docker logs phantom-agent on first boot (entrypoint prints the
+ *  - The guardian-installer epilogue (prints the random per-install value)
+ *  - docker logs guardian-agent on first boot (entrypoint prints the
  *    credentials banner ONCE when the seed fires; no print on later
  *    boots when SecretStore already holds operator-set credentials)
- *  - /opt/phantom/.env at PHANTOM_DEFAULT_ADMIN_PASSWORD
+ *  - /opt/guardian/.env at GUARDIAN_DEFAULT_ADMIN_PASSWORD
  *
  * # CLI parity
  *
- * The host-side reset CLI (installer/phantom-reset-admin-password.sh →
+ * The host-side reset CLI (installer/guardian-reset-admin-password.sh →
  * mcp/agent/cli/reset-admin.mjs) does NOT use these constants. The CLI
  * prompts the operator for a new password interactively. Defaults are
  * a first-boot-only mechanism.
@@ -59,11 +59,11 @@
 export const ADMIN_USERNAME = "admin";
 
 /** Cookie name for the server-side session token. v0.4.0 renamed from
- *  the pre-v0.4.0 `phantom_auth` because that name's value was a flat
+ *  the pre-v0.4.0 `guardian_auth` because that name's value was a flat
  *  boolean ("=1"); the new value is a 32-byte random token whose hash
  *  is server-validated. Renaming makes it obvious in logs/proxies
  *  that the auth model has changed. */
-export const SESSION_COOKIE_NAME = "phantom_session";
+export const SESSION_COOKIE_NAME = "guardian_session";
 
 /** Absolute session lifetime in seconds. Cookies expire after this
  *  regardless of activity; idle-timeout is not separately enforced

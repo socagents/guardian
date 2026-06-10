@@ -1,10 +1,10 @@
 /**
- * Phantom model catalog — returns the Vertex AI / Gemini models that
- * phantom standalone supports today, plus placeholder entries for the
+ * Guardian model catalog — returns the Vertex AI / Gemini models that
+ * guardian standalone supports today, plus placeholder entries for the
  * other providers (Anthropic, OpenAI) that are WIP.
  *
  * Spark's workspace exposes /api/v1/models via its api-gateway, which
- * dynamically discovers models from each connected provider. Phantom
+ * dynamically discovers models from each connected provider. Guardian
  * is single-tenant and currently only ships Vertex AI integration in
  * the chat code path, so we serve a curated catalog from this route
  * rather than probing remote model APIs at request time.
@@ -37,7 +37,7 @@ interface ModelInfo {
   wip?: boolean;
 }
 
-// Phantom's curated Vertex catalog. Updated when Google ships new
+// Guardian's curated Vertex catalog. Updated when Google ships new
 // generations. Context windows reflect the published Vertex docs at
 // the time of writing.
 const VERTEX_MODELS: ModelInfo[] = [

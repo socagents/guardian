@@ -51,7 +51,7 @@ export default function BenchPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
-  const [manifest, setManifest] = useState("phantom-soc-v1");
+  const [manifest, setManifest] = useState("guardian-soc-v1");
   const [routerPreset, setRouterPreset] = useState("");
 
   const refresh = useCallback(async () => {
@@ -161,7 +161,7 @@ export default function BenchPage() {
                 type="text"
                 value={manifest}
                 onChange={(e) => setManifest(e.target.value)}
-                placeholder="phantom-soc-v1"
+                placeholder="guardian-soc-v1"
                 className="w-full px-3 py-2 rounded-xl text-sm bg-surface-container-low border border-white/10 text-on-surface font-mono"
               />
             </div>
@@ -210,7 +210,7 @@ export default function BenchPage() {
             </p>
             <p className="text-xs text-on-surface-variant/60 max-w-md mx-auto leading-relaxed">
               Fire one from the form above with manifest{" "}
-              <span className="font-mono">phantom-soc-v1</span> (the bundled
+              <span className="font-mono">guardian-soc-v1</span> (the bundled
               3-case sample corpus).
             </p>
           </div>

@@ -112,17 +112,17 @@ def test_registry_rejects_type_mismatch() -> None:
 
 def test_registry_format_prometheus_round_trip() -> None:
     r = MetricsRegistry()
-    c = r.counter("phantom_mcp_tool_calls_total", "Total tool calls")
+    c = r.counter("guardian_mcp_tool_calls_total", "Total tool calls")
     c.inc(tool="xsiam.execute_xql_query", status="ok")
-    g = r.gauge("phantom_mcp_active_sessions", "Active")
+    g = r.gauge("guardian_mcp_active_sessions", "Active")
     g.set(2)
     out = r.format_prometheus()
-    assert "# TYPE phantom_mcp_tool_calls_total counter" in out
+    assert "# TYPE guardian_mcp_tool_calls_total counter" in out
     assert (
-        'phantom_mcp_tool_calls_total{status="ok",tool="xsiam.execute_xql_query"} 1'
+        'guardian_mcp_tool_calls_total{status="ok",tool="xsiam.execute_xql_query"} 1'
         in out
     )
-    assert "phantom_mcp_active_sessions 2" in out
+    assert "guardian_mcp_active_sessions 2" in out
 
 
 def test_timer_observes_into_histogram() -> None:

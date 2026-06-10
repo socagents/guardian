@@ -28,7 +28,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.event_log import SqliteEventLog
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_observability_routes(mcp: FastMCP, events: SqliteEventLog) -> None:

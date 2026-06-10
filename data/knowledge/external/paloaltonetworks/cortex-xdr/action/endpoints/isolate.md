@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/endpoints/isolate/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_endpoints_isolate`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api/cortex-xdr-apis/response-actions/isolate-endpoints.html
 
@@ -42,5 +42,5 @@ A ResponseActionResponse object if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_endpoints_isolate`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_endpoints_isolate`
 - Source mapping: `ebarti/cortex_xdr_client/api/endpoints_api.py` → `isolate_endpoints`

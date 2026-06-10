@@ -3,7 +3,7 @@ import { AuthGate } from "@/components/auth/auth-gate";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Phantom Agent",
+  title: "Guardian Agent",
   description: "AI incident-response agent — control plane",
   // Favicon resolves via Next.js's app-icon file convention:
   // app/icon.svg is auto-discovered and emits a hashed
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
  * per the v0.2.x triage that flagged it; verified again in v0.5.1).
  * Its `useEffect` was writing to localStorage on every page load
  * even though nothing read the context, polluting browser storage
- * with a `phantom.chat.sessions.v1` key that confused operators
+ * with a `guardian.chat.sessions.v1` key that confused operators
  * looking at DevTools. The actual chat sessions flow through
  * /api/v1/sessions (server-side).
  */

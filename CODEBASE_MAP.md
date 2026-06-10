@@ -1,4 +1,4 @@
-# Phantom — Codebase Map
+# Guardian — Codebase Map
 
 A lightweight map of the repo so an agent can find where a feature lives
 *before* it starts reading files. Layered: top-level groups first, then the
@@ -8,13 +8,13 @@ modules inside each. Keep this current when you add or move a service.
 
 | Path | What it is |
 |------|------------|
-| `mcp/agent/` | The chat UI + embedded MCP subprocess (the **`phantom-agent`** customer container). Next.js 15 + React 19 + Python 3.12. |
-| `bundles/spark/` | Phantom's runtime bundle — the MCP server, the per-instance connector containers, default skills, plugins, KBs, prompts, providers, and caldera content. |
+| `mcp/agent/` | The chat UI + embedded MCP subprocess (the **`guardian-agent`** customer container). Next.js 15 + React 19 + Python 3.12. |
+| `bundles/spark/` | Guardian's runtime bundle — the MCP server, the per-instance connector containers, default skills, plugins, KBs, prompts, providers, and caldera content. |
 | `xlog/` | Log-generation backend (the **`xlog`** customer container). FastAPI + Strawberry GraphQL + Rosetta. |
 | `installer/` | Customer installer template + docker-compose.yml. |
-| `updater/` | The **`phantom-updater`** customer container — manages per-instance connector container lifecycle + stack-level upgrades. |
-| `phantom-browser/` | Dockerfile only — headless Chromium for the web connector (CDP-accessed). |
-| `phantom-connector-runtime/` | Shared base image for container-style per-instance connectors. |
+| `updater/` | The **`guardian-updater`** customer container — manages per-instance connector container lifecycle + stack-level upgrades. |
+| `guardian-browser/` | Dockerfile only — headless Chromium for the web connector (CDP-accessed). |
+| `guardian-connector-runtime/` | Shared base image for container-style per-instance connectors. |
 | `docs/` | Long-form docs (`CICD.md` is the canonical CI/CD pipeline reference). |
 | `.github/` | Workflows + composite actions + issue templates. |
 | `scripts/` | One-off maintainer scripts (e.g. `refresh_cortex_baked_catalog.py`). |
@@ -23,11 +23,11 @@ modules inside each. Keep this current when you add or move a service.
 | `reports/` | Audit + analysis artifacts (gitignored from agent context via `.claudeignore`). |
 | `diagrams/` | Source for architecture diagrams (`.excalidraw`, `.svg`). |
 
-## bundles/spark/ — the Phantom runtime bundle
+## bundles/spark/ — the Guardian runtime bundle
 
 | Path | What it is |
 |------|------------|
-| `bundles/spark/mcp/` | The Python FastMCP server that runs as a subprocess inside `phantom-agent`. Registers ~80 tools, exposes REST routes for the Next.js side. |
+| `bundles/spark/mcp/` | The Python FastMCP server that runs as a subprocess inside `guardian-agent`. Registers ~80 tools, exposes REST routes for the Next.js side. |
 | `bundles/spark/connectors/` | Per-connector source: each subdir is one connector (`xlog`, `xsiam`, `caldera`, `cortex-content`, `cortex-docs`, `cortex-xdr`, `web`). Each runs as its own image at customer release time. |
 | `bundles/spark/skills/` | Default skills shipped with the agent (MD files with frontmatter). Volume-seeded on first boot; merged on per-release marker. |
 | `bundles/spark/plugins/` | Built-in plugins (bundled vendor extensions). |
@@ -69,13 +69,13 @@ Each connector ships as its own image at release time. The agent dispatches to p
 
 | Connector | What it does |
 |-----------|--------------|
-| `xlog` | Phantom's log-generation tools (wraps the xlog service GraphQL). |
+| `xlog` | Guardian's log-generation tools (wraps the xlog service GraphQL). |
 | `xsiam` | XSIAM PAPI integration — XQL queries, alerts, datasets. |
 | `caldera` | Caldera red-team operations. |
 | `cortex-content` | Cortex content catalog (data sources, packs, modeling rules) — local catalog at `bundles/spark/connectors/cortex-content/baked/`. |
 | `cortex-docs` | Cortex documentation search (embedded vector index). |
 | `cortex-xdr` | Cortex XDR API (cases, issues, alerts). |
-| `web` | Web browsing via Playwright + headless Chromium (phantom-browser CDP). |
+| `web` | Web browsing via Playwright + headless Chromium (guardian-browser CDP). |
 
 ## xlog/ — the log-generation backend
 
@@ -93,10 +93,10 @@ Each connector ships as its own image at release time. The agent dispatches to p
 | Path | What it is |
 |------|------------|
 | `installer/docker-compose.yml` | Customer compose — image refs use `@${DIGEST_*}` for content-pinning. |
-| `installer/build.sh` | Builds the `phantom-installer` binary. |
+| `installer/build.sh` | Builds the `guardian-installer` binary. |
 | `installer/template/` | Files copied into the customer install kit. |
-| `updater/src/main.py` | The `phantom-updater` daemon — manages per-instance connector container lifecycle. |
-| `updater/Dockerfile` | Builds the `phantom-updater` image. |
+| `updater/src/main.py` | The `guardian-updater` daemon — manages per-instance connector container lifecycle. |
+| `updater/Dockerfile` | Builds the `guardian-updater` image. |
 
 ## Finding a feature
 

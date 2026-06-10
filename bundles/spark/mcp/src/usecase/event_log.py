@@ -32,8 +32,8 @@ call writes `tool_call` (status=failure) to audit (forensic) AND
 # Side effects on record()
 
   1. sqlite append (this module)
-  2. structured log line (`docker logs phantom_agent` picks it up)
-  3. metrics counter `phantom_mcp_runtime_events_total{event_name}` ++
+  2. structured log line (`docker logs guardian_agent` picks it up)
+  3. metrics counter `guardian_mcp_runtime_events_total{event_name}` ++
 
 The metric is auto-registered on first record() per event name —
 operators don't need to pre-declare each event in the registry.
@@ -51,7 +51,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-logger = logging.getLogger("Phantom MCP.events")
+logger = logging.getLogger("Guardian MCP.events")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 
@@ -184,7 +184,7 @@ class SqliteEventLog:
             reg = metrics_registry()
             if reg is not None:
                 c = reg.counter(
-                    "phantom_mcp_runtime_events_total",
+                    "guardian_mcp_runtime_events_total",
                     "Total runtime events recorded by event name.",
                 )
                 c.inc(event_name=event_name)

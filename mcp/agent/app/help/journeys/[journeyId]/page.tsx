@@ -202,7 +202,7 @@ export default function JourneyDetailPage() {
         {/* Prerequisites — guidance-only callout (not numbered).
             Renders before the numbered sections so an operator landing
             on this journey cold sees what setup they're likely missing.
-            NOT a hard gate: Phantom doesn't block execution if the
+            NOT a hard gate: Guardian doesn't block execution if the
             prerequisite hasn't been completed. */}
         {journey.prerequisites && journey.prerequisites.length > 0 && (
           <section className="rounded-2xl p-5 border border-tertiary/30 bg-tertiary/5">
@@ -216,7 +216,7 @@ export default function JourneyDetailPage() {
             </div>
             <p className="text-xs text-on-surface-variant mb-3">
               These journeys set up state this walkthrough assumes is
-              already in place. Not a hard requirement — Phantom won&apos;t
+              already in place. Not a hard requirement — Guardian won&apos;t
               block you — but skipping them usually means the example
               prompts don&apos;t work end-to-end.
             </p>

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Phantom — VM compose drift check
+# Guardian — VM compose drift check
 #
 # Compares the canonical local docker-compose.yml against the file
-# currently deployed on phantom-vm at $VM_REMOTE_REPO/docker-compose.yml.
+# currently deployed on guardian-vm at $VM_REMOTE_REPO/docker-compose.yml.
 # Run before sync-to-VM so a stale VM compose can never silently mask
 # a local change (e.g. a new volume mount that doesn't take effect
 # until the VM compose actually carries the declaration).
@@ -15,16 +15,16 @@
 # it accidentally. This script makes the check explicit + automatic.
 #
 # v0.3.0+ NOTE — this script checks the REPO-ROOT docker-compose.yml
-# (the dev compose, used by build.yml deploy-compose on phantom-vm)
+# (the dev compose, used by build.yml deploy-compose on guardian-vm)
 # against the file at $VM_REMOTE_REPO. The repo-root compose still
-# uses tag-based image references (`image: phantom-agent:local`). The CUSTOMER
+# uses tag-based image references (`image: guardian-agent:local`). The CUSTOMER
 # compose at installer/docker-compose.yml uses digest pinning and is
-# NOT what runs on phantom-vm — it ships in the customer install kit.
+# NOT what runs on guardian-vm — it ships in the customer install kit.
 # So this drift check is the right shape for the dev/CI flow but
 # would not make sense for customer installs.
 #
 # For a customer-side drift check, the relevant question is "does my
-# /opt/phantom/.env have the digests the manifest says?". That's a
+# /opt/guardian/.env have the digests the manifest says?". That's a
 # separate audit; the customer compose's fail-loud fallback
 # (`@${DIGEST_*:-sha256:invalid_digest_run_installer_first}`) already
 # surfaces this on `docker compose up` if anything's missing.
@@ -52,7 +52,7 @@ while [[ $# -gt 0 ]]; do
       cat <<EOF
 Usage: $0 [--quiet]
 
-Compare local docker-compose.yml to the deployed copy on phantom-vm.
+Compare local docker-compose.yml to the deployed copy on guardian-vm.
 
 Exit codes:
   0  identical — sync-to-VM is safe

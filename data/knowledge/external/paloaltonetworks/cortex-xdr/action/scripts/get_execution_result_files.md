@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/scripts/get_script_execution_result_files/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_scripts_get_execution_result_files`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api/cortex-xdr-apis/script-execution/get-script-execution-result-files.html
 
@@ -43,5 +43,5 @@ A signed public link to a zip file containing the retrieved files. Link expires 
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_scripts_get_execution_result_files`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_scripts_get_execution_result_files`
 - Source mapping: `ebarti/cortex_xdr_client/api/scripts_api.py` → `get_script_execution_result_files`

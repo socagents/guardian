@@ -12,7 +12,7 @@
  *      knowledge bundles read-only, manifest jobs skipped, etc).
  *
  * All writes go through /api/agent/restore which auth-gates via the
- * phantom_session cookie at middleware.ts (v0.9.1+). Multipart upload
+ * guardian_session cookie at middleware.ts (v0.9.1+). Multipart upload
  * is browser-native (FormData).
  */
 
@@ -30,7 +30,7 @@ const glassPanel: React.CSSProperties = {
 
 interface RestoreManifest {
   schema_version?: number;
-  phantom_version?: string;
+  guardian_version?: string;
   created_at?: string;
   sections?: string[];
   section_counts?: Record<string, number>;
@@ -87,7 +87,7 @@ export default function BackupRestorePage() {
       }
       const blob = await r.blob();
       // Pull filename from Content-Disposition; fall back to a stamp.
-      let filename = "phantom-backup.zip";
+      let filename = "guardian-backup.zip";
       const cd = r.headers.get("content-disposition");
       if (cd) {
         const m = cd.match(/filename="?([^"]+)"?/);
@@ -220,7 +220,7 @@ export default function BackupRestorePage() {
         variant: "success",
         title: "reset-ui-password.sh downloaded",
         description:
-          "Save it to /opt/phantom/ on your VM (chmod 755) and run sudo ./reset-ui-password.sh if you ever lose UI access.",
+          "Save it to /opt/guardian/ on your VM (chmod 755) and run sudo ./reset-ui-password.sh if you ever lose UI access.",
       });
     } catch (err) {
       addToast({
@@ -254,7 +254,7 @@ export default function BackupRestorePage() {
             </h1>
           </div>
           <p className="text-sm text-on-surface-variant ml-9">
-            Download or restore a complete-state snapshot of your Phantom deployment.
+            Download or restore a complete-state snapshot of your Guardian deployment.
           </p>
         </header>
 
@@ -309,7 +309,7 @@ export default function BackupRestorePage() {
             Restore from backup
           </h2>
           <p className="text-xs text-on-surface-variant/70 mt-1">
-            Upload a phantom-backup-*.zip. Preview what would land, then
+            Upload a guardian-backup-*.zip. Preview what would land, then
             click Apply.
           </p>
         </div>
@@ -360,8 +360,8 @@ export default function BackupRestorePage() {
                 Restore plan
               </h3>
               <p className="text-xs text-on-surface-variant/70">
-                Backed up from Phantom v
-                {preview.manifest?.phantom_version || "unknown"} on{" "}
+                Backed up from Guardian v
+                {preview.manifest?.guardian_version || "unknown"} on{" "}
                 {preview.manifest?.created_at?.slice(0, 19) || "unknown"}
               </p>
             </div>
@@ -493,17 +493,17 @@ export default function BackupRestorePage() {
               SecretStore hash and writes a fresh PBKDF2 hash — no{" "}
               <code className="font-mono">docker compose down -v</code>
               , no SQLite surgery. Reads <code className="font-mono">MCP_TOKEN</code>
-              {" "}from the running phantom_agent container, so the
+              {" "}from the running guardian_agent container, so the
               operator never has to know it.
             </p>
             <p className="text-xs text-on-surface-variant/70 mt-2">
-              The v0.1.36+ phantom-installer already deposits this
-              file at <code className="font-mono">/opt/phantom/reset-ui-password.sh</code>
+              The v0.1.36+ guardian-installer already deposits this
+              file at <code className="font-mono">/opt/guardian/reset-ui-password.sh</code>
               {" "}on every install. <strong>If you upgraded the agent
               image with an older installer binary (e.g. via{" "}
               <code className="font-mono">--upgrade-to</code>) the
               file may not be on disk</strong> — download it here and
-              copy to <code className="font-mono">/opt/phantom/</code>.
+              copy to <code className="font-mono">/opt/guardian/</code>.
             </p>
           </div>
 
@@ -527,10 +527,10 @@ export default function BackupRestorePage() {
             </p>
             <pre className="font-mono text-[11px] bg-surface-container-highest rounded-lg p-3 overflow-x-auto">
 {`# After downloading via the button above, copy to the install dir:
-sudo install -m 755 ~/Downloads/reset-ui-password.sh /opt/phantom/
+sudo install -m 755 ~/Downloads/reset-ui-password.sh /opt/guardian/
 
 # Then if you ever lose your UI password:
-cd /opt/phantom && sudo ./reset-ui-password.sh`}
+cd /opt/guardian && sudo ./reset-ui-password.sh`}
             </pre>
           </div>
         </div>
@@ -577,7 +577,7 @@ cd /opt/phantom && sudo ./reset-ui-password.sh`}
             is the exception (single-row, always overwritten).
           </li>
           <li>
-            <strong className="text-on-surface">PHANTOM_SECRET_KEK does
+            <strong className="text-on-surface">GUARDIAN_SECRET_KEK does
             NOT need to match</strong> across source and destination. The
             zip carries cleartext secrets; the destination re-encrypts
             under its own KEK on restore.

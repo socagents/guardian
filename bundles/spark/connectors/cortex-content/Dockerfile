@@ -1,5 +1,5 @@
-# phantom-connector-cortex-content — per-connector image for the Cortex
-# Content marketplace fetch connector. Built FROM phantom-connector-runtime.
+# guardian-connector-cortex-content — per-connector image for the Cortex
+# Content marketplace fetch connector. Built FROM guardian-connector-runtime.
 #
 # Adds zero extra Python dependencies — the connector uses only stdlib
 # (urllib, json, pathlib, time) plus httpx (for GitHub API calls), and
@@ -16,11 +16,11 @@
 # the same crash + resource isolation guarantees as the other
 # connectors, with no behavioral cost.
 
-ARG PHANTOM_RUNTIME_VERSION=latest
-FROM ghcr.io/kite-production/phantom-connector-runtime:${PHANTOM_RUNTIME_VERSION}
+ARG GUARDIAN_RUNTIME_VERSION=latest
+FROM ghcr.io/kite-production/guardian-connector-runtime:${GUARDIAN_RUNTIME_VERSION}
 
-LABEL org.opencontainers.image.source="https://github.com/kite-production/phantom"
-LABEL org.opencontainers.image.description="Phantom cortex-content connector container — Palo Alto Networks Cortex Content marketplace fetch (XSIAM packs, ModelingRules, ParsingRules, CorrelationRules) from the public demisto/content GitHub repository."
+LABEL org.opencontainers.image.source="https://github.com/kite-production/guardian"
+LABEL org.opencontainers.image.description="Guardian cortex-content connector container — Palo Alto Networks Cortex Content marketplace fetch (XSIAM packs, ModelingRules, ParsingRules, CorrelationRules) from the public demisto/content GitHub repository."
 
 # No extra deps. httpx is in the base runtime image.
 

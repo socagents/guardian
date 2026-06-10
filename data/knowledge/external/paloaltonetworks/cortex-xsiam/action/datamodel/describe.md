@@ -2,7 +2,7 @@
 
 **HTTP**: `POST /public_api/v1/xql/start_xql_query/` with `dataset = X | datamodel`
 **MCP tool**: `xsiam_datamodel_describe`
-**Phantom connector**: `xsiam`
+**Guardian connector**: `xsiam`
 
 ## Purpose
 

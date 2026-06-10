@@ -16,7 +16,7 @@ import { useChat } from "@/components/chat/use-chat";
 // Stable localStorage key for the debug panel toggle. Lives at module
 // scope so the constant doesn't re-allocate per render and stays
 // trivially greppable from elsewhere.
-const DEBUG_PANEL_KEY = "phantom.chat.debug-panel.open";
+const DEBUG_PANEL_KEY = "guardian.chat.debug-panel.open";
 import type { ChatMessage } from "@/lib/api/chat";
 import {
   listChatSessions,
@@ -29,7 +29,7 @@ import { listModels } from "@/lib/api/models";
 import type { ModelInfo, Session } from "@/lib/api/types";
 import { SparkLogo } from "@/components/sidebar";
 
-// ─── Quick Action Chips (phantom-flavored) ──────────────────────────────────
+// ─── Quick Action Chips (guardian-flavored) ──────────────────────────────────
 
 const QUICK_ACTIONS = [
   { label: "Health Check", icon: "monitor_heart", prompt: "Run a system health check across the MCP and connector instances" },
@@ -45,11 +45,11 @@ const QUICK_ACTIONS = [
 /**
  * The Spark-ported `Session` type expects `session_id` / `last_active_at`
  * / `last_model` / `total_input_tokens` / `metadata` — none of which our
- * phantom MCP returns. The MCP shape is `{id, user, started_at, ended_at,
+ * guardian MCP returns. The MCP shape is `{id, user, started_at, ended_at,
  * title, meta, message_count}`. Rather than coerce both servers into one
  * type (the Spark type is used by other Spark-port pages we may revive),
  * we read fields off a permissive `Record<string, unknown>` and fall
- * through Spark → phantom names. This keeps the chat page working today
+ * through Spark → guardian names. This keeps the chat page working today
  * without touching every other consumer of the Spark Session type.
  */
 function readStr(obj: Record<string, unknown>, ...keys: string[]): string {
@@ -139,7 +139,7 @@ export default function ChatPage() {
   // Available models
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
 
-  // Chat hook — phantom is single-tenant, so no workspace defaults; the
+  // Chat hook — guardian is single-tenant, so no workspace defaults; the
   // chat handler picks the model from the runtime config (Vertex/Gemini).
   const {
     messages,
@@ -243,7 +243,7 @@ export default function ChatPage() {
   //
   // v0.3.6 — server-side filter via `exclude_scheduled=true` drops
   // job-driven sessions (rows tagged `meta.scheduled_by=<job-name>` by
-  // the chat-route when X-Phantom-Trigger is `job:*`) at the SQL layer.
+  // the chat-route when X-Guardian-Trigger is `job:*`) at the SQL layer.
   // Pre-v0.3.6 the filter ran client-side AFTER the fetch, which broke
   // on busy installs whose 50-row default window was 100% scheduled
   // sessions — the filter dropped all 50 and the sidebar showed empty
@@ -273,7 +273,7 @@ export default function ChatPage() {
   // v0.1.27 — per-session approval mode. Persisted in
   // session.metadata.approval_mode via PATCH /api/agent/sessions/[id].
   // The chat handler reads it on each turn (30s server-side cache);
-  // when 'bypass' it forwards X-Phantom-Approval-Bypass to MCP, which
+  // when 'bypass' it forwards X-Guardian-Approval-Bypass to MCP, which
   // makes the gate auto-approve gated tools. Default 'manual' is
   // safe: every gated tool needs operator confirmation.
   const [approvalMode, setApprovalMode] = useState<"manual" | "bypass">(
@@ -850,7 +850,7 @@ function EmptyState({ onQuickAction }: { onQuickAction: (prompt: string) => void
         </div>
         <div className="text-center">
           <h2 className="text-xl font-headline font-bold text-on-surface">
-            Talk to Phantom
+            Talk to Guardian
           </h2>
           <p className="text-sm text-on-surface-variant/70 mt-1 font-body max-w-sm">
             AI incident response — case triage, XQL investigation,

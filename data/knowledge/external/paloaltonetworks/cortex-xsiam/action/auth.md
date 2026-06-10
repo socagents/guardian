@@ -1,6 +1,6 @@
 # Cortex XSIAM — authentication
 
-Cortex XSIAM's REST API uses two auth modes. The Phantom connector supports
+Cortex XSIAM's REST API uses two auth modes. The Guardian connector supports
 both via per-instance config; `_xsiam_client.py` selects based on the
 instance's `auth_mode` field.
 
@@ -29,7 +29,7 @@ x-xdr-timestamp: <unix-millis>
 Content-Type: application/json
 ```
 
-Phantom's `_xsiam_client.py` generates the nonce + timestamp per request and
+Guardian's `_xsiam_client.py` generates the nonce + timestamp per request and
 computes the SHA-256. Operators never paste plain API keys into the agent;
 keys live in the `SecretStore` and the agent only sees the per-instance
 handle (`instance_id`).

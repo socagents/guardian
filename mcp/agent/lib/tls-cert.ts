@@ -29,8 +29,8 @@ export interface SelfSignedCert {
 
 const DEFAULT_SAN_LIST = [
   "DNS:localhost",
-  "DNS:phantom-agent",
-  "DNS:phantom-updater",
+  "DNS:guardian-agent",
+  "DNS:guardian-updater",
   "IP:127.0.0.1",
 ];
 
@@ -38,9 +38,9 @@ const DEFAULT_SAN_LIST = [
  * Generate a self-signed cert + key pair via openssl. Returns PEM
  * strings (NOT yet \n-escaped — escape for .env at the call site).
  *
- * @param opts.commonName  Subject CN (default "phantom").
+ * @param opts.commonName  Subject CN (default "guardian").
  * @param opts.days        Validity period (default 365).
- * @param opts.extraSans   Additional SAN entries (e.g. ["DNS:my.phantom.example"]).
+ * @param opts.extraSans   Additional SAN entries (e.g. ["DNS:my.guardian.example"]).
  *                         Default SANs cover compose-internal DNS + localhost.
  *
  * Throws if openssl isn't on PATH or returns non-zero.
@@ -48,13 +48,13 @@ const DEFAULT_SAN_LIST = [
 export function generateSelfSignedCert(
   opts: { commonName?: string; days?: number; extraSans?: string[] } = {},
 ): SelfSignedCert {
-  const cn = opts.commonName ?? "phantom";
+  const cn = opts.commonName ?? "guardian";
   const days = opts.days ?? 365;
   const sanList = [...DEFAULT_SAN_LIST, ...(opts.extraSans ?? [])];
 
   // Use a tmpdir with random name; clean up via try/finally so a thrown
   // openssl error doesn't leak the dir.
-  const workDir = mkdtempSync(join(tmpdir(), "phantom-tls-"));
+  const workDir = mkdtempSync(join(tmpdir(), "guardian-tls-"));
   try {
     const certFile = join(workDir, "cert.pem");
     const keyFile = join(workDir, "key.pem");
@@ -66,7 +66,7 @@ export function generateSelfSignedCert(
       "-days", String(days),
       "-keyout", keyFile,
       "-out", certFile,
-      "-subj", `/CN=${cn}/O=Phantom/OU=Self-signed`,
+      "-subj", `/CN=${cn}/O=Guardian/OU=Self-signed`,
       "-addext", `subjectAltName=${sanList.join(",")}`,
       "-addext", "basicConstraints=CA:FALSE",
       "-addext", "keyUsage=digitalSignature,keyEncipherment",
@@ -162,7 +162,7 @@ export function pemToEnvEscape(pem: string): string {
  * truth for TLS material across the stack (replaced the old
  * SSL_CERT_PEM compose-env passthrough).
  *
- * Path is configurable via PHANTOM_TLS_DIR env (defaults to /tls) so
+ * Path is configurable via GUARDIAN_TLS_DIR env (defaults to /tls) so
  * dev/test environments can point at an alternate location without
  * needing a Docker volume.
  *
@@ -175,7 +175,7 @@ export function writeTlsToSharedVolume(certPem: string, keyPem: string): {
   certPath: string;
   keyPath: string;
 } {
-  const dir = process.env.PHANTOM_TLS_DIR ?? "/tls";
+  const dir = process.env.GUARDIAN_TLS_DIR ?? "/tls";
   // mkdirSync is idempotent with recursive=true; no error if exists.
   mkdirSyncSafe(dir);
 
@@ -195,7 +195,7 @@ export function writeTlsToSharedVolume(certPem: string, keyPem: string): {
  * plain HTTP.
  */
 export function clearTlsFromSharedVolume(): void {
-  const dir = process.env.PHANTOM_TLS_DIR ?? "/tls";
+  const dir = process.env.GUARDIAN_TLS_DIR ?? "/tls";
   for (const f of ["cert.pem", "key.pem"]) {
     try {
       unlinkSyncSafe(pathJoin(dir, f));

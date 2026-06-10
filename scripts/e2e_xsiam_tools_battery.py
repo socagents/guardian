@@ -13,12 +13,12 @@ For each of the 59 XSIAM tools shipped by the R5 arc, validates:
 Individual tool invocation tested via chat agent (probabilistic LLM
 tool-selection — not amenable to a deterministic REST loop).
 
-USAGE (against phantom-vm via IAP tunnel + docker exec):
+USAGE (against guardian-vm via IAP tunnel + docker exec):
     set -a && source .env.vm && set +a
     gcloud compute start-iap-tunnel ...
     SSHPASS=... sshpass -e ssh ... \\
-      'MCP_TOKEN=$(docker exec phantom_agent env | grep MCP_TOKEN | cut -d= -f2-)
-       docker exec -e MCP_TOKEN -i phantom_agent python3 -' \\
+      'MCP_TOKEN=$(docker exec guardian_agent env | grep MCP_TOKEN | cut -d= -f2-)
+       docker exec -e MCP_TOKEN -i guardian_agent python3 -' \\
       < scripts/e2e_xsiam_tools_battery.py
 
 Exit 0 = catalog complete + toggle probe passes.

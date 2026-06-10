@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUNDLE_DIR="${BUNDLE_DIR:-$ROOT_DIR/bundles/spark}"
 DIST_DIR="${DIST_DIR:-$ROOT_DIR/dist}"
-BUNDLE_NAME="${BUNDLE_NAME:-phantom-soc-simulation-0.1.0}"
+BUNDLE_NAME="${BUNDLE_NAME:-guardian-soc-simulation-0.1.0}"
 OUTPUT_DIR="$DIST_DIR/$BUNDLE_NAME"
 ARCHIVE_PATH="${ARCHIVE_PATH:-$DIST_DIR/$BUNDLE_NAME.tar.zst}"
 

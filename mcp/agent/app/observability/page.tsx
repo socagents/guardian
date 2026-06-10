@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 /**
- * Observability overview — phantom version.
+ * Observability overview — guardian version.
  *
  * Spark's overview was Grafana-shaped: PromQL queries against a real
  * Prometheus, log-volume tiles fed by Loki, service-up rollup from a
- * scrape registry. Phantom is self-contained — no Grafana, no
+ * scrape registry. Guardian is self-contained — no Grafana, no
  * Prometheus server, no Loki. The MCP exposes /api/v1/metrics
  * (Prometheus text) and /api/v1/audit directly; this page parses
  * them client-side.
@@ -109,7 +109,7 @@ export default function ObservabilityOverview() {
           <h1 className="font-headline text-3xl font-bold tracking-tight text-on-surface">Observability</h1>
         </div>
         <p className="text-sm text-on-surface-variant ml-9">
-          Phantom-internal observability — self-contained, no Grafana / Prometheus / Loki dependency.
+          Guardian-internal observability — self-contained, no Grafana / Prometheus / Loki dependency.
           Drill in via the sidebar (Services, Metrics, Traces, Logs, Events, Pipeline).
         </p>
       </div>
@@ -126,7 +126,7 @@ export default function ObservabilityOverview() {
           value={loading ? "..." : `${auditTotal}+`}
           hint="Append-only, sqlite-backed. Tail live at /activity." />
         <Tile icon="dns" accent="text-tertiary" label="Services"
-          value="3" hint="phantom-agent · phantom-mcp · embedded sqlite." />
+          value="3" hint="guardian-agent · guardian-mcp · embedded sqlite." />
         <Tile icon="timeline" accent="text-primary-fixed-dim" label="Traces"
           value="OTel-ready" hint="Auto-instrumented OTLP. Configure an exporter to capture." />
       </div>

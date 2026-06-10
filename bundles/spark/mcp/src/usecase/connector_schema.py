@@ -61,7 +61,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 # ─────────────────────────────────────────────────────────────────
 # Schema discovery

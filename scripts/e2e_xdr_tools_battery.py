@@ -20,13 +20,13 @@ amenable to a deterministic REST probe because LLM tool-selection is
 probabilistic. The "did each tool work" validation lives in operator
 hands-on smoking + chat-driven test prompts post-deploy.
 
-USAGE (against phantom-vm via IAP tunnel + docker exec):
+USAGE (against guardian-vm via IAP tunnel + docker exec):
     set -a && source .env.vm && set +a
     gcloud compute start-iap-tunnel ...
     SSHPASS=... sshpass -e ssh ... \\
-      'MCP_TOKEN=$(docker exec phantom_agent env | grep MCP_TOKEN | cut -d= -f2-)
-       INSTANCE_ID=$(docker exec phantom_agent ... | jq -r ".instances[0].id")
-       docker exec -e MCP_TOKEN -e INSTANCE_ID phantom_agent python3 -' \\
+      'MCP_TOKEN=$(docker exec guardian_agent env | grep MCP_TOKEN | cut -d= -f2-)
+       INSTANCE_ID=$(docker exec guardian_agent ... | jq -r ".instances[0].id")
+       docker exec -e MCP_TOKEN -e INSTANCE_ID guardian_agent python3 -' \\
       < scripts/e2e_xdr_tools_battery.py
 
 Exit code 0 = catalog complete + toggle probe passes.

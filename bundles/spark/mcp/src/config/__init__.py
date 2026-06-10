@@ -1,4 +1,4 @@
-"""Configuration module for Phantom MCP Server."""
+"""Configuration module for Guardian MCP Server."""
 
 from .config import Settings, get_config, reload_config
 

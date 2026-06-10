@@ -1,9 +1,9 @@
 /**
- * Phantom marketplace endpoint — returns the connectors that ship in
+ * Guardian marketplace endpoint — returns the connectors that ship in
  * this bundle: xsiam, cortex-xdr, cortex-docs, cortex-content, web.
  * The connectors page (lifted from Spark's workspace UI) calls
  * /api/marketplace/connectors expecting a GitHub-catalog-shaped JSON;
- * in phantom standalone, the catalog IS the bundle, so we serve
+ * in guardian standalone, the catalog IS the bundle, so we serve
  * hand-curated specs derived from the bundle's
  * `connectors/<id>/connector.yaml` files.
  *
@@ -71,7 +71,7 @@ interface MarketplaceConnector {
   topAgents: Array<{ name: string; color: string }>;
 }
 
-const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
+const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
   // ── xsiam ───────────────────────────────────────────────────────────────
   {
     id: "xsiam",
@@ -82,7 +82,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     description:
       "Palo Alto Cortex XSIAM connector — run XQL queries via PAPI, list cases and issues, look up assets, manage datasets and lookups.",
     longDescription:
-      "Bridges Phantom to your Cortex XSIAM tenant. The agent can run XQL queries, search the bundled xql-examples knowledge base, list cases and issues, look up assets, create datasets, and read/write lookup data — the core read-and-investigate paths for incident response and threat hunting.",
+      "Bridges Guardian to your Cortex XSIAM tenant. The agent can run XQL queries, search the bundled xql-examples knowledge base, list cases and issues, look up assets, create datasets, and read/write lookup data — the core read-and-investigate paths for incident response and threat hunting.",
     category: "Security",
     tags: ["siem", "xql", "cortex", "incident-response"],
     icon: "query_stats",
@@ -136,12 +136,12 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     versions: [{ version: "1.0.0", date: "2026-04-15", changes: ["Initial PAPI integration"] }],
     setupGuide:
       "In XSIAM, create a PAPI key with detection-read + remote-script-exec scopes, then supply CORTEX_MCP_PAPI_* env values.",
-    dockerImage: "ghcr.io/kite-production/phantom-mcp:latest",
+    dockerImage: "ghcr.io/kite-production/guardian-mcp:latest",
     runtime: "python",
     sdkLanguage: "Python",
-    sdkPackage: "phantom-spark-xsiam-connector",
+    sdkPackage: "guardian-spark-xsiam-connector",
     ingestion: { enabled: false, mode: "pull", description: "Queries run on demand" },
-    topAgents: [{ name: "phantom-agent", color: "#1f7bff" }],
+    topAgents: [{ name: "guardian-agent", color: "#1f7bff" }],
   },
   // ── web (v0.1.27) ────────────────────────────────────────────────────────
   {
@@ -153,7 +153,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     description:
       "Headless browser tools — fetch web pages, extract text/links, screenshot, click, fill forms. Backed by a profile-gated chromedp/headless-shell sidecar.",
     longDescription:
-      "Lets the agent reach the public web for IOC pivots, vendor advisories, threat-intel portal scraping, and 'go read this CVE writeup' requests. Talks to phantom-browser (a profile-gated sidecar) over Chrome DevTools Protocol via Playwright Python. The Allowed Domains list is the primary safety control — restrict the agent to vetted hosts. By default web.navigate is approval-gated; use the chat-header dropdown or a job's bypass slider to opt out per session/job.",
+      "Lets the agent reach the public web for IOC pivots, vendor advisories, threat-intel portal scraping, and 'go read this CVE writeup' requests. Talks to guardian-browser (a profile-gated sidecar) over Chrome DevTools Protocol via Playwright Python. The Allowed Domains list is the primary safety control — restrict the agent to vetted hosts. By default web.navigate is approval-gated; use the chat-header dropdown or a job's bypass slider to opt out per session/job.",
     category: "Security",
     tags: ["browser", "scraping", "intel", "v0.1.27"],
     icon: "language",
@@ -222,7 +222,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
         name: "cdp_url",
         type: "text",
         required: true,
-        defaultValue: "http://phantom-browser:9222",
+        defaultValue: "http://guardian-browser:9222",
       },
       {
         display: "Default timeout (ms)",
@@ -266,7 +266,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
         date: "2026-05-06",
         changes: [
           "Initial release — 10 tools (navigate, get_text, get_html, screenshot, click, fill, wait_for, extract_links, close_session, list_sessions)",
-          "Connects to phantom-browser sidecar via Playwright over CDP; profile-gated so it doesn't auto-start",
+          "Connects to guardian-browser sidecar via Playwright over CDP; profile-gated so it doesn't auto-start",
           "Trafilatura-powered readable text extraction",
           "allowed_domains hostname allow-list with .example.com suffix wildcard support",
           "web.navigate approval-gated by default; bypass via chat-header dropdown or job bypass slider",
@@ -274,17 +274,17 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
       },
     ],
     setupGuide:
-      "1) Bring up the sidecar: `docker compose --profile browser up -d phantom-browser`. 2) Click 'Add instance', leave cdp_url as the default. 3) Set Allowed Domains to your vetted threat-intel + vendor-doc hosts (use `.example.com` to match all subdomains). 4) Save. The agent will see web.* tools on its next refresh.",
-    dockerImage: "ghcr.io/kite-production/phantom-browser:latest",
+      "1) Bring up the sidecar: `docker compose --profile browser up -d guardian-browser`. 2) Click 'Add instance', leave cdp_url as the default. 3) Set Allowed Domains to your vetted threat-intel + vendor-doc hosts (use `.example.com` to match all subdomains). 4) Save. The agent will see web.* tools on its next refresh.",
+    dockerImage: "ghcr.io/kite-production/guardian-browser:latest",
     runtime: "python",
     sdkLanguage: "Python",
-    sdkPackage: "phantom-spark-web-connector",
+    sdkPackage: "guardian-spark-web-connector",
     ingestion: {
       enabled: false,
       mode: "pull",
       description: "Pages are fetched on demand by the agent — no continuous ingestion.",
     },
-    topAgents: [{ name: "phantom-agent", color: "#a855f7" }],
+    topAgents: [{ name: "guardian-agent", color: "#a855f7" }],
   },
   // ── cortex-docs (v0.3.1) ─────────────────────────────────────────────────
   {
@@ -403,7 +403,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
           "Initial release — 6 tools (search, suggest, xql_lookup, fetch_topic, fetch_toc, deep_research)",
           "Wraps four upstream scripts from cortex-deep-search_sharable, preserved verbatim (search.py, fetch_topic.py, xql_lookup.py, research_planner.py)",
           "Module-style Python connector — stdlib-only (urllib + json + re), no daemon, zero extra deps",
-          "SystemExit-translation wrapper at the integration boundary so transient docs-API outages produce structured error returns instead of crashing phantom-agent",
+          "SystemExit-translation wrapper at the integration boundary so transient docs-API outages produce structured error returns instead of crashing guardian-agent",
           "Bundles cortex_xql_query_authoring foundation skill — six-step KB-search → stage/function-extraction → cortex-docs lookup → query-authoring workflow",
           "deep_research uses ANTHROPIC_API_KEY when available; falls back to built-in heuristic planner with no LLM dependency",
         ],
@@ -411,16 +411,16 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     ],
     setupGuide:
       "1) Click 'Add instance' on the cortex-docs row. 2) Leave the defaults — the Cortex docs API is public, no credentials needed. 3) Save. The agent will see cortex-docs.* tools on the next refresh and the cortex_xql_query_authoring skill becomes operational. 4) (Optional) Set plannerModel to a Claude model id if you want cortex-docs/deep_research to use LLM-driven planning instead of the heuristic fallback.",
-    dockerImage: "ghcr.io/kite-production/phantom-connector-cortex-docs:latest",
+    dockerImage: "ghcr.io/kite-production/guardian-connector-cortex-docs:latest",
     runtime: "python",
     sdkLanguage: "Python",
-    sdkPackage: "phantom-spark-cortex-docs-connector",
+    sdkPackage: "guardian-spark-cortex-docs-connector",
     ingestion: {
       enabled: false,
       mode: "pull",
       description: "Cortex docs are fetched on demand per tool call — no continuous ingestion.",
     },
-    topAgents: [{ name: "phantom-agent", color: "#fa582d" }],
+    topAgents: [{ name: "guardian-agent", color: "#fa582d" }],
   },
   // ── cortex-content (v0.3.9) ──────────────────────────────────────────────
   {
@@ -430,7 +430,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     version: "0.3.9",
     publisher: "kite-production",
     description:
-      "Cortex content catalog bundled with Phantom — XSIAM/XSOAR content packs, ModelingRules, ParsingRules, CorrelationRules. Ten tools for listing/searching packs, fetching rule bundles, plus index_kb to embed pack content into the agent's semantic-search KB.",
+      "Cortex content catalog bundled with Guardian — XSIAM/XSOAR content packs, ModelingRules, ParsingRules, CorrelationRules. Ten tools for listing/searching packs, fetching rule bundles, plus index_kb to embed pack content into the agent's semantic-search KB.",
     longDescription:
       "Gives the chat agent a reference for canonical XSIAM content. When operators ask 'show me how Cortex models cisco_esa_raw' or 'pull the F5APM modeling rule so I can adapt it', the agent uses cortex-content/get_modeling_rule to fetch the three-file bundle (.xif + .yml + _schema.json) from the local catalog. The agent uses these as references when authoring or updating data models for the operator's tenant — instead of guessing XDM paths (which produces broken parsers, as the v0.3.7 model-authoring session showed), it can ground each mapping against the canonical implementation. v0.3.9 adds cortex_index_kb which walks a pack's rules and upserts each into the agent's knowledge_search KB (kb_name='cortex-content'), enabling semantic search across the ~200 packs that ship ModelingRules without round-tripping through list/get tools per rule. Idempotent — source_hash dedupe means re-indexing is cheap. All reads are local file reads; no network calls.",
     category: "Security",
@@ -443,7 +443,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     installCount: 0,
     status: "installed",
     reliability: "stable",
-    authType: "None — local catalog bundled with Phantom.",
+    authType: "None — local catalog bundled with Guardian.",
     tools: [
       {
         name: "list_packs",
@@ -528,7 +528,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     ],
     config: [],
     setupGuide:
-      "No setup required. The Cortex content catalog is bundled with Phantom and read from local files — no configuration, no network, no credentials.",
+      "No setup required. The Cortex content catalog is bundled with Guardian and read from local files — no configuration, no network, no credentials.",
     versions: [
       {
         version: "0.3.7",
@@ -541,16 +541,16 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
         ],
       },
     ],
-    dockerImage: "ghcr.io/kite-production/phantom-mcp:latest",
+    dockerImage: "ghcr.io/kite-production/guardian-mcp:latest",
     runtime: "python",
     sdkLanguage: "Python",
-    sdkPackage: "phantom-spark-cortex-content-connector",
+    sdkPackage: "guardian-spark-cortex-content-connector",
     ingestion: {
       enabled: false,
       mode: "pull",
       description: "Pack content fetched on demand per tool call; cached locally for 24h by default.",
     },
-    topAgents: [{ name: "phantom-agent", color: "#1963b3" }],
+    topAgents: [{ name: "guardian-agent", color: "#1963b3" }],
   },
 
   // ── cortex-xdr (v0.5.61 base, v0.5.68 description rewrite) ───────────────
@@ -563,7 +563,7 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     description:
       "Cortex XDR API wrapper — list incidents and alerts, drill into specific cases, and run XQL queries against the XDR data lake. General-purpose interface for incident response, threat hunting, investigation reporting, and detection coverage validation.",
     longDescription:
-      "Phantom's interface to your Cortex XDR tenant's Public API. The chat agent can answer operator questions like 'show me unresolved high-severity incidents in the last 24 hours', 'pull the alerts from incident <id>', or 'run XQL: dataset=xdr_data | filter agent_hostname=\"xdragent\" and event_type=ENUM.PROCESS | dedup actor_process_image_name | limit 50'. Four tools cover the core read paths: get_cases_and_issues (incident listing with filters by time, endpoint, severity, status), get_incident_extra_data (full alerts + network/file artifacts for a specific incident), run_xql_query (synchronous XQL with bounded polling — returns rows when complete or execution_id for long queries), and get_xql_results (poll an in-flight async execution). Same Cortex Public API family + Authorization + x-xdr-auth-id auth pattern as XSIAM; unified api_url / api_id / api_key field names per v0.5.59 / #35. Use cases: incident response (triage + drill-down), threat hunting (XQL ad-hoc queries), and investigation reporting (incident details + related artifacts). Read-only: no write/action endpoints in v0.1.x (isolate endpoint, run remote script, etc. deferred behind an explicit approval gate in a future release).",
+      "Guardian's interface to your Cortex XDR tenant's Public API. The chat agent can answer operator questions like 'show me unresolved high-severity incidents in the last 24 hours', 'pull the alerts from incident <id>', or 'run XQL: dataset=xdr_data | filter agent_hostname=\"xdragent\" and event_type=ENUM.PROCESS | dedup actor_process_image_name | limit 50'. Four tools cover the core read paths: get_cases_and_issues (incident listing with filters by time, endpoint, severity, status), get_incident_extra_data (full alerts + network/file artifacts for a specific incident), run_xql_query (synchronous XQL with bounded polling — returns rows when complete or execution_id for long queries), and get_xql_results (poll an in-flight async execution). Same Cortex Public API family + Authorization + x-xdr-auth-id auth pattern as XSIAM; unified api_url / api_id / api_key field names per v0.5.59 / #35. Use cases: incident response (triage + drill-down), threat hunting (XQL ad-hoc queries), and investigation reporting (incident details + related artifacts). Read-only: no write/action endpoints in v0.1.x (isolate endpoint, run remote script, etc. deferred behind an explicit approval gate in a future release).",
     category: "Security",
     tags: ["cortex", "xdr", "edr", "siem", "incidents", "alerts", "xql", "threat-hunting", "investigation", "incident-response"],
     icon: "shield_lock",
@@ -633,16 +633,16 @@ const PHANTOM_CONNECTORS: MarketplaceConnector[] = [
     ],
     setupGuide:
       "1) In the Cortex XDR console, navigate to Settings → Configurations → API Keys. 2) Generate a key with 'Advanced' security level (required for x-xdr-auth-id header path). 3) Copy the api_id (integer next to the key), api_key (long alphanumeric — paste raw, no 'Bearer' prefix), and api_url (format: https://api-yourtenant.xdr.us.paloaltonetworks.com). 4) Click 'Add instance' on the Cortex XDR card. 5) Paste, save. 6) Click 'Test Connection' on the new instance card — green check means creds valid. 7) Try natural-language queries via chat: 'show me unresolved high-severity incidents in the last 24h', 'pull the alerts from incident <id>', 'run XQL to count process events on hostname X yesterday'. The agent picks the right tool (get_cases_and_issues / get_incident_extra_data / run_xql_query) automatically based on your question.",
-    dockerImage: "ghcr.io/kite-production/phantom-connector-cortex-xdr:latest",
+    dockerImage: "ghcr.io/kite-production/guardian-connector-cortex-xdr:latest",
     runtime: "python",
     sdkLanguage: "Python",
-    sdkPackage: "phantom-spark-cortex-xdr-connector",
+    sdkPackage: "guardian-spark-cortex-xdr-connector",
     ingestion: {
       enabled: false,
       mode: "pull",
       description: "Incidents + XQL results fetched on demand per tool call. No background polling.",
     },
-    topAgents: [{ name: "phantom-agent", color: "#ef4444" }],
+    topAgents: [{ name: "guardian-agent", color: "#ef4444" }],
   },
 ];
 
@@ -737,7 +737,7 @@ async function loadLiveTools(connectorId: string): Promise<Tool[] | null> {
 
 export async function GET() {
   // Build a deep copy so concurrent requests don't see each other's overlay
-  const out = PHANTOM_CONNECTORS.map((c) => ({ ...c, tools: [...c.tools] }));
+  const out = GUARDIAN_CONNECTORS.map((c) => ({ ...c, tools: [...c.tools] }));
   await Promise.all(
     out.map(async (c) => {
       const live = await loadLiveTools(c.id);

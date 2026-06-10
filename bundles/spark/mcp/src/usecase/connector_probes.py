@@ -61,14 +61,14 @@ async def real_probe(
       2. environment variables (legacy default; used when no
          instance context is available, e.g. the /connectors probe)
 
-    Returns (ok, error_message, is_auth_error). PHANTOM_TLS_VERIFY=0
+    Returns (ok, error_message, is_auth_error). GUARDIAN_TLS_VERIFY=0
     (default in self-signed mode) tolerates the agent's auto-generated
     cert for compose-internal HTTPS callees.
     """
     cfg = config or {}
     sec = secrets or {}
     timeout = httpx.Timeout(5.0, connect=3.0)
-    verify = os.environ.get("PHANTOM_TLS_VERIFY", "0") == "1"
+    verify = os.environ.get("GUARDIAN_TLS_VERIFY", "0") == "1"
 
     try:
         if connector_id == "xsiam":

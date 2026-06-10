@@ -23,7 +23,7 @@ from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
@@ -124,10 +124,10 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
                     "Newly-discovered entry-points visible at "
                     "GET /api/v1/plugin-entries. As of v0.5.48 the "
                     "agent's hook-runner can also INVOKE plugin-"
-                    "contributed handlers in the phantom.hooks group "
+                    "contributed handlers in the guardian.hooks group "
                     "via the 'plugin' transport in /settings/hooks. "
                     "Other contribution types (skills, connectors, "
-                    "scanners, providers) still need a phantom-agent "
+                    "scanners, providers) still need a guardian-agent "
                     "restart to land."
                 ),
             },
@@ -181,7 +181,7 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
                 status_code=500,
             )
         # v0.5.48 — clear plugin-hook handler cache. Skill/connector/
-        # provider/scanner caches still require a phantom-agent
+        # provider/scanner caches still require a guardian-agent
         # restart since those registries don't yet hot-reload.
         try:
             from usecase.plugin_hook_runner import clear_cache
@@ -194,7 +194,7 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
                 "note": (
                     "Plugin-hook handler cache flushed. For other "
                     "contribution types (skills, connectors, providers, "
-                    "scanners), restart phantom-agent to fully purge."
+                    "scanners), restart guardian-agent to fully purge."
                 ),
             }
         )

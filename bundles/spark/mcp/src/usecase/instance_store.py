@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 
@@ -75,7 +75,7 @@ class Instance:
     # v0.1.30: per-instance container URL for connectors with
     # `runtimeMapping.style: container` in their connector.yaml. NULL/None
     # for the existing in-process (style: module) connectors. Populated
-    # by phantom-updater's `start` endpoint when it brings up the
+    # by guardian-updater's `start` endpoint when it brings up the
     # connector container; cleared by `stop`. The connector_loader's
     # container branch (see _resolve_callable) reads this via
     # merged_config()→contextvar→get_config().container_url at every
@@ -252,7 +252,7 @@ class InstanceStore:
             # v0.1.30 migration: container_url for per-instance
             # connector containers. Nullable — only set for connectors
             # with style: container; in-process connectors leave it
-            # NULL. Populated by phantom-updater's start endpoint
+            # NULL. Populated by guardian-updater's start endpoint
             # (P1.9). Same swallow-on-duplicate pattern as the v0.1.15
             # enabled migration above.
             try:
@@ -563,18 +563,18 @@ class InstanceStore:
         self, instance_id: str, container_url: str | None,
     ) -> bool:
         """Set (or clear) the container_url for a connector instance.
-        Called by phantom-updater's lifecycle endpoints (P1.9):
+        Called by guardian-updater's lifecycle endpoints (P1.9):
 
-          - start endpoint:   set_container_url(id, "http://phantom-connector-X-Y:9000")
+          - start endpoint:   set_container_url(id, "http://guardian-connector-X-Y:9000")
           - stop endpoint:    set_container_url(id, None)
-          - restart endpoint: set_container_url(id, "http://phantom-connector-X-Y:9000")
+          - restart endpoint: set_container_url(id, "http://guardian-connector-X-Y:9000")
                               (URL may differ if Docker assigned a new IP, hence the
                               explicit re-set rather than no-op)
 
         Returns True if the row was found and updated, False if no
         instance with that id exists.
 
-        Doesn't audit-log this — the upstream phantom-updater
+        Doesn't audit-log this — the upstream guardian-updater
         endpoint emits its own `connector_container_started` /
         `_stopped` audit row that's more operator-meaningful than
         the raw column update.
@@ -771,7 +771,7 @@ class InstanceStore:
 # ─────────────────────────────────────────────────────────────────
 # Module-level singleton accessor — wired by main.py.
 #
-# Phantom convention (mirrors memory_store, kb_store, audit_log,
+# Guardian convention (mirrors memory_store, kb_store, audit_log,
 # settings_store, etc.). Exists so the agent-self-modification
 # built-in tools (instances_list / instances_get) can look up the
 # active store at call time without being passed it through every

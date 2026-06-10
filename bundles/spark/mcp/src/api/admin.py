@@ -18,7 +18,7 @@ Before this endpoint, materializing a new connector instance via
 the new connector's tools (FastMCP's `mcp.tool()` registration only
 runs in async_main()'s startup loop). The setup endpoint honestly
 returned `requires_mcp_restart: true` and operators had to
-`docker compose restart phantom-agent`.
+`docker compose restart guardian-agent`.
 
 The hot-reload makes that restart unnecessary: register_all_tools()
 is idempotent (skips names already in tool_registry), so calling it
@@ -49,7 +49,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.connector_loader import reload_tools_now
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _is_mcp_token_principal(request: Request) -> bool:

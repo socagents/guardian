@@ -29,5 +29,5 @@ Disable one or more IoCs — XDR stops alerting/blocking on them. Use when an op
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_ioc_disable`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_ioc_disable`
 - Companion: `xdr_ioc_enable` (re-enables); `xdr_ioc_insert_json` (initial upload).

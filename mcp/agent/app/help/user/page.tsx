@@ -3,8 +3,8 @@
 /**
  * /help/user — operator-focused user guide.
  *
- * Companion to /help/architecture. Operators driving Phantom land here
- * for surface walks; architects extending Phantom go to /help/architecture
+ * Companion to /help/architecture. Operators driving Guardian land here
+ * for surface walks; architects extending Guardian go to /help/architecture
  * for the system-internals view. The split keeps each guide useful to
  * its audience without bloating either:
  *
@@ -46,11 +46,11 @@ interface SectionDef {
 }
 
 const SECTIONS: SectionDef[] = [
-  { id: "overview", label: "What Phantom is", group: "Welcome", icon: "explore" },
+  { id: "overview", label: "What Guardian is", group: "Welcome", icon: "explore" },
   { id: "daily-workflow", label: "Daily Workflow", group: "Welcome", icon: "loop" },
   { id: "authentication", label: "Authentication", group: "Welcome", icon: "lock_person" },
   { id: "profile", label: "Your Profile", group: "Welcome", icon: "person" },
-  { id: "upgrades", label: "Upgrading Phantom", group: "Welcome", icon: "system_update" },
+  { id: "upgrades", label: "Upgrading Guardian", group: "Welcome", icon: "system_update" },
   { id: "ui-tour", label: "Operator UI Tour", group: "Welcome", icon: "tour" },
 
   { id: "chat", label: "Chat", group: "Command", icon: "chat_bubble" },
@@ -162,7 +162,7 @@ export default function HelpPage() {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(
-        "phantom.help.user.sidebar-collapsed",
+        "guardian.help.user.sidebar-collapsed",
       );
       if (stored === "true") setSidebarCollapsed(true);
     } catch {
@@ -172,7 +172,7 @@ export default function HelpPage() {
   useEffect(() => {
     try {
       window.localStorage.setItem(
-        "phantom.help.user.sidebar-collapsed",
+        "guardian.help.user.sidebar-collapsed",
         sidebarCollapsed ? "true" : "false",
       );
     } catch {
@@ -211,7 +211,7 @@ export default function HelpPage() {
               </button>
             </div>
             <p className="text-sm text-on-surface-variant/80 mb-5 leading-relaxed">
-              Operator guide to every Phantom capability. Click a section to
+              Operator guide to every Guardian capability. Click a section to
               jump.
             </p>
 
@@ -298,7 +298,7 @@ export default function HelpPage() {
               </h1>
             </div>
             <p className="text-base text-on-surface-variant leading-relaxed">
-              Phantom is a continuous SOC simulation platform: it generates
+              Guardian is a continuous SOC simulation platform: it generates
               synthetic security telemetry, runs MITRE ATT&amp;CK scenarios,
               validates detections, and orchestrates red/blue workflows
               through an AI agent surface. This guide walks every operator
@@ -337,9 +337,9 @@ export default function HelpPage() {
                                    WELCOME
               ============================================================ */}
 
-          <Section id="overview" icon="explore" title="What Phantom is">
+          <Section id="overview" icon="explore" title="What Guardian is">
             <p>
-              Phantom packages a SOC adversary lab into a four-container
+              Guardian packages a SOC adversary lab into a four-container
               Docker stack. The agent is the human-facing surface — a
               Next.js UI where you chat, run jobs, configure connectors,
               and watch telemetry. Behind it sits an MCP server that
@@ -357,7 +357,7 @@ export default function HelpPage() {
               The agent orchestrates all of that through natural-language
               chat plus optional scheduled jobs. You don&apos;t need to
               wait for real attacks to pressure-test detection content;
-              Phantom gives you a repeatable lab on demand.
+              Guardian gives you a repeatable lab on demand.
             </p>
             <p>
               Who&apos;s it for? <Term>SOC tier-1 / tier-2 analysts</Term>{" "}
@@ -378,7 +378,7 @@ export default function HelpPage() {
               authoring tools and your production SOC.
             </p>
             <Callout tone="info">
-              Phantom ships zero native tools — every capability comes from
+              Guardian ships zero native tools — every capability comes from
               the bundled connectors or runtime built-ins (memory,
               sessions, knowledge search). That keeps the surface honest:
               what you see in <Link href="/skills" className="link">/skills</Link>{" "}
@@ -459,18 +459,18 @@ export default function HelpPage() {
               <p>
                 The installer auto-generates a random admin
                 password per install and writes it to{" "}
-                <Code>/opt/phantom/.env</Code> as{" "}
-                <Code>PHANTOM_DEFAULT_ADMIN_PASSWORD</Code>. No
-                credential is baked into the phantom-agent image. You
+                <Code>/opt/guardian/.env</Code> as{" "}
+                <Code>GUARDIAN_DEFAULT_ADMIN_PASSWORD</Code>. No
+                credential is baked into the guardian-agent image. You
                 see the value in three places:
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
-                <li>The installer&apos;s &ldquo;First-time login&rdquo; banner at the end of <Code>sudo ./phantom-installer</Code>.</li>
-                <li>Inside <Code>/opt/phantom/.env</Code> under <Code>PHANTOM_DEFAULT_ADMIN_PASSWORD</Code> (mode 0600; root or installer-user only).</li>
+                <li>The installer&apos;s &ldquo;First-time login&rdquo; banner at the end of <Code>sudo ./guardian-installer</Code>.</li>
+                <li>Inside <Code>/opt/guardian/.env</Code> under <Code>GUARDIAN_DEFAULT_ADMIN_PASSWORD</Code> (mode 0600; root or installer-user only).</li>
                 <li>Docker logs of the agent on the FIRST boot only — the entrypoint prints a credentials banner once when it seeds. Subsequent boots stay quiet (already-initialized branch).</li>
               </ul>
               <Pre>{`username:  admin
-password:  <value of PHANTOM_DEFAULT_ADMIN_PASSWORD from .env>`}</Pre>
+password:  <value of GUARDIAN_DEFAULT_ADMIN_PASSWORD from .env>`}</Pre>
               <p>
                 Sign in. The UI will show a non-dismissible amber
                 banner and auto-redirect you to <Code>/profile</Code>{" "}
@@ -479,11 +479,11 @@ password:  <value of PHANTOM_DEFAULT_ADMIN_PASSWORD from .env>`}</Pre>
                 change, the value in <Code>.env</Code> is never
                 consulted again — your operator-set password lives
                 in <Code>SecretStore</Code>, encrypted at rest with{" "}
-                <Code>PHANTOM_SECRET_KEK</Code>.
+                <Code>GUARDIAN_SECRET_KEK</Code>.
               </p>
               <p>
                 If you lose the random value before completing the forced first-login change, run{" "}
-                <Code>sudo /opt/phantom/phantom-reset-admin-password</Code> from the host to set a new one interactively.
+                <Code>sudo /opt/guardian/guardian-reset-admin-password</Code> from the host to set a new one interactively.
               </p>
               <AuthLoginFlow />
             </SubSection>
@@ -497,7 +497,7 @@ password:  <value of PHANTOM_DEFAULT_ADMIN_PASSWORD from .env>`}</Pre>
                 pick a scope, and copy the key (shown once).
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
-                <li>Send it as <Code>Authorization: Bearer phantom_ak_…</Code> to <Code>/api/chat</Code> or any <Code>/api/agent/*</Code> route.</li>
+                <li>Send it as <Code>Authorization: Bearer guardian_ak_…</Code> to <Code>/api/chat</Code> or any <Code>/api/agent/*</Code> route.</li>
                 <li>Scopes: <Code>agent:read</Code> (read-only), <Code>agent:write</Code> (includes running chat turns + mutations), <Code>agent:*</Code> (full non-credential access).</li>
                 <li>Keys can never reach credential settings (providers, connector instances, API-key management) — those always require a logged-in session, so a leaked key stays bounded.</li>
                 <li>Revoke any key instantly from <Code>/api-keys</Code>; it stops working within ~30 seconds.</li>
@@ -533,12 +533,12 @@ password:  <value of PHANTOM_DEFAULT_ADMIN_PASSWORD from .env>`}</Pre>
                 If you can&apos;t log in (forgot the password, no
                 browser session), reset from the host shell. No old
                 password needed — the trust boundary is shell access
-                to the machine running Phantom. A host script for
-                this is installed at <Code>/opt/phantom/</Code>{" "}
+                to the machine running Guardian. A host script for
+                this is installed at <Code>/opt/guardian/</Code>{" "}
                 by every fresh installer run:
               </p>
-              <Pre>{`# From the host running phantom-agent:
-sudo /opt/phantom/phantom-reset-admin-password`}</Pre>
+              <Pre>{`# From the host running guardian-agent:
+sudo /opt/guardian/guardian-reset-admin-password`}</Pre>
               <p>
                 The wrapper validates the agent container is running,
                 then exec-replaces itself with the in-container CLI.
@@ -547,10 +547,10 @@ sudo /opt/phantom/phantom-reset-admin-password`}</Pre>
                 password twice. On success it tells you to restart the
                 agent container so any in-memory caches get flushed:
               </p>
-              <Pre>{`docker compose restart phantom-agent`}</Pre>
+              <Pre>{`docker compose restart guardian-agent`}</Pre>
               <p>
                 Then sign in with the new password as usual. The
-                legacy invocation <Code>docker exec -it phantom_agent node /app/cli/reset-admin.mjs</Code>{" "}
+                legacy invocation <Code>docker exec -it guardian_agent node /app/cli/reset-admin.mjs</Code>{" "}
                 still works — the host script is just a thin wrapper
                 around exactly that command. Use whichever is in your
                 muscle memory.
@@ -568,7 +568,7 @@ sudo /opt/phantom/phantom-reset-admin-password`}</Pre>
                 curl against the MCP-side admin_reset endpoint. The
                 non-interactive flag fixes that:
               </p>
-              <Pre>{`echo -n 'NewPassword' | docker exec -i phantom_agent \\
+              <Pre>{`echo -n 'NewPassword' | docker exec -i guardian_agent \\
   node /app/cli/reset-admin.mjs --password-stdin --skip-confirm`}</Pre>
               <AuthCliResetFlow />
             </SubSection>
@@ -576,24 +576,24 @@ sudo /opt/phantom/phantom-reset-admin-password`}</Pre>
             <SubSection icon="restart_alt" title="Factory reset (host utility)">
               <p>
                 If you want to start over from the customer-fresh
-                shipped state — same blank-canvas Phantom a brand-new
+                shipped state — same blank-canvas Guardian a brand-new
                 install boots into — use the factory-reset script.
                 It&apos;s host-side by physical necessity (a container
                 can&apos;t delete the docker volume it&apos;s mounting),
                 ships in every install kit at{" "}
-                <Code>/opt/phantom/</Code>, and asks for typed
+                <Code>/opt/guardian/</Code>, and asks for typed
                 confirmation before wiping anything:
               </p>
               <Pre>{`# Show the plan without doing anything:
-sudo /opt/phantom/phantom-factory-reset --dry-run
+sudo /opt/guardian/guardian-factory-reset --dry-run
 
 # Actually wipe + re-install:
-sudo /opt/phantom/phantom-factory-reset
+sudo /opt/guardian/guardian-factory-reset
 
 # Skip the 'Type FACTORY RESET' prompt (scripted use only):
-sudo /opt/phantom/phantom-factory-reset --yes`}</Pre>
+sudo /opt/guardian/guardian-factory-reset --yes`}</Pre>
               <p>
-                What gets wiped: every <Code>phantom_*</Code> docker
+                What gets wiped: every <Code>guardian_*</Code> docker
                 volume (memories, instances + their secrets, API keys,
                 audit log, sessions, jobs, notifications, journey-tested
                 marks, metrics bookmarks, TLS certs, skills volume).
@@ -601,8 +601,8 @@ sudo /opt/phantom/phantom-factory-reset --yes`}</Pre>
                 stack comes back up healthy with shipped defaults.
               </p>
               <p>
-                What survives: <Code>/opt/phantom/.env</Code> (so your{" "}
-                <Code>PHANTOM_SECRET_KEK</Code> + registry credentials
+                What survives: <Code>/opt/guardian/.env</Code> (so your{" "}
+                <Code>GUARDIAN_SECRET_KEK</Code> + registry credentials
                 + any operator-managed env vars are intact across the
                 reset), the docker images already on disk (no image
                 pulls needed for the recovery install), and both
@@ -612,11 +612,11 @@ sudo /opt/phantom/phantom-factory-reset --yes`}</Pre>
                 When the script returns, the UI shows the default
                 first-login screen again — sign in with{" "}
                 <Code>admin</Code> and the value of{" "}
-                <Code>PHANTOM_DEFAULT_ADMIN_PASSWORD</Code> from{" "}
-                <Code>/opt/phantom/.env</Code>. The installer&apos;s
+                <Code>GUARDIAN_DEFAULT_ADMIN_PASSWORD</Code> from{" "}
+                <Code>/opt/guardian/.env</Code>. The installer&apos;s
                 output banner shows this on screen, and you can{" "}
-                <Code>grep PHANTOM_DEFAULT</Code>{" "}
-                <Code>/opt/phantom/.env</Code> any time to retrieve
+                <Code>grep GUARDIAN_DEFAULT</Code>{" "}
+                <Code>/opt/guardian/.env</Code> any time to retrieve
                 it. The agent walks you through changing the
                 password at <Code>/profile</Code> just like a fresh
                 install.
@@ -626,7 +626,7 @@ sudo /opt/phantom/phantom-factory-reset --yes`}</Pre>
             <SubSection icon="visibility" title="Checking auth events in observability">
               <p>
                 Every login, every password change, every session
-                lifecycle event is recorded in Phantom&apos;s audit
+                lifecycle event is recorded in Guardian&apos;s audit
                 log. You don&apos;t have to trust that things worked —
                 you can see them. Two places to look:
               </p>
@@ -680,20 +680,20 @@ After a failed login attempt:
             <SubSection icon="help" title="What if&hellip;">
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li><strong>The default credentials banner doesn&apos;t go away after changing the password.</strong> Hard-refresh the page (clears the AuthGate&apos;s cached state). If it persists, check the docker logs for entrypoint errors during the auth seed.</li>
-                <li><strong>Login says &ldquo;Authentication service unavailable.&rdquo;</strong> The agent can&apos;t reach the MCP. Check <Code>docker compose ps</Code> — phantom-agent should be <Code>Up (healthy)</Code>.</li>
+                <li><strong>Login says &ldquo;Authentication service unavailable.&rdquo;</strong> The agent can&apos;t reach the MCP. Check <Code>docker compose ps</Code> — guardian-agent should be <Code>Up (healthy)</Code>.</li>
                 <li><strong>Login says &ldquo;Too many failed attempts. Try again in Ns.&rdquo;</strong> Per-IP rate limit fired (5 failures in 60s). Wait it out; the lockout is 60s.</li>
                 <li><strong>You changed your password and another tab still loads.</strong> The server-side cache is up to 30s. Click around — the next API call will get 401 and bounce you to sign in. (Or wait 30s.)</li>
-                <li><strong>You upgrade Phantom and your password stops working.</strong> Auth state lives on the persistent <Code>phantom_data</Code> volume. As long as the volume isn&apos;t dropped (<Code>docker compose down -v</Code> would do that), credentials survive upgrades. If you DID drop the volume, you&apos;re back to the default credentials banner.</li>
+                <li><strong>You upgrade Guardian and your password stops working.</strong> Auth state lives on the persistent <Code>guardian_data</Code> volume. As long as the volume isn&apos;t dropped (<Code>docker compose down -v</Code> would do that), credentials survive upgrades. If you DID drop the volume, you&apos;re back to the default credentials banner.</li>
               </ul>
             </SubSection>
 
             <SubSection icon="security" title="Where credentials live">
               <p>
-                Phantom&apos;s admin password lives in EXACTLY one
+                Guardian&apos;s admin password lives in EXACTLY one
                 place: the SecretStore at{" "}
                 <Code>/app/data/secrets/ui/auth/admin/</Code>{" "}
                 inside the agent container (mapped to the{" "}
-                <Code>phantom_data</Code> docker volume). It&apos;s
+                <Code>guardian_data</Code> docker volume). It&apos;s
                 stored as a PBKDF2-HMAC-SHA256 hash with a 32-byte
                 random salt and 600,000 iterations, then encrypted at
                 rest with the SecretStore&apos;s KEK-derived AES-256-GCM
@@ -719,14 +719,14 @@ After a failed login attempt:
               <p>
                 Every <Code>/api/agent/*</Code> endpoint, plus{" "}
                 <Code>/api/chat</Code> and <Code>/api/skills/*</Code>,
-                requires a valid <Code>phantom_session</Code> cookie on
+                requires a valid <Code>guardian_session</Code> cookie on
                 EVERY request. The check happens at a Next.js
                 middleware layer before any route handler runs — same
                 cookie the UI uses, same validation path{" "}
                 <Code>/api/auth/status</Code> uses.
               </p>
               <p>
-                If you script against the Phantom API (curl, Python
+                If you script against the Guardian API (curl, Python
                 requests, etc.), include the session cookie in every
                 call:
               </p>
@@ -749,25 +749,25 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
             </SubSection>
           </Section>
 
-          <Section id="upgrades" icon="upload" title="Upgrading Phantom">
+          <Section id="upgrades" icon="upload" title="Upgrading Guardian">
             <p>
-              Phantom updates ship as numbered releases on{" "}
+              Guardian updates ship as numbered releases on{" "}
               <a
-                href="https://github.com/kite-production/phantom/releases"
+                href="https://github.com/kite-production/guardian/releases"
                 className="link"
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 GitHub Releases
               </a>
-              . Each release includes a <Code>phantom-installer</Code>{" "}
+              . Each release includes a <Code>guardian-installer</Code>{" "}
               binary stamped at that version, plus the docker images on
               GHCR. Customer-side upgrades go through the installer.
             </p>
 
             <Callout tone="warn">
               <Term>v0.3.0 is a major version bump (breaking change).</Term>{" "}
-              Pre-v0.3.0 phantom-installer binaries cannot install or
+              Pre-v0.3.0 guardian-installer binaries cannot install or
               upgrade to v0.3.0+. Customers running v0.2.x must download
               the v0.3.x installer binary and run a one-time migration —
               see{" "}
@@ -780,22 +780,22 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
             <SubSection icon="auto_awesome" title="Recommended upgrade flow">
               <ol className="list-decimal pl-5 space-y-1.5 text-sm">
                 <li>
-                  Download the <Code>phantom-installer</Code> binary
+                  Download the <Code>guardian-installer</Code> binary
                   for the version you want from the releases page.
                   Each binary is sealed to a single version.
                 </li>
                 <li>
-                  <Code>chmod +x phantom-installer</Code>
+                  <Code>chmod +x guardian-installer</Code>
                 </li>
                 <li>
-                  <Code>sudo ./phantom-installer</Code>
+                  <Code>sudo ./guardian-installer</Code>
                 </li>
               </ol>
               <p className="text-sm text-on-surface-variant mt-2">
-                The installer preserves <Code>/opt/phantom/.env</Code>{" "}
+                The installer preserves <Code>/opt/guardian/.env</Code>{" "}
                 secrets (KEK, registry token, UI password), strips the
-                stale <Code>PHANTOM_VERSION</Code> +{" "}
-                <Code>DIGEST_PHANTOM_*</Code> lines, appends the new
+                stale <Code>GUARDIAN_VERSION</Code> +{" "}
+                <Code>DIGEST_GUARDIAN_*</Code> lines, appends the new
                 manifest, and runs <Code>docker compose pull / up -d</Code>.
                 Only services whose image content actually changed
                 get recreated.
@@ -819,7 +819,7 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
                 <Term>Preserved across the migration:</Term> all named
                 volumes (operator data, secrets store, KEK, on-disk
                 caldera + xlog state, skills volume), your{" "}
-                <Code>PHANTOM_SECRET_KEK</Code>, GHCR token, UI password,
+                <Code>GUARDIAN_SECRET_KEK</Code>, GHCR token, UI password,
                 setup-form values.
               </p>
               <p className="text-sm">
@@ -834,7 +834,7 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
                 </li>
                 <li>xlog active streaming workers (re-create as needed)</li>
                 <li>
-                  phantom-agent in-flight chat sessions with active
+                  guardian-agent in-flight chat sessions with active
                   streams (earlier persisted turns are kept)
                 </li>
               </ul>
@@ -850,9 +850,9 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
               </p>
               <ol className="list-decimal pl-5 space-y-1 text-sm">
                 <li>
-                  Download the v0.3.x phantom-installer binary from{" "}
+                  Download the v0.3.x guardian-installer binary from{" "}
                   <a
-                    href="https://github.com/kite-production/phantom/releases/tag/v0.3.0"
+                    href="https://github.com/kite-production/guardian/releases/tag/v0.3.0"
                     className="link"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -866,7 +866,7 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
                   re-run after the upgrade.
                 </li>
                 <li>
-                  <Code>sudo ./phantom-installer</Code> — the installer
+                  <Code>sudo ./guardian-installer</Code> — the installer
                   detects the v0.2.x state, prints a one-time migration
                   banner, stops the old stack, applies the new
                   manifest, and starts v0.3.0 with digest-pinned
@@ -876,7 +876,7 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
               <p className="text-sm">
                 Full step-by-step + troubleshooting in{" "}
                 <a
-                  href="https://github.com/kite-production/phantom/blob/main/installer/MIGRATION-FROM-V02X.md"
+                  href="https://github.com/kite-production/guardian/blob/main/installer/MIGRATION-FROM-V02X.md"
                   className="link"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -895,7 +895,7 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
                 <li>
                   <Term>About modal:</Term> click the version chip in
                   the sidebar, expand &quot;Image versions&quot; — shows
-                  PHANTOM_VERSION + 5 stack-tier digests.
+                  GUARDIAN_VERSION + 5 stack-tier digests.
                 </li>
                 <li>
                   <Term>Observability panel:</Term>{" "}
@@ -915,7 +915,7 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
 
             <SubSection icon="tune" title="Pinning a specific version">
               <p>
-                Each <Code>phantom-installer</Code> binary is sealed
+                Each <Code>guardian-installer</Code> binary is sealed
                 to one version (its embedded digest manifest is only
                 valid for that version). To install a specific
                 version, download that version&apos;s installer binary
@@ -926,10 +926,10 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
               </p>
               <pre className="text-xs bg-surface-container-low p-3 rounded">
 {`# Download the binary for the version you want:
-gh release download v0.3.1 --repo kite-production/phantom \\
-  --pattern phantom-installer
-chmod +x phantom-installer
-sudo ./phantom-installer`}
+gh release download v0.3.1 --repo kite-production/guardian \\
+  --pattern guardian-installer
+chmod +x guardian-installer
+sudo ./guardian-installer`}
               </pre>
               <Callout tone="info">
                 Each installer embeds a per-version digest manifest,
@@ -949,7 +949,7 @@ sudo ./phantom-installer`}
                     <Code>compose up</Code>
                   </Term>{" "}
                   → <Code>.env</Code> is missing{" "}
-                  <Code>DIGEST_PHANTOM_*</Code> values. Re-run the
+                  <Code>DIGEST_GUARDIAN_*</Code> values. Re-run the
                   installer; the strip + append logic is idempotent.
                 </li>
                 <li>
@@ -964,9 +964,9 @@ sudo ./phantom-installer`}
                     /observability/connectors
                   </Term>{" "}
                   → an env var (e.g.{" "}
-                  <Code>DIGEST_PHANTOM_CONNECTOR_XLOG</Code>) is
+                  <Code>DIGEST_GUARDIAN_CONNECTOR_XLOG</Code>) is
                   missing from{" "}
-                  <Code>/opt/phantom/.env</Code> or wasn&apos;t
+                  <Code>/opt/guardian/.env</Code> or wasn&apos;t
                   forwarded into the affected service&apos;s container.
                   Re-run installer to refresh; if still showing,
                   inspect the running container&apos;s env to confirm
@@ -1090,7 +1090,7 @@ sudo ./phantom-installer`}
             <SubSection icon="auto_awesome_motion" title="Auto-compaction & context guard">
               <p>
                 Long sessions can outgrow the model&apos;s context window.
-                Phantom guards against this in two ways. First, the chat
+                Guardian guards against this in two ways. First, the chat
                 handler estimates input + reserved-output tokens before each
                 turn; at &gt;= 90% of the model cap it emits a{" "}
                 <Code>context_warning</Code> event and the chat input shows
@@ -1504,7 +1504,7 @@ aborted      ── operator clicked Cancel before completion`}</Pre>
           <Section id="skills" icon="auto_awesome" title="Skills">
             <p>
               <Link href="/skills" className="link">/skills</Link> is the
-              registry of every behavior Phantom knows about. Skills are
+              registry of every behavior Guardian knows about. Skills are
               markdown documents the agent reads at the start of relevant
               sessions to bias its tool selection — think &quot;procedural
               recipes&quot; rather than runnable code.
@@ -1578,7 +1578,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 enable/disable, and click-through to a detail panel with
                 the full markdown content and analytics (calls in last
                 24h / 7d / 30d). Skills are global to the install —
-                Phantom is single-tenant, so a skill is either on or off
+                Guardian is single-tenant, so a skill is either on or off
                 for the whole agent.
               </p>
             </SubSection>
@@ -2011,11 +2011,11 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
             <SubSection icon="library_books" title="Bundled KBs">
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Term>phantom-soc</Term> — main reference content:
+                  <Term>guardian-soc</Term> — main reference content:
                   architecture notes, scenario design rationale, run-book
                   entries, post-mortem templates. The agent retrieves from
                   this KB whenever you ask conceptual questions about
-                  Phantom.
+                  Guardian.
                 </li>
                 <li>
                   <Term>xql-examples</Term> — 787 curated Cortex XQL / XSIAM
@@ -2511,8 +2511,8 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
             </ul>
             <p className="text-sm text-on-surface-variant">
               Universal container-mode: every instance runs as its own{" "}
-              <Code>phantom-connector-&lt;id&gt;-&lt;name&gt;</Code>{" "}
-              container, started by phantom-updater when the instance
+              <Code>guardian-connector-&lt;id&gt;-&lt;name&gt;</Code>{" "}
+              container, started by guardian-updater when the instance
               row is created. Tool calls flow from the agent&apos;s MCP
               to the container over loopback HTTPS.
             </p>
@@ -2584,7 +2584,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
             <SubSection icon="lock" title="Secret storage">
               <p>
                 Per-instance credentials live encrypted at rest under a
-                <Code>PHANTOM_SECRET_KEK</Code> envelope (AES-256-GCM).
+                <Code>GUARDIAN_SECRET_KEK</Code> envelope (AES-256-GCM).
                 Secrets never leave the MCP container; the API redacts
                 them as <Code>***</Code> on read. Rotating a credential
                 writes a new envelope; the old one is GC&apos;d on the
@@ -2606,10 +2606,10 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
                 </li>
                 <li>
                   Agent writes the password to a shared docker volume
-                  (<Code>phantom_operator_creds:/operator-creds/caldera.yaml</Code>).
+                  (<Code>guardian_operator_creds:/operator-creds/caldera.yaml</Code>).
                 </li>
                 <li>
-                  Agent POSTs to phantom-updater asking it to restart caldera.
+                  Agent POSTs to guardian-updater asking it to restart caldera.
                 </li>
                 <li>
                   Caldera&apos;s entrypoint reads the bridge file on startup
@@ -2843,11 +2843,11 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <ol className="list-decimal pl-5 space-y-1.5 text-sm">
                 <li>
                   Build + publish your connector container image to any
-                  OCI registry phantom-updater can pull from (GHCR,
+                  OCI registry guardian-updater can pull from (GHCR,
                   Docker Hub, ECR, your private registry, etc.). The
                   image must run the{" "}
-                  <Code>phantom-connector-runtime</Code> entrypoint
-                  (FROM <Code>ghcr.io/kite-production/phantom-connector-runtime:latest</Code>{" "}
+                  <Code>guardian-connector-runtime</Code> entrypoint
+                  (FROM <Code>ghcr.io/kite-production/guardian-connector-runtime:latest</Code>{" "}
                   is the supported base — see{" "}
                   <Code>bundles/spark/connectors/_runtime/Dockerfile</Code>{" "}
                   for the pattern).
@@ -2929,11 +2929,11 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 <li>
                   <Term>container</Term> (used by web today) — each
                   instance gets its own Docker container that{" "}
-                  phantom-updater starts when you create the instance and
+                  guardian-updater starts when you create the instance and
                   stops when you delete it. The agent&apos;s tool-dispatch
                   loader becomes a routing proxy that forwards calls over
                   MCP-over-HTTP to{" "}
-                  <Code>http://phantom-connector-&lt;id&gt;-&lt;name&gt;:9000</Code>.
+                  <Code>http://guardian-connector-&lt;id&gt;-&lt;name&gt;:9000</Code>.
                   Crash isolation, resource isolation, independent
                   versioning. See the{" "}
                   <Link
@@ -2949,14 +2949,14 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 Operator-facing experience is identical regardless of
                 style — Install + Create Instance work the same way. The
                 only operational difference: container-style connectors
-                need <Code>phantom-updater</Code> running and need pull
+                need <Code>guardian-updater</Code> running and need pull
                 access to the connector&apos;s GHCR image. For
                 disconnected installs, see the{" "}
                 <Link
-                  href="/help/architecture#phantom-updater"
+                  href="/help/architecture#guardian-updater"
                   className="link"
                 >
-                  phantom-updater
+                  guardian-updater
                 </Link>{" "}
                 section&apos;s &quot;cached&quot; pull-fallback note.
               </p>
@@ -3048,13 +3048,13 @@ probed          ── transient state during an in-flight probe`}</Pre>
               is a separate marketplace from{" "}
               <Link href="/connectors" className="link">/connectors</Link>.
               Where the connector marketplace controls{" "}
-              <em>which systems Phantom can talk to</em>, Data Sources
-              controls <em>which vendor log shapes Phantom can synthesize</em>.
+              <em>which systems Guardian can talk to</em>, Data Sources
+              controls <em>which vendor log shapes Guardian can synthesize</em>.
               They&apos;re independent — install one without the other,
               uninstall one without the other.
             </p>
             <p>
-              When you install a data source, Phantom learns the
+              When you install a data source, Guardian learns the
               vendor&apos;s actual field schema (e.g. FortiGate emits{" "}
               <Code>srcip</Code> / <Code>dstport</Code> / <Code>sentbyte</Code>,
               not <Code>local_ip</Code> / <Code>remote_port</Code>). The
@@ -3066,13 +3066,13 @@ probed          ── transient state during an in-flight probe`}</Pre>
               Sentinel parser, an Elastic ingest pipeline, or
               whatever bespoke parsing you run on your destination
               platform. Without an installed data source, the agent
-              falls back to Phantom&apos;s generic synthesis (works
+              falls back to Guardian&apos;s generic synthesis (works
               for dashboards, doesn&apos;t parse cleanly through any
               vendor-specific pipeline).
             </p>
             <p className="text-sm text-on-surface-variant">
               Fresh installs come up with Data Sources Installed (0).
-              The catalog ships bundled with Phantom — 130+ vendors
+              The catalog ships bundled with Guardian — 130+ vendors
               cover the major SIEM/EDR/firewall/identity products. Every
               bundled source is a real Cortex XSIAM ingest+parse path, not
               an action-only integration. No setup, no external accounts,
@@ -3112,7 +3112,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <p className="text-sm text-on-surface-variant">
                 Uninstall is destructive in the sense that any
                 in-flight skill or chat thread referencing the
-                installed schema will fall back to Phantom&apos;s
+                installed schema will fall back to Guardian&apos;s
                 generic synthesis on its next invocation. If you
                 accidentally uninstall, the simplest recovery is to
                 re-install from Browse — the catalog row is still
@@ -3159,7 +3159,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
 
             <SubSection icon="psychology" title="What 'vendor-faithful' means under the hood">
               <p>
-                Phantom&apos;s generic synthesis emits records with
+                Guardian&apos;s generic synthesis emits records with
                 generic field names like <Code>local_ip</Code> /{" "}
                 <Code>remote_port</Code>. Those work for charts that
                 count records but DON&apos;T parse cleanly through
@@ -3476,7 +3476,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 A standalone library of all 137 vendor SVGs lives at{" "}
                 <Code>docs/assets/vendor-logos/</Code> in the repo —
                 maintainer asset library for docs / brand-mark reuse.
-                Phantom&apos;s runtime never reads it (serves from
+                Guardian&apos;s runtime never reads it (serves from
                 the YAML inline blocks).
               </p>
             </SubSection>
@@ -3486,7 +3486,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
           <Section id="log-destinations-ux" icon="cloud_upload" title="Log Destinations">
             <p>
               <strong>The <Code>/log-destinations</Code> page is where you configure
-              where Phantom forwards synthesized security records.</strong> Each
+              where Guardian forwards synthesized security records.</strong> Each
               destination has a name, a type (syslog / HTTP webhook / XSIAM HTTP
               Collector / Splunk HEC), and a type-specific config. Workers reference
               destinations by a stable handle; the agent can list them — and create
@@ -3514,7 +3514,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
 
             <SubSection icon="play_circle" title="Testing a destination">
               <p>
-                Click the <Code>Test</Code> button on any row. Phantom sends a
+                Click the <Code>Test</Code> button on any row. Guardian sends a
                 real test message to the destination (probe handler) and shows
                 the result inline as a green/red badge for ~6s. The row&apos;s
                 status dot updates: green = last probe OK, red = last probe
@@ -3522,7 +3522,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </p>
               <p className="text-sm text-on-surface-variant">
                 Test fires from the MCP server — the message reaches the
-                destination from inside the phantom-agent container, not from
+                destination from inside the guardian-agent container, not from
                 the operator&apos;s browser.
               </p>
             </SubSection>
@@ -3558,7 +3558,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                   create a syslog destination for you, or — for a credentialed
                   type — points you to this page to add it.</li>
                 <li>Starts the worker with an opaque{" "}
-                  <Code>logdest:&lt;id&gt;</Code> handle. Phantom fills in the
+                  <Code>logdest:&lt;id&gt;</Code> handle. Guardian fills in the
                   real address — and, for an XSIAM HTTP destination, the endpoint
                   + auth key — behind the scenes, so the agent never handles your
                   credentials.</li>
@@ -3576,7 +3576,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <p>
                 Operators upgrading from v0.16.x → v0.17.x with{" "}
                 <Code>WEBHOOK_ENDPOINT</Code> + <Code>WEBHOOK_KEY</Code> env
-                vars set in <Code>/opt/phantom/.env</Code> get an automatic{" "}
+                vars set in <Code>/opt/guardian/.env</Code> get an automatic{" "}
                 <Code>XSIAM Default</Code> destination created on first boot,
                 marked as the default for the <Code>xsiam_http</Code> type.
                 The env vars stay in place as fallback for any legacy code
@@ -3591,7 +3591,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 keys, Splunk HEC tokens, TLS private keys). The agent has no
                 write tools; only the operator (you) can create or edit them
                 through this page. Secrets are AES-GCM-encrypted at rest under{" "}
-                <Code>PHANTOM_SECRET_KEK</Code>; GET responses always redact
+                <Code>GUARDIAN_SECRET_KEK</Code>; GET responses always redact
                 them as <Code>&quot;***&quot;</Code> sentinels.
               </p>
             </SubSection>
@@ -3606,8 +3606,8 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 XSIAM HTTP Collector destinations
               </h4>
               <p>
-                Records ALWAYS land in <Code>phantom_logs_raw</Code>. This is
-                XSIAM-side hardcoded for the &quot;phantom&quot; brand on the
+                Records ALWAYS land in <Code>guardian_logs_raw</Code>. This is
+                XSIAM-side hardcoded for the &quot;guardian&quot; brand on the
                 collector. Each batch arrives as one outer row with an{" "}
                 <Code>events</Code> JSON-array column holding the original
                 record list. A downstream modeling rule unflattens per-event
@@ -3616,7 +3616,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <p className="text-sm">
                 Verify with:{" "}
                 <Code>
-                  dataset = phantom_logs_raw | sort desc _time | limit 10
+                  dataset = guardian_logs_raw | sort desc _time | limit 10
                 </Code>
               </p>
 
@@ -3626,8 +3626,8 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <p>
                 When you use{" "}
                 <Code>
-                  phantom_create_data_worker(type=&quot;CEF&quot;,
-                  vendor=&quot;phantom&quot;,
+                  guardian_create_data_worker(type=&quot;CEF&quot;,
+                  vendor=&quot;guardian&quot;,
                   product=&quot;smoke_test&quot;, destination=&quot;udp:
                   &lt;broker&gt;:514&quot;)
                 </Code>
@@ -3635,8 +3635,8 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 dataset named{" "}
                 <Code>&lt;vendor&gt;_&lt;product&gt;_raw</Code> (both
                 lowercased, non-alphanumeric chars → <Code>_</Code>). So{" "}
-                <Code>vendor=phantom + product=smoke_test</Code> →{" "}
-                <Code>phantom_smoke_test_raw</Code>. Each CEF extension
+                <Code>vendor=guardian + product=smoke_test</Code> →{" "}
+                <Code>guardian_smoke_test_raw</Code>. Each CEF extension
                 (<Code>act</Code>, <Code>src</Code>, <Code>dst</Code>,{" "}
                 <Code>spt</Code>, <Code>dpt</Code>, ...) becomes a typed
                 column automatically — no modeling rule needed.
@@ -3644,7 +3644,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <p className="text-sm">
                 Verify with:{" "}
                 <Code>
-                  dataset = phantom_smoke_test_raw | sort desc _time | limit
+                  dataset = guardian_smoke_test_raw | sort desc _time | limit
                   20
                 </Code>
               </p>
@@ -3686,7 +3686,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               Plugins are vendor-shipped or operator-authored bundles
               that contribute extra tools, skills, hooks, or agent
               definitions to the runtime without touching the core
-              Phantom image. View installed plugins at{" "}
+              Guardian image. View installed plugins at{" "}
               <Link href="/plugins" className="link">/plugins</Link>.
             </p>
 
@@ -3757,7 +3757,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
 
             <Callout tone="warn">
               Plugins run inside the same MCP container as the rest of
-              Phantom — they can call any internal API the MCP can
+              Guardian — they can call any internal API the MCP can
               reach. Treat plugin installation with the same care as
               installing a vendor library: review the manifest, scope
               the tools you allow, and check audit rows after the first
@@ -3780,11 +3780,11 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 </Link>{" "}
                 for <strong>pip-installable</strong> plugins that target
                 one of five reserved entry-point groups
-                (<Code>phantom.skills</Code>,{" "}
-                <Code>phantom.connectors</Code>,{" "}
-                <Code>phantom.hooks</Code>,{" "}
-                <Code>phantom.scanners</Code>,{" "}
-                <Code>phantom.providers</Code>).
+                (<Code>guardian.skills</Code>,{" "}
+                <Code>guardian.connectors</Code>,{" "}
+                <Code>guardian.hooks</Code>,{" "}
+                <Code>guardian.scanners</Code>,{" "}
+                <Code>guardian.providers</Code>).
               </p>
               <p>
                 The page hosts:
@@ -3824,7 +3824,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </p>
               <Callout tone="info">
                 v0.5.48 closed the cross-language bridge — plugin
-                handlers in the <Code>phantom.hooks</Code> group are{" "}
+                handlers in the <Code>guardian.hooks</Code> group are{" "}
                 <strong>callable</strong> from{" "}
                 <Link href="/settings/hooks" className="link">
                   /settings/hooks
@@ -3834,7 +3834,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 JSON config). Install/uninstall hot-reloads the
                 plugin-hook cache; other contribution types (skills,
                 connectors, providers, scanners) still need a
-                phantom-agent restart to wire into their respective
+                guardian-agent restart to wire into their respective
                 registries.
               </Callout>
             </SubSection>
@@ -3953,7 +3953,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
             <SubSection id="hooks-builtin" icon="extension" title="Built-in handlers">
               <p>
                 Built-in handlers are policy primitives that ship with
-                every Phantom deployment. Pick one from the dropdown,
+                every Guardian deployment. Pick one from the dropdown,
                 fill its config form, save. The agent calls the handler
                 in-process on each matching event — no subprocess to
                 manage, no HTTP service to operate.
@@ -3967,7 +3967,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                   <Code>PreToolUse</Code>, POSTs the tool details to a
                   webhook receiver you operate. Your receiver pings
                   Slack with Approve/Deny buttons, waits for an analyst
-                  click, returns the decision. Phantom blocks the tool
+                  click, returns the decision. Guardian blocks the tool
                   on <Code>deny</Code> and lets it through on{" "}
                   <Code>allow</Code>. Config: webhook URL + optional
                   auth header.
@@ -3999,7 +3999,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <p>
                 A fifth transport — <Term>Plugin handler</Term> — wires
                 in handlers contributed by pip-installable Python
-                packages targeting the <Code>phantom.hooks</Code>{" "}
+                packages targeting the <Code>guardian.hooks</Code>{" "}
                 entry-point group. Discovery + lifecycle for those
                 packages happens at{" "}
                 <Link
@@ -4326,7 +4326,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 username comes from <Code>UI_USER</Code> in the
                 runtime config and isn&apos;t editable in the UI — to
                 change it, update the env var in your{" "}
-                <Code>.env</Code> and restart the phantom-agent
+                <Code>.env</Code> and restart the guardian-agent
                 container.
               </p>
             </SubSection>
@@ -4359,7 +4359,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               Useful for SIEM pollers reading the audit log, CI scripts
               triggering scenario runs, cross-host integrations exposing
               automation hooks back at the agent. Keys take the shape{" "}
-              <Code>phantom_ak_&lt;id&gt;_&lt;secret&gt;</Code>; the
+              <Code>guardian_ak_&lt;id&gt;_&lt;secret&gt;</Code>; the
               backend stores only <Code>sha256(&lt;secret&gt;)</Code> so
               the plaintext is shown <em>once</em> at create time and
               never recoverable after that.
@@ -4405,7 +4405,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <Link href="/observability/pipeline" className="link">
                 /observability/pipeline
               </Link>{" "}
-              is a live React Flow graph of every Phantom subsystem: the
+              is a live React Flow graph of every Guardian subsystem: the
               browser, the agent, the MCP, the six storage subsystems
               (audit, memory, secrets, settings, sessions, jobs), and the
               three connectors. Box borders flip green/amber/red based on
@@ -4724,18 +4724,18 @@ session:s_4k21m
               <ul className="list-disc pl-5 space-y-2 text-sm">
                 <li>
                   <Term>Vertex prompt caching</Term> — when ON,
-                  Phantom uses Vertex&apos;s{" "}
+                  Guardian uses Vertex&apos;s{" "}
                   <Code>cachedContents</Code> API to cache the
                   system-prompt TAIL across turns. Saves 30-60% on
                   input tokens after the first turn. Default ON if
-                  the <Code>PHANTOM_VERTEX_CACHE=1</Code> env var is
+                  the <Code>GUARDIAN_VERTEX_CACHE=1</Code> env var is
                   set at boot; OFF otherwise. Toggle here to turn it
                   off per-workspace without redeploying.
                 </li>
                 <li>
                   <Term>Auto-compaction threshold</Term> — when
                   loading session history at the start of a turn,
-                  Phantom token-budget-walks oldest-to-newest until
+                  Guardian token-budget-walks oldest-to-newest until
                   the cap fits. If the walk drops ≥ N prior messages,
                   auto-compaction kicks in and summarizes the dropped
                   portion via Gemini. Default 5; chatty workflows
@@ -4827,7 +4827,7 @@ session:s_4k21m
 
           <Section id="backup-restore" icon="save" title="Backup & Restore">
             <p>
-              Phantom packages every operator-owned piece of state
+              Guardian packages every operator-owned piece of state
               into a single portable zip:{" "}
               <Link href="/settings/backup-restore" className="link">
                 /settings/backup-restore
@@ -4835,7 +4835,7 @@ session:s_4k21m
               is the one-stop surface. The same zip downloads from one
               deployment and restores onto another, even when the
               destination uses a different{" "}
-              <Code>PHANTOM_SECRET_KEK</Code>. Use it to migrate
+              <Code>GUARDIAN_SECRET_KEK</Code>. Use it to migrate
               between hosts, snapshot before risky changes, or
               capture known-good state for compliance.
             </p>
@@ -4847,7 +4847,7 @@ session:s_4k21m
                   /settings/backup-restore
                 </Link>{" "}
                 and your browser saves{" "}
-                <Code>phantom-backup-&lt;ISO-stamp&gt;.zip</Code>.
+                <Code>guardian-backup-&lt;ISO-stamp&gt;.zip</Code>.
                 The zip carries one JSON or directory per platform
                 surface:
               </p>
@@ -4913,7 +4913,7 @@ session:s_4k21m
                 counts entries per section, and renders a per-section
                 summary card:
               </p>
-              <Pre>{`Restore preview — phantom-backup-2026-05-25T14-22-09Z.zip
+              <Pre>{`Restore preview — guardian-backup-2026-05-25T14-22-09Z.zip
 
   Personality           1 row (will overwrite existing)
   Instances             4 instances + 11 secrets
@@ -5026,7 +5026,7 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
 
           <Section id="settings-precedence" icon="layers" title="Where Settings Live">
             <p>
-              Phantom has multiple surfaces where you can set or change
+              Guardian has multiple surfaces where you can set or change
               operator credentials and connector config. This section
               is the cheat sheet for which surface to use when, what
               survives an upgrade, and where the data actually lives.
@@ -5084,9 +5084,9 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
                 Upgrading the stack via{" "}
                 <Code>docker compose pull + up</Code> swaps in new
                 images without touching persistent volumes. The
-                bind-mounted <Code>./.phantom-agent</Code> path holds
+                bind-mounted <Code>./.guardian-agent</Code> path holds
                 the setup-completed flag; the named volume{" "}
-                <Code>phantom_mcp_data</Code> holds the SecretStore +
+                <Code>guardian_mcp_data</Code> holds the SecretStore +
                 InstanceStore + ProviderStore + audit log. Both
                 survive container recreation.
               </p>
@@ -5184,7 +5184,7 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
 
             <SubSection icon="save" title="Scenario 3e — Backup &amp; restore the whole deployment">
               <p>
-                Phantom packages every operator-owned piece of state
+                Guardian packages every operator-owned piece of state
                 into a single portable zip. See{" "}
                 <Link href="#backup-restore" className="link">
                   Backup &amp; Restore
@@ -5329,7 +5329,7 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
           >
             <p>
               Companion to this user guide, focused on{" "}
-              <em>how Phantom is built</em> rather than how to use it.
+              <em>how Guardian is built</em> rather than how to use it.
               Covers the 5-service stack, boot lifecycle, the
               chat-route pipeline, every subsystem (memory, knowledge,
               skills, hooks, tasks, plan mode, subagents, plugins,

@@ -36,7 +36,7 @@ from src import connector  # noqa: E402
 def test_search_translates_systemexit_to_error_dict():
     """Upstream search.py:_post_json() calls sys.exit(1) on HTTPError.
     The wrapper must catch that and return ok=false instead of letting
-    SystemExit propagate (which would kill phantom-agent)."""
+    SystemExit propagate (which would kill guardian-agent)."""
     with mock.patch.object(connector._search, "search", side_effect=SystemExit(1)):
         result = connector.cortex_search("anything")
     assert result["ok"] is False

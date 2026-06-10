@@ -8,7 +8,7 @@
 > gated by an inline approvals dance the operator resolves without
 > leaving chat.
 >
-> Also serves as authoritative documentation for phantom's
+> Also serves as authoritative documentation for guardian's
 > implementation while the upstream PR is in flight.
 
 ## Context
@@ -18,7 +18,7 @@
 **agent-driven** memory writes (§6.10 row "memory"). What it doesn't
 connect: the *middle* of those two. Today agents can:
 
-| Operation                                | v1.2 spec | Phantom shipped (Phase 11) |
+| Operation                                | v1.2 spec | Guardian shipped (Phase 11) |
 |------------------------------------------|-----------|----------------------------|
 | Read own state (jobs, settings, persona) | ❌ silent | ✅ 19 read tools           |
 | Write own runtime data (jobs, settings)  | ❌ silent | ✅ 8 soft-write tools      |
@@ -35,7 +35,7 @@ self-mod needs.
 ## Proposal
 
 Extend §6.10 + §7.2 + add a new §7.13 covering the four-tier model
-phantom implements.
+guardian implements.
 
 ### Proposal A — Catalog of agent self-modification tools
 
@@ -131,7 +131,7 @@ limitation that breaks chat-driven self-mod parity.
 
 Two extensions to lift it:
 
-1. **Standalone (already works in phantom v0.2)**: gated tool calls
+1. **Standalone (already works in guardian v0.2)**: gated tool calls
    create rows via `bus.request(actor='agent', risk_tier=…)` and
    block on `bus.wait_async`. The chat route detects the new pending
    row by polling `/api/v1/approvals?status=pending` (max 6s race),
@@ -223,7 +223,7 @@ neat-hierarchy theory:
 
 ## Reference implementation
 
-In `kite-production/phantom`:
+In `kite-production/guardian`:
 
 | Layer | File |
 |---|---|
@@ -237,7 +237,7 @@ In `kite-production/phantom`:
 | Tier-5 deny boundary | `bundles/spark/manifest.yaml` `tools.deny[]` |
 | Tests | `bundles/spark/mcp/tests/test_approvals_bus.py`, `test_approval_gate.py`, `test_personality_store.py` |
 
-The phantom tree across the 8 commits:
+The guardian tree across the 8 commits:
 - 36 self-mod tools (19 read + 8 soft + 6 destructive + 3 credential)
 - 17 gated via `humanRequired[]`
 - 8 forbidden via `tools.deny[]` (Tier-5 boundary)
@@ -268,7 +268,7 @@ Every proposal is **additive**:
 
 ## Open questions for upstream review
 
-1. **Should `risk_tier` values be an enum or open string?** Phantom
+1. **Should `risk_tier` values be an enum or open string?** Guardian
    ships `read | soft | destructive | credential`. A future bundle
    might want `pii` or `external_api` tiers; an open string allows
    that, but loses static checking. Spec recommendation: closed enum

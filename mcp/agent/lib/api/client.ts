@@ -23,21 +23,21 @@ export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
 /**
  * Resolve the URL for an agent-runtime API call.
  *
- * Phantom-agent topology differs from the Spark workspace's: there is
+ * Guardian-agent topology differs from the Spark workspace's: there is
  * no api-gateway, no nginx hop. The Next.js app proxies every backend
  * call through its own `/api/agent/*` route handlers
  * (see lib/mcp-proxy.ts), which forward to the embedded MCP at
  * `MCP_URL` with bearer auth attached server-side.
  *
  * Translation: `/api/v1/<path>` (Spark gateway-shape) → `/api/agent/<path>`
- * (phantom proxy-shape). Same payloads on the wire; only the prefix
+ * (guardian proxy-shape). Same payloads on the wire; only the prefix
  * differs.
  *
  * For client-side calls, relative paths work — the browser resolves
  * against the current origin. For SSR (server components, route
  * handlers calling other route handlers), `fetch()` needs an absolute
  * URL or it errors with "Failed to parse URL". We use
- * `PHANTOM_AGENT_INTERNAL_URL` if set (e.g. when the agent runs behind
+ * `GUARDIAN_AGENT_INTERNAL_URL` if set (e.g. when the agent runs behind
  * a non-trivial network setup), otherwise fall back to
  * `http://localhost:3000` — that's the in-process Next.js server
  * itself, calling its own `/api/agent/*` handler. Yes, it's a
@@ -54,7 +54,7 @@ function resolveGatewayUrl(path: string): string {
   // are fine and preferred (no env coupling, work behind any reverse proxy).
   if (typeof window === "undefined") {
     const internalBase = (
-      process.env.PHANTOM_AGENT_INTERNAL_URL ||
+      process.env.GUARDIAN_AGENT_INTERNAL_URL ||
       "http://localhost:3000"
     ).replace(/\/+$/, "");
     return `${internalBase}${resolved}`;
@@ -79,7 +79,7 @@ async function parseError(response: Response): Promise<ApiError> {
           retryable: Boolean(envelope.retryable),
         };
       }
-      // Phantom-agent route shape: { error: "...", ... }.
+      // Guardian-agent route shape: { error: "...", ... }.
       // Fallback so handlers like /api/agent/marketplace/.../uninstall
       // (which return 409 + {error: "..., delete N instances first"})
       // surface their helpful message to the UI instead of getting
@@ -227,7 +227,7 @@ interface ListEnvelope<T> {
  *                         `{ "approvals": [...], "count": N }`,
  *                         `{ "events": [...], "count": N }`, …
  *
- * The phantom MCP uses (3) almost everywhere — each endpoint names its
+ * The guardian MCP uses (3) almost everywhere — each endpoint names its
  * payload after the resource (`jobs`, `approvals`, `events`, `keys`,
  * `instances`, etc.). Earlier this helper only recognized (1) and (2),
  * which silently turned every named-envelope response into an empty

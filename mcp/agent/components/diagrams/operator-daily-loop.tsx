@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom Operator Daily Loop.
+ * Guardian Operator Daily Loop.
  *
  * Cyclical flow showing the operator's typical day-driver loop:
  * Chat → Run scenario → Observe → Refine → Chat again. Three primary

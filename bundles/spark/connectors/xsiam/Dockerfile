@@ -1,5 +1,5 @@
-# phantom-connector-xsiam — per-connector image for the XSIAM PAPI
-# connector, built FROM phantom-connector-runtime.
+# guardian-connector-xsiam — per-connector image for the XSIAM PAPI
+# connector, built FROM guardian-connector-runtime.
 #
 # Adds google-auth as the only extra Python dep — needed because the
 # XSIAM connector talks to Cortex PAPI through Google Vertex (some
@@ -7,11 +7,11 @@
 # bearer (other code paths). The base image already has httpx +
 # pydantic + cryptography which cover the rest of the surface.
 
-ARG PHANTOM_RUNTIME_VERSION=latest
-FROM ghcr.io/kite-production/phantom-connector-runtime:${PHANTOM_RUNTIME_VERSION}
+ARG GUARDIAN_RUNTIME_VERSION=latest
+FROM ghcr.io/kite-production/guardian-connector-runtime:${GUARDIAN_RUNTIME_VERSION}
 
-LABEL org.opencontainers.image.source="https://github.com/kite-production/phantom"
-LABEL org.opencontainers.image.description="Phantom xsiam connector container — Cortex XSIAM PAPI tools (XQL queries, dataset/asset/issue lookups, log push) running as a per-instance MCP server."
+LABEL org.opencontainers.image.source="https://github.com/kite-production/guardian"
+LABEL org.opencontainers.image.description="Guardian xsiam connector container — Cortex XSIAM PAPI tools (XQL queries, dataset/asset/issue lookups, log push) running as a per-instance MCP server."
 
 # Connector-specific deps. Pinned conservatively to match what the
 # in-process connector uses today (bundles/spark/mcp/requirements.txt).

@@ -42,7 +42,7 @@
  * If the MCP is unreachable or the anthropic provider instance isn't
  * materialized yet, returns null from the store path and falls back
  * to env vars. That's intentional — first-install flow ships env
- * vars in /opt/phantom/.env (e.g. ANTHROPIC_API_KEY), and the
+ * vars in /opt/guardian/.env (e.g. ANTHROPIC_API_KEY), and the
  * ProviderStore path comes online once the operator configures via UI.
  */
 

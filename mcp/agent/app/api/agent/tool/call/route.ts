@@ -67,7 +67,7 @@ async function openMcpSession(base: string, token: string): Promise<string> {
     params: {
       protocolVersion: '2024-11-05',
       capabilities: {},
-      clientInfo: { name: 'phantom-agent-ui-tool-call', version: '1.0' },
+      clientInfo: { name: 'guardian-agent-ui-tool-call', version: '1.0' },
     },
   });
   const resp = await fetch(`${base}/api/v1/stream/mcp`, {
@@ -334,7 +334,7 @@ export async function POST(request: Request): Promise<NextResponse<ToolCallRespo
 
   // tools/call wraps the actual result in `{content: [{type, text}], isError?}`.
   // Try to surface a useful shape: parse the first text content as JSON
-  // if possible (most Phantom tools return JSON strings); fall back to
+  // if possible (most Guardian tools return JSON strings); fall back to
   // the raw text. Carry isError through to ok=false when set.
   const payload = frame.payload as {
     content?: Array<{ type: string; text?: string }>;

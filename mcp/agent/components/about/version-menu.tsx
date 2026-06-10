@@ -89,8 +89,8 @@ export function VersionMenu({ collapsed }: VersionMenuProps) {
               ? "bg-secondary-container/25 text-secondary"
               : "sidebar-text sidebar-hover",
           )}
-          title={collapsed ? "About Phantom" : undefined}
-          aria-label="About Phantom"
+          title={collapsed ? "About Guardian" : undefined}
+          aria-label="About Guardian"
           aria-expanded={open}
           aria-haspopup="menu"
         >

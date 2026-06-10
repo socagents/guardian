@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Phantom Architecture Guide.
+ * Guardian Architecture Guide.
  *
- * Architect-focused deep documentation for Phantom's internals.
+ * Architect-focused deep documentation for Guardian's internals.
  * Distinct from /help/user (operator-task-oriented). The split is
  * deliberate: operators don't need to know how the chat-route's
- * tool-dispatch loop wires hooks; architects extending Phantom DO
+ * tool-dispatch loop wires hooks; architects extending Guardian DO
  * need that level of detail. Splitting keeps each guide useful to
  * its audience without bloating either.
  *
@@ -80,7 +80,7 @@ const SECTIONS: SectionDef[] = [
  { id: "stack", label: "Service Stack", group: "Foundation", icon: "view_module" },
  { id: "image-pinning", label: "Image Digest Pinning", group: "Foundation", icon: "verified" },
  { id: "tls-proxy", label: "TLS Proxy & Entrypoint", group: "Foundation", icon: "lock" },
- { id: "phantom-updater", label: "phantom-updater Service", group: "Foundation", icon: "system_update" },
+ { id: "guardian-updater", label: "guardian-updater Service", group: "Foundation", icon: "system_update" },
  { id: "manifest", label: "Manifest & Bundle", group: "Foundation", icon: "package_2" },
  { id: "data-roots", label: "Data Roots", group: "Foundation", icon: "database" },
  { id: "boot-lifecycle", label: "Boot Lifecycle", group: "Foundation", icon: "rocket_launch" },
@@ -197,7 +197,7 @@ export default function ArchitectureGuide() {
  useEffect(() => {
  try {
  const stored = window.localStorage.getItem(
- "phantom.help.architecture.sidebar-collapsed",
+ "guardian.help.architecture.sidebar-collapsed",
 );
  if (stored === "true") setSidebarCollapsed(true);
  } catch {
@@ -208,7 +208,7 @@ export default function ArchitectureGuide() {
  useEffect(() => {
  try {
  window.localStorage.setItem(
- "phantom.help.architecture.sidebar-collapsed",
+ "guardian.help.architecture.sidebar-collapsed",
  sidebarCollapsed ? "true" : "false",
 );
  } catch {
@@ -356,7 +356,7 @@ export default function ArchitectureGuide() {
  <Stack />
  <ImagePinning />
  <TlsProxy />
- <PhantomUpdater />
+ <GuardianUpdater />
  <ConnectorContainers />
  <Manifest />
  <DataRoots />
@@ -441,14 +441,14 @@ function Intro() {
  return (
  <Section id="intro" icon="info" title="Introduction">
  <p>
- Phantom is a continuous SOC simulation platform: it generates synthetic
+ Guardian is a continuous SOC simulation platform: it generates synthetic
  security telemetry, drives MITRE ATT&CK scenario emulation, validates
  detections against XSIAM, and orchestrates red/blue workflows over
  an MCP (Model Context Protocol) tool surface. This guide documents
- Phantom&apos;s architecture for engineers extending it.
+ Guardian&apos;s architecture for engineers extending it.
  </p>
  <p>
- Phantom is built on{" "}
+ Guardian is built on{" "}
  <Term>Spark Agents&apos;</Term> bundle-spec foundation: a manifest-driven
  agent definition that ships as a self-contained directory and loads
  through a 5-service Compose stack. Layered on top of that
@@ -523,13 +523,13 @@ function Stack() {
  </li>
  <li>
  <Term>caldera</Term> (container <Code>caldera</Code>) —
- prebuilt image, MITRE Caldera 5.3.0 red-team backend. Phantom
+ prebuilt image, MITRE Caldera 5.3.0 red-team backend. Guardian
  drives it via the <Code>caldera.*</Code> MCP tool family. Has
  its own SQLite for adversaries / abilities / operations under
  <Code> /usr/src/app/data</Code>.
  </li>
  <li>
- <Term>phantom-browser</Term> (container <Code>phantom_browser</Code>) —
+ <Term>guardian-browser</Term> (container <Code>guardian_browser</Code>) —
  <Code> chromedp/headless-shell</Code> sidecar exposing CDP on
  :9222 (internal-only — never published to the host network).
  The web connector connects via Playwright&apos;s{" "}
@@ -538,14 +538,14 @@ function Stack() {
  a web-connector instance exists.
  </li>
  <li>
- <Term>phantom-updater</Term> (container <Code>phantom_updater</Code>) —
+ <Term>guardian-updater</Term> (container <Code>guardian_updater</Code>) —
  Python 3.12 sidecar; drives the host&apos;s
  <Code> /var/run/docker.sock</Code> to manage per-instance
  connector containers and to perform stack-level updates. See
- the dedicated <a href="#phantom-updater" className="link">phantom-updater</a> section below.
+ the dedicated <a href="#guardian-updater" className="link">guardian-updater</a> section below.
  </li>
  <li>
- <Term>phantom-agent</Term> (container <Code>phantom_agent</Code>) —
+ <Term>guardian-agent</Term> (container <Code>guardian_agent</Code>) —
  Next.js 15 + React 19 UI on :3000 AND embedded MCP server on
  :8080. The MCP runs as a Python subprocess of the agent&apos;s
  entrypoint, NOT a separate container — same trust boundary,
@@ -580,16 +580,16 @@ XLOG_URL              = https://xlog:8000   # TLS-only; xlog mounts
 CALDERA_URL           = http://caldera:8888 # caldera TLS pending
 MCP_URL               = http://localhost:8080/api/v1/stream/mcp
                         # ← localhost because MCP is a SUBPROCESS of
-                        #   phantom-agent, not a separate service.
+                        #   guardian-agent, not a separate service.
 
 # Cross-service (operator may override in .env):
-PHANTOM_AGENT_INTERNAL_URL = https://phantom-agent:8080
-                             # ← phantom-updater calls back to the
+GUARDIAN_AGENT_INTERNAL_URL = https://guardian-agent:8080
+                             # ← guardian-updater calls back to the
                              #   agent over this URL after starting
                              #   a connector container.
 
 # Per-instance connector containers:
-container_url         = http://phantom-connector-<connector>-<instance>:9000
+container_url         = http://guardian-connector-<connector>-<instance>:9000
                         # ← stored in instance_store.db; the agent's
                         #   tool-dispatch loader uses it to route
                         #   tool calls to the right container.`}</Pre>
@@ -624,7 +624,7 @@ container_url         = http://phantom-connector-<connector>-<instance>:9000
  </li>
  <li>
  <Term>API keys</Term>:{" "}
- <Code>Authorization: Bearer phantom_ak_&lt;id&gt;_&lt;secret&gt;</Code>{" "}
+ <Code>Authorization: Bearer guardian_ak_&lt;id&gt;_&lt;secret&gt;</Code>{" "}
  — operator-minted long-lived tokens for programmatic access.
  Hashed at rest in <Code>api_keys.db</Code> with a per-key
  random salt. See <a href="#api-keys" className="link">API Keys</a> in the user guide for the operator-facing flow.
@@ -639,7 +639,7 @@ function ImagePinning() {
  return (
  <Section id="image-pinning" icon="verified" title="Image Digest Pinning">
  <p>
- Image references in the customer compose, the phantom-updater
+ Image references in the customer compose, the guardian-updater
  service, and per-instance connector container startup use{" "}
  <Term>content-digest pinning</Term>. Containers are recreated
  by docker compose <i>iff their image content actually changed</i>,
@@ -649,10 +649,10 @@ function ImagePinning() {
  <p>
  Why this matters: caldera holds in-memory red-team operation
  state, xlog holds active streaming workers in a module-level
- dict, phantom-agent holds in-flight chat sessions and job
+ dict, guardian-agent holds in-flight chat sessions and job
  history. Without digest pinning, every release would recreate
  all five containers (because the compose file&apos;s{" "}
- <Code>{`image: foo:${"${PHANTOM_VERSION}"}`}</Code>{" "}
+ <Code>{`image: foo:${"${GUARDIAN_VERSION}"}`}</Code>{" "}
  string changed), even when release.yml&apos;s conditional-rebuild
  logic had retagged caldera/xlog/browser from the previous version&apos;s
  same-byte image. The compose file&apos;s image string only
@@ -667,28 +667,28 @@ function ImagePinning() {
  Release asset. The manifest enumerates every image in the
  release with its sha256 content digest:
  </p>
- <Pre>{`# Phantom image digest manifest
+ <Pre>{`# Guardian image digest manifest
 # Generated by release.yml from a release commit.
 
-PHANTOM_VERSION=0.3.0
-DIGEST_PHANTOM_AGENT=sha256:abc...
-DIGEST_PHANTOM_XLOG=sha256:def...
-DIGEST_PHANTOM_CALDERA=sha256:ghi...
-DIGEST_PHANTOM_UPDATER=sha256:jkl...
-DIGEST_PHANTOM_BROWSER=sha256:mno...
-DIGEST_PHANTOM_CONNECTOR_RUNTIME=sha256:pqr...
-DIGEST_PHANTOM_CONNECTOR_XLOG=sha256:stu...
-DIGEST_PHANTOM_CONNECTOR_XSIAM=sha256:vwx...
-DIGEST_PHANTOM_CONNECTOR_CALDERA=sha256:yz0...
-DIGEST_PHANTOM_CONNECTOR_WEB=sha256:123...
-DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
+GUARDIAN_VERSION=0.3.0
+DIGEST_GUARDIAN_AGENT=sha256:abc...
+DIGEST_GUARDIAN_XLOG=sha256:def...
+DIGEST_GUARDIAN_CALDERA=sha256:ghi...
+DIGEST_GUARDIAN_UPDATER=sha256:jkl...
+DIGEST_GUARDIAN_BROWSER=sha256:mno...
+DIGEST_GUARDIAN_CONNECTOR_RUNTIME=sha256:pqr...
+DIGEST_GUARDIAN_CONNECTOR_XLOG=sha256:stu...
+DIGEST_GUARDIAN_CONNECTOR_XSIAM=sha256:vwx...
+DIGEST_GUARDIAN_CONNECTOR_CALDERA=sha256:yz0...
+DIGEST_GUARDIAN_CONNECTOR_WEB=sha256:123...
+DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
  <p>
  Same manifest content is{" "}
- <Term>embedded into the phantom-installer binary</Term> at build
+ <Term>embedded into the guardian-installer binary</Term> at build
  time so the installer is fully self-contained — no runtime fetch
  from GitHub Releases needed during fresh installs. The manifest
  is also reachable as a Release asset for the{" "}
- <a href="#phantom-updater" className="link">phantom-updater</a>{" "}
+ <a href="#guardian-updater" className="link">guardian-updater</a>{" "}
  to fetch during in-app upgrades.
  </p>
  </SubSection>
@@ -700,7 +700,7 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
  with an explicit-invalid fallback:
  </p>
  <Pre>{`xlog:
-  image: ghcr.io/kite-production/phantom-xlog@\${DIGEST_PHANTOM_XLOG:-sha256:invalid_digest_run_installer_first}`}</Pre>
+  image: ghcr.io/kite-production/guardian-xlog@\${DIGEST_GUARDIAN_XLOG:-sha256:invalid_digest_run_installer_first}`}</Pre>
  <p>
  The fallback is intentionally invalid — when an operator&apos;s
  .env is missing a <Code>DIGEST_*</Code> value, docker compose
@@ -714,19 +714,19 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
  <ul className="list-disc pl-5 space-y-2 text-sm">
  <li>
  <Term>Fresh install.</Term> Customer downloads{" "}
- <Code>phantom-installer</Code> for vX.Y.Z, runs{" "}
- <Code>sudo ./phantom-installer</Code>. Installer reads its
+ <Code>guardian-installer</Code> for vX.Y.Z, runs{" "}
+ <Code>sudo ./guardian-installer</Code>. Installer reads its
  embedded manifest and writes{" "}
- <Code>PHANTOM_VERSION=X.Y.Z</Code>{" "}
- plus 10 <Code>DIGEST_PHANTOM_*</Code> lines into{" "}
- <Code>/opt/phantom/.env</Code>. <Code>docker compose pull</Code>{" "}
+ <Code>GUARDIAN_VERSION=X.Y.Z</Code>{" "}
+ plus 10 <Code>DIGEST_GUARDIAN_*</Code> lines into{" "}
+ <Code>/opt/guardian/.env</Code>. <Code>docker compose pull</Code>{" "}
  +{" "}
  <Code>up -d</Code> launches with digest-pinned images.
  </li>
  <li>
  <Term>Upgrade (in-app).</Term> Operator clicks &quot;Update
  now&quot; in the UI sidebar. The agent proxies to{" "}
- phantom-updater&apos;s <Code>POST /api/v1/update</Code>;
+ guardian-updater&apos;s <Code>POST /api/v1/update</Code>;
  updater fetches the latest GitHub Release&apos;s manifest,
  compares each service&apos;s current digest vs the manifest&apos;s
  target, pulls only changed images, applies the manifest to{" "}
@@ -738,10 +738,10 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
  <li>
  <Term>Upgrade (re-run installer).</Term> Same flow as fresh
  install, but the installer detects the existing{" "}
- <Code>/opt/phantom/.env</Code>, preserves secrets / KEK /
+ <Code>/opt/guardian/.env</Code>, preserves secrets / KEK /
  registry token, strips stale{" "}
- <Code>PHANTOM_VERSION + DIGEST_PHANTOM_*</Code> lines, appends
- the new manifest. Each phantom-installer binary is{" "}
+ <Code>GUARDIAN_VERSION + DIGEST_GUARDIAN_*</Code> lines, appends
+ the new manifest. Each guardian-installer binary is{" "}
  <Term>sealed to one version</Term> (its embedded manifest is
  only valid for that version) — to install vN, download the
  vN binary.
@@ -761,11 +761,11 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
  <a href="#connector-containers" className="link">Connector Containers</a>)
  also use digest pinning. <Code>_connector_image_ref()</Code> in{" "}
  <Code>updater/src/main.py</Code> reads{" "}
- <Code>DIGEST_PHANTOM_CONNECTOR_&lt;ID&gt;</Code>{" "}
+ <Code>DIGEST_GUARDIAN_CONNECTOR_&lt;ID&gt;</Code>{" "}
  (forwarded from{" "}
  <Code>/host/.env</Code> through the updater&apos;s{" "}
  <Code>environment:</Code> block) and constructs the image ref as{" "}
- <Code>ghcr.io/.../phantom-connector-&lt;id&gt;@sha256:...</Code>.
+ <Code>ghcr.io/.../guardian-connector-&lt;id&gt;@sha256:...</Code>.
  Without the env var, the updater falls back to tag pinning with
  a loud warning — observable in{" "}
  <Code>/observability/connectors</Code> as a yellow{" "}
@@ -792,7 +792,7 @@ DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS=sha256:456...`}</Pre>
  <Term>Comprehensive endpoint:</Term>{" "}
  <Code>GET /api/agent/digests</Code> returns the full picture:
  stack-tier digest list + per-instance connector digest list (proxied
- to phantom-updater&apos;s <Code>/api/v1/connectors/digests</Code>).
+ to guardian-updater&apos;s <Code>/api/v1/connectors/digests</Code>).
  Used by the observability panel; also the canonical
  incident-response endpoint for &quot;exactly which image bytes is
  each running container?&quot;.
@@ -806,9 +806,9 @@ function TlsProxy() {
  return (
  <Section id="tls-proxy" icon="lock" title="TLS Proxy & Entrypoint">
  <p>
- The phantom-agent container ships with a tiny Node TLS proxy that
+ The guardian-agent container ships with a tiny Node TLS proxy that
  fronts both the Next.js UI (:3000) and the embedded MCP (:8080)
- with HTTPS when <Code>PHANTOM_TLS_ENABLED=1</Code> is set. The
+ with HTTPS when <Code>GUARDIAN_TLS_ENABLED=1</Code> is set. The
  entrypoint script (<Code>mcp/agent/entrypoint.sh</Code>) decides
  at boot whether to hand sockets to Next.js / Uvicorn directly
  (TLS off) or to start the proxy and route through it (TLS on).
@@ -816,19 +816,19 @@ function TlsProxy() {
  </p>
 
  <SubSection icon="settings_input_component" title="Boot decision tree">
- <Pre>{`PHANTOM_TLS_ENABLED unset / "0"
+ <Pre>{`GUARDIAN_TLS_ENABLED unset / "0"
   → Next.js binds :3000 directly (HTTP)
   → Uvicorn (MCP) binds :8080 directly (HTTP)
   → No tls-proxy.js process
 
-PHANTOM_TLS_ENABLED = "1"
+GUARDIAN_TLS_ENABLED = "1"
   ├─ Cert + key present at /tls/cert.pem + /tls/key.pem
   │   → use as-is
-  ├─ Else if PHANTOM_AUTO_TLS = "1"
+  ├─ Else if GUARDIAN_AUTO_TLS = "1"
   │   → generate self-signed via openssl into /tls/
   │   → log "TLS enabled — generated self-signed cert"
   └─ Else
-      → fail-fast: "PHANTOM_TLS_ENABLED=1 but no cert"
+      → fail-fast: "GUARDIAN_TLS_ENABLED=1 but no cert"
 
   → Uvicorn binds 127.0.0.1:8080 (loopback, HTTPS using same cert)
   → Next.js binds 127.0.0.1:3001 (loopback, plain HTTP)
@@ -855,13 +855,13 @@ PHANTOM_TLS_ENABLED = "1"
  </p>
  </SubSection>
 
- <SubSection icon="warning" title="Self-signed cert and PHANTOM_TLS_VERIFY">
+ <SubSection icon="warning" title="Self-signed cert and GUARDIAN_TLS_VERIFY">
  <p>
- The default <Code>PHANTOM_AUTO_TLS=1</Code> path generates a
- self-signed cert. Internal callers (phantom-updater calling
+ The default <Code>GUARDIAN_AUTO_TLS=1</Code> path generates a
+ self-signed cert. Internal callers (guardian-updater calling
  back to the agent, the agent&apos;s own loopback healthchecks)
  then need to skip chain verification. The convention:{" "}
- <Code>PHANTOM_TLS_VERIFY</Code> with a value of <Code>0</Code>{" "}
+ <Code>GUARDIAN_TLS_VERIFY</Code> with a value of <Code>0</Code>{" "}
  means &quot;skip verify&quot;; anything else means enforce.
  The agent&apos;s entrypoint sets it on every internal client
  (Python httpx, Node fetch wrappers) when the self-signed mode
@@ -870,7 +870,7 @@ PHANTOM_TLS_ENABLED = "1"
  <p>
  Production-grade: replace <Code>/tls/cert.pem</Code> +{" "}
  <Code>/tls/key.pem</Code> with a CA-signed pair and unset{" "}
- <Code>PHANTOM_TLS_VERIFY</Code>. The proxy serves the new cert
+ <Code>GUARDIAN_TLS_VERIFY</Code>. The proxy serves the new cert
  on next container restart; no code change.
  </p>
  </SubSection>
@@ -892,11 +892,11 @@ PHANTOM_TLS_ENABLED = "1"
 );
 }
 
-function PhantomUpdater() {
+function GuardianUpdater() {
  return (
- <Section id="phantom-updater" icon="autorenew" title="phantom-updater Service">
+ <Section id="guardian-updater" icon="autorenew" title="guardian-updater Service">
  <p>
- phantom-updater is a sidecar container with one job: drive the
+ guardian-updater is a sidecar container with one job: drive the
  host&apos;s docker daemon for lifecycle operations the agent
  itself can&apos;t safely perform on its own image. Two surfaces:
  stack-level updates (pull new image versions, recreate services)
@@ -907,7 +907,7 @@ function PhantomUpdater() {
 
  <SubSection icon="approval" title="Why a separate container">
  <p>
- During a stack-level update, phantom-agent&apos;s container is
+ During a stack-level update, guardian-agent&apos;s container is
  destroyed and replaced. If the update logic lived inside that
  image, the operator&apos;s progress stream would die mid-update.
  Living in its own container — its own image, its own version —
@@ -949,10 +949,10 @@ POST   /api/v1/connectors/reconcile`}</Pre>
 
  <SubSection icon="sync" title="Digest-drift reconciliation (startup + periodic)">
  <p>
- Per-instance connector containers are managed dynamically by phantom-updater — they are NOT in <Code>docker-compose.yml</Code>, so a <Code>docker compose up -d</Code> never touches them. When an install or dev cycle updates a connector&apos;s pinned digest in <Code>/host/connector-digests.env</Code>, the already-running container keeps its old image until phantom-updater recreates it.
+ Per-instance connector containers are managed dynamically by guardian-updater — they are NOT in <Code>docker-compose.yml</Code>, so a <Code>docker compose up -d</Code> never touches them. When an install or dev cycle updates a connector&apos;s pinned digest in <Code>/host/connector-digests.env</Code>, the already-running container keeps its old image until guardian-updater recreates it.
  </p>
  <p>
- phantom-updater reconciles that drift automatically: once ~30s after startup, and (v0.17.128) <strong>on a periodic loop</strong> (default every 5 minutes, override via <Code>PHANTOM_UPDATER_RECONCILE_INTERVAL_S</Code>). Each pass compares every <Code>phantom-connector-*</Code> container&apos;s running digest to its pin and recreates only the divergent ones (sequential, per-container error isolation). The periodic loop matters because phantom-updater rarely restarts — its own image isn&apos;t rebuilt on the dev cycle — so a startup-only reconcile would leave a pin that changes between restarts unapplied. Operators can force a synchronous pass with <Code>POST /api/v1/connectors/reconcile/digests</Code>.
+ guardian-updater reconciles that drift automatically: once ~30s after startup, and (v0.17.128) <strong>on a periodic loop</strong> (default every 5 minutes, override via <Code>GUARDIAN_UPDATER_RECONCILE_INTERVAL_S</Code>). Each pass compares every <Code>guardian-connector-*</Code> container&apos;s running digest to its pin and recreates only the divergent ones (sequential, per-container error isolation). The periodic loop matters because guardian-updater rarely restarts — its own image isn&apos;t rebuilt on the dev cycle — so a startup-only reconcile would leave a pin that changes between restarts unapplied. Operators can force a synchronous pass with <Code>POST /api/v1/connectors/reconcile/digests</Code>.
  </p>
  </SubSection>
 
@@ -1001,8 +1001,8 @@ function ConnectorContainers() {
  </p>
  <p>
  Per-instance container images are <Term>digest-pinned</Term> at
- startup (matching the stack-tier services). The phantom-updater
- reads <Code>DIGEST_PHANTOM_CONNECTOR_&lt;ID&gt;</Code> from its{" "}
+ startup (matching the stack-tier services). The guardian-updater
+ reads <Code>DIGEST_GUARDIAN_CONNECTOR_&lt;ID&gt;</Code> from its{" "}
  environment when starting a new instance container, so the
  instance is reproducibly bound to a specific image-byte hash.
  See{" "}
@@ -1041,15 +1041,15 @@ function ConnectorContainers() {
 
  <SubSection icon="schema" title="Naming + addressing">
  <Pre>{`# Container name (deterministic):
-phantom-connector-<connector_id>-<instance_name>
-   # e.g. phantom-connector-web-acme
+guardian-connector-<connector_id>-<instance_name>
+   # e.g. guardian-connector-web-acme
 
 # Image tag:
-ghcr.io/kite-production/phantom-connector-<id>:<VERSION>
-   # VERSION = $PHANTOM_VERSION (the customer's pinned release)
+ghcr.io/kite-production/guardian-connector-<id>:<VERSION>
+   # VERSION = $GUARDIAN_VERSION (the customer's pinned release)
 
 # Compose-network DNS:
-http://phantom-connector-<id>-<name>:9000
+http://guardian-connector-<id>-<name>:9000
    # Stored in instance_store.db.container_url after the
    # updater calls back POST /api/v1/instances/{id}/container_url
    # The agent's tool-dispatch loader reads container_url at tool
@@ -1064,14 +1064,14 @@ Next.js POST /api/v1/instances → MCP creates instance row
 MCP read connector.yaml.runtimeMapping.style
    ├─ "module"    → register tools in-process (legacy path)
    └─ "container" → POST /api/v1/connectors/<id>/instances/<name>/start
-                    on phantom-updater
+                    on guardian-updater
                                        ↓
-                    updater.docker_run(image, env, network=phantom_default,
-                                       volume=phantom_mcp_data:/app/data:ro)
+                    updater.docker_run(image, env, network=guardian_default,
+                                       volume=guardian_mcp_data:/app/data:ro)
                                        ↓
                     container boots; entrypoint loads instance config from
                     the read-only data volume + decrypts secrets via the
-                    SecretStoreReader (PHANTOM_SECRET_KEK from env)
+                    SecretStoreReader (GUARDIAN_SECRET_KEK from env)
                                        ↓
                     FastMCP server up on :9000; updater POSTs back to
                     /api/v1/instances/{id}/container_url with the URL
@@ -1110,8 +1110,8 @@ MCP read connector.yaml.runtimeMapping.style
  </li>
  <li>
  <Term>Same KEK</Term>. The container needs{" "}
- <Code>PHANTOM_SECRET_KEK</Code> in env to decrypt the
- instance&apos;s secrets. phantom-updater inherits it from
+ <Code>GUARDIAN_SECRET_KEK</Code> in env to decrypt the
+ instance&apos;s secrets. guardian-updater inherits it from
  the host&apos;s <Code>.env</Code> and passes it through.
  </li>
  <li>
@@ -1131,7 +1131,7 @@ function Manifest() {
  return (
  <Section id="manifest" icon="package_2" title="Manifest & Bundle">
  <p>
- Phantom is a Spark v1.2 bundle. The bundle root contains a{" "}
+ Guardian is a Spark v1.2 bundle. The bundle root contains a{" "}
  <Code>manifest.yaml</Code> declaring identity, model requirements,
  connectors, settings, audit events, and capabilities. The manifest
  is the contract between the bundle and its runtime.
@@ -1140,7 +1140,7 @@ function Manifest() {
  <Pre>{`bundles/spark/
 ├── manifest.yaml # Bundle contract — identity, models,
 │ # connectors, audit events, etc.
-├── mcp/ # phantom-mcp service source
+├── mcp/ # guardian-mcp service source
 │ ├── src/
 │ │ ├── main.py # MCP boot + service wiring
 │ │ ├── api/ # REST routes (audit, hooks, tasks, etc.)
@@ -1199,7 +1199,7 @@ function DataRoots() {
  <Section id="data-roots" icon="database" title="Data Roots">
  <p>
  Spark&apos;s invariant: <Term>bundle_root is read-only; data_root
- is mutable</Term>. Phantom honors this strictly. Every store writes
+ is mutable</Term>. Guardian honors this strictly. Every store writes
  to <Code>/app/data/</Code>; bundle files (manifest, skills,
  scenarios, plugin manifests) are read-only at runtime. The diagram
  below shows every store, the audit log they all write into, and
@@ -1451,7 +1451,7 @@ function ChatLifecycle() {
  <Code>callGemini(contents, tools, runtimeConfig, actionPolicy, model)</Code>
  {" "}runs through the API-key path or falls through to Vertex.
  Prompt caching sits inside the Vertex path: if{" "}
- <Code>PHANTOM_VERTEX_CACHE=1</Code>, the system prompt is
+ <Code>GUARDIAN_VERTEX_CACHE=1</Code>, the system prompt is
  cached and referenced via <Code>cachedContent</Code>.
  </p>
  </SubSection>
@@ -1636,8 +1636,8 @@ function ToolDispatch() {
  <Code>marketplace_list</Code>,{" "}
  <Code>log_destinations_list</Code>, <Code>settings_get</Code>,{" "}
  <Code>skills_read</Code>, <Code>knowledge_search</Code>,{" "}
- <Code>phantom_get_field_info</Code>,{" "}
- <Code>phantom_get_technology_stack</Code>.
+ <Code>guardian_get_field_info</Code>,{" "}
+ <Code>guardian_get_technology_stack</Code>.
  </li>
  <li>
  <Term>REPEATABLE-READ semantics</Term>: a catalog/config
@@ -1916,7 +1916,7 @@ function VertexCache() {
  </SubSection>
  <SubSection icon="lock" title="Gating">
  <p>
- Vertex prompt caching is gated behind <Code>PHANTOM_VERTEX_CACHE=1</Code> env
+ Vertex prompt caching is gated behind <Code>GUARDIAN_VERTEX_CACHE=1</Code> env
  var (operator opt-in). exposed this as a
  personality toggle. Future: per-model gate as the chat-route
  learns which models reliably support cached references.
@@ -1986,7 +1986,7 @@ function ObservabilityOverview() {
  return (
  <Section id="observability-overview" icon="insights" title="Observability Overview">
  <p>
- Phantom emits enough telemetry that customers can answer{" "}
+ Guardian emits enough telemetry that customers can answer{" "}
  <em>&ldquo;what is the platform doing right now?&rdquo;</em>{" "}
  and{" "}
  <em>&ldquo;what did it do last week?&rdquo;</em>{" "}
@@ -2021,7 +2021,7 @@ function ObservabilityOverview() {
  </li>
  <li>
  <Term><Link href="/observability/traces" className="link">/observability/traces</Link></Term>
- {" "}— OpenTelemetry distributed traces (opt-in via <Code>PHANTOM_OTEL=1</Code>).
+ {" "}— OpenTelemetry distributed traces (opt-in via <Code>GUARDIAN_OTEL=1</Code>).
  Chat turns are parent spans; tool calls are child spans; connector calls are grandchildren.
  Drill in to find which sub-call dominated turn latency.
  </li>
@@ -2062,7 +2062,7 @@ function ObservabilityOverview() {
  <li>
  <Term><Link href="/observability/plugins" className="link">/observability/plugins</Link></Term>
  {" "}— entry-point plugin inventory (pip-installed Python packages exposing{" "}
- <Code>phantom.hooks</Code> / <Code>phantom.skills</Code> / etc.) with install + uninstall buttons.
+ <Code>guardian.hooks</Code> / <Code>guardian.skills</Code> / etc.) with install + uninstall buttons.
  </li>
  </ul>
  </SubSection>
@@ -2128,10 +2128,10 @@ Q: "Is XSIAM healthy?"
 
 Q: "Where is my Vertex spend coming from?"
    → /observability/cost. By-model bar chart + by-session
-     drill-down. Cache-savings tile if PHANTOM_VERTEX_CACHE=1.
+     drill-down. Cache-savings tile if GUARDIAN_VERTEX_CACHE=1.
 
 Q: "How long are turns taking?"
-   → /observability/traces (requires PHANTOM_OTEL=1). Per-turn
+   → /observability/traces (requires GUARDIAN_OTEL=1). Per-turn
      span tree shows the dominant cost.
 
 Q: "Did anyone change settings while I was out?"
@@ -2165,7 +2165,7 @@ Q: "Why did this detection rule fire?"
  </li>
  <li>
  <Term>traces</Term> — exported live to an OTLP endpoint;
- Phantom doesn&apos;t retain them locally.
+ Guardian doesn&apos;t retain them locally.
  </li>
  <li>
  <Term>logs (container stdout)</Term> — Docker&apos;s log
@@ -2214,7 +2214,7 @@ function AuditPersistence() {
  that aren&apos;t tool calls. Body:{" "}
  <Code>{`{ action, target?, status?, duration_ms?, metadata? }`}</Code>
 . Actor is fixed to <Code>user:operator</Code> (bearer auth).
- Trigger inherits from the X-Phantom-Trigger contextvar.
+ Trigger inherits from the X-Guardian-Trigger contextvar.
  </p>
  </SubSection>
  <SubSection icon="cloud_upload" title="safeAudit() helper">
@@ -2254,11 +2254,11 @@ function BackupRestore() {
  /settings/backup-restore
  </Link>. One zip captures every operator-owned data surface;
  the same zip restores onto another deployment with a different{" "}
- <Code>PHANTOM_SECRET_KEK</Code>.
+ <Code>GUARDIAN_SECRET_KEK</Code>.
  </p>
  <SubSection icon="folder_zip" title="Zip layout (schema_version: 1)">
- <Pre>{`phantom-backup-<ISO-stamp>.zip
-├── manifest.json          schema_version, phantom_version,
+ <Pre>{`guardian-backup-<ISO-stamp>.zip
+├── manifest.json          schema_version, guardian_version,
 │                          created_at, section_counts,
 │                          restore_order, plaintext-secrets warning
 ├── personality.json       SqlitePersonalityStore blob
@@ -2272,7 +2272,7 @@ function BackupRestore() {
  <ul className="list-disc pl-6 space-y-1.5">
  <li>
  <Code>GET /api/agent/backup</Code> — session-gated via the{" "}
- <Code>phantom_session</Code> cookie at{" "}
+ <Code>guardian_session</Code> cookie at{" "}
  <Code>middleware.ts</Code>. Server-side calls{" "}
  <Code>/api/v1/instances?include_secrets=true</Code> (a
  bearer-auth gated MCP flag mirroring the ProviderStore
@@ -2324,7 +2324,7 @@ function BackupRestore() {
  <li>
  <strong>Jobs</strong> — last because runtime jobs may
  reference connector tools (e.g.{" "}
- <Code>phantom_create_data_worker</Code>) that need their
+ <Code>guardian_create_data_worker</Code>) that need their
  instance enabled before the first cron tick.
  </li>
  </ol>
@@ -2332,7 +2332,7 @@ function BackupRestore() {
  <SubSection icon="key" title="Secrets handling">
  <p>
  The zip carries <strong>cleartext</strong> connector secrets so
- the operator&rsquo;s <Code>PHANTOM_SECRET_KEK</Code> doesn&rsquo;t
+ the operator&rsquo;s <Code>GUARDIAN_SECRET_KEK</Code> doesn&rsquo;t
  need to match across deployments. The destination&rsquo;s
  SecretStore re-encrypts on write. Tradeoff: the zip itself is
  sensitive — the manifest carries an explicit warning, the UI
@@ -2347,7 +2347,7 @@ function BackupRestore() {
  internal gate; the agent&rsquo;s{" "}
  <Code>/api/agent/backup</Code> route runs behind{" "}
  <Code>middleware.ts</Code> which validates the operator&rsquo;s{" "}
- <Code>phantom_session</Code> cookie before any handler fires —
+ <Code>guardian_session</Code> cookie before any handler fires —
  secrets never reach an unauthenticated caller.
  </p>
  </SubSection>
@@ -2371,7 +2371,7 @@ function SettingsTuning() {
  return (
  <Section id="settings-tuning" icon="tune" title="Settings & Tuning">
  <p>
- Phantom exposes a handful of operator-tunable knobs that
+ Guardian exposes a handful of operator-tunable knobs that
  modulate chat-route and memory-store behavior:{" "}
  <Code>vertexCacheEnabled</Code>,{" "}
  <Code>autoCompactMinDropped</Code>,{" "}
@@ -2394,7 +2394,7 @@ function SettingsTuning() {
  <SubSection icon="link" title="Server-side wiring">
  <p>
  <Term>vertexCacheEnabled</Term> is consulted by the chat-route
- alongside the <Code>PHANTOM_VERTEX_CACHE</Code> env var.{" "}
+ alongside the <Code>GUARDIAN_VERTEX_CACHE</Code> env var.{" "}
  <Term>autoCompactMinDropped</Term> threads into the
  compaction pipeline as the trigger threshold (drop ≥ N
  prior messages → summarize via Gemini). The MMR + temporal-
@@ -2412,7 +2412,7 @@ function Personality() {
  return (
  <Section id="personality" icon="psychology_alt" title="Personality Store">
  <p>
- Phantom&apos;s agent personality lives in a single-row store
+ Guardian&apos;s agent personality lives in a single-row store
  separate from manifest-driven settings. It captures both
  free-form persona content (name, tone, system-prompt
  instructions) AND a small set of behavior knobs the operator
@@ -2424,7 +2424,7 @@ function Personality() {
  <p>
  A single-row SQLite table at{" "}
  <Code>/app/data/personality.db</Code>. The single-row design
- is intentional: Phantom is single-user, the persona is global
+ is intentional: Guardian is single-user, the persona is global
  across all sessions, and concurrent edits are operator-
  visible (last-writer-wins with audit-row history).
  </p>
@@ -2555,7 +2555,7 @@ function Hooks() {
  return (
  <Section id="hooks" icon="webhook" title="Hooks Framework">
  <p>
- The hooks framework is Phantom&apos;s policy fabric. Operators
+ The hooks framework is Guardian&apos;s policy fabric. Operators
  register hooks that fire at chat-route lifecycle events
  (PreToolUse, PostToolUse, etc.). Four transports: <Code>command</Code>{" "}
  (subprocess), <Code>http</Code> (webhook),{" "}
@@ -2623,7 +2623,7 @@ function Hooks() {
  run-time. Right for <em>policy scripts</em> the operator
  maintains in their own SCM (a Python policy engine, a shell
  script that calls out to LDAP, etc.). The script can have
- any deps it likes — Phantom doesn&apos;t care.
+ any deps it likes — Guardian doesn&apos;t care.
  </li>
  <li>
  <strong>
@@ -2639,7 +2639,7 @@ function Hooks() {
  <Code>plugin</Code>
  </strong>{" "}
  — invoke a plugin-contributed handler from the{" "}
- <Code>phantom.hooks</Code> entry-point group. Plugin
+ <Code>guardian.hooks</Code> entry-point group. Plugin
  handlers live in Python, the hook-runner lives in TS, the
  agent bridges via{" "}
  <Code>POST /api/v1/plugin-hooks/{"{name}"}/invoke</Code>{" "}
@@ -2734,7 +2734,7 @@ function Hooks() {
 
 Latency: microseconds. Failure mode: thrown exception → failurePolicy
 (block | allow | warn). Right for slack-approval, rate-limit,
-memory-injection — primitives that ship with every Phantom deploy.`}</Pre>
+memory-injection — primitives that ship with every Guardian deploy.`}</Pre>
 
  <div style={{ marginTop: 14, marginBottom: 4 }}>
  <strong>http</strong>
@@ -2770,7 +2770,7 @@ timeoutMs (default 5s) or failurePolicy fires.`}</Pre>
 Latency: 20-50ms subprocess spawn + handler runtime. Right for
 operator-maintained policy scripts (a Python policy engine, a
 shell script that calls LDAP, etc.). Subprocess can use any
-deps — Phantom doesn't care.`}</Pre>
+deps — Guardian doesn't care.`}</Pre>
 
  <div style={{ marginTop: 14, marginBottom: 4 }}>
  <strong>plugin</strong>
@@ -2976,7 +2976,7 @@ function PlanMode() {
  </SubSection>
  <SubSection icon="psychology" title="Per-turn, not persistent">
  <p>
- Phantom&apos;s plan mode is per-turn (slash command on a
+ Guardian&apos;s plan mode is per-turn (slash command on a
  specific message), not a workspace-wide setting. Rationale: a
  permanent setting trains operators to dismiss every plan card;
  a per-turn opt-in keeps friction proportional to operator
@@ -3123,7 +3123,7 @@ function ConnectorsLifecycleSvg() {
  /app/bundle/connectors/&lt;id&gt;/connector.yaml
  </text>
  <text x="280" y="232" fill="#64748b" fontSize="9" textAnchor="middle" fontFamily="ui-monospace, monospace">
- baked into phantom-agent image · COPY at build time
+ baked into guardian-agent image · COPY at build time
  </text>
 
  {/* Arrow: bundle author → bundle YAML */}
@@ -3138,7 +3138,7 @@ function ConnectorsLifecycleSvg() {
  /app/data/user_connectors/&lt;id&gt;/connector.yaml
  </text>
  <text x="820" y="232" fill="#64748b" fontSize="9" textAnchor="middle" fontFamily="ui-monospace, monospace">
- phantom_mcp_data volume · persistent across upgrades
+ guardian_mcp_data volume · persistent across upgrades
  </text>
 
  {/* Arrow: user upload → user YAML */}
@@ -3242,10 +3242,10 @@ function ConnectorsLifecycleSvg() {
  6. SPAWN
  </text>
 
- {/* phantom-updater */}
+ {/* guardian-updater */}
  <rect x="120" y="586" width="280" height="76" rx="10" fill="#1a0a2e" stroke="#c084fc" strokeWidth="1.5" />
  <text x="260" y="608" fill="#e5e7eb" fontSize="12" fontWeight="600" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif">
- phantom-updater
+ guardian-updater
  </text>
  <text x="260" y="626" fill="#94a3b8" fontSize="10" textAnchor="middle" fontFamily="ui-monospace, monospace">
  _connector_image_ref(id, version)
@@ -3260,7 +3260,7 @@ function ConnectorsLifecycleSvg() {
  {/* Per-instance container */}
  <rect x="540" y="586" width="440" height="76" rx="10" fill="#2a1238" stroke="#c084fc" strokeWidth="1.5" />
  <text x="760" y="608" fill="#e5e7eb" fontSize="12" fontWeight="600" textAnchor="middle" fontFamily="ui-sans-serif, system-ui, sans-serif">
- phantom-connector-&lt;id&gt;-&lt;name&gt;
+ guardian-connector-&lt;id&gt;-&lt;name&gt;
  </text>
  <text x="760" y="626" fill="#94a3b8" fontSize="10" textAnchor="middle" fontFamily="ui-monospace, monospace">
  FastMCP server on :9000 · reads secrets via SecretStoreReader
@@ -3306,7 +3306,7 @@ function ConnectorsLifecycleSvg() {
  tool call: cortex-docs/cortex_search → look up container_url in instances.db
  </text>
  <text x="550" y="770" fill="#94a3b8" fontSize="10" textAnchor="middle" fontFamily="ui-monospace, monospace">
- → open MCP-over-HTTP session to http://phantom-connector-&lt;id&gt;-&lt;name&gt;:9000
+ → open MCP-over-HTTP session to http://guardian-connector-&lt;id&gt;-&lt;name&gt;:9000
  </text>
  <text x="550" y="784" fill="#64748b" fontSize="9" textAnchor="middle" fontFamily="ui-monospace, monospace">
  errors classified → state machine: connected | failed | needs-auth
@@ -3327,7 +3327,7 @@ function ConnectorsDesign() {
  >
  <p>
  A <Term>connector</Term> is a versioned spec (
- <Code>connector.yaml</Code>) describing how Phantom integrates with
+ <Code>connector.yaml</Code>) describing how Guardian integrates with
  one external system — its tools, its config schema, its secrets,
  its OCI image. An <Term>instance</Term> is a configured deployment
  of a connector — a specific tenant/account with its own credentials
@@ -3339,8 +3339,8 @@ function ConnectorsDesign() {
  The system has <strong>two origin paths</strong> for connectors
  (bundle-shipped vs operator-uploaded), <strong>five storage layers</strong>{" "}
  (YAML on disk, marketplace.db, instances.db, SecretStore,
- phantom-updater&apos;s docker daemon state), and{" "}
- <strong>three runtime actors</strong> (the agent&apos;s MCP, phantom-
+ guardian-updater&apos;s docker daemon state), and{" "}
+ <strong>three runtime actors</strong> (the agent&apos;s MCP, guardian-
  updater, and per-instance containers). The diagram below shows how
  they fit together; the subsections after it walk each step.
  </p>
@@ -3358,7 +3358,7 @@ function ConnectorsDesign() {
  <p className="text-xs text-on-surface-variant/70 mt-3 italic">
  Two origin paths feed one schema validator → one catalog → one
  install table. Instance creation forks the path: config goes to
- instances.db, secrets go to SecretStore, and phantom-updater
+ instances.db, secrets go to SecretStore, and guardian-updater
  derives the image ref + spawns a per-instance container. The
  agent&apos;s connector-loader proxies tool calls over MCP-over-
  HTTP to the right instance container at runtime.
@@ -3375,15 +3375,15 @@ function ConnectorsDesign() {
 ──────                                  ───────────────
 Path:   bundles/spark/connectors/<id>/  Path:   /app/data/user_connectors/<id>/
         connector.yaml                          connector.yaml
-Origin: ships in the phantom-agent      Origin: POST /api/v1/marketplace/upload
+Origin: ships in the guardian-agent      Origin: POST /api/v1/marketplace/upload
         image (Dockerfile COPY)                 (multipart from /connectors UI)
 Image:  derived at runtime from         Image:  REQUIRED — operator declares
         digest manifest:                        an OCI ref in the YAML:
         ghcr.io/<owner>/                          image: ghcr.io/your-org/
-          phantom-connector-<id>                          your-connector:v1.2
-          @\${DIGEST_PHANTOM_CONNECTOR_<ID>}
-        (read from /host/.env by                 phantom-updater pulls this URL
-         phantom-updater at startup)             directly.
+          guardian-connector-<id>                          your-connector:v1.2
+          @\${DIGEST_GUARDIAN_CONNECTOR_<ID>}
+        (read from /host/.env by                 guardian-updater pulls this URL
+         guardian-updater at startup)             directly.
 Schema: bundle-validates at MCP boot    Schema: validates at upload time
         via validate_connector_spec             (POST endpoint), again at next
         (jsonschema)                            MCP boot.
@@ -3443,7 +3443,7 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  </td>
  <td className="py-2 px-2 align-top">
  Baked at <Code>docker build</Code>. Replaced on every
- phantom-agent image upgrade.
+ guardian-agent image upgrade.
  </td>
  </tr>
  <tr style={{ borderBottom: "0.5px solid var(--glass-border)" }}>
@@ -3458,11 +3458,11 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  via the marketplace upload form).
  </td>
  <td className="py-2 px-2 align-top font-mono text-on-surface-variant">
- phantom_mcp_data volume
+ guardian_mcp_data volume
  </td>
  <td className="py-2 px-2 align-top">
  Persistent across upgrades. Cleared by{" "}
- <Code>phantom-factory-reset</Code> only.
+ <Code>guardian-factory-reset</Code> only.
  </td>
  </tr>
  <tr style={{ borderBottom: "0.5px solid var(--glass-border)" }}>
@@ -3475,7 +3475,7 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  No config or secrets here.
  </td>
  <td className="py-2 px-2 align-top font-mono text-on-surface-variant">
- sqlite in phantom_mcp_data
+ sqlite in guardian_mcp_data
  </td>
  <td className="py-2 px-2 align-top">
  Persistent. Cleared by factory-reset. Survives both
@@ -3490,10 +3490,10 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  Per-instance non-secret config (parsed from the operator&apos;s
  setup form), state (connected/failed/etc), and{" "}
  <Code>container_url</Code> (compose-DNS name set by
- phantom-updater after start).
+ guardian-updater after start).
  </td>
  <td className="py-2 px-2 align-top font-mono text-on-surface-variant">
- sqlite in phantom_mcp_data
+ sqlite in guardian_mcp_data
  </td>
  <td className="py-2 px-2 align-top">
  Persistent. Surveys container lifecycle independently:
@@ -3509,15 +3509,15 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  Per-instance secrets keyed by{" "}
  <Code>connectors/&lt;id&gt;/instances/&lt;name&gt;/&lt;slot&gt;</Code>.
  AES-GCM at rest with KEK derived via PBKDF2 from{" "}
- <Code>PHANTOM_SECRET_KEK</Code> (lives in <Code>.env</Code>).
+ <Code>GUARDIAN_SECRET_KEK</Code> (lives in <Code>.env</Code>).
  </td>
  <td className="py-2 px-2 align-top font-mono text-on-surface-variant">
- dir tree in phantom_mcp_data
+ dir tree in guardian_mcp_data
  </td>
  <td className="py-2 px-2 align-top">
  Persistent. <strong>Lose the KEK and ALL secrets are
  unrecoverable</strong> — back up{" "}
- <Code>PHANTOM_SECRET_KEK</Code> with your other deployment
+ <Code>GUARDIAN_SECRET_KEK</Code> with your other deployment
  credentials.
  </td>
  </tr>
@@ -3531,7 +3531,7 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  color: "#94a3b8",
  }}
  >
- <strong>Note:</strong> the phantom-updater&apos;s docker daemon
+ <strong>Note:</strong> the guardian-updater&apos;s docker daemon
  is technically a sixth store (per-instance container state).
  It&apos;s ephemeral — containers can be killed + recreated and
  the agent reconciles from <Code>instances.db</Code> +{" "}
@@ -3550,20 +3550,20 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  </p>
  <ol className="list-decimal pl-5 space-y-2 text-sm">
  <li>
- <strong>Author</strong> — Phantom maintainer writes{" "}
+ <strong>Author</strong> — Guardian maintainer writes{" "}
  <Code>bundles/spark/connectors/cortex-docs/connector.yaml</Code>{" "}
  + the implementation in <Code>src/connector.py</Code>. PR lands;
- release.yml builds <Code>phantom-connector-cortex-docs</Code>{" "}
+ release.yml builds <Code>guardian-connector-cortex-docs</Code>{" "}
  image at this version&apos;s digest + writes{" "}
- <Code>DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS</Code> into the
+ <Code>DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS</Code> into the
  release manifest.
  </li>
  <li>
  <strong>Customer install</strong> — operator runs
- <Code> phantom-installer</Code>. installer pulls phantom-agent
+ <Code> guardian-installer</Code>. installer pulls guardian-agent
  (which bakes <Code>bundles/spark/connectors/</Code> at{" "}
  <Code>/app/bundle/</Code>) + writes the digest manifest into{" "}
- <Code>/opt/phantom/.env</Code>. MCP boots,{" "}
+ <Code>/opt/guardian/.env</Code>. MCP boots,{" "}
  <Code>_scan_catalogue</Code> validates the YAML against
  <Code> connector.schema.json</Code>, registers the connector in
  the in-memory catalog.
@@ -3598,28 +3598,28 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  <li>
  <strong>Container spawn</strong> — MCP reads the connector&apos;s
  runtimeMapping.style (must be <Code>container</Code>){" "}
- → POSTs to phantom-updater&apos;s
+ → POSTs to guardian-updater&apos;s
  <Code> /api/v1/connectors/cortex-docs/instances/&lt;name&gt;/start</Code>.{" "}
- phantom-updater derives image ref via{" "}
+ guardian-updater derives image ref via{" "}
  <Code>_connector_image_ref</Code> (reads{" "}
- <Code>DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS</Code> from{" "}
+ <Code>DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS</Code> from{" "}
  <Code>/host/.env</Code> — moved here from{" "}
  <Code>os.environ</Code> to a 30s-cached file read), then{" "}
  <Code>docker_run(image, name, network, volume)</Code>.
  </li>
  <li>
  <strong>Container init</strong> — the spawned{" "}
- <Code>phantom-connector-cortex-docs-&lt;name&gt;</Code> container
+ <Code>guardian-connector-cortex-docs-&lt;name&gt;</Code> container
  reads its instance config + secrets from{" "}
  <Code>/app/data</Code> (mounted read-only) via the{" "}
  <Code>SecretStoreReader</Code> (decrypts using{" "}
- <Code>PHANTOM_SECRET_KEK</Code> from env). Starts a FastMCP
+ <Code>GUARDIAN_SECRET_KEK</Code> from env). Starts a FastMCP
  server on :9000.
  </li>
  <li>
- <strong>Container URL callback</strong> — phantom-updater POSTs
+ <strong>Container URL callback</strong> — guardian-updater POSTs
  the resolved DNS{" "}
- (<Code>http://phantom-connector-cortex-docs-&lt;name&gt;:9000</Code>) back to{" "}
+ (<Code>http://guardian-connector-cortex-docs-&lt;name&gt;:9000</Code>) back to{" "}
  <Code>/api/v1/instances/&lt;id&gt;/container_url</Code>; the agent
  stores it in <Code>instances.db</Code> + transitions status to{" "}
  <Code>connected</Code> on first successful probe.
@@ -3880,7 +3880,7 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  <a href="#image-pinning" className="link">
  Image Digest Pinning
  </a>{" "}
- — how DIGEST_PHANTOM_CONNECTOR_* values get baked into{" "}
+ — how DIGEST_GUARDIAN_CONNECTOR_* values get baked into{" "}
  <Code>/host/.env</Code> at runtime-read time.
  </li>
  <li>
@@ -3941,7 +3941,7 @@ disabled → pending (operator re-enables)`}</Pre>
  <li>
  <Code>POST /api/v1/connectors/{`{id}`}/_record_success | _record_failure</Code>{" "}
  — internal endpoints the chat-route hits per tool dispatch.
- Underscore prefix flags them as intra-Phantom.
+ Underscore prefix flags them as intra-Guardian.
  </li>
  <li>
  <Code>connector_auth_required</Code> SSE event — emitted to
@@ -4068,7 +4068,7 @@ function Plugins() {
  return (
  <Section id="plugins" icon="extension" title="Plugin System">
  <p>
- The plugin system makes Phantom a platform: drop a directory
+ The plugin system makes Guardian a platform: drop a directory
  under <Code>bundles/spark/plugins/&lt;name&gt;/</Code> with a{" "}
  <Code>manifest.yaml</Code> declaring contributions; restart or
  click Reload; the plugin&apos;s skills, scenarios, memory
@@ -4130,22 +4130,22 @@ agents: # agent definitions contributed to /agents
  directories. The <strong>entry-point distributable plugin
  system</strong> covers pip-installable Python packages that
  register contributions via{" "}
- <Code>[project.entry-points.&quot;phantom.*&quot;]</Code>{" "}
+ <Code>[project.entry-points.&quot;guardian.*&quot;]</Code>{" "}
  stanzas in their <Code>pyproject.toml</Code>. Five reserved
- groups: <Code>phantom.skills</Code>,{" "}
- <Code>phantom.connectors</Code>, <Code>phantom.hooks</Code>,{" "}
- <Code>phantom.scanners</Code>, <Code>phantom.providers</Code>.
+ groups: <Code>guardian.skills</Code>,{" "}
+ <Code>guardian.connectors</Code>, <Code>guardian.hooks</Code>,{" "}
+ <Code>guardian.scanners</Code>, <Code>guardian.providers</Code>.
  </p>
  <p style={{ marginTop: 12 }}>
  Discovery is implemented in{" "}
  <Code>bundles/spark/mcp/src/usecase/plugin_entry_points.py</Code>:
- walks <Code>importlib.metadata.entry_points(group=&quot;phantom.*&quot;)</Code>{" "}
+ walks <Code>importlib.metadata.entry_points(group=&quot;guardian.*&quot;)</Code>{" "}
  at MCP startup, logs the catalog. Contributed
- handlers in the <Code>phantom.hooks</Code> group are{" "}
+ handlers in the <Code>guardian.hooks</Code> group are{" "}
  <strong>callable</strong> via the new <Code>plugin</Code>{" "}
  hook transport — see <a href="#hooks-transport-types" className="link">the Hook System section</a> for the cross-language
  invocation bridge. Other group contributions (skills,
- connectors, scanners, providers) still need a phantom-agent
+ connectors, scanners, providers) still need a guardian-agent
  restart to wire into their respective registries.
  </p>
  <p style={{ marginTop: 12 }}>
@@ -4175,7 +4175,7 @@ agents: # agent definitions contributed to /agents
  install form + per-row Uninstall buttons. Newly-installed
  packages&apos; entry-points appear in the right group after
  the auto-refresh; their CONTRIBUTED handlers become callable
- only after the next phantom-agent restart (the in-process
+ only after the next guardian-agent restart (the in-process
  plugin caches don&apos;t flush on install).
  </p>
  </SubSection>
@@ -4255,10 +4255,10 @@ function Polish() {
  <SubSection icon="translate" title="Audit event-name aliases">
  <p>
  <Code>lib/audit-event-names.ts</Code> bidirectional table
- mapping phantom-internal action names to OTel-conventional
+ mapping guardian-internal action names to OTel-conventional
  dot-namespaced form (<Code>chat_compaction_end</Code> →{" "}
- <Code>agent.context.compaction.completed</Code>). Phantom
- continues writing the phantom names as canonical; the
+ <Code>agent.context.compaction.completed</Code>). Guardian
+ continues writing the guardian names as canonical; the
  alias table is consultative for downstream observability
  forwarders (Datadog, OTel collector).
  </p>
@@ -4282,7 +4282,7 @@ function Subagents() {
  return (
  <Section id="subagents" icon="groups" title="Subagents & Agent Definitions">
  <p>
- Subagents are Phantom&apos;s foreground delegation primitive:
+ Subagents are Guardian&apos;s foreground delegation primitive:
  the parent agent dispatches a scoped child with its own
  system prompt, tool catalogue, and transcript. The model
  invokes the synthetic <Code>subagent_create</Code> tool with{" "}
@@ -4459,7 +4459,7 @@ function SubstrateComposition() {
  return (
  <Section id="substrate-composition" icon="diversity_3" title="Substrate Composition">
  <p>
- Phantom&apos;s subsystems compose rather than duplicate. Each
+ Guardian&apos;s subsystems compose rather than duplicate. Each
  substrate contributes one capability; higher-level features sit
  on top by reusing the substrate&apos;s primitives. New features
  land mostly as glue rather than new infrastructure.
@@ -4544,7 +4544,7 @@ function AuditSchema() {
  status TEXT, -- 'success' | 'failure' | 'skipped'
  duration_ms INTEGER, -- nullable
  metadata_json TEXT NOT NULL, -- action-specific JSON (NEVER secret VALUES)
- trigger TEXT -- X-Phantom-Trigger header
+ trigger TEXT -- X-Guardian-Trigger header
 );
 CREATE INDEX idx_audit_ts ON audit_events(ts);
 CREATE INDEX idx_audit_actor ON audit_events(actor);
@@ -4631,7 +4631,7 @@ function AuditEvents() {
  <SubSection icon="translate" title="OTel-conventional aliases">
  <p>
  <Code>lib/audit-event-names.ts:AUDIT_EVENT_NAME_ALIASES</Code>{" "}
- maps phantom names to dot-namespaced form for downstream
+ maps guardian names to dot-namespaced form for downstream
  observability forwarders. Examples:{" "}
  <Code>chat_compaction_end</Code> →{" "}
  <Code>agent.context.compaction.completed</Code>;{" "}
@@ -4651,10 +4651,10 @@ function RestApi() {
  The MCP side requires <Code>Authorization: Bearer $MCP_TOKEN</Code>{" "}
  on every <Code>/api/v1/*</Code> call. The agent-side proxies
  at <Code>/api/agent/*</Code> are gated by the operator&apos;s
- <Code>phantom_session</Code> cookie (server-side validated at
+ <Code>guardian_session</Code> cookie (server-side validated at
  the edge middleware — see{" "}
  <Link href="#authentication" className="link">Authentication</Link>).
- The endpoints below are the surfaces unique to Phantom&apos;s
+ The endpoints below are the surfaces unique to Guardian&apos;s
  control plane (the broader xlog GraphQL surface is documented
  in the Foundation section).
  </p>
@@ -4710,7 +4710,7 @@ function RestApi() {
  <p>
  Every <Code>/api/v1/...</Code> endpoint above has a sibling{" "}
  <Code>/api/agent/...</Code> proxy in the Next.js agent. The
- proxy is gated by the <Code>phantom_session</Code> cookie at
+ proxy is gated by the <Code>guardian_session</Code> cookie at
  the edge middleware and forwards via the bearer-authed{" "}
  <Code>callMcpServer()</Code>. UI pages hit the agent paths.
  </p>
@@ -4809,7 +4809,7 @@ function BootLifecycle() {
  KBs reconciled by source-hash) and what gates the agent UI from
  rendering before the runtime is ready.
  </p>
- <SubSection icon="schedule" title="phantom-mcp boot sequence">
+ <SubSection icon="schedule" title="guardian-mcp boot sequence">
  <Pre>{`1. entrypoint.sh runs:
    - skills bootstrap (marker-driven auto-merge):
        FORCE_SKILLS_SYNC=1   → merge defaults; stamp marker
@@ -4817,7 +4817,7 @@ function BootLifecycle() {
        marker missing/stale  → MERGE defaults; stamp marker
                                (the per-release auto-rollout path)
        marker matches        → no-op (operator deletions stick)
-     marker file: phantom_mcp_skills/.seeded_version
+     marker file: guardian_mcp_skills/.seeded_version
 2. python -m src.main starts:
    - load config (pydantic-settings; env via validation_alias)
    - build FastMCP instance
@@ -4829,7 +4829,7 @@ function BootLifecycle() {
 3. /ping/ becomes 200; /health/full becomes 200`}</Pre>
  <p>
  The skills bootstrap uses a per-release marker
- (PHANTOM_VERSION stamped into <Code>.seeded_version</Code> on
+ (GUARDIAN_VERSION stamped into <Code>.seeded_version</Code> on
  every successful merge) so the entrypoint detects &ldquo;this
  volume hasn&apos;t seen the current release&apos;s defaults
  yet&rdquo; and auto-merges. The merge is strictly additive:{" "}
@@ -4842,7 +4842,7 @@ function BootLifecycle() {
  default set).
  </p>
  </SubSection>
- <SubSection icon="schedule" title="phantom-agent boot sequence">
+ <SubSection icon="schedule" title="guardian-agent boot sequence">
  <Pre>{`1. Next.js boots; AuthGate wraps every page
 2. /api/agent/setup-status checks runtime config:
    - reads /app/runtime/setup.json
@@ -4907,12 +4907,12 @@ function Authentication() {
  </p>
  <AuthTopology />
  <ul className="list-disc pl-6 space-y-1">
- <li><strong>USER tier</strong> — operator&apos;s browser. Untrusted from the server&apos;s POV; the only credential it carries is the <Code>phantom_session</Code> cookie (32-byte random, HttpOnly, Secure, SameSite=Strict, 2-hour Max-Age).</li>
+ <li><strong>USER tier</strong> — operator&apos;s browser. Untrusted from the server&apos;s POV; the only credential it carries is the <Code>guardian_session</Code> cookie (32-byte random, HttpOnly, Secure, SameSite=Strict, 2-hour Max-Age).</li>
  <li><strong>EDGE tier (in-container)</strong> — TLS terminates at <Code>tls-proxy.js</Code> on :3000 and forwards to Next.js on :3001 (plain HTTP, loopback). The four <Code>/api/auth/*</Code> route handlers (<Code>login</Code>, <Code>logout</Code>, <Code>status</Code>, <Code>change-password</Code>) live inside the Next.js process and call MCP for everything storage-related.</li>
  <li><strong>AUTH SERVICE tier (in-container, separate process)</strong> — embedded MCP, reached at <Code>https://127.0.0.1:8080</Code> with bearer <Code>MCP_TOKEN</Code>. Three layers internally: <Code>api/ui_auth.py</Code> (HTTP routes) → <Code>usecase/auth_store.py</Code> (orchestration: seeding, sessions, the credentials_changed flag) → <Code>usecase/ui_auth.py</Code> (crypto envelope: PBKDF2-HMAC-SHA256 at 600k iters).</li>
  <li><strong>STORAGE tier (single source of truth)</strong> — exactly two persisted-state stores. <Code>SecretStore</Code> holds the password hash + the credentials_changed flag (AES-256-GCM at rest, KEK-derived). <Code>auth_sessions.db</Code> (SQLite) holds session token HASHES (never raw tokens) + their expiry / revoked state.</li>
  <li><strong>AUDIT log (observer)</strong> — every auth action emits an <Code>audit_events</Code> row. Write-only from the service&apos;s POV; queryable separately via the observability surfaces.</li>
- <li><strong>CLI reset (out-of-band bypass)</strong> — <Code>docker exec phantom_agent node /app/cli/reset-admin.mjs</Code> skips the browser + Next.js tiers entirely. Trust boundary: host shell access (anyone with <Code>docker exec</Code> already has root inside the container, so the bypass is no privilege escalation). Reads <Code>MCP_TOKEN</Code> from <Code>/proc/1/environ</Code> and POSTs directly to the service tier&apos;s <Code>/admin_reset</Code> route.</li>
+ <li><strong>CLI reset (out-of-band bypass)</strong> — <Code>docker exec guardian_agent node /app/cli/reset-admin.mjs</Code> skips the browser + Next.js tiers entirely. Trust boundary: host shell access (anyone with <Code>docker exec</Code> already has root inside the container, so the bypass is no privilege escalation). Reads <Code>MCP_TOKEN</Code> from <Code>/proc/1/environ</Code> and POSTs directly to the service tier&apos;s <Code>/admin_reset</Code> route.</li>
  </ul>
  </SubSection>
 
@@ -4930,7 +4930,7 @@ auth_sessions.db  (DATA_ROOT/ — SQLite, per-row indexed)
  └── sessions(token_hash PK, username, created_at_ms, expires_at_ms,
               user_agent_hash, revoked_at_ms)
 
-Cookie: phantom_session=<32B random>; HttpOnly; Secure; SameSite=Strict;
+Cookie: guardian_session=<32B random>; HttpOnly; Secure; SameSite=Strict;
         Max-Age=7200
 `}</Pre>
  <ul className="list-disc pl-6 space-y-1">
@@ -4947,9 +4947,9 @@ Cookie: phantom_session=<32B random>; HttpOnly; Secure; SameSite=Strict;
  <Code>/api/agent/*</Code>, <Code>/api/skills/*</Code>) accepts an{" "}
  <strong>API-key bearer</strong> for scripts, schedulers, CI, and any
  programmatic integration. Operators mint scoped, revocable keys in{" "}
- <Code>/api-keys</Code> (shape <Code>phantom_ak_&lt;id&gt;_&lt;secret&gt;</Code>;
+ <Code>/api-keys</Code> (shape <Code>guardian_ak_&lt;id&gt;_&lt;secret&gt;</Code>;
  the DB stores only <Code>sha256(secret)</Code>, never the raw key).
- Send <Code>Authorization: Bearer phantom_ak_…</Code>.
+ Send <Code>Authorization: Bearer guardian_ak_…</Code>.
  </p>
  <ul className="list-disc pl-6 space-y-1">
  <li><strong>Coarse scopes</strong>: <Code>agent:read</Code> (GET routes + chat read), <Code>agent:write</Code> (mutations + <Code>/api/chat</Code>), <Code>agent:*</Code> (both). <Code>*</Code> remains full admin. Chosen per key at mint time.</li>
@@ -4981,7 +4981,7 @@ Cookie: phantom_session=<32B random>; HttpOnly; Secure; SameSite=Strict;
 ];`}</Pre>
  <p>
  Each request: read{" "}
- <Code>phantom_session</Code> from cookies; call{" "}
+ <Code>guardian_session</Code> from cookies; call{" "}
  <Code>validateSession(token)</Code> (the same path{" "}
  <Code>/api/auth/status</Code> uses, with the 30s positive cache
  from <Code>lib/auth-store.ts</Code>); absence OR invalid value
@@ -5026,26 +5026,26 @@ Cookie: phantom_session=<32B random>; HttpOnly; Secure; SameSite=Strict;
  <Code>auth_store.seed_admin_defaults_if_empty()</Code>. If the
  SecretStore has no <Code>auth.v1</Code> for <Code>admin</Code>, it
  writes the PBKDF2 hash of{" "}
- <Code>$PHANTOM_DEFAULT_ADMIN_PASSWORD</Code> (sourced from{" "}
- <Code>/opt/phantom/.env</Code>) and sets{" "}
+ <Code>$GUARDIAN_DEFAULT_ADMIN_PASSWORD</Code> (sourced from{" "}
+ <Code>/opt/guardian/.env</Code>) and sets{" "}
  <Code>credentials_changed=false</Code>. Idempotent on subsequent
  boots.
  </p>
  <p>
- The default password does not live in the phantom-agent image.
+ The default password does not live in the guardian-agent image.
  The installer auto-generates a random per-install value into{" "}
  <Code>.env</Code> on first install (or back-fills it on upgrade
  if missing) per the &ldquo;no credentials in any image&rdquo;
  rule. The seed path fails-loud if the env var is unset on a
  fresh install (refuses to seed an empty hash); operators recover
  by re-running the installer or via{" "}
- <Code>sudo /opt/phantom/phantom-reset-admin-password</Code>.
+ <Code>sudo /opt/guardian/guardian-reset-admin-password</Code>.
  </p>
  <AuthLoginFlow />
  <ul className="list-disc pl-6 space-y-1">
- <li><Code>POST /api/auth/login</Code> validates username against the baked <Code>ADMIN_USERNAME</Code> constant. Phantom is single-user; only the admin account exists.</li>
+ <li><Code>POST /api/auth/login</Code> validates username against the baked <Code>ADMIN_USERNAME</Code> constant. Guardian is single-user; only the admin account exists.</li>
  <li>In-memory per-source-IP rate limit: 5 failures / 60s → 60s lockout. Resets on container restart. Audited via <Code>login_failed</Code> events.</li>
- <li>Successful verify mints a random 32-byte URL-safe token, hashes it, stores the hash in <Code>auth_sessions.db</Code>, returns the raw token in the JSON body, and the Next.js login route wraps it in the <Code>phantom_session</Code> cookie with the security attributes listed above.</li>
+ <li>Successful verify mints a random 32-byte URL-safe token, hashes it, stores the hash in <Code>auth_sessions.db</Code>, returns the raw token in the JSON body, and the Next.js login route wraps it in the <Code>guardian_session</Code> cookie with the security attributes listed above.</li>
  <li>Audit row: <Code>login_success</Code> with the resolved <Code>credentials_changed</Code> in metadata so the UI knows whether to redirect to <Code>/profile</Code>.</li>
  </ul>
  </SubSection>
@@ -5060,7 +5060,7 @@ Cookie: phantom_session=<32B random>; HttpOnly; Secure; SameSite=Strict;
  <ul className="list-disc pl-6 space-y-1">
  <li><Code>POST /api/auth/change-password</Code> reads the session cookie, validates it via <Code>auth-store.changePassword()</Code> which calls MCP <Code>POST /api/v1/ui/auth/change_password</Code>.</li>
  <li>MCP verifies <Code>current_password</Code> against the stored hash, writes the new hash, sets <Code>credentials_changed=true</Code>, and revokes ALL active sessions for the user.</li>
- <li>Server response carries cleared <Code>phantom_session</Code> cookie. The operator is force-logged-out on this device. Other tabs / devices get a 401 on their next API call (the 30s positive-validation cache on the Next.js side means up to 30s of stale-valid before the revocation takes effect everywhere).</li>
+ <li>Server response carries cleared <Code>guardian_session</Code> cookie. The operator is force-logged-out on this device. Other tabs / devices get a 401 on their next API call (the 30s positive-validation cache on the Next.js side means up to 30s of stale-valid before the revocation takes effect everywhere).</li>
  <li>A security notification is posted to <Code>/notifications</Code>: <em>&ldquo;Your password was changed at &lt;ts&gt;&rdquo;</em>. Canary if someone else changes the password.</li>
  <li>Audit row: <Code>password_changed_ui</Code> with the sessions-revoked count.</li>
  </ul>
@@ -5075,19 +5075,19 @@ Cookie: phantom_session=<32B random>; HttpOnly; Secure; SameSite=Strict;
  consistent invocation shape:
  </p>
  <AuthCliResetFlow />
- <Pre>{`# Canonical path (script lives at /opt/phantom/ on every install):
-sudo /opt/phantom/phantom-reset-admin-password
+ <Pre>{`# Canonical path (script lives at /opt/guardian/ on every install):
+sudo /opt/guardian/guardian-reset-admin-password
 
 # Legacy invocation still works (the wrapper above just execs into this):
-docker exec -it phantom_agent node /app/cli/reset-admin.mjs
+docker exec -it guardian_agent node /app/cli/reset-admin.mjs
 `}</Pre>
  <ul className="list-disc pl-6 space-y-1">
- <li><strong>Host script is a thin wrapper</strong>: validates the agent container is running, then exec-replaces itself with <Code>docker exec -it phantom_agent node /app/cli/reset-admin.mjs</Code>. Credential-write logic stays inside the container (single code path with /profile&apos;s change-password flow); the host script just gives operators a memorable command.</li>
+ <li><strong>Host script is a thin wrapper</strong>: validates the agent container is running, then exec-replaces itself with <Code>docker exec -it guardian_agent node /app/cli/reset-admin.mjs</Code>. Credential-write logic stays inside the container (single code path with /profile&apos;s change-password flow); the host script just gives operators a memorable command.</li>
  <li>CLI presents a <Code>Type RESET to continue</Code> ceremony to prevent fat-finger triggers, then prompts for new password (terminal echo masked) + confirmation.</li>
  <li>Reads <Code>MCP_TOKEN</Code> from <Code>/proc/1/environ</Code> inside the container (same pattern as the smoke-test probes documented in CLAUDE.md). Calls MCP <Code>POST /api/v1/ui/auth/admin_reset</Code>.</li>
  <li>MCP overwrites the password hash, sets <Code>credentials_changed=true</Code>, revokes all sessions, and audits the action with <Code>actor=cli:&lt;hostname&gt;</Code> + action=<Code>password_changed_cli</Code>.</li>
- <li>CLI prints <Code>Restart the agent: docker compose restart phantom-agent</Code> on success. The operator does the restart — flushes any in-memory caches and forces clean state.</li>
- <li><strong>Companion utility</strong> — <Code>sudo /opt/phantom/phantom-factory-reset</Code> wipes ALL operator-state volumes + re-runs the installer. Use that when you want the customer-fresh blank-canvas state (not just a password reset). Preserves <Code>.env</Code> so KEK + registry creds survive across the reset.</li>
+ <li>CLI prints <Code>Restart the agent: docker compose restart guardian-agent</Code> on success. The operator does the restart — flushes any in-memory caches and forces clean state.</li>
+ <li><strong>Companion utility</strong> — <Code>sudo /opt/guardian/guardian-factory-reset</Code> wipes ALL operator-state volumes + re-runs the installer. Use that when you want the customer-fresh blank-canvas state (not just a password reset). Preserves <Code>.env</Code> so KEK + registry creds survive across the reset.</li>
  </ul>
  </SubSection>
 
@@ -5145,7 +5145,7 @@ secret_write                   system                 secret:/ui/auth/...     ha
  <ul className="list-disc pl-6 space-y-1">
  <li><strong>Symmetric counts as a reliability signal</strong>: <Code>session_created</Code> should equal <Code>session_deleted + session_revoked</Code> over any time window. Drift = leaked sessions and warrants investigation. Same logic for <Code>secret_write</Code> on the credentials_changed flag (should flip exactly once per password rotation).</li>
  <li><strong>Source attribution</strong>: the <Code>actor</Code> column distinguishes UI changes (<Code>user:&lt;username&gt;</Code>) from CLI resets (<Code>cli:&lt;hostname&gt;</Code>) from system internals (<Code>system</Code>). A <Code>password_changed_cli</Code> event with an unfamiliar hostname is the classic &ldquo;someone else SSH&apos;d into the box&rdquo; canary.</li>
- <li><strong>What feeds where</strong>: <Code>/observability/events</Code> shows the audit table directly. <Code>/observability/metrics</Code> exposes <Code>phantom_mcp_http_requests_total</Code> counters that include the auth route paths. <Code>/notifications</Code> surfaces the security canary &ldquo;Your password was changed at &lt;ts&gt;&rdquo; that ALSO fires on every password change (UI or CLI) so the operator gets a UI-level signal even when not actively watching observability.</li>
+ <li><strong>What feeds where</strong>: <Code>/observability/events</Code> shows the audit table directly. <Code>/observability/metrics</Code> exposes <Code>guardian_mcp_http_requests_total</Code> counters that include the auth route paths. <Code>/notifications</Code> surfaces the security canary &ldquo;Your password was changed at &lt;ts&gt;&rdquo; that ALSO fires on every password change (UI or CLI) so the operator gets a UI-level signal even when not actively watching observability.</li>
  <li><strong>What&apos;s deliberately NOT logged</strong>: raw passwords (never), raw session tokens (never — only the SHA-256 hash exists server-side), <Code>MCP_TOKEN</Code> (never), KEK material (never). Audit metadata is operator-readable; secrets are not.</li>
  </ul>
  </SubSection>
@@ -5170,7 +5170,7 @@ secret_write                   system                 secret:/ui/auth/...     ha
  <li><strong>UI</strong>: <Code>components/auth/auth-gate.tsx</Code> (server-side validation via /api/auth/status, redirects to /profile when credentials_changed=false), <Code>components/auth/login-screen.tsx</Code> (spark-style animated UI), <Code>app/profile/page.tsx</Code> (read-only username, banner + change form).</li>
  <li><strong>MCP side</strong>: <Code>bundles/spark/mcp/src/usecase/auth_store.py</Code> (sessions + flag + seeding) wraps <Code>usecase/ui_auth.py</Code> (PBKDF2 envelope). HTTP routes at <Code>api/ui_auth.py</Code>: <Code>/login</Code>, <Code>/logout</Code>, <Code>/session</Code>, <Code>/change_password</Code>, <Code>/admin_reset</Code>.</li>
  <li><strong>CLI</strong>: <Code>mcp/agent/cli/reset-admin.mjs</Code> (interactive prompts + ceremony, runs inside the agent container).</li>
- <li><strong>Host utilities</strong>: <Code>installer/phantom-reset-admin-password.sh</Code> (host wrapper around the CLI above), <Code>installer/phantom-factory-reset.sh</Code> (wipes phantom_* volumes + re-runs installer). Both embedded into the single-file <Code>phantom-installer</Code> binary via heredoc; both also copied verbatim into the multi-file install kit. After install, they live at <Code>/opt/phantom/phantom-reset-admin-password</Code> and <Code>/opt/phantom/phantom-factory-reset</Code>.</li>
+ <li><strong>Host utilities</strong>: <Code>installer/guardian-reset-admin-password.sh</Code> (host wrapper around the CLI above), <Code>installer/guardian-factory-reset.sh</Code> (wipes guardian_* volumes + re-runs installer). Both embedded into the single-file <Code>guardian-installer</Code> binary via heredoc; both also copied verbatim into the multi-file install kit. After install, they live at <Code>/opt/guardian/guardian-reset-admin-password</Code> and <Code>/opt/guardian/guardian-factory-reset</Code>.</li>
  </ul>
  </SubSection>
  </Section>
@@ -5183,7 +5183,7 @@ function SetupWiring() {
  return (
  <Section id="setup-wiring" icon="rocket_launch" title="Setup & First-Run Wiring">
  <p>
- Phantom comes up on first install with no operator clicks
+ Guardian comes up on first install with no operator clicks
  needed — the installer generates per-install credentials and
  the entrypoint seeds the stores at boot. Subsequent provider
  + connector configuration happens through dedicated UI surfaces,
@@ -5194,26 +5194,26 @@ function SetupWiring() {
 
  <SubSection icon="terminal" title="Installer-side: generate the .env">
  <p>
- The customer-facing installer binary (<Code>phantom-installer</Code>)
- writes <Code>/opt/phantom/.env</Code> on first run. The file
+ The customer-facing installer binary (<Code>guardian-installer</Code>)
+ writes <Code>/opt/guardian/.env</Code> on first run. The file
  carries:
  </p>
  <Pre>{`# Service credentials + the 5 core compose-substitution digests
-PHANTOM_DEFAULT_ADMIN_PASSWORD=<random-32-byte-base64>  # auto-generated, per-install
-PHANTOM_SECRET_KEK=<random-32-byte-base64>              # AES-256-GCM key encryption key
+GUARDIAN_DEFAULT_ADMIN_PASSWORD=<random-32-byte-base64>  # auto-generated, per-install
+GUARDIAN_SECRET_KEK=<random-32-byte-base64>              # AES-256-GCM key encryption key
 MCP_TOKEN=<random-32-byte-hex>                          # bearer for /api/v1/*
-PHANTOM_VERSION=<current-tag>                           # runtime version marker
-DIGEST_PHANTOM_AGENT=sha256:...                         # image-digest pinning per service
-DIGEST_PHANTOM_UPDATER=sha256:...
-DIGEST_PHANTOM_XLOG=sha256:...
-DIGEST_PHANTOM_CALDERA=sha256:...
-DIGEST_PHANTOM_BROWSER=sha256:...`}</Pre>
+GUARDIAN_VERSION=<current-tag>                           # runtime version marker
+DIGEST_GUARDIAN_AGENT=sha256:...                         # image-digest pinning per service
+DIGEST_GUARDIAN_UPDATER=sha256:...
+DIGEST_GUARDIAN_XLOG=sha256:...
+DIGEST_GUARDIAN_CALDERA=sha256:...
+DIGEST_GUARDIAN_BROWSER=sha256:...`}</Pre>
  <p>
  The <Code>.env</Code> file is owned by the customer. The
  installer never ships secrets in the image; everything sensitive
  lands here on the target host. A companion file{" "}
- <Code>/opt/phantom/connector-digests.env</Code> carries the
- per-connector image digests (read only by phantom-updater).
+ <Code>/opt/guardian/connector-digests.env</Code> carries the
+ per-connector image digests (read only by guardian-updater).
  See{" "}
  <Link href="#image-pinning" className="link">
  Image Digest Pinning
@@ -5224,7 +5224,7 @@ DIGEST_PHANTOM_BROWSER=sha256:...`}</Pre>
 
  <SubSection icon="play_arrow" title="First boot: entrypoint seeds the stores">
  <p>
- When the phantom-agent container starts for the first time, its{" "}
+ When the guardian-agent container starts for the first time, its{" "}
  <Code>entrypoint.sh</Code> walks an idempotent seed sequence
  BEFORE the Next.js + MCP processes accept traffic:
  </p>
@@ -5236,7 +5236,7 @@ DIGEST_PHANTOM_BROWSER=sha256:...`}</Pre>
  </li>
  <li>
  <strong>Skills volume merge</strong> — checks{" "}
- <Code>phantom_mcp_skills</Code> against the image-baked
+ <Code>guardian_mcp_skills</Code> against the image-baked
  default-skills tree. Per-release marker (
  <Code>.seeded_version</Code>) drives the auto-merge: image
  files copy in if new, operator edits stay. See{" "}
@@ -5250,7 +5250,7 @@ DIGEST_PHANTOM_BROWSER=sha256:...`}</Pre>
  <Code>auth_store.seed_admin_defaults_if_empty()</Code>. If
  the SecretStore has no <Code>auth.v1</Code> entry for{" "}
  <Code>admin</Code>, writes the PBKDF2-HMAC-SHA256 hash of{" "}
- <Code>$PHANTOM_DEFAULT_ADMIN_PASSWORD</Code> and sets{" "}
+ <Code>$GUARDIAN_DEFAULT_ADMIN_PASSWORD</Code> and sets{" "}
  <Code>credentials_changed=false</Code>. Idempotent — if the
  hash already exists, this is a no-op.
  </li>
@@ -5284,13 +5284,13 @@ DIGEST_PHANTOM_BROWSER=sha256:...`}</Pre>
  </p>
  <ul className="list-disc pl-5 space-y-1 text-sm">
  <li>
- Username: <Code>admin</Code> (the only account — Phantom is
+ Username: <Code>admin</Code> (the only account — Guardian is
  single-user)
  </li>
  <li>
  Password: the auto-generated value from{" "}
- <Code>PHANTOM_DEFAULT_ADMIN_PASSWORD</Code> in the install
- host&apos;s <Code>/opt/phantom/.env</Code>
+ <Code>GUARDIAN_DEFAULT_ADMIN_PASSWORD</Code> in the install
+ host&apos;s <Code>/opt/guardian/.env</Code>
  </li>
  </ul>
  <p>
@@ -5311,7 +5311,7 @@ DIGEST_PHANTOM_BROWSER=sha256:...`}</Pre>
 
  <SubSection icon="settings" title="Provider configuration">
  <p>
- Phantom needs at least one configured LLM provider to drive
+ Guardian needs at least one configured LLM provider to drive
  the chat agent. <Code>/providers</Code> is the configuration
  surface for Vertex AI (GCP service account) and Gemini API
  keys. The page wires to:
@@ -5363,15 +5363,15 @@ POST   /api/agent/providers/vertex/test -- probe credentials`}</Pre>
 
  <SubSection icon="restart_alt" title="Factory reset path">
  <p>
- The host-side <Code>phantom-factory-reset</Code> utility
- returns a Phantom install to shipped defaults: wipes the
+ The host-side <Code>guardian-factory-reset</Code> utility
+ returns a Guardian install to shipped defaults: wipes the
  SecretStore, the data root, the skills volume, and every
  connector instance + provider entry. Re-runs the entrypoint
  seed flow on next boot as if it were a fresh install.{" "}
  <Code>--dry-run</Code> prints what would be wiped without
  touching anything; <Code>--yes</Code> skips the interactive
  confirmation. The operator&apos;s <Code>.env</Code>{" "}
- (PHANTOM_DEFAULT_ADMIN_PASSWORD, KEK, digests) is preserved
+ (GUARDIAN_DEFAULT_ADMIN_PASSWORD, KEK, digests) is preserved
  so the post-reset stack comes up under the same identity. See{" "}
  <Link href="#authentication" className="link">
  Authentication → Factory reset
@@ -5389,7 +5389,7 @@ POST   /api/agent/providers/vertex/test -- probe credentials`}</Pre>
  <li><Code>mcp/agent/app/providers/page.tsx</Code> — provider config UI</li>
  <li><Code>mcp/agent/app/connectors/page.tsx</Code> — connector marketplace + instance config UI</li>
  <li><Code>mcp/agent/app/profile/page.tsx</Code> — password rotation UI</li>
- <li><Code>installer/templates/phantom-factory-reset</Code> — host-side reset utility</li>
+ <li><Code>installer/templates/guardian-factory-reset</Code> — host-side reset utility</li>
  </ul>
  </SubSection>
  </Section>
@@ -5623,7 +5623,7 @@ function KnowledgePipeline() {
     └── ...
 
 # Two KBs ship today:
-#   phantom-soc    — main reference content
+#   guardian-soc    — main reference content
 #   xql-examples   — 787 curated Cortex XQL / XSIAM queries for
 #                    RAG retrieval (787 entries:
 #                    158 hand-curated + live-tenant-validated
@@ -5646,7 +5646,7 @@ function KnowledgePipeline() {
  and runs cosine similarity against the KB&apos;s vector index.
  The xsiam connector wraps this in{" "}
  <Code>find_xql_examples_rag</Code> for natural-language XQL
- example retrieval; phantom-soc is queried whenever the agent
+ example retrieval; guardian-soc is queried whenever the agent
  needs conceptual context.
  </p>
  </SubSection>
@@ -5717,7 +5717,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
  <p>
  The MCP image builds skills into{" "}
  <Code>/app/skills-default/</Code>. Compose mounts a named
- volume <Code>phantom_mcp_skills</Code> at{" "}
+ volume <Code>guardian_mcp_skills</Code> at{" "}
  <Code>/app/skills</Code>. The entrypoint copies defaults into
  the volume only when the volume is empty; on subsequent boots
  it leaves the volume alone. <em>Operator edits to{" "}
@@ -5823,7 +5823,7 @@ downstream scenarios reuse — keeps cross-scenario telemetry coherent.
  </p>
  <p>
  The header carries just the operator-actionable affordances:
- Import + Create. Phantom is single-tenant; no workspace
+ Import + Create. Guardian is single-tenant; no workspace
  selector.
  </p>
  </SubSection>
@@ -6002,7 +6002,7 @@ Operator clicks Create Instance → /connectors → <id> → form
 POST /api/v1/instances → instances.py checks marketplace_store.is_installed
                        → 409 connector_not_installed if not (deny)
                        → otherwise InstanceStore.create writes row
-                       → phantom-updater starts per-instance container
+                       → guardian-updater starts per-instance container
                        → MCP's iter_registrations re-runs
                        → tools now advertise
             ↓
@@ -6028,7 +6028,7 @@ Agent's tool catalogue: <id>/<tool_name> entries appear`}</Pre>
  <ul className="list-disc pl-6 space-y-1">
  <li>Schema validation against <Code>connector.schema.json</Code> (same as bundle connectors).</li>
  <li>The declared <Code>id</Code> must not collide with a bundle id (409 <Code>id_collides_with_bundle</Code>) or an existing user id (409 <Code>id_already_exists</Code> — operator must DELETE first to replace).</li>
- <li>The YAML MUST declare an <Code>image</Code> field — the OCI reference to the operator&apos;s pre-published connector container (e.g. <Code>ghcr.io/your-org/your-connector:v1.0</Code>). phantom-updater pulls this image when instances are created.</li>
+ <li>The YAML MUST declare an <Code>image</Code> field — the OCI reference to the operator&apos;s pre-published connector container (e.g. <Code>ghcr.io/your-org/your-connector:v1.0</Code>). guardian-updater pulls this image when instances are created.</li>
  </ul>
  <p>
  On success the YAML is written to{" "}
@@ -6071,7 +6071,7 @@ Agent's tool catalogue: <id>/<tool_name> entries appear`}</Pre>
  <li><strong>Env-var-driven instance creation.</strong> <Code>_AUTO_MIGRATION</Code> deleted; the env vars (CALDERA_URL, PAPI_AUTH_HEADER, etc.) are no longer consulted for instance materialization.</li>
  <li><strong>Bundle connector deletion at runtime.</strong> DELETE on a bundle id returns 403. Use uninstall to hide it.</li>
  <li><strong>Bundle/user id sharing.</strong> User uploads cannot reuse a bundle id; upload rejected at validation time.</li>
- <li><strong>Image building inside Phantom.</strong> Users publish their connector container to any OCI registry first; Phantom only references the image. No <Code>docker build</Code> inside our containers.</li>
+ <li><strong>Image building inside Guardian.</strong> Users publish their connector container to any OCI registry first; Guardian only references the image. No <Code>docker build</Code> inside our containers.</li>
  </ul>
  </SubSection>
 
@@ -6118,7 +6118,7 @@ function DataSourcesMarketplace() {
  parses them cleanly — the vendor&apos;s own SIEM connector, a
  Splunk technology add-on, a Sentinel parser, an Elastic
  ingest pipeline, a custom Logstash filter, or any other
- platform&apos;s vendor-specific modeling rule. Phantom is
+ platform&apos;s vendor-specific modeling rule. Guardian is
  destination-neutral; the data sources marketplace produces
  wire-faithful events, and the receiving system decides how
  to parse them.
@@ -6144,7 +6144,7 @@ function DataSourcesMarketplace() {
 
  <SubSection icon="storefront" title="Two marketplaces, two storage homes">
  <p>
- Phantom ships two distinct marketplaces. Both live under the
+ Guardian ships two distinct marketplaces. Both live under the
  catalog side of the{" "}
  <Link href="#authentication" className="link">
  catalog/credential boundary
@@ -6264,12 +6264,12 @@ function DataSourcesMarketplace() {
     data_source.yaml
 
 /app/data/user_data_sources/               (operator-uploaded, writable,
-                                             persists via phantom_mcp_data volume)
+                                             persists via guardian_mcp_data volume)
   <operator-chosen-id>/
     data_source.yaml`}</Pre>
  <p>
  The bundled root ships in the agent image — one YAML per
- vendor-product pair, refreshed when Phantom releases. The
+ vendor-product pair, refreshed when Guardian releases. The
  user root is a writable mount; operators populate it via the
  upload flow.
  </p>
@@ -6562,7 +6562,7 @@ Step 1:   data_sources_list(filter="fortigate")
 Step 2:   data_sources_get_schema(data_source_id)
           → 176 fields (172 non-meta) with observable_overrides + XDM mappings
             ↓
-Step 3:   phantom_generate_fake_data_v2(
+Step 3:   guardian_generate_fake_data_v2(
             request_input={records=50, type="json", ...},
             schema_override={field_names_and_types from step 2}
           )
@@ -6593,7 +6593,7 @@ Records:  3 sample records with srcip/dstip/srcport/dstport/proto/action/...
  xlog ships two GraphQL fields for fake-data synthesis:
  </p>
  <ul className="list-disc pl-6 space-y-1 text-sm">
- <li><Code>generateFakeData(requestInput)</Code> — legacy path. Uses Rosetta&apos;s built-in field universe (generic Phantom-branded shape).</li>
+ <li><Code>generateFakeData(requestInput)</Code> — legacy path. Uses Rosetta&apos;s built-in field universe (generic Guardian-branded shape).</li>
  <li><Code>generateFakeDataV2(requestInput, schemaOverride?)</Code> — vendor-aware path. When <Code>schemaOverride</Code> is supplied, top-level keys + value generation come from the override. When omitted, falls back to identical Rosetta behavior — strict backward-compat.</li>
  </ul>
  <p>
@@ -6620,7 +6620,7 @@ Records:  3 sample records with srcip/dstip/srcport/dstport/proto/action/...
  <li><strong>Baked catalog</strong>: <Code>bundles/spark/connectors/cortex-content/baked/</Code> — 576 files / 2.9 MB / <Code>_manifest.json</Code> sentinel.</li>
  <li><strong>Refresh script</strong>: <Code>scripts/refresh_cortex_baked_catalog.py</Code> — maintainer-only, not invoked at runtime.</li>
  <li><strong>xlog dynamic schema</strong>: <Code>xlog/app/dynamic_schema.py</Code> + <Code>xlog/app/schema.py</Code> (<Code>generateFakeDataV2</Code> resolver).</li>
- <li><strong>xlog MCP tool</strong>: <Code>bundles/spark/connectors/xlog/src/data_faker.py</Code> — <Code>phantom_generate_fake_data_v2</Code>.</li>
+ <li><strong>xlog MCP tool</strong>: <Code>bundles/spark/connectors/xlog/src/data_faker.py</Code> — <Code>guardian_generate_fake_data_v2</Code>.</li>
  <li><strong>Skill</strong>: <Code>bundles/spark/mcp/skills/workflows/simulate_vendor_logs.md</Code>.</li>
  <li><strong>UI page</strong>: <Code>mcp/agent/app/data-sources/page.tsx</Code> — Browse + Installed tabs, drill-down drawer, ruby-red uninstall modal.</li>
  <li><strong>Next.js proxies</strong>: <Code>mcp/agent/app/api/agent/data-sources/*</Code> — thin forwards to MCP.</li>
@@ -6699,7 +6699,7 @@ Specialty : OS · Honeypot · ICS · PhysSec · Voice · Analytics · Other`}</P
 
  <SubSection icon="image" title="Logo pipeline — one vendor logo per vendor">
  <p>
- Phantom serves vendor logos inline from each YAML&apos;s
+ Guardian serves vendor logos inline from each YAML&apos;s
  base64 <Code>logo:</Code> block. The catalog endpoint
  resolves a single <em>vendor</em> logo per vendor_key so every
  pack of the same vendor renders the same mark — every F5 pack
@@ -6726,7 +6726,7 @@ Catalog enrichment (api/data_sources.py):
 
 Logo provenance is recorded in each YAML's 'logo:' block:
   source:   "wikipedia:File:Avaya_Logo.svg" / "simpleicons:fortinet"
-            / "phantom-bundle" / "hand-crafted"
+            / "guardian-bundle" / "hand-crafted"
   license:  Wikimedia Commons / vendor trademark / CC0-1.0 / CC BY-SA
   fidelity: branded (vendor's actual artwork)
             | branded-recolored (white→navy for visibility)
@@ -6773,7 +6773,7 @@ Logo provenance is recorded in each YAML's 'logo:' block:
  <SubSection icon="diagram_2" title="Picture — internal data flow">
  <p>
  The diagram below shows a single <Code>/data-sources</Code>{" "}
- request flowing through Phantom&apos;s four layers — browser →
+ request flowing through Guardian&apos;s four layers — browser →
  Next.js proxy → embedded MCP → YAML loader — and the two
  storage roots the loader scans (bundle: read-only, ships with
  the image; user: writable through the CRUD endpoints). The
@@ -7021,7 +7021,7 @@ Restore order (manifest.json restore_order):
             holds the row + non-secret config. Secret slots (declared by
             <Code> type:&quot;secret&quot;</Code> fields in the spec.yaml)
             land in SecretStore at{" "}
-            <Code>/agents/phantom/log_destinations/&lt;id&gt;/&lt;slot&gt;</Code>{" "}
+            <Code>/agents/guardian/log_destinations/&lt;id&gt;/&lt;slot&gt;</Code>{" "}
             and cascade-delete on row delete.
           </p>
           <Pre>{`CREATE TABLE log_destinations (
@@ -7060,7 +7060,7 @@ Restore order (manifest.json restore_order):
             or touch any destination secret. It passes a{" "}
             <strong>reference</strong> —{" "}
             <Code>destination=&quot;logdest:&lt;id&gt;&quot;</Code> — to{" "}
-            <Code>phantom_create_data_worker</Code>. The reference is
+            <Code>guardian_create_data_worker</Code>. The reference is
             resolved <strong>server-side, inside the MCP</strong>, at the
             connector-proxy chokepoint, immediately before the call is
             forwarded to the xlog connector container:
@@ -7075,7 +7075,7 @@ MCP  pkg/connector_proxy.proxy_call_tool          ← resolution chokepoint
   │                       + webhook_url / webhook_key (plaintext auth_key,
   │                         read from merged_config = store + SecretStore)
   ▼  MCP-over-HTTP (bearer) — resolved address + injected key
-xlog connector  phantom-connector-xlog-<name>:9000
+xlog connector  guardian-connector-xlog-<name>:9000
   │   forwards webhookUrl / webhookKey on BOTH createDataWorker
   │   and createScenarioWorkerFromQuery
   ▼  GraphQL over HTTP
@@ -7105,13 +7105,13 @@ xlog service  xlog:8000 → rosetta Sender / WebhookSender → destination`}</Pr
               ones — those stay on the operator-only REST + UI path.</li>
           </ul>
           <p className="text-sm text-on-surface-variant">
-            Scope: covers <Code>phantom_create_data_worker</Code> (both its{" "}
+            Scope: covers <Code>guardian_create_data_worker</Code> (both its{" "}
             <Code>createDataWorker</Code> and{" "}
             <Code>createScenarioWorkerFromQuery</Code> routes — xlog honors{" "}
             <Code>webhookUrl</Code>/<Code>webhookKey</Code> on each, falling
             back to the <Code>WEBHOOK_ENDPOINT</Code> env default when
             absent). The file-scenario tool{" "}
-            (<Code>phantom_create_scenario_worker</Code>) takes a destination
+            (<Code>guardian_create_scenario_worker</Code>) takes a destination
             object and is not yet on the <Code>logdest:</Code> path;{" "}
             <Code>webhook</Code> / <Code>splunk_hec</Code> destination types
             are not yet wired into generation.
@@ -7173,8 +7173,8 @@ xlog service  xlog:8000 → rosetta Sender / WebhookSender → destination`}</Pr
           </p>
           <Pre>{`Destination type → XSIAM dataset
 
-xsiam_http   →  phantom_logs_raw   (ALWAYS; XSIAM-side hardcoded for
-                                    the 'phantom' brand on the collector)
+xsiam_http   →  guardian_logs_raw   (ALWAYS; XSIAM-side hardcoded for
+                                    the 'guardian' brand on the collector)
                 Shape: 1 row per batch with an 'events' JSON-array
                 column holding the original record list. A downstream
                 modeling rule unflattens per-event if needed.
@@ -7193,7 +7193,7 @@ syslog (JSON)→  depends on the broker's input config (no convention).
                 broker may drop it OR route to a catchall — ask the
                 operator which dataset their broker is mapped to.`}</Pre>
           <p>
-            The <Code>phantom_create_data_worker</Code> docstring
+            The <Code>guardian_create_data_worker</Code> docstring
             teaches the agent these mappings so when an operator says
             &quot;simulate 50 FortiGate logs and verify they arrived in
             XSIAM,&quot; the agent fires the worker with the right{" "}
@@ -7207,7 +7207,7 @@ syslog (JSON)→  depends on the broker's input config (no convention).
           <p>
             The diagram below shows a single{" "}
             <Code>/log-destinations</Code> request flowing through
-            Phantom&apos;s four layers — browser → Next.js proxy →
+            Guardian&apos;s four layers — browser → Next.js proxy →
             embedded MCP → SQLite + SecretStore. The MCP lane splits
             into three concerns: the <strong>types loader</strong>{" "}
             (boot-time scan of <Code>bundles/spark/destinations/</Code>),
@@ -7217,7 +7217,7 @@ syslog (JSON)→  depends on the broker's input config (no convention).
             <Code>probe()</Code> + <Code>send()</Code> dispatch). The
             credential boundary is explicit: secrets land in
             SecretStore at{" "}
-            <Code>/agents/phantom/log_destinations/&lt;id&gt;/&lt;slot&gt;</Code>,
+            <Code>/agents/guardian/log_destinations/&lt;id&gt;/&lt;slot&gt;</Code>,
             never in the SQLite row (which only carries{" "}
             <Code>secret_refs_json</Code> pointers), and the
             agent-callable MCP tools return <Code>&quot;***&quot;</Code>{" "}
@@ -7354,7 +7354,7 @@ Next.js proxy: /api/agent/operator-state/{key} (session-gated).
  <SubSection icon="rule" title="Out of scope">
  <ul className="list-disc pl-6 space-y-1">
  <li><strong>Expose operator state to the agent.</strong> Operator workflow state stays operator-only. No <Code>operator_state_get</Code> or similar in the agent&apos;s catalog. If a use case emerges (e.g. agent summarizing &quot;tests you&apos;ve passed&quot;), it&apos;ll come in as a separate narrow read-only tool, scoped per-key.</li>
- <li><strong>Per-user scoping.</strong> Phantom ships single-user (admin only). The schema has no user_id column today; multi-user lands by adding it + moving PRIMARY KEY to (user_id, key). All existing rows migrate cleanly with the DEFAULT clause.</li>
+ <li><strong>Per-user scoping.</strong> Guardian ships single-user (admin only). The schema has no user_id column today; multi-user lands by adding it + moving PRIMARY KEY to (user_id, key). All existing rows migrate cleanly with the DEFAULT clause.</li>
  <li><strong>Migrate UI preferences.</strong> Theme, sidebar-collapsed, debug-panel-open stay in localStorage by intent — device-local is correct for those (per the third-leg discussion above).</li>
  </ul>
  </SubSection>
@@ -7379,7 +7379,7 @@ function XlogConnector() {
  <Section id="xlog-connector" icon="data_object" title="xlog Connector">
  <p>
  xlog is the synthetic-log generator. It runs as its own service
- (the <Code>phantom</Code> container) and exposes a Strawberry
+ (the <Code>guardian</Code> container) and exposes a Strawberry
  GraphQL API. The xlog MCP connector wraps that API as ~25 MCP
  tools so the agent can request log generation through chat. The
  diagram below shows xlog alongside CALDERA and XSIAM PAPI — the
@@ -7432,7 +7432,7 @@ function XlogConnector() {
  <SubSection icon="link" title="rosetta-ce">
  <p>
  Vendor-specific event shapes come from the{" "}
- <Code>rosetta-ce</Code> library (external dependency). Phantom
+ <Code>rosetta-ce</Code> library (external dependency). Guardian
  imports <Code>Events</Code>, <Code>Observables</Code>, and{" "}
  <Code>Sender</Code> classes; vendor catalogues live in
  rosetta-ce, not in this repo. Updating to support a new vendor
@@ -7458,9 +7458,9 @@ function CalderaConnector() {
  <Section id="caldera-connector" icon="swords" title="CALDERA Connector">
  <p>
  CALDERA is a MITRE ATT&amp;CK adversary emulation backend.
- Phantom runs CALDERA 5.3.0 in the <Code>caldera</Code>{" "}
+ Guardian runs CALDERA 5.3.0 in the <Code>caldera</Code>{" "}
  container and wraps its REST API as MCP tools. The connector
- carries its own state DB independent of phantom-mcp.
+ carries its own state DB independent of guardian-mcp.
  </p>
  <SubSection icon="dns" title="Tool family">
  <ul className="list-disc pl-5 space-y-1 text-sm">
@@ -7505,7 +7505,7 @@ function CalderaConnector() {
  reaches it as <Code>http://caldera:8888</Code>. Sandcat
  agents in your simulated environment dial back to the
  same endpoint over whatever bridge your lab uses; that is
- outside the Phantom stack&apos;s scope.
+ outside the Guardian stack&apos;s scope.
  </p>
  </SubSection>
  </Section>
@@ -7517,7 +7517,7 @@ function XsiamConnector() {
  <Section id="xsiam-connector" icon="security" title="XSIAM Connector">
  <p>
  The XSIAM connector wraps Cortex XSIAM&apos;s public API
- (PAPI). It is the bridge between Phantom&apos;s synthetic
+ (PAPI). It is the bridge between Guardian&apos;s synthetic
  telemetry and a real detection-engineering surface — operators
  push log streams to XSIAM via webhook senders, then verify
  their detection content fired via XQL queries through this
@@ -7551,7 +7551,7 @@ function XsiamConnector() {
  PAPI uses a bearer-style auth pair:{" "}
  <Code>x-xdr-auth-id</Code> (a numeric id) plus an{" "}
  <Code>Authorization</Code> header (a long secret). Both come
- from XSIAM&apos;s API Keys page. Phantom stores them via the
+ from XSIAM&apos;s API Keys page. Guardian stores them via the
  secret store envelope; the connector attaches both on every
  call.
  </p>
@@ -7559,10 +7559,10 @@ function XsiamConnector() {
  <SubSection icon="science" title="Playground id">
  <p>
  PAPI executes XQL against an &ldquo;issue war room&rdquo;
- context. Phantom uses one fixed playground id
+ context. Guardian uses one fixed playground id
  (<Code>PLAYGROUND_ID</Code>) for all execution. Configurable
  per-instance, but the typical install uses a single
- dedicated playground that the operator created for Phantom.
+ dedicated playground that the operator created for Guardian.
  </p>
  </SubSection>
  </Section>
@@ -7774,7 +7774,7 @@ function WebConnector() {
  navigating JavaScript-heavy pages, executing in-page JS,
  capturing screenshots, exporting cookies for downstream auth
  flows, scraping pages that gate content behind interactive
- controls. Backed by the <Code>phantom-browser</Code> service
+ controls. Backed by the <Code>guardian-browser</Code> service
  (profile-gated; only spawns when a web-connector instance
  exists per CLAUDE.md §Stack topology).
  </p>
@@ -7805,9 +7805,9 @@ function WebConnector() {
  <SubSection icon="settings_input_component" title="Architecture (Playwright + CDP)">
  <p>
  The web connector container spawns a Playwright client and
- attaches it to <Code>phantom-browser</Code> via the Chrome
+ attaches it to <Code>guardian-browser</Code> via the Chrome
  DevTools Protocol (
- <Code>connect_over_cdp(&quot;http://phantom-browser:9222&quot;)</Code>
+ <Code>connect_over_cdp(&quot;http://guardian-browser:9222&quot;)</Code>
  ). Playwright never spawns its own Chromium — that would
  balloon the connector image size. Sharing one host browser
  across all web-connector instances keeps per-instance
@@ -7833,7 +7833,7 @@ function AuthIdentity() {
  return (
  <Section id="auth-identity" icon="shield_person" title="Auth & Identity Flows">
  <p>
- Four identity boundaries meet inside Phantom: operator (HTTP),
+ Four identity boundaries meet inside Guardian: operator (HTTP),
  agent (browser), MCP (compose-internal), and external
  connectors. Each has its own auth surface; understanding all
  four is necessary before wiring up an integration or debugging
@@ -7847,7 +7847,7 @@ function AuthIdentity() {
  <SubSection icon="person" title="Operator → UI (session cookie)">
  <p>
  The Next.js <Code>middleware.ts</Code> validates a{" "}
- <Code>phantom_session</Code> cookie on every request to{" "}
+ <Code>guardian_session</Code> cookie on every request to{" "}
  <Code>/api/agent/**</Code>, <Code>/api/chat</Code>, and{" "}
  <Code>/api/skills/**</Code>. The cookie is minted by{" "}
  <Code>POST /api/auth/login</Code> after PBKDF2-HMAC-SHA256
@@ -7880,7 +7880,7 @@ function AuthIdentity() {
  and disabled flag.
  </p>
  </SubSection>
- <SubSection icon="cable" title="Phantom → external (per-connector)">
+ <SubSection icon="cable" title="Guardian → external (per-connector)">
  <p>
  Each connector instance carries its own credentials in the
  secret store: CALDERA red-user + API key, XSIAM PAPI
@@ -8002,10 +8002,10 @@ function SecretStore() {
 
  <SubSection icon="layers" title="Two backends today, one tomorrow">
  <p>
- Phantom ships two backends. They layer: the env-var
+ Guardian ships two backends. They layer: the env-var
  overlay is consulted first, the file-backed store is the
  default and the only place writes go. InfisicalSecretStore
- lands when Phantom onboards onto Spark.
+ lands when Guardian onboards onto Spark.
  </p>
  <Pre>{`╔═══════════════════════════════╤══════════════════════╤══════════════╗
 ║ Backend                       │ When                 │ Status       ║
@@ -8020,7 +8020,7 @@ function SecretStore() {
  it) just to hold a handful of API keys for one agent is
  overkill. The file-backed store gives the same
  encryption-at-rest property with a single env var and zero
- extra services. When/if Phantom onboards onto Spark, the
+ extra services. When/if Guardian onboards onto Spark, the
  platform&apos;s Infisical takes over &mdash; same{" "}
  <Code>read(path)</Code> calls, different backend.
  </p>
@@ -8035,7 +8035,7 @@ function SecretStore() {
  </p>
  <Pre>{`/app/data/secrets/
 └── agents/
-    └── phantom/
+    └── guardian/
         ├── connectors/
         │   └── <instance_id>/
         │       ├── apiToken
@@ -8054,7 +8054,7 @@ function SecretStore() {
  ciphertext, 16-byte GCM auth tag &mdash; all base64-wrapped
  to keep the file UTF-8-readable for ops tooling. The state
  is the named volume{" "}
- <Code>phantom_mcp_data</Code>, so secrets survive container
+ <Code>guardian_mcp_data</Code>, so secrets survive container
  recreation; <Code>docker compose down -v</Code> wipes
  everything.
  </p>
@@ -8073,13 +8073,13 @@ function SecretStore() {
  <p>
  The mapping is deterministic. The path
  segments uppercase and join with double-underscore,
- prefixed with <Code>PHANTOM_SECRET__</Code>. Examples:
+ prefixed with <Code>GUARDIAN_SECRET__</Code>. Examples:
  </p>
- <Pre>{`/agents/phantom/connectors/foo/api_key
-  → PHANTOM_SECRET__AGENTS__PHANTOM__CONNECTORS__FOO__API_KEY
+ <Pre>{`/agents/guardian/connectors/foo/api_key
+  → GUARDIAN_SECRET__AGENTS__GUARDIAN__CONNECTORS__FOO__API_KEY
 
 /ui/auth/admin/password_hash
-  → PHANTOM_SECRET__UI__AUTH__ADMIN__PASSWORD_HASH`}</Pre>
+  → GUARDIAN_SECRET__UI__AUTH__ADMIN__PASSWORD_HASH`}</Pre>
  <p>
  Double-underscore separator avoids ambiguity with the
  single underscores common in slot names (e.g.{" "}
@@ -8108,7 +8108,7 @@ function SecretStore() {
  </p>
  <p>
  <Term>Disable knob.</Term> Set{" "}
- <Code>PHANTOM_ENV_SECRETS_DISABLED=1</Code> to turn
+ <Code>GUARDIAN_ENV_SECRETS_DISABLED=1</Code> to turn
  off the overlay entirely. Useful for testing, or for
  deployments that intentionally don&apos;t want env-var
  precedence.
@@ -8117,7 +8117,7 @@ function SecretStore() {
 
  <SubSection icon="key" title="The KEK">
  <p>
- <Code>PHANTOM_SECRET_KEK</Code> is a 32-byte AES key,
+ <Code>GUARDIAN_SECRET_KEK</Code> is a 32-byte AES key,
  base64-encoded, lives in operator <Code>.env</Code>{" "}
  alongside <Code>MCP_TOKEN</Code>. Generate with{" "}
  <Code>openssl rand -base64 32</Code>. The KEK never leaves
@@ -8145,13 +8145,13 @@ function SecretStore() {
  </p>
  <ul className="list-disc pl-5 space-y-1.5 text-sm">
  <li>
- <Code>/agents/phantom/connectors/&lt;instance_id&gt;/&lt;slot&gt;</Code>{" "}
+ <Code>/agents/guardian/connectors/&lt;instance_id&gt;/&lt;slot&gt;</Code>{" "}
  &mdash; per-connector-instance secrets (xsiam{" "}
  <Code>apiToken</Code>, caldera{" "}
  <Code>redPassword</Code>, etc.)
  </li>
  <li>
- <Code>/agents/phantom/providers/&lt;instance_id&gt;/&lt;slot&gt;</Code>{" "}
+ <Code>/agents/guardian/providers/&lt;instance_id&gt;/&lt;slot&gt;</Code>{" "}
  &mdash; model provider creds (vertex{" "}
  <Code>serviceAccountJson</Code>, gemini{" "}
  <Code>apiKey</Code>)
@@ -8274,9 +8274,9 @@ throw new ApprovalDeniedError(toolName, decision);`}</Pre>
  <Code>agent_batch_propose</Code> itself (no nesting) and{" "}
  <Code>approvals_resolve</Code> (logical loop). Prometheus
  metrics:{" "}
- <Code>phantom_batch_proposals_total</Code>,{" "}
- <Code>phantom_batch_actions_total</Code>, and the{" "}
- <Code>phantom_batch_size</Code> histogram (buckets 1/2/3/5/10/25
+ <Code>guardian_batch_proposals_total</Code>,{" "}
+ <Code>guardian_batch_actions_total</Code>, and the{" "}
+ <Code>guardian_batch_size</Code> histogram (buckets 1/2/3/5/10/25
  matching the eager 25-action cap).
  </p>
  </SubSection>
@@ -8291,7 +8291,7 @@ function ApiKeys() {
  Operator-issued API keys gate programmatic access to the
  agent&apos;s <Code>/api/v1/*</Code> surface. They&apos;re the
  mechanism for automating job creation, exporting audit logs,
- or integrating Phantom with external dashboards.
+ or integrating Guardian with external dashboards.
  </p>
  <SubSection icon="database" title="Schema">
  <Pre>{`api_keys (
@@ -8471,7 +8471,7 @@ function JobsSubsystem() {
  <Code>{`{type: "prompt", message}`}</Code>. The dispatcher
  POSTs to the agent&apos;s <Code>/api/chat</Code> endpoint
  with the message and an{" "}
- <Code>X-Phantom-Trigger: job:&lt;name&gt;</Code> header for
+ <Code>X-Guardian-Trigger: job:&lt;name&gt;</Code> header for
  audit attribution. Personality, memory tools, audit, and
  session persistence all apply — same pipeline as
  interactive chat. The chat handler creates a fresh{" "}
@@ -8583,7 +8583,7 @@ job_runs (
  fire&quot;. Useful for trusted recurring jobs where every
  tool call would otherwise block on the operator. The
  dispatcher sends{" "}
- <Code>X-Phantom-Approval-Bypass: 1</Code> on the chat call;
+ <Code>X-Guardian-Approval-Bypass: 1</Code> on the chat call;
  the MCP-side gate auto-approves with{" "}
  <Code>auto_approved=true</Code> in the audit row so post-hoc
  review surfaces what ran. Toggle from the kebab menu (Edit →
@@ -8594,7 +8594,7 @@ job_runs (
  <SubSection icon="record_voice_over" title="Session approval mode + agent narration">
  <p>
  Per-job bypass (above) and per-session bypass share the same
- wire: <Code>X-Phantom-Approval-Bypass: 1</Code> on the chat
+ wire: <Code>X-Guardian-Approval-Bypass: 1</Code> on the chat
  call to the MCP. The per-session form is operator-driven from
  the chat header dropdown:{" "}
  <Code>session.metadata.approval_mode ∈ {`{`}manual,
@@ -8748,7 +8748,7 @@ function PipelineHealth() {
  return (
  <Section id="pipeline-health" icon="monitor_heart" title="Pipeline Health Probes">
  <p>
- The pipeline page is a live React Flow graph of every Phantom
+ The pipeline page is a live React Flow graph of every Guardian
  subsystem. Box borders flip green / amber / red based on health
  probes; edges pulse cyan when traffic flowed in the last 60
  seconds. The page is two data sources stitched in real time.
@@ -8868,9 +8868,9 @@ job:weekly-coverage         // job name`}</Pre>
  <p>
  Counters declared in{" "}
  <Code>manifest.observability.metrics[]</Code> (dotted names
- like <Code>phantom.simulations_total</Code>) are
+ like <Code>guardian.simulations_total</Code>) are
  pre-registered at boot — Prometheus underscored form
- (<Code>phantom_simulations_total</Code>) appears in{" "}
+ (<Code>guardian_simulations_total</Code>) appears in{" "}
  <Code>/api/v1/metrics</Code> as 0-valued counters so
  dashboards never see &ldquo;metric not found&rdquo; gaps in
  the warm-up window. Histograms and lazily-created metrics
@@ -8880,12 +8880,12 @@ job:weekly-coverage         // job name`}</Pre>
  </p>
  <p>
  Three batch-approval metrics:{" "}
- <Code>phantom_batch_proposals_total{`{approved=...}`}</Code>{" "}
+ <Code>guardian_batch_proposals_total{`{approved=...}`}</Code>{" "}
  (counter; +1 per agent_batch_propose call),{" "}
- <Code>phantom_batch_actions_total{`{tool=...,result=...}`}</Code>{" "}
+ <Code>guardian_batch_actions_total{`{tool=...,result=...}`}</Code>{" "}
  (counter; +1 per action inside a batch, labels split per-tool
  reliability from per-tool volume), and the lazy-registered{" "}
- <Code>phantom_batch_size</Code> histogram with custom
+ <Code>guardian_batch_size</Code> histogram with custom
  count-buckets (1, 2, 3, 5, 10, 25) matching the 25-action
  eager-validation cap. The emission helpers wrap every metric
  call in <Code>try/except</Code> — metrics failures NEVER

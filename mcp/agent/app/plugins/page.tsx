@@ -4,7 +4,7 @@
  * /plugins — Round-15 / Phase X.
  *
  * Inventory of plugins discovered under `bundles/spark/plugins/`.
- * Phantom plugins are filesystem-discovered (no marketplace, no
+ * Guardian plugins are filesystem-discovered (no marketplace, no
  * install flow): drop a directory, restart, plugin contributes
  * its skills + scenarios + memory seeds.
  *

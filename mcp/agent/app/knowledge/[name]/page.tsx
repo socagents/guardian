@@ -10,7 +10,7 @@
  * They're documented as future-Tier-3 work in the spec patch and
  * shown here as disabled tabs so operators see the seam.
  *
- * Routing: phantom is single-tenant, so we don't have spark_ui's
+ * Routing: guardian is single-tenant, so we don't have spark_ui's
  * `/w/{workspace}/...` prefix — KBs are global to this deployment.
  */
 

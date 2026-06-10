@@ -7,7 +7,7 @@ Two acceptable bearer shapes:
      is the unrestricted admin path — same trust as the embedded MCP
      itself. Generated at container start (or pinned in `.env`).
 
-  2. **API key** (`phantom_ak_<id>_<secret>`): operator-minted long-
+  2. **API key** (`guardian_ak_<id>_<secret>`): operator-minted long-
      lived keys for external integrations. Looked up in the
      SqliteApiKeyStore; verified by hash; scoped per-row. Active keys
      are accepted on routes that match their scope list.
@@ -68,7 +68,7 @@ def require_bearer(request: Request) -> JSONResponse | None:
 
     # Path 2: API key. Only consult the store when the token has the
     # API-key prefix — saves a sqlite hit on every malformed bearer.
-    if token.startswith("phantom_ak_"):
+    if token.startswith("guardian_ak_"):
         store = api_key_store()
         if store is not None:
             row = store.verify(token)

@@ -35,7 +35,7 @@ from starlette.responses import FileResponse, JSONResponse
 from api.auth import require_bearer
 from usecase.media_store import MediaTooLargeError, SqliteMediaStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_media_routes(mcp: FastMCP, store: SqliteMediaStore) -> None:

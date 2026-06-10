@@ -19,7 +19,7 @@ scheduler uses for job dispatches (`_dispatch_chat`).
 - `/observability/bench` UI page (run history, compare view, drill-
   down). The runner today emits a JSON summary the operator reads from
   the audit log or the bench_run MCP-tool return value.
-- CLI binary `phantom bench run`. Wired via the MCP tool for now;
+- CLI binary `guardian bench run`. Wired via the MCP tool for now;
   operators invoke from chat.
 - Scheduled bench job (weekly auto-run). Operators wire today via the
   existing scheduler + bench_run tool.
@@ -59,9 +59,9 @@ from usecase.benchmark import (
     summarize,
 )
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
-DEFAULT_AGENT_INTERNAL_URL = "https://phantom-agent:8080"
+DEFAULT_AGENT_INTERNAL_URL = "https://guardian-agent:8080"
 CASE_TIMEOUT_S = 300.0  # per-case timeout — overrides BenchCase.max_wall_seconds
                        # only on infrastructure deadlock; the case-side
                        # max_wall_seconds drives wall_warning flag.
@@ -115,7 +115,7 @@ async def _dispatch_case(
     will tag the case as `infrastructure_error`.
     """
     agent_url = os.environ.get(
-        "PHANTOM_AGENT_INTERNAL_URL", DEFAULT_AGENT_INTERNAL_URL
+        "GUARDIAN_AGENT_INTERNAL_URL", DEFAULT_AGENT_INTERNAL_URL
     ).rstrip("/")
     chat_endpoint = f"{agent_url}/api/chat"
 
@@ -142,7 +142,7 @@ async def _dispatch_case(
                 headers={
                     "Content-Type": "application/json",
                     "Accept": "text/event-stream",
-                    "X-Phantom-Trigger": "bench",
+                    "X-Guardian-Trigger": "bench",
                 },
             ) as resp:
                 if resp.status_code != 200:

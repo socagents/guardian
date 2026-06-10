@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/endpoints/get_endpoint/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_endpoints_get`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 ## Purpose
 
@@ -56,5 +56,5 @@ A GetEndpointResponse object if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_endpoints_get`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_endpoints_get`
 - Source mapping: `ebarti/cortex_xdr_client/api/endpoints_api.py` → `get_endpoint`

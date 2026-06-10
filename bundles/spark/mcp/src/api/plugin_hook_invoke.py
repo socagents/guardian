@@ -32,7 +32,7 @@ from usecase.plugin_hook_runner import (
     clear_cache,
 )
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_plugin_hook_invoke_routes(mcp: FastMCP) -> None:

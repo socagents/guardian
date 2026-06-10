@@ -15,7 +15,7 @@
  *   the prompt builder expects. Extra fields would be wasted tokens.
  */
 
-import { PhantomMCPClient } from '@/lib/mcp-client';
+import { GuardianMCPClient } from '@/lib/mcp-client';
 import { getEffectiveRuntimeConfig } from '@/lib/runtime-config';
 import type { SkillSummary } from '@/lib/system-prompt';
 
@@ -46,7 +46,7 @@ export async function fetchSkillsForPrompt(): Promise<SkillSummary[]> {
       'http://localhost:8080/api/v1/stream/mcp';
     if (!mcpToken || !mcpUrl) return [];
 
-    const client = new PhantomMCPClient(mcpUrl, mcpToken);
+    const client = new GuardianMCPClient(mcpUrl, mcpToken);
     const result = await client.callTool('skills_list_all', {});
     const raw = result.content?.[0]?.text || '[]';
     const rows = JSON.parse(raw) as SkillsListResponse[];

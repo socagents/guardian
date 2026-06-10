@@ -1,7 +1,7 @@
 /**
  * Lightweight Gemini API key health check, called by /api/setup at
  * submit time. Failure here is a WARNING, not a BLOCKER — operators
- * legitimately want to set up Phantom without a working Gemini key
+ * legitimately want to set up Guardian without a working Gemini key
  * (offline lab use, Vertex-only deployments, "I'll fix the key later")
  * and we shouldn't gate first-run completion on a third-party API.
  *

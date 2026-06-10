@@ -11,14 +11,14 @@ import type {
 } from "@/lib/api/types";
 
 /**
- * Phantom models page — ported from spark/services/ui's /models, with two
- * phantom-specific shifts:
- *   1. **Endpoints**: hits /api/agent/models (a static phantom-curated
+ * Guardian models page — ported from spark/services/ui's /models, with two
+ * guardian-specific shifts:
+ *   1. **Endpoints**: hits /api/agent/models (a static guardian-curated
  *      Vertex catalog) instead of Spark's gateway-side /api/v1/models.
- *      Default-model lookup against /api/v1/config is dropped; phantom
+ *      Default-model lookup against /api/v1/config is dropped; guardian
  *      doesn't track a "default model" concept yet.
  *   2. **Mode**: Server Component → Client Component. Spark's version
- *      reads cookies via next/headers; phantom uses the standard auth
+ *      reads cookies via next/headers; guardian uses the standard auth
  *      cookie automatically attached to fetch(). Switching to a client
  *      component also makes the tab-routing (?tab=embedding) read-only
  *      via useSearchParams without a server roundtrip.
@@ -172,7 +172,7 @@ export default function ModelsPage() {
     };
   }, []);
 
-  // Phantom doesn't yet expose a "default model" config; the badge is
+  // Guardian doesn't yet expose a "default model" config; the badge is
   // never rendered until the concept lands. Keep the prop on ModelRow
   // so the rest of the rendering tree compiles unchanged. Typed via
   // useState (not a literal null) so TS doesn't narrow the comparison
@@ -673,5 +673,5 @@ interface DefaultModelRef {
   provider: string;
 }
 
-// getDefaultModel/getRecord were removed — phantom doesn't track a
+// getDefaultModel/getRecord were removed — guardian doesn't track a
 // "default model" workspace setting yet. Re-add when the concept lands.

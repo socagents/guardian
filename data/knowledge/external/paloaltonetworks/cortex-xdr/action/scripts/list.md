@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/scripts/get_scripts/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_scripts_list`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api/cortex-xdr-apis/script-execution/get-scripts.html
 
@@ -51,5 +51,5 @@ An object of type GetScriptsResponse if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_scripts_list`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_scripts_list`
 - Source mapping: `ebarti/cortex_xdr_client/api/scripts_api.py` → `get_scripts`

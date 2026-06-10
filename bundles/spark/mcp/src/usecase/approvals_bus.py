@@ -75,13 +75,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 # v0.1.24 — origin discrimination for approvals.
 #
 # Approvals are tagged with the surface that requested them so the
 # right resolver UI lights up. Format conventions match the existing
-# X-Phantom-Trigger contextvar (audit_log._current_trigger):
+# X-Guardian-Trigger contextvar (audit_log._current_trigger):
 #
 #   "chat:<session_id>"   chat thread that initiated the request →
 #                         inline approval card in that chat session
@@ -96,7 +96,7 @@ logger = logging.getLogger("Phantom MCP")
 #
 # The bus reads from `audit_log.get_current_trigger()` rather than
 # duplicating a parallel contextvar — same plumbing already routes
-# X-Phantom-Trigger from chat/scheduler/REST handlers down through
+# X-Guardian-Trigger from chat/scheduler/REST handlers down through
 # every awaited code path via Python contextvars.
 
 DEFAULT_DATA_ROOT = Path("/app/data")
@@ -379,7 +379,7 @@ class InProcessApprovalsBus:
         approval_id = str(uuid.uuid4())
         created = self._now_iso()
         # Resolve origin: explicit kwarg wins, else read from the
-        # X-Phantom-Trigger contextvar (already set by chat/scheduler/
+        # X-Guardian-Trigger contextvar (already set by chat/scheduler/
         # REST request handlers — see usecase.audit_log), else
         # "unknown" (the table default).
         from usecase.audit_log import get_current_trigger

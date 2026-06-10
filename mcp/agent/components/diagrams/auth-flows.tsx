@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom auth flows — three animated diagrams.
+ * Guardian auth flows — three animated diagrams.
  *
  * Visual argument: the SecretStore is the only place credentials live;
  * every auth journey converges on it. Each diagram below traces one
@@ -404,8 +404,8 @@ export function AuthLoginFlow() {
           y={ROW_MAIN}
           variant="origin"
           title="Browser"
-          sub="https://phantom:3000"
-          detail="admin / $PHANTOM_DEFAULT_ADMIN_PASSWORD"
+          sub="https://guardian:3000"
+          detail="admin / $GUARDIAN_DEFAULT_ADMIN_PASSWORD"
         />
         <FlowNode
           x={COL.edge}
@@ -439,7 +439,7 @@ export function AuthLoginFlow() {
           y={ROW_NOTIFY}
           variant="notify"
           title="Set-Cookie"
-          sub="phantom_session=<32B>"
+          sub="guardian_session=<32B>"
           detail="HttpOnly · Secure · SameSite=Strict · Max-Age=7200"
         />
 
@@ -683,7 +683,7 @@ export function AuthCliResetFlow() {
           variant="host"
           title="Host shell"
           sub="docker exec -it"
-          detail='phantom_agent node …'
+          detail='guardian_agent node …'
         />
         <FlowNode
           x={COL.edge}
@@ -718,7 +718,7 @@ export function AuthCliResetFlow() {
           variant="notify"
           title="Operator action"
           sub="docker compose restart"
-          detail="phantom-agent  (in-memory invalidate)"
+          detail="guardian-agent  (in-memory invalidate)"
         />
 
         {/* 1. Host shell → CLI */}

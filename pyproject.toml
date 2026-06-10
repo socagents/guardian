@@ -1,8 +1,8 @@
-# Repo-root pyproject.toml — Phantom AI Layer LSP configuration.
+# Repo-root pyproject.toml — Guardian AI Layer LSP configuration.
 #
-# Phantom is a polyglot repo (Next.js + TypeScript for the agent UI, Python
+# Guardian is a polyglot repo (Next.js + TypeScript for the agent UI, Python
 # for the embedded MCP, updater, connectors). This file does NOT
-# package Phantom as a Python distribution — each Python subsystem manages
+# package Guardian as a Python distribution — each Python subsystem manages
 # its own requirements (`bundles/spark/mcp/requirements*.txt`,
 # `updater/requirements.txt`). The root pyproject exists solely to:
 #
@@ -20,7 +20,7 @@
 
 # --- pyright configuration (LSP) -------------------------------------------
 #
-# Coverage scope: every Python source tree in Phantom EXCEPT vendor data +
+# Coverage scope: every Python source tree in Guardian EXCEPT vendor data +
 # generated build artifacts. The exclude of cortex-content/baked is
 # load-bearing — 576 vendor JSON/SVG files that would otherwise flood the
 # pyright index with parse errors on non-Python data.
@@ -35,7 +35,7 @@ include = [
   "scripts",
   "tooling",
   ".claude/hooks",
-  "phantom-connector-runtime",
+  "guardian-connector-runtime",
 ]
 exclude = [
   "**/__pycache__",
@@ -59,13 +59,13 @@ reportUnknownArgumentType = "none"
 reportUnknownVariableType = "none"
 
 
-# --- dev tools (informational — Phantom is not a single Python package) ----
+# --- dev tools (informational — Guardian is not a single Python package) ----
 #
 # The list below is the SAME set of tools `pip install pyright "mcp[cli]"`
 # would give you; we duplicate it here as documentation + so tooling that
 # parses pyproject.toml can discover the expected dev surface.
 
-[tool.phantom-ai-layer.dev-tools]
+[tool.guardian-ai-layer.dev-tools]
 required = [
   "pyright>=1.1.300",
   "mcp[cli]>=0.1.0",

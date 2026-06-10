@@ -2,7 +2,7 @@
  * Builtin hook spec contract — Issue #26 (v0.5.21).
  *
  * A "builtin" hook is an in-process TypeScript function shipped in the
- * phantom-agent image (under `mcp/agent/lib/hook-builtins/`) that operators
+ * guardian-agent image (under `mcp/agent/lib/hook-builtins/`) that operators
  * can install from `/settings/hooks` with a single dropdown pick + a
  * dynamic config form — no subprocess, no HTTP, no code edits.
  *
@@ -27,7 +27,7 @@
  *     same pattern: each spec exports a `validateConfig(unknown) -> Result`
  *     function it owns end-to-end.
  *
- * Why builtins ship in `phantom-agent`'s image (not as plugins):
+ * Why builtins ship in `guardian-agent`'s image (not as plugins):
  *
  *   - Builtins are framework-side primitives (slack-approval, rate-limit,
  *     context-warning, memory-inject). They're the same surface for every
@@ -95,7 +95,7 @@ export interface BuiltinHookSpec {
    *  selection. Should answer "what does this do, when do I want it?". */
   description: string;
   /** Material icon name (matches the `material-symbols-outlined`
-   *  font Phantom already loads). Used in the /settings/hooks list row
+   *  font Guardian already loads). Used in the /settings/hooks list row
    *  to badge builtins by purpose. */
   icon: string;
   /** Which `HookEvent` names this builtin can be attached to. Empty

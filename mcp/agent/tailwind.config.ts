@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Phantom theme tokens.
+ * Guardian theme tokens.
  *
  * All colors resolve through CSS variables defined in app/globals.css —
  * `:root` carries the dark Ocean Navy palette (default) and

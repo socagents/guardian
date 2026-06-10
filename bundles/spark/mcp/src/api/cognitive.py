@@ -48,7 +48,7 @@ from usecase.context_assembler import ContextAssembler
 from usecase.memory_store import SqliteMemoryStore
 from usecase.session_store import SqliteSessionStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _int(query: Any, key: str, default: int) -> int:

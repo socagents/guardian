@@ -53,7 +53,7 @@ from usecase.event_log import event_log
 from usecase.instance_store import Instance, InstanceStore
 from usecase.secret_store import SecretStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _emit_tool_failed_event(
@@ -319,7 +319,7 @@ def _load_yaml(path: Path) -> dict:
 #      (or POST /api/v1/instances) — supplying the config + secrets.
 #
 # The upgrade migration (for v0.4.x customers carrying instances in
-# the persisted phantom_data volume) lives in
+# the persisted guardian_data volume) lives in
 # `usecase.marketplace_store.MarketplaceStore.upgrade_install_existing_instances`,
 # which runs once at boot and auto-installs every connector that
 # already has an instance row. Customer experience: nothing visibly
@@ -435,7 +435,7 @@ def _build_container_proxy(
         f"    if not container_url:\n"
         f"        raise RuntimeError(\n"
         f"            f\"connector {connector_id!r} instance has no \"\n"
-        f"            f\"container_url — phantom-updater hasn't started \"\n"
+        f"            f\"container_url — guardian-updater hasn't started \"\n"
         f"            f\"the container yet, or the routing entry was \"\n"
         f"            f\"deleted. Try recreating the instance via /connectors UI.\"\n"
         f"        )\n"
@@ -500,7 +500,7 @@ def _resolve_callable(
             f"must be 'container' (got {style!r}). v0.5.0 deleted the "
             f"in-process module/class dispatch paths as part of the "
             f"universal container-mode migration — every connector runs "
-            f"as a per-instance phantom-connector-<id>-<name> container."
+            f"as a per-instance guardian-connector-<id>-<name> container."
         )
 
     # The connector code DOESN'T live in this Python process — it runs
@@ -938,7 +938,7 @@ def iter_registrations(
         spec = _load_yaml(connector_yaml)
         pairs, function_prefix = _resolve_callable(cid, connector_dir, spec)
 
-        # For now Phantom uses single-instance-per-connector. Use the
+        # For now Guardian uses single-instance-per-connector. Use the
         # first (typically only) instance for the wrap. Multi-instance
         # support is a follow-up — the platform's connector-manager
         # registers tools per-instance with a discriminator in the

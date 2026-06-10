@@ -11,7 +11,7 @@ etc.
 # Why the wrappers exist
 The upstream scripts were authored as standalone CLIs and call
 `sys.exit(1)` on HTTP errors (HTTPError, URLError). Inside a long-
-running connector process that would terminate phantom-agent — an
+running connector process that would terminate guardian-agent — an
 unrecoverable failure for one transient docs-site blip. Each wrapper
 below catches `SystemExit` at the boundary and converts it to a
 structured `{"ok": false, "error": "..."}` return so:
@@ -63,7 +63,7 @@ def _shielded() -> Iterator[None]:
     error paths. Anything else propagates normally. This is the
     process-survival guard that lets a transient HTTP error from the
     docs API surface as a returned error dict instead of crashing
-    phantom-agent.
+    guardian-agent.
 
     Use as a context manager around any call into _search / _fetch_topic
     / _xql_lookup that hits the network — the public scripts call
@@ -193,7 +193,7 @@ def cortex_xql_lookup(
 
     Args:
         term:      Stage or function name (e.g. "dedup",
-                   "arrayindexof"). Phantom strips a leading
+                   "arrayindexof"). Guardian strips a leading
                    "stage"/"function"/"xql"/"cortex query language"
                    noise prefix automatically.
         kind:      "auto" (default; inferred from name), "stage", or

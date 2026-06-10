@@ -4,7 +4,7 @@
  * /observability/plugins — Issue #29 UI gap fill (v0.5.44 + v0.5.47).
  *
  * View of the entry-point plugin discovery catalog with lifecycle
- * controls. Each plugin entry-point group (phantom.skills /
+ * controls. Each plugin entry-point group (guardian.skills /
  * connectors / hooks / scanners / providers) gets a section;
  * per-group rows show each PluginRef (name, dist_name, dist_version,
  * target) plus an Uninstall button.
@@ -51,27 +51,27 @@ const glassCard = {
 } as const;
 
 const GROUP_META: Record<string, { label: string; icon: string; about: string }> = {
-  "phantom.skills": {
+  "guardian.skills": {
     label: "Skills",
     icon: "school",
     about: "Skill-MD contributions. Discovered packages should export a function returning a SkillDef list.",
   },
-  "phantom.connectors": {
+  "guardian.connectors": {
     label: "Connectors",
     icon: "cable",
     about: "Connector manifests. Discovered packages export connector descriptors for the marketplace.",
   },
-  "phantom.hooks": {
+  "guardian.hooks": {
     label: "Hook builtins",
     icon: "webhook",
     about: "Builtin-hook specs (matches the in-image lib/hook-builtins/ shape). Pip-installable hook libraries.",
   },
-  "phantom.scanners": {
+  "guardian.scanners": {
     label: "Scanners",
     icon: "radar",
     about: "Deterministic SAST scanners (Octagon-style). Reserved for future scanner integration work.",
   },
-  "phantom.providers": {
+  "guardian.providers": {
     label: "Providers",
     icon: "cloud",
     about: "Model-provider adapters. Discovered packages export provider factories.",
@@ -137,7 +137,7 @@ export default function PluginsPage() {
         );
         return;
       }
-      setInstallResult(`Installed ${data.spec}. Restart phantom-agent to load contributed builtins.`);
+      setInstallResult(`Installed ${data.spec}. Restart guardian-agent to load contributed builtins.`);
       setInstallSpec("");
       await refresh();
     } catch (err) {
@@ -205,7 +205,7 @@ export default function PluginsPage() {
             packages targeting any of them appear here. v0.5.47 adds
             install / uninstall via{" "}
             <code className="font-mono text-xs">pip --user</code>{" "}
-            inside the agent container — restart phantom-agent for
+            inside the agent container — restart guardian-agent for
             newly-installed packages to surface.
           </p>
           <div className="ml-9 mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary/15 text-secondary text-xs">
@@ -231,7 +231,7 @@ export default function PluginsPage() {
               <p className="text-xs text-on-surface-variant/70 mt-0.5">
                 Runs{" "}
                 <code className="font-mono">pip install --user &lt;spec&gt;</code>{" "}
-                inside the agent container. Restart phantom-agent
+                inside the agent container. Restart guardian-agent
                 afterward for contributed builtins to load.
               </p>
             </div>
@@ -246,7 +246,7 @@ export default function PluginsPage() {
                   void handleInstall();
                 }
               }}
-              placeholder="e.g. phantom-hook-mypackage or git+https://github.com/..."
+              placeholder="e.g. guardian-hook-mypackage or git+https://github.com/..."
               disabled={installing}
               className="flex-1 bg-surface-container-low/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50 font-mono"
             />
@@ -382,15 +382,15 @@ export default function PluginsPage() {
               <p>
                 In your <code className="font-mono">pyproject.toml</code>:
               </p>
-              <pre className="bg-surface-container-low/40 p-3 rounded-lg text-[11px] font-mono leading-relaxed overflow-x-auto">{`[project.entry-points."phantom.hooks"]
+              <pre className="bg-surface-container-low/40 p-3 rounded-lg text-[11px] font-mono leading-relaxed overflow-x-auto">{`[project.entry-points."guardian.hooks"]
 my-hook = "my_pkg.hooks:my_hook_factory"
 
-[project.entry-points."phantom.skills"]
+[project.entry-points."guardian.skills"]
 my-skill = "my_pkg.skills:my_skill_factory"`}</pre>
               <p>
                 Then{" "}
                 <code className="font-mono">
-                  docker exec phantom_agent pip install ./your-package
+                  docker exec guardian_agent pip install ./your-package
                 </code>{" "}
                 + restart MCP. The package will appear in the table
                 above after the next boot&apos;s{" "}

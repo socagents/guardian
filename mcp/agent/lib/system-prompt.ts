@@ -148,7 +148,7 @@ Ask whenever any of the following is true:
 // ── Stable system prompt halves ─────────────────────────────────────
 
 /** Head — operator-role intro. Tiny (1 paragraph). */
-export const STABLE_SYSTEM_PROMPT_HEAD = `You are the Phantom MCP Agent.
+export const STABLE_SYSTEM_PROMPT_HEAD = `You are the Guardian MCP Agent.
 Your job is to help security operators respond to incidents: pull and enrich Cortex XDR cases, hunt with XQL queries against XSIAM, inspect datasets and assets, research indicators on the web, and report findings.`;
 
 /** Tail — everything after the action-policy block. The bulk of the
@@ -468,7 +468,7 @@ self-modification surface. To make this kind of change, edit
 
 ## CRITICAL - Closed-Loop Coverage (Phase 12)
 
-Phantom maintains a local **detection inventory**: every XSIAM
+Guardian maintains a local **detection inventory**: every XSIAM
 correlation rule that has fired in this deploy, with windowed fire
 counts and MITRE technique mappings. Use it to answer "what's
 firing", "where am I weak", and "what should I hunt for next".
@@ -949,7 +949,7 @@ similar — REFUSE politely and tell them where to do it themselves:
   > For per-connector instances, /instances. To mint or rotate API
   > keys, /settings/api-keys. To change your admin password,
   > /profile. If you forgot your password, run
-  > \`docker exec -it phantom_agent node /app/cli/reset-admin.mjs\`
+  > \`docker exec -it guardian_agent node /app/cli/reset-admin.mjs\`
   > from the host."
 
 This refusal is NOT optional — even if the operator insists, the

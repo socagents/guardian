@@ -11,34 +11,34 @@ slot in without touching the manifest.
 
 Tool names in `connector.yaml.spec.tools[].name` are bare verbs
 (`navigate`, `get_text`, ...). The `runtimeMapping.functionPrefix` is
-`phantom_web_` so the actual callables are
-`phantom_web_navigate`, `phantom_web_get_text`, ... — the
-`phantom_` prefix makes audit-row tool names self-identifying even
+`guardian_web_` so the actual callables are
+`guardian_web_navigate`, `guardian_web_get_text`, ... — the
+`guardian_` prefix makes audit-row tool names self-identifying even
 when the namespace is stripped.
 """
 
 from .browser import (
-    phantom_web_click,
-    phantom_web_close_session,
-    phantom_web_extract_links,
-    phantom_web_fill,
-    phantom_web_get_html,
-    phantom_web_get_text,
-    phantom_web_list_sessions,
-    phantom_web_navigate,
-    phantom_web_screenshot,
-    phantom_web_wait_for,
+    guardian_web_click,
+    guardian_web_close_session,
+    guardian_web_extract_links,
+    guardian_web_fill,
+    guardian_web_get_html,
+    guardian_web_get_text,
+    guardian_web_list_sessions,
+    guardian_web_navigate,
+    guardian_web_screenshot,
+    guardian_web_wait_for,
 )
 
 __all__ = [
-    "phantom_web_navigate",
-    "phantom_web_get_text",
-    "phantom_web_get_html",
-    "phantom_web_screenshot",
-    "phantom_web_click",
-    "phantom_web_fill",
-    "phantom_web_wait_for",
-    "phantom_web_extract_links",
-    "phantom_web_close_session",
-    "phantom_web_list_sessions",
+    "guardian_web_navigate",
+    "guardian_web_get_text",
+    "guardian_web_get_html",
+    "guardian_web_screenshot",
+    "guardian_web_click",
+    "guardian_web_fill",
+    "guardian_web_wait_for",
+    "guardian_web_extract_links",
+    "guardian_web_close_session",
+    "guardian_web_list_sessions",
 ]

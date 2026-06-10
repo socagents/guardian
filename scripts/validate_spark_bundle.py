@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the local Spark-compatible Phantom bundle projection."""
+"""Validate the local Spark-compatible Guardian bundle projection."""
 
 from __future__ import annotations
 

@@ -22,7 +22,7 @@ Usage (from repo root, via the SSH + MCP tunnels):
     #   gcloud compute start-iap-tunnel <vm> 22 --local-host-port=localhost:2222 &
     #   gcloud compute start-iap-tunnel <vm> 8080 --local-host-port=localhost:8081 &
     # Then:
-    PHANTOM_MCP_TOKEN=$(ssh ...) python3 retrieval_probe.py
+    GUARDIAN_MCP_TOKEN=$(ssh ...) python3 retrieval_probe.py
 
 What it reports per test query:
   - Top-5 KB matches with similarity scores
@@ -57,7 +57,7 @@ from typing import Any
 # dance, which is exactly what /api/agent/tool/call does for us.
 # The route is internally permissive (no cookie check) when reached
 # from outside the AuthGate'd UI; it just dispatches.
-AGENT_URL = os.environ.get("PHANTOM_AGENT_URL", "https://localhost:3001")
+AGENT_URL = os.environ.get("GUARDIAN_AGENT_URL", "https://localhost:3001")
 TLS_INSECURE = ssl._create_unverified_context()  # self-signed dev cert
 
 

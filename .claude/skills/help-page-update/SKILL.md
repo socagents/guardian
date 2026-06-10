@@ -11,7 +11,7 @@ paths:
 
 # Updating help pages
 
-Activates for work in `mcp/agent/app/help/`. Phantom's help pages are the SPEC (architecture) + the user-facing description (user) + the click-path catalog (journeys). They are MANDATORY pre-release docs.
+Activates for work in `mcp/agent/app/help/`. Guardian's help pages are the SPEC (architecture) + the user-facing description (user) + the click-path catalog (journeys). They are MANDATORY pre-release docs.
 
 ## File responsibilities
 
@@ -70,7 +70,7 @@ When documenting a new service or changed wiring, the architecture page MUST inc
 - Failure mode (retries? circuit breaker?)
 - Sync vs async
 
-Example: *`phantom-agent` (Next.js, port 3000) → embedded MCP subprocess (Python FastMCP, port 8080) — bearer auth via `MCP_TOKEN`, in-process loopback over HTTPS, ~5s timeout, no retry. The agent proxies every `/api/agent/*` call to the MCP at `/api/v1/*` via [lib/mcp-proxy.ts](../mcp-proxy.ts).*
+Example: *`guardian-agent` (Next.js, port 3000) → embedded MCP subprocess (Python FastMCP, port 8080) — bearer auth via `MCP_TOKEN`, in-process loopback over HTTPS, ~5s timeout, no retry. The agent proxies every `/api/agent/*` call to the MCP at `/api/v1/*` via [lib/mcp-proxy.ts](../mcp-proxy.ts).*
 
 Boxes-with-labels diagrams are not enough. Drift hides in the wires.
 

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom login screen — v0.4.0.
+ * Guardian login screen — v0.4.0.
  *
  * Ported from spark-platform's `services/ui/app/login/page.tsx` per
  * operator request: keep the EXACT animations, layout, robot
@@ -9,21 +9,21 @@
  * not a simplified variant. Adapted three pieces only:
  *
  *  1. Import path: `motion/react` (spark) → `framer-motion`
- *     (phantom). Same package; phantom's package.json pins
+ *     (guardian). Same package; guardian's package.json pins
  *     `framer-motion ^11.3.6` while spark's pins `motion ^11.13.1`.
- *  2. Response shape: phantom's /api/auth/login returns
+ *  2. Response shape: guardian's /api/auth/login returns
  *     `{ ok: true, credentialsChanged }`; spark returned the same
  *     shape but the original LoginScreen here checked `data.success`.
  *     This file uses the v0.4.0 shape.
  *  3. Branding + copy: "Spark AI" / "Powered by Claude, GPT-4o, …"
- *     replaced with Phantom-relevant. v0.4.0 used "Powered by [Cortex
+ *     replaced with Guardian-relevant. v0.4.0 used "Powered by [Cortex
  *     XSIAM, CALDERA, Gemini, MCP, Vertex AI, MITRE ATT&CK]" framing.
  *     v0.17.39 switched the framing from third-party brands ("powered
- *     by") to first-person capabilities ("Phantom can [simulate logs,
+ *     by") to first-person capabilities ("Guardian can [simulate logs,
  *     simulate attacks, create workers, send logs, validate detections,
  *     orchestrate workflows]") — operator's call: the brand-name cycle
- *     suggested Phantom was a thin shim over those products; the
- *     capability cycle communicates what Phantom actually does for
+ *     suggested Guardian was a thin shim over those products; the
+ *     capability cycle communicates what Guardian actually does for
  *     them.
  *
  * # Interface contract (unchanged from pre-v0.4.0)
@@ -32,7 +32,7 @@
  *
  * AuthGate renders this when /api/auth/status returns
  * `{ authenticated: false }`. On a successful login, the route sets
- * the phantom_session cookie and the component calls `onSuccess`,
+ * the guardian_session cookie and the component calls `onSuccess`,
  * which re-triggers AuthGate's status poll. Auth state then flips
  * to authenticated; AuthGate may further redirect to /profile if
  * `credentialsChanged === false` (default-credentials banner path).
@@ -40,17 +40,17 @@
  * # Dependencies
  *
  *  - `@/components/ui/wavy-background` — canvas-based simplex-noise
- *    waves (already present in phantom, identical to spark).
+ *    waves (already present in guardian, identical to spark).
  *  - `@/components/ui/tools-stack-card` — small showcase card below
- *    the form (already present in phantom, motion-import adapted).
+ *    the form (already present in guardian, motion-import adapted).
  *  - `/img/myrobo.webp` — 1.6MB decorative character; ported to
- *    phantom's public/img/ from spark public/img/.
+ *    guardian's public/img/ from spark public/img/.
  *
  * # What this file does NOT do
  *
  *  - Setup-required redirect — spark had a setup wizard at /setup;
- *    phantom v0.4.0 deleted the setup page so that branch is gone.
- *  - Direct window.location navigation — phantom uses the AuthGate
+ *    guardian v0.4.0 deleted the setup page so that branch is gone.
+ *  - Direct window.location navigation — guardian uses the AuthGate
  *    callback so SPA routing handles the post-login flow (chat
  *    landing OR /profile for default-credentials path).
  */
@@ -126,7 +126,7 @@ export const LoginScreen = ({ onSuccess }: { onSuccess: () => void }) => {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/img/myrobo.webp"
-            alt="Phantom assistant"
+            alt="Guardian assistant"
             className="absolute inset-0 h-full w-full object-contain object-left-bottom opacity-95 [mask-image:linear-gradient(to_right,black_72%,transparent_100%)]"
           />
         </div>
@@ -199,17 +199,17 @@ export const LoginScreen = ({ onSuccess }: { onSuccess: () => void }) => {
                 </div>
 
                 {/* Description column.
-                  * v0.17.39 — "Phantom can [FlippingText]" framing
+                  * v0.17.39 — "Guardian can [FlippingText]" framing
                   * (was "Powered by …" through v0.17.38). Same
                   * typewriter cycle, same cyan color, same 6-item
                   * cycle length — just swapped to first-person
-                  * capabilities. The cycle reads as "Phantom can
-                  * simulate logs · Phantom can simulate attacks · …"
-                  * so the operator sees what Phantom does rather
+                  * capabilities. The cycle reads as "Guardian can
+                  * simulate logs · Guardian can simulate attacks · …"
+                  * so the operator sees what Guardian does rather
                   * than what it sits on top of. */}
                 <div className="md:pl-2 md:pt-1">
                   <p className="text-lg font-semibold text-slate-200">
-                    Phantom can{" "}
+                    Guardian can{" "}
                     <FlippingText
                       words={[
                         "simulate logs",

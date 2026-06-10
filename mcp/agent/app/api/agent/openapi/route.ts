@@ -53,7 +53,7 @@ export async function GET(request: Request) {
         status: 200,
         headers: {
           "Content-Type": "application/yaml; charset=utf-8",
-          "Content-Disposition": 'inline; filename="phantom-agent-openapi.yaml"',
+          "Content-Disposition": 'inline; filename="guardian-agent-openapi.yaml"',
         },
       });
     } catch (err) {
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     status: 200,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": 'inline; filename="phantom-agent-openapi.json"',
+      "Content-Disposition": 'inline; filename="guardian-agent-openapi.json"',
     },
   });
 }

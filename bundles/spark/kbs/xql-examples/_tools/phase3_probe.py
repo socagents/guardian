@@ -56,7 +56,7 @@ from typing import Any
 
 # ─── Config ─────────────────────────────────────────────────────────
 
-AGENT_URL = os.environ.get("PHANTOM_AGENT_URL", "https://localhost:3001")
+AGENT_URL = os.environ.get("GUARDIAN_AGENT_URL", "https://localhost:3001")
 TLS_INSECURE = ssl._create_unverified_context()
 
 

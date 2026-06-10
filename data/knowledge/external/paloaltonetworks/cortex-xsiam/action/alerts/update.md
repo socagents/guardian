@@ -44,4 +44,4 @@ Bulk-update one or more alerts. Common operations: change severity, set status t
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_alerts_update`
+- Guardian tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_alerts_update`

@@ -1,4 +1,4 @@
-# Phantom CI/CD Guide
+# Guardian CI/CD Guide
 
 > Build, test, prerelease, release. Pipeline mechanics, workflow
 > contracts, change scenarios, customer upgrade flows, approval gates.
@@ -27,7 +27,7 @@
 - [Customer onboarding flow (first-time install)](#customer-onboarding-flow-first-time-install)
 - [Rollback procedure](#rollback-procedure)
   - [Tag immutability + accidental tag deletion](#tag-immutability--recovery-from-accidental-tag-deletion)
-- [phantom-updater in the release loop](#phantom-updater-in-the-release-loop)
+- [guardian-updater in the release loop](#guardian-updater-in-the-release-loop)
 - [Pre-release / beta channel (future)](#pre-release--beta-channel-future)
 - [The two installers](#the-two-installers)
   - [Monorepo release invariant](#monorepo-release-invariant)
@@ -45,11 +45,11 @@
 - [Build & release workflow (mechanics)](#build--release-workflow-mechanics)
   - [PR cycle (vs main-push cycle)](#pr-cycle-vs-main-push-cycle)
 - [Spec-driven workflow](#spec-driven-workflow)
-- [phantom-vm runner prerequisites](#phantom-vm-runner-prerequisites)
+- [guardian-vm runner prerequisites](#guardian-vm-runner-prerequisites)
   - [Self-hosted runner capacity](#self-hosted-runner-capacity)
 - [Code → VM contract](#code--vm-contract)
 - [Smoke-test commands (read-only, via IAP tunnel)](#smoke-test-commands)
-- [`installer/build-phantom-installer.sh` env-var contract](#installerbuild-phantom-installersh-env-var-contract)
+- [`installer/build-guardian-installer.sh` env-var contract](#installerbuild-guardian-installersh-env-var-contract)
 - [Image digest pinning contract (customer compose)](#image-digest-pinning-contract-customer-compose)
 - [Image signing, SBOM, provenance (future)](#image-signing-sbom-provenance-future)
 - [CI/CD failure modes + recovery playbook](#cicd-failure-modes--recovery-playbook)
@@ -60,7 +60,7 @@
 
 The diagram below summarizes the full pipeline as documented in this file: dev cycle, release cycle, the three change scenarios, GHCR per-version access, rollback paths, and the REBUILT/UNCHANGED diagnostic. **The diagram is a scaffold; this document has the detail.** When reading a section below, refer back to the diagram for spatial context.
 
-![Phantom CI/CD pipeline — full overview](cicd-pipeline.svg)
+![Guardian CI/CD pipeline — full overview](cicd-pipeline.svg)
 
 The diagram is generated from [`cicd-pipeline.svg`](cicd-pipeline.svg) in this same directory. Edit the SVG when the pipeline changes substantively — the visual + textual descriptions should stay in lockstep, same as CHANGELOG and release-notes.ts.
 
@@ -80,22 +80,22 @@ The diagram now reads top-to-bottom as **lifecycle → pipeline**: the top secti
 
 ## Overview
 
-Phantom ships to customers as a Docker Compose stack of 5 stack-level images (xlog, agent, caldera, updater, browser) plus N per-instance connector containers managed dynamically by phantom-updater. Two distribution flavors:
+Guardian ships to customers as a Docker Compose stack of 5 stack-level images (xlog, agent, caldera, updater, browser) plus N per-instance connector containers managed dynamically by guardian-updater. Two distribution flavors:
 
 | Flavor | For | Built by | Distributed via | Pull access |
 |---|---|---|---|---|
 | **Customer release** | Production customers | `release.yml` on `v*.*.*` tag push | GitHub Release `vX.Y.Z` + customer installer asset | Customer PAT (`read:packages` only) |
-| **Dev prerelease** | Operator (phantom-vm) | `build-dev-installer.yml` on every push to main | `dev-latest` GitHub prerelease + `/home/ayman/phantom-installer-dev` on phantom-vm | Operator PAT (`read:packages` only) via prerelease association |
+| **Dev prerelease** | Operator (guardian-vm) | `build-dev-installer.yml` on every push to main | `dev-latest` GitHub prerelease + `/home/ayman/guardian-installer-dev` on guardian-vm | Operator PAT (`read:packages` only) via prerelease association |
 
-Both installers execute the **same script body** (`installer/phantom-installer.template.sh`). The only difference is the digest manifest baked in at build time — customer releases pin to immutable `vX.Y.Z` content, dev prereleases pin to the rolling `:dev` digests.
+Both installers execute the **same script body** (`installer/guardian-installer.template.sh`). The only difference is the digest manifest baked in at build time — customer releases pin to immutable `vX.Y.Z` content, dev prereleases pin to the rolling `:dev` digests.
 
 The CI/CD pipeline has three sequential steps per push to main:
 
 1. **Per-service build** — `build-xlog.yml` / `build-agent.yml` / `build-caldera.yml` / `build-connectors.yml`. Each fires ONLY when its service's source changed. Pushes `:dev` image tag.
-2. **Dev installer build + prerelease publish** — `build-dev-installer.yml`. Fans in from any of the above (`workflow_run`) OR fires on `installer/**` changes. Resolves current `:dev` digests, builds `phantom-installer-dev`, stages at `/home/ayman/phantom-installer-dev`, publishes `dev-latest` prerelease (load-bearing for operator-PAT pull access).
+2. **Dev installer build + prerelease publish** — `build-dev-installer.yml`. Fans in from any of the above (`workflow_run`) OR fires on `installer/**` changes. Resolves current `:dev` digests, builds `guardian-installer-dev`, stages at `/home/ayman/guardian-installer-dev`, publishes `dev-latest` prerelease (load-bearing for operator-PAT pull access).
 3. **Customer release** — `release.yml`. Fires ONLY on `v*.*.*` tag push, AFTER explicit operator approval in chat. Builds customer images (conditional rebuild via path diff against previous tag), publishes GitHub Release with the customer installer asset, deletes `dev-latest` prerelease.
 
-Operator drives every install on phantom-vm. CI never installs. The IAP tunnel is for **read-only smoke testing AFTER the operator's install** — never for `tar+scp`, `docker compose build`, or any path that mutates VM source.
+Operator drives every install on guardian-vm. CI never installs. The IAP tunnel is for **read-only smoke testing AFTER the operator's install** — never for `tar+scp`, `docker compose build`, or any path that mutates VM source.
 
 ## Change scenarios
 
@@ -116,9 +116,9 @@ Every change to the codebase falls into one of three scenarios. The scenario det
   - **No new installer binary.** Customers use the installer they already have on disk.
 
 **Customer experience**:
-- Customer's existing installer at `/opt/phantom/phantom-installer` reads the latest minor manifest (within current major) on re-run.
-- Re-run command: `sudo /opt/phantom/phantom-installer`
-- Installer detects existing install at `/opt/phantom/`, prints `Upgrading v5.29 → v5.30 (same major, code-only)`, pulls newer images by digest, restarts services whose digest changed.
+- Customer's existing installer at `/opt/guardian/guardian-installer` reads the latest minor manifest (within current major) on re-run.
+- Re-run command: `sudo /opt/guardian/guardian-installer`
+- Installer detects existing install at `/opt/guardian/`, prints `Upgrading v5.29 → v5.30 (same major, code-only)`, pulls newer images by digest, restarts services whose digest changed.
 
 **Volume policy**: **PRESERVED**. The customer's stored content (jobs, skills, connector instances, memories, audit log, sessions, secrets, KEK material) survives the upgrade.
 
@@ -141,13 +141,13 @@ Every change to the codebase falls into one of three scenarios. The scenario det
 **What we ship**:
 - New `:v6.0` image tags on GHCR (where applicable; same conditional-rebuild logic as Scenario 1).
 - A new GitHub Release `v6.0` containing:
-  - A **NEW `phantom-installer` binary** with the new install logic + the new digest manifest baked in.
+  - A **NEW `guardian-installer` binary** with the new install logic + the new digest manifest baked in.
   - The new `release-manifest-v6.0.env`.
 
 **Customer experience**:
 - Customer downloads the new installer from the GitHub Release page.
-- Runs `sudo ./phantom-installer-v6`. The installer:
-  - Detects the existing install at `/opt/phantom/`.
+- Runs `sudo ./guardian-installer-v6`. The installer:
+  - Detects the existing install at `/opt/guardian/`.
   - Reads `WIPE_VOLUMES=false` flag baked in at build time (Scenario 2 default).
   - Prints `Upgrading v5.29 → v6.0 (major, installer changed; volumes preserved)`.
   - Runs the new install ceremony idempotently against the existing `.env` + volumes (preserves operator-managed lines; rewrites manifest-managed lines).
@@ -177,7 +177,7 @@ Every change to the codebase falls into one of three scenarios. The scenario det
 **What we ship**:
 - New `:v6.0` image tags on GHCR (all 5 stack services + connector images rebuilt).
 - A new GitHub Release `v6.0` containing:
-  - A NEW `phantom-installer` binary with:
+  - A NEW `guardian-installer` binary with:
     - The new digest manifest.
     - **`WIPE_VOLUMES=true`** flag baked in at build time (Scenario 3 marker).
     - Wipe logic that runs unconditionally when this installer is used to upgrade from any prior major.
@@ -187,11 +187,11 @@ Every change to the codebase falls into one of three scenarios. The scenario det
 **Customer experience**:
 - Customer downloads the new installer.
 - Customer is expected to make their own backups BEFORE running the upgrade (operator-side decision; not automated by the installer — see Rollback procedure).
-- Runs `sudo ./phantom-installer-v6`. The installer:
-  - Detects existing install at `/opt/phantom/`.
+- Runs `sudo ./guardian-installer-v6`. The installer:
+  - Detects existing install at `/opt/guardian/`.
   - Reads `WIPE_VOLUMES=true` flag from its baked-in config.
   - Prints `Upgrading v5.29 → v6.0 (major, schema-breaking; volumes WILL be wiped — fresh defaults)`.
-  - Wipes `phantom_*` docker volumes.
+  - Wipes `guardian_*` docker volumes.
   - Proceeds with fresh-volume install (default admin password, empty audit log, no instances, no jobs, etc.).
 
 **Volume policy**: **WIPED → FRESH DEFAULTS**. The customer's stored content is destroyed by design. Customers who needed to preserve content should have backed up BEFORE running the upgrade (their responsibility, not the installer's). See Rollback procedure for the fully-manual rollback discipline.
@@ -215,13 +215,13 @@ The mechanism distinguishing Scenario 2 (keep volumes) from Scenario 3 (wipe vol
 | Build-time flag value | Scenario | Customer install behavior |
 |---|---|---|
 | `WIPE_VOLUMES=false` | Scenario 2 | Installer runs idempotently against existing volumes; data preserved |
-| `WIPE_VOLUMES=true` | Scenario 3 | Installer wipes `phantom_*` volumes before install; data lost |
+| `WIPE_VOLUMES=true` | Scenario 3 | Installer wipes `guardian_*` volumes before install; data lost |
 
-The flag is set by `installer/build-phantom-installer.sh` at build time based on which scenario the release is. The operator opens the release issue with `scenario:2` or `scenario:3`; the release.yml workflow reads this label and sets the flag in the installer build.
+The flag is set by `installer/build-guardian-installer.sh` at build time based on which scenario the release is. The operator opens the release issue with `scenario:2` or `scenario:3`; the release.yml workflow reads this label and sets the flag in the installer build.
 
 **Why a flag and not a prompt**: prompts can be skipped or misinterpreted. A baked-in flag means the install ceremony is deterministic from the customer's perspective — they either downloaded a "keep volumes" installer or a "wipe volumes" installer, and they should know which BEFORE running it by reading the release notes.
 
-Implementation status: NOT YET IMPLEMENTED — `installer/build-phantom-installer.sh` does not currently read the scenario label and bake `WIPE_VOLUMES`. The first Scenario 3 release will require this implementation.
+Implementation status: NOT YET IMPLEMENTED — `installer/build-guardian-installer.sh` does not currently read the scenario label and bake `WIPE_VOLUMES`. The first Scenario 3 release will require this implementation.
 
 ### Factory reset
 
@@ -230,10 +230,10 @@ Implementation status: NOT YET IMPLEMENTED — `installer/build-phantom-installe
 Available at any time on the host:
 
 ```bash
-sudo /opt/phantom/phantom-factory-reset
+sudo /opt/guardian/guardian-factory-reset
 ```
 
-Wipes all `phantom_*` docker volumes, preserves `.env` (KEK + registry creds + operator-managed settings survive), re-runs the installer to bring fresh containers up. Customer types `FACTORY RESET` to confirm; `--dry-run` shows the plan without wiping; `--yes` skips the prompt for scripted use.
+Wipes all `guardian_*` docker volumes, preserves `.env` (KEK + registry creds + operator-managed settings survive), re-runs the installer to bring fresh containers up. Customer types `FACTORY RESET` to confirm; `--dry-run` shows the plan without wiping; `--yes` skips the prompt for scripted use.
 
 Use cases:
 - Customer wants a clean slate on the current version (corrupted state, test reset, demo prep).
@@ -249,7 +249,7 @@ When planning a change, walk this tree to identify the scenario:
 What did the change touch?
 │
 ├── Only source under mcp/agent/, bundles/spark/, xlog/, third_party/caldera/,
-│   bundles/spark/connectors/, phantom-connector-runtime/ ?
+│   bundles/spark/connectors/, guardian-connector-runtime/ ?
 │   AND backwards-compatible with prior storage schema?
 │   → SCENARIO 1
 │     • MINOR bump within current major (v5.29 → v5.30)
@@ -263,7 +263,7 @@ What did the change touch?
 │   → SCENARIO 2
 │     • MAJOR bump (v5.29 → v6.0)
 │     • customer downloads NEW installer from the release
-│     • runs sudo ./phantom-installer-v(X+1)
+│     • runs sudo ./guardian-installer-v(X+1)
 │     • installer baked with WIPE_VOLUMES=false → volumes preserved
 │     • no customer confirmation needed
 │
@@ -297,18 +297,18 @@ Edge cases:
 |---|---|---|
 | 1 | Customer re-runs EXISTING installer → fetches latest minor manifest within current major → pulls newer images | ⏳ Partial — installer self-detects existing install + applies new manifest, but the manifest-fetch-on-rerun path (read latest minor's release-manifest from GitHub Releases) is not yet implemented; today's installer has the manifest baked in at build time |
 | 2 | New installer with `WIPE_VOLUMES=false` flag → customer downloads → run → volumes preserved | ⏳ Partial — installer self-detect upgrade works; `WIPE_VOLUMES=false` flag is not yet baked into the build pipeline (today's installer always preserves volumes by default) |
-| 2 | `installer/build-phantom-installer.sh` reads `scenario:2` label and bakes `WIPE_VOLUMES=false` | ❌ Not implemented |
+| 2 | `installer/build-guardian-installer.sh` reads `scenario:2` label and bakes `WIPE_VOLUMES=false` | ❌ Not implemented |
 | 3 | New installer with `WIPE_VOLUMES=true` flag → customer downloads → run → volumes wiped → fresh defaults | ❌ Not implemented |
-| 3 | `installer/build-phantom-installer.sh` reads `scenario:3` label and bakes `WIPE_VOLUMES=true` | ❌ Not implemented |
+| 3 | `installer/build-guardian-installer.sh` reads `scenario:3` label and bakes `WIPE_VOLUMES=true` | ❌ Not implemented |
 | 3 | Volume wipe logic in installer's Step 6 (before manifest apply) | ❌ Not implemented |
 | 3 | Release-time discipline for breaking-change documentation + customer backup guidance | ✅ Documentation contract codified (see CLAUDE.md § Documentation discipline + customer-side backup is operator's responsibility) |
 
-Scenarios 1's full implementation requires the installer to fetch the latest minor's manifest from GitHub Releases on each re-run (rather than relying on baked-in digests). Scenarios 2 + 3 share the same `WIPE_VOLUMES` flag mechanic that's not yet implemented in `build-phantom-installer.sh`. **None of the scenario-specific implementations exist today**; the existing installer behaves as a "Scenario 1 with baked-in digests" path. The first non-trivial S2 or S3 release will require this implementation work — the contract above is the target.
+Scenarios 1's full implementation requires the installer to fetch the latest minor's manifest from GitHub Releases on each re-run (rather than relying on baked-in digests). Scenarios 2 + 3 share the same `WIPE_VOLUMES` flag mechanic that's not yet implemented in `build-guardian-installer.sh`. **None of the scenario-specific implementations exist today**; the existing installer behaves as a "Scenario 1 with baked-in digests" path. The first non-trivial S2 or S3 release will require this implementation work — the contract above is the target.
 
 Suggested v(X+1).0.0 implementation outline:
-1. Add `INCOMPATIBLE_FROM` placeholder to `installer/phantom-installer.template.sh`. At build time, `installer/build-phantom-installer.sh` substitutes it from an env var (`INCOMPATIBLE_FROM=v0.5.0,v0.5.1,...,v0.5.12`).
-2. New install step (between Step 3 and Step 4) reads `PHANTOM_VERSION` from `/opt/phantom/.env`. If it matches the `INCOMPATIBLE_FROM` list, fire the confirmation prompt.
-3. On `UPGRADE`: shell out to `docker compose -f /opt/phantom/docker-compose.yml down --remove-orphans`, then `tar` each `phantom_*` volume's mount-point under `/opt/phantom/backups/<new-version>-pre-upgrade-<timestamp>/`, then `docker volume rm`, then continue with the standard fresh-volume install.
+1. Add `INCOMPATIBLE_FROM` placeholder to `installer/guardian-installer.template.sh`. At build time, `installer/build-guardian-installer.sh` substitutes it from an env var (`INCOMPATIBLE_FROM=v0.5.0,v0.5.1,...,v0.5.12`).
+2. New install step (between Step 3 and Step 4) reads `GUARDIAN_VERSION` from `/opt/guardian/.env`. If it matches the `INCOMPATIBLE_FROM` list, fire the confirmation prompt.
+3. On `UPGRADE`: shell out to `docker compose -f /opt/guardian/docker-compose.yml down --remove-orphans`, then `tar` each `guardian_*` volume's mount-point under `/opt/guardian/backups/<new-version>-pre-upgrade-<timestamp>/`, then `docker volume rm`, then continue with the standard fresh-volume install.
 4. CHANGELOG + release-notes for the breaking release include the migration note.
 
 ## Release-readiness criteria (the use-case-completion gate)
@@ -323,7 +323,7 @@ Pre-v0.6.52 the agent's mental model defaulted to "each green commit could be a 
 
 When the agent is in the middle of a multi-release arc:
 
-1. **Iterate the dev cycle autonomously.** Each commit goes through: pre-deploy gate (tsc + lint + build + pytest) → push → CI build → auto-deploy on phantom-vm → agent-side smoke via IAP tunnel → fix-and-push next iteration. **No operator approval requested between iterations.** The operator has pre-authorized the dev cycle by setting up the multi-release arc.
+1. **Iterate the dev cycle autonomously.** Each commit goes through: pre-deploy gate (tsc + lint + build + pytest) → push → CI build → auto-deploy on guardian-vm → agent-side smoke via IAP tunnel → fix-and-push next iteration. **No operator approval requested between iterations.** The operator has pre-authorized the dev cycle by setting up the multi-release arc.
 2. **Smoke-uncovered bugs are fixed inline, not deferred.** If the smoke matrix uncovers a bug — even one unrelated to the current commit's stated scope — the agent files the fix as the next iteration's release. Use-case completion is the bar. "Track in a follow-up issue" is forbidden when the bug blocks the use case from working end-to-end. v0.6.52's discovery of the kb_loader strict-required-fields bug (doc_count 631 vs 629) is the canonical example: caught during smoke, fixed in the next iteration (v0.6.53), not deferred to "post-tag work."
 3. **Tag only on capability completion.** The tag question is asked when the agent has verified end-to-end on the deployed install: the user can perform the use case the arc was meant to deliver, the smoke matrix at the capability level passes (not just per-commit bullets), and the docs (architecture page + user guide + journeys + release notes) reflect the capability. Only then does the agent ask the operator for explicit tag approval per CLAUDE.md § Approval phrasing.
 4. **Mid-arc commits get CHANGELOG entries, not release tags.** Every commit still ships its own CHANGELOG.md + release-notes.ts entry for traceability (per CLAUDE.md § Documentation discipline). The entries name the prerequisite role: "v0.6.52 is a prerequisite for the XQL skill capability; the skill itself ships in v0.6.5N." This way the operator + future code-archaeologists can trace the arc when reading commit history.
@@ -343,7 +343,7 @@ The end-state check goes in the FIRST commit of the arc's CHANGELOG entry, in a 
 
 - **No automated arc detection.** The agent doesn't try to infer "this commit completes an arc" from code patterns. Arcs are declared explicitly by the operator or by the agent at arc-open time, stored in the FIRST commit's CHANGELOG entry, and updated as the arc progresses.
 - **No tag-blocking automation.** This is a behavioral contract for the agent. The tag mechanics (release.yml on `v*.*.*` push) are unchanged; the discipline lives in CLAUDE.md (agent behavior) + this document (CI/CD mechanics).
-- **No "skip the dev cycle" path.** Mid-arc commits STILL build + deploy + smoke. The optimization isn't "fewer cycles"; it's "fewer customer-facing tags." Customers see one tag per arc; the agent + phantom-vm see many dev-cycle iterations between tags.
+- **No "skip the dev cycle" path.** Mid-arc commits STILL build + deploy + smoke. The optimization isn't "fewer cycles"; it's "fewer customer-facing tags." Customers see one tag per arc; the agent + guardian-vm see many dev-cycle iterations between tags.
 
 ### Forbidden under this gate
 
@@ -354,7 +354,7 @@ The end-state check goes in the FIRST commit of the arc's CHANGELOG entry, in a 
 
 ## Deprecation policy
 
-Phantom doesn't yet have a deprecated feature in production, but the policy below applies starting with the first feature we deprecate. Codified now so the first deprecation doesn't reinvent the discipline under pressure.
+Guardian doesn't yet have a deprecated feature in production, but the policy below applies starting with the first feature we deprecate. Codified now so the first deprecation doesn't reinvent the discipline under pressure.
 
 ### The deprecation lifecycle
 
@@ -397,7 +397,7 @@ Every deprecated feature moves through 3 stages:
 ### Examples (hypothetical, none shipped yet)
 
 - "Legacy `setup.json` config file format" — deprecated in v0.6.0, warning surfaced in v0.6.5, removed in v1.0.0 (with installer-side migration to `.env`-only).
-- "Old MCP tool name `phantom_log_query` replaced by `xlog_search`" — both registered in v0.7.0 with deprecation notice on old, removed in v1.0.0.
+- "Old MCP tool name `guardian_log_query` replaced by `xlog_search`" — both registered in v0.7.0 with deprecation notice on old, removed in v1.0.0.
 
 ### Forbidden in deprecation work
 
@@ -408,7 +408,7 @@ Every deprecated feature moves through 3 stages:
 
 ## Customer onboarding flow (first-time install)
 
-The Change Scenarios section above describes the UPGRADE path (customer already has Phantom installed). This section covers the **first-time install** experience for a brand-new customer.
+The Change Scenarios section above describes the UPGRADE path (customer already has Guardian installed). This section covers the **first-time install** experience for a brand-new customer.
 
 ### Prerequisites the customer brings
 
@@ -425,27 +425,27 @@ The Change Scenarios section above describes the UPGRADE path (customer already 
    ```bash
    # Pick ONE of these forms — they're equivalent.
    # Form A (gh CLI, recommended if installed):
-   gh release download v0.5.X --repo kite-production/phantom --pattern phantom-installer
-   chmod +x phantom-installer
+   gh release download v0.5.X --repo kite-production/guardian --pattern guardian-installer
+   chmod +x guardian-installer
 
    # Form B (curl, when gh isn't available):
-   curl -sSLo phantom-installer \
-     "https://github.com/kite-production/phantom/releases/latest/download/phantom-installer"
-   chmod +x phantom-installer
+   curl -sSLo guardian-installer \
+     "https://github.com/kite-production/guardian/releases/latest/download/guardian-installer"
+   chmod +x guardian-installer
    ```
-   `phantom-installer` is a single-file shell script with all docker-compose + helper scripts embedded via heredoc. It's `~30 KB` — small enough to email/scp if needed.
+   `guardian-installer` is a single-file shell script with all docker-compose + helper scripts embedded via heredoc. It's `~30 KB` — small enough to email/scp if needed.
 
 2. **Run the installer**:
    ```bash
-   sudo ./phantom-installer
+   sudo ./guardian-installer
    ```
-   The installer auto-detects "fresh install vs upgrade" by checking whether `/opt/phantom/.env` exists. On fresh install, it creates `/opt/phantom/`, generates secrets (KEK, random admin password, MCP_TOKEN), pulls images, brings the stack up.
+   The installer auto-detects "fresh install vs upgrade" by checking whether `/opt/guardian/.env` exists. On fresh install, it creates `/opt/guardian/`, generates secrets (KEK, random admin password, MCP_TOKEN), pulls images, brings the stack up.
 
-3. **Step 4 — Registry credentials** (interactive prompt): Customer pastes their `read:packages` PAT. The installer validates against `ghcr.io` (v0.5.8+ probe — see [PAT recipes](#pat-recipes)); on validation success, the PAT is written to `/opt/phantom/.env` as `PHANTOM_REGISTRY_TOKEN=ghp_…`.
+3. **Step 4 — Registry credentials** (interactive prompt): Customer pastes their `read:packages` PAT. The installer validates against `ghcr.io` (v0.5.8+ probe — see [PAT recipes](#pat-recipes)); on validation success, the PAT is written to `/opt/guardian/.env` as `GUARDIAN_REGISTRY_TOKEN=ghp_…`.
 
-4. **Step 7 — Stack startup**: installer pulls + starts 4 services (`xlog`, `caldera`, `phantom-agent`, `phantom-updater`; `phantom-browser` stays profile-gated until a web connector instance is configured). On healthy phantom-agent, banner prints:
+4. **Step 7 — Stack startup**: installer pulls + starts 4 services (`xlog`, `caldera`, `guardian-agent`, `guardian-updater`; `guardian-browser` stays profile-gated until a web connector instance is configured). On healthy guardian-agent, banner prints:
    ```
-   ✓ Phantom v0.5.X is running.
+   ✓ Guardian v0.5.X is running.
      Open in a browser:    https://<vm-ip>:3000
      Note:                 The agent uses a self-signed cert. Your
                            browser will warn the first time; accept it.
@@ -454,10 +454,10 @@ The Change Scenarios section above describes the UPGRADE path (customer already 
 
 5. **First-time UI flow**:
    - Customer browses to `https://<vm-ip>:3000` and accepts the self-signed-cert warning.
-   - Logs in with `admin` + the randomized password from the install banner (also persisted to `/opt/phantom/.env` as `PHANTOM_DEFAULT_ADMIN_PASSWORD` if they close the terminal).
+   - Logs in with `admin` + the randomized password from the install banner (also persisted to `/opt/guardian/.env` as `GUARDIAN_DEFAULT_ADMIN_PASSWORD` if they close the terminal).
    - Lands at `/profile` with a non-dismissible banner: **"Change your default password before continuing."**
    - Changes password, gets force-logged-out, signs back in with the new password.
-   - From this point forward, `PHANTOM_DEFAULT_ADMIN_PASSWORD` in `.env` is never consulted (auth uses the SecretStore-encrypted operator-set password).
+   - From this point forward, `GUARDIAN_DEFAULT_ADMIN_PASSWORD` in `.env` is never consulted (auth uses the SecretStore-encrypted operator-set password).
 
 6. **Configure providers + connectors**:
    - `/providers` → add a model provider (Vertex AI service-account JSON or Gemini API key).
@@ -491,36 +491,36 @@ When a release breaks something AND the storage schema hasn't changed (i.e., the
 
 1. **Identify the previous good version**. From the GitHub Releases page or `gh release list`:
    ```bash
-   gh release list --repo kite-production/phantom --limit 5
+   gh release list --repo kite-production/guardian --limit 5
    ```
 2. **Download the installer for the prior version**:
    ```bash
-   gh release download v0.5.X-prior --repo kite-production/phantom --pattern phantom-installer
-   chmod +x phantom-installer
+   gh release download v0.5.X-prior --repo kite-production/guardian --pattern guardian-installer
+   chmod +x guardian-installer
    ```
 3. **Run the older installer**:
    ```bash
-   sudo ./phantom-installer
+   sudo ./guardian-installer
    ```
-   The installer auto-detects existing install at `/opt/phantom/`, reads the running version from `.env`, prints `→ Downgrading vX.Y.Z+1 → vX.Y.Z` (the installer's upgrade-banner logic treats version movement bidirectionally), rewrites the digest manifest with the OLDER version's digests, pulls the older images, restarts services whose digest changed.
+   The installer auto-detects existing install at `/opt/guardian/`, reads the running version from `.env`, prints `→ Downgrading vX.Y.Z+1 → vX.Y.Z` (the installer's upgrade-banner logic treats version movement bidirectionally), rewrites the digest manifest with the OLDER version's digests, pulls the older images, restarts services whose digest changed.
 4. **Volume policy**: PRESERVED. Same as Scenario 1/2 upgrade — only services whose digest changed get recreated.
 
 **Caveat**: this assumes the older release's images are still on GHCR. release.yml publishes images permanently (no auto-cleanup); rollback target should be reachable indefinitely.
 
 ### Customer-side rollback (Scenario 3 — incompatible schema)
 
-When the bad release was Scenario 3 (storage schema breaking), rollback is **only possible if the customer's `/opt/phantom/backups/<release>-pre-upgrade-<timestamp>/` is intact**. Procedure:
+When the bad release was Scenario 3 (storage schema breaking), rollback is **only possible if the customer's `/opt/guardian/backups/<release>-pre-upgrade-<timestamp>/` is intact**. Procedure:
 
-1. Stop the stack: `sudo docker compose -f /opt/phantom/docker-compose.yml down --remove-orphans`.
-2. Wipe the post-upgrade volumes: `sudo docker volume rm $(docker volume ls -q --filter name=phantom_)`.
-3. Manually restore the backed-up volume contents (the backup is a tarball per volume under `/opt/phantom/backups/.../`):
+1. Stop the stack: `sudo docker compose -f /opt/guardian/docker-compose.yml down --remove-orphans`.
+2. Wipe the post-upgrade volumes: `sudo docker volume rm $(docker volume ls -q --filter name=guardian_)`.
+3. Manually restore the backed-up volume contents (the backup is a tarball per volume under `/opt/guardian/backups/.../`):
    ```bash
    # Example for one volume (repeat per volume):
-   sudo docker volume create phantom_secrets
-   sudo tar -xzf /opt/phantom/backups/vX.0.0-pre-upgrade-<ts>/phantom_secrets.tar.gz \
-     -C /var/lib/docker/volumes/phantom_secrets/_data
+   sudo docker volume create guardian_secrets
+   sudo tar -xzf /opt/guardian/backups/vX.0.0-pre-upgrade-<ts>/guardian_secrets.tar.gz \
+     -C /var/lib/docker/volumes/guardian_secrets/_data
    ```
-4. Restore `.env` from `/opt/phantom/backups/.../`.
+4. Restore `.env` from `/opt/guardian/backups/.../`.
 5. Re-run the OLDER installer (the one that wrote the schema this backup was made with).
 
 This is a manual procedure. If customers can't follow it confidently, the practical answer is "live with the failure on the new version, file a bug, wait for v(X+1).0.1 fix." Scenario 3 rollback is operationally expensive by design — the major-version bump signals exactly this irreversibility.
@@ -531,7 +531,7 @@ When we (the operator) realize we shipped a broken release, BEFORE customers hit
 
 1. **Mark the release as draft** (hides it from `latest` resolution but doesn't break already-downloaded installers):
    ```bash
-   gh release edit vX.Y.Z --draft --repo kite-production/phantom
+   gh release edit vX.Y.Z --draft --repo kite-production/guardian
    ```
    Effect: the release disappears from the public listing. Customers who haven't yet downloaded the installer for this version won't see it; their existing installer (for an older version) continues to work. The release assets remain accessible by direct URL for already-issued downloads.
 2. **Cut a follow-up release** with the fix (regardless of how trivial — every yank deserves a documented replacement, not a silent revert).
@@ -546,7 +546,7 @@ When the release has been live for hours-to-days and customers have already adop
 
 When `release.yml` fires on a tag push but fails partway through (the v0.5.4 release-yml partial-failure case we hit before, or any future similar):
 
-1. **Identify what got published vs what didn't**. Check `gh release view vX.Y.Z` — does the release exist? Are the assets attached? Are the images on GHCR (`docker manifest inspect ghcr.io/kite-production/phantom-agent:vX.Y.Z`)?
+1. **Identify what got published vs what didn't**. Check `gh release view vX.Y.Z` — does the release exist? Are the assets attached? Are the images on GHCR (`docker manifest inspect ghcr.io/kite-production/guardian-agent:vX.Y.Z`)?
 2. **If the release object exists but assets are missing**: re-run release.yml via `workflow_dispatch` with `version=X.Y.Z`. The workflow uploads assets that are missing.
 3. **If the release was never created**: delete the tag locally + remotely, re-tag the same commit, push again to fire release.yml fresh:
    ```bash
@@ -581,7 +581,7 @@ If someone (you, a CI bug, a misclicked button) deletes a published tag:
    git tag vX.Y.Z <recovered-commit-sha>
    git push origin vX.Y.Z
    ```
-4. **Verify customer flow still works**: `gh release download vX.Y.Z --pattern phantom-installer` from a workstation with a customer-style PAT.
+4. **Verify customer flow still works**: `gh release download vX.Y.Z --pattern guardian-installer` from a workstation with a customer-style PAT.
 
 If you can't recover the original commit, the tag is effectively lost. The published images on GHCR survive (they're tagged by digest content), but the customer-facing "release vX.Y.Z" handle is gone until you publish a successor `vX.Y.Z+1` covering whatever the lost tag was supposed to cover.
 
@@ -591,37 +591,37 @@ See [CI/CD failure modes #4 (PREV_V race)](#4-prev_v-race-when-tagging-two-versi
 
 ### Forbidden in rollback procedures
 
-- **Editing image digests in `/opt/phantom/.env` by hand** to "force a rollback" without re-running the older installer. The manifest-managed lines are owned by the installer; hand-editing drifts the running stack from any reproducible release point.
+- **Editing image digests in `/opt/guardian/.env` by hand** to "force a rollback" without re-running the older installer. The manifest-managed lines are owned by the installer; hand-editing drifts the running stack from any reproducible release point.
 - **Deleting a published release entirely** (`gh release delete vX.Y.Z`). The released images on GHCR lose their release association — customer PATs lose pull permission. Use `--draft` instead.
 - **Force-pushing a different commit to the same `vX.Y.Z` tag**. Tag immutability is the customer's trust mechanism: if `vX.Y.Z` points at different content this week than last week, customers' digest manifests no longer match what's on GHCR.
 - **Deleting a published tag**. `git push origin :refs/tags/vX.Y.Z` against a live release breaks `gh release download` for customers. Use draft + recreate-from-known-commit if you genuinely need to alter a tag.
 
-## phantom-updater in the release loop
+## guardian-updater in the release loop
 
-`phantom-updater` is the in-stack service that manages **per-instance connector containers** (its primary and only production role as of v0.5.20). It runs as a sidecar container in the customer's compose stack.
+`guardian-updater` is the in-stack service that manages **per-instance connector containers** (its primary and only production role as of v0.5.20). It runs as a sidecar container in the customer's compose stack.
 
-**v0.5.20 model correction — no in-UI upgrade path**: pre-v0.5.20 docs described phantom-updater as the engine behind an "in-UI Update button" that drove Scenario 1 upgrades. That path is removed. Customer upgrades happen via the installer ONLY (Scenario 1: re-run existing installer; Scenarios 2 + 3: download new installer). The legacy update-detection + update-apply endpoints (`/api/v1/version/check`, `/api/v1/update`) may still exist in the source tree but are not exercised from the customer-facing UI.
+**v0.5.20 model correction — no in-UI upgrade path**: pre-v0.5.20 docs described guardian-updater as the engine behind an "in-UI Update button" that drove Scenario 1 upgrades. That path is removed. Customer upgrades happen via the installer ONLY (Scenario 1: re-run existing installer; Scenarios 2 + 3: download new installer). The legacy update-detection + update-apply endpoints (`/api/v1/version/check`, `/api/v1/update`) may still exist in the source tree but are not exercised from the customer-facing UI.
 
 ### Primary role: per-instance connector container lifecycle
 
-When the customer creates a connector instance (via `/instances`), phantom-updater:
-- Pulls the corresponding connector image (e.g., `phantom-connector-xlog:vX.Y.Z`) by digest.
+When the customer creates a connector instance (via `/instances`), guardian-updater:
+- Pulls the corresponding connector image (e.g., `guardian-connector-xlog:vX.Y.Z`) by digest.
 - Starts a per-instance container with the customer's instance-specific config + secret-store handle.
 - Tracks the container's lifecycle (health, restart, removal) for the agent's `/instances` page.
 
-This is the load-bearing reason phantom-updater exists today. The image lifecycle for these per-instance containers is the only customer-facing CI/CD-adjacent behavior phantom-updater drives.
+This is the load-bearing reason guardian-updater exists today. The image lifecycle for these per-instance containers is the only customer-facing CI/CD-adjacent behavior guardian-updater drives.
 
 ### Source + interface
 
 - Source: [`updater/src/main.py`](../updater/src/main.py) — FastAPI service.
-- Port: not exposed externally; phantom-agent calls it internally over the compose network.
-- Image: `ghcr.io/<owner>/phantom-updater:vX.Y.Z` — built by release.yml only (not on the dev cycle; that's why `phantom-updater` shows up as STABLE-ADVANCED in `build-dev-installer.yml`'s diagnostic, not REBUILT).
+- Port: not exposed externally; guardian-agent calls it internally over the compose network.
+- Image: `ghcr.io/<owner>/guardian-updater:vX.Y.Z` — built by release.yml only (not on the dev cycle; that's why `guardian-updater` shows up as STABLE-ADVANCED in `build-dev-installer.yml`'s diagnostic, not REBUILT).
 
 ### Auth
 
-Every authenticated endpoint requires `Authorization: Bearer <MCP_TOKEN>`. The `MCP_TOKEN` env var is shared with phantom-agent (per-stack random, generated by the installer at first boot, persisted in `/opt/phantom/.env`). If `MCP_TOKEN` is unset, all authenticated routes return 401 — fail-closed by design.
+Every authenticated endpoint requires `Authorization: Bearer <MCP_TOKEN>`. The `MCP_TOKEN` env var is shared with guardian-agent (per-stack random, generated by the installer at first boot, persisted in `/opt/guardian/.env`). If `MCP_TOKEN` is unset, all authenticated routes return 401 — fail-closed by design.
 
-For pulling connector images from GHCR, phantom-updater uses `PHANTOM_REGISTRY_TOKEN` (the customer's PAT, same one the installer captured at first install). The `_docker_login()` helper wraps `docker login ghcr.io -u $GHCR_USER -p $TOKEN` before any pull.
+For pulling connector images from GHCR, guardian-updater uses `GUARDIAN_REGISTRY_TOKEN` (the customer's PAT, same one the installer captured at first install). The `_docker_login()` helper wraps `docker login ghcr.io -u $GHCR_USER -p $TOKEN` before any pull.
 
 ### Legacy upgrade endpoints (vestigial)
 
@@ -636,11 +636,11 @@ These endpoints exist in `updater/src/main.py` but are NOT used by the customer-
 
 Future cleanup: when these endpoints are removed, the corresponding code paths in `updater/src/main.py` go with them. Deferred until a future release that warrants the touchup.
 
-### Forbidden in phantom-updater work
+### Forbidden in guardian-updater work
 
 - **Re-introducing a customer-facing "UI Update button"**. Upgrades go through the installer. Period.
-- **Adding auto-rollback logic to phantom-updater**. Rollback is fully manual at the operator level (see Rollback procedure).
-- **Making phantom-updater update itself**. Splitting the trust boundary (separate image, separate version) is what lets phantom-updater stay running during phantom-agent restarts. Self-update breaks this invariant.
+- **Adding auto-rollback logic to guardian-updater**. Rollback is fully manual at the operator level (see Rollback procedure).
+- **Making guardian-updater update itself**. Splitting the trust boundary (separate image, separate version) is what lets guardian-updater stay running during guardian-agent restarts. Self-update breaks this invariant.
 - **Bypassing the `MCP_TOKEN` bearer check**. Fail-closed-on-unset is non-negotiable.
 
 ## Pre-release / beta channel (future)
@@ -649,7 +649,7 @@ Today's release model has exactly two channels: customer releases (`vX.Y.Z` tags
 
 **Status today**: not implemented; not yet needed. No customer has asked for beta access; the dev/release split covers single-operator + production-customer flows cleanly.
 
-**When this becomes relevant**: first time a customer wants to validate a release on their staging environment before promoting it to production. Or first time we want a wider feedback loop than just the operator on phantom-vm before customer GA.
+**When this becomes relevant**: first time a customer wants to validate a release on their staging environment before promoting it to production. Or first time we want a wider feedback loop than just the operator on guardian-vm before customer GA.
 
 ### Design sketch (for when it's needed)
 
@@ -664,14 +664,14 @@ If we add a beta channel later, the shape would mirror the existing prerelease m
 Mechanic: `release.yml` would gain a flag (or a separate `release-beta.yml` workflow) that fires on `v*-beta.*` tag push, creates a `--prerelease` GitHub Release, and DOESN'T delete `dev-latest` (since beta is parallel to dev, not a replacement). Customers in the beta program would:
 1. Receive a one-off "beta access granted" notice from the operator.
 2. Use their existing customer PAT (`read:packages` is sufficient — prerelease versions inherit the same per-version access semantics as releases).
-3. Explicitly target the beta version: `gh release download vX.Y.Z-beta.N --pattern phantom-installer`.
+3. Explicitly target the beta version: `gh release download vX.Y.Z-beta.N --pattern guardian-installer`.
 4. Install + smoke-test in their environment, report issues.
 5. Operator decides whether to promote to `vX.Y.Z` (drops `-beta` suffix, fresh tag) or iterate.
 
 **Implementation work needed when this triggers**:
 - New `release-beta.yml` workflow (or extension to `release.yml`).
 - Customer-facing beta-program documentation.
-- phantom-updater modifications to detect beta releases for opted-in customers (channel-aware update detection).
+- guardian-updater modifications to detect beta releases for opted-in customers (channel-aware update detection).
 - Internal SOP for beta-program enrollment + access management.
 
 ### Forbidden going forward (beta channel)
@@ -684,43 +684,43 @@ Mechanic: `release.yml` would gain a flag (or a separate `release-beta.yml` work
 
 | Installer | Built by | Triggered by | Image tags | Pinned how | Distribution | Shipped to customers? |
 |---|---|---|---|---|---|---|
-| `phantom-installer` | [release.yml](../.github/workflows/release.yml) | `v*.*.*` tag push | `ghcr.io/<owner>/phantom-<svc>:vX.Y.Z` (immutable semver) | per-image digests baked into the binary | GitHub Release asset on the `vX.Y.Z` release | **YES** |
-| `phantom-installer-dev` | [build-dev-installer.yml](../.github/workflows/build-dev-installer.yml) | per-service build workflow completion + push to `installer/**` + `workflow_dispatch` | `ghcr.io/<owner>/phantom-<svc>:dev` (overwritten per push) | per-image digests baked into the binary | GitHub Release asset on the `dev-latest` **prerelease** + staged at `/home/ayman/phantom-installer-dev` on phantom-vm + workflow artifact | **NO** |
+| `guardian-installer` | [release.yml](../.github/workflows/release.yml) | `v*.*.*` tag push | `ghcr.io/<owner>/guardian-<svc>:vX.Y.Z` (immutable semver) | per-image digests baked into the binary | GitHub Release asset on the `vX.Y.Z` release | **YES** |
+| `guardian-installer-dev` | [build-dev-installer.yml](../.github/workflows/build-dev-installer.yml) | per-service build workflow completion + push to `installer/**` + `workflow_dispatch` | `ghcr.io/<owner>/guardian-<svc>:dev` (overwritten per push) | per-image digests baked into the binary | GitHub Release asset on the `dev-latest` **prerelease** + staged at `/home/ayman/guardian-installer-dev` on guardian-vm + workflow artifact | **NO** |
 
-The two binaries execute the **identical** script body — same install/upgrade ceremony, same compose, same env file, same install location. The ONLY divergence is the digest manifest baked in at build time via `installer/build-phantom-installer.sh`. The customer installer has zero knowledge of dev — no flags, no branches, no toggles.
+The two binaries execute the **identical** script body — same install/upgrade ceremony, same compose, same env file, same install location. The ONLY divergence is the digest manifest baked in at build time via `installer/build-guardian-installer.sh`. The customer installer has zero knowledge of dev — no flags, no branches, no toggles.
 
 ### Monorepo release invariant
 
-**Phantom is a monorepo release**: all 5 stack-level services (`phantom-xlog`, `phantom-agent`, `phantom-caldera`, `phantom-updater`, `phantom-browser`) + 6 per-connector images (`phantom-connector-{runtime,xlog,xsiam,caldera,web,cortex-docs,cortex-content}`) ship in lockstep at the same `vX.Y.Z` version. Mixed-version manifests are NOT supported by phantom-installer or phantom-updater.
+**Guardian is a monorepo release**: all 5 stack-level services (`guardian-xlog`, `guardian-agent`, `guardian-caldera`, `guardian-updater`, `guardian-browser`) + 6 per-connector images (`guardian-connector-{runtime,xlog,xsiam,caldera,web,cortex-docs,cortex-content}`) ship in lockstep at the same `vX.Y.Z` version. Mixed-version manifests are NOT supported by guardian-installer or guardian-updater.
 
 - `release.yml`'s conditional rebuild logic is **purely an optimization** — it retags from the previous version's digests when a service's source is unchanged, so the resulting customer compose still has only ONE version string but contains a mix of newly-built and retagged-from-prev digests.
-- The version string in `/opt/phantom/.env` (`PHANTOM_VERSION=0.5.X`) refers to the **release as a whole**, not to any individual image's source-version.
-- Customers can't pick "give me phantom-agent v0.5.10 but xlog v0.5.4." Phantom-updater + phantom-installer both refuse mixed-version manifests by reading `PHANTOM_VERSION` as authoritative.
+- The version string in `/opt/guardian/.env` (`GUARDIAN_VERSION=0.5.X`) refers to the **release as a whole**, not to any individual image's source-version.
+- Customers can't pick "give me guardian-agent v0.5.10 but xlog v0.5.4." Guardian-updater + guardian-installer both refuse mixed-version manifests by reading `GUARDIAN_VERSION` as authoritative.
 
 When working on a release that "only touches agent," the resulting `vX.Y.Z+1` will still publish manifest entries for xlog/caldera/updater/browser — just retagged from the previous release's digests. That's not a bug; it's the unified-release contract.
 
 **Forbidden**:
-- Hand-editing `PHANTOM_VERSION` in `/opt/phantom/.env` to mix versions.
+- Hand-editing `GUARDIAN_VERSION` in `/opt/guardian/.env` to mix versions.
 - Splitting release.yml into per-service release workflows (would break the unified release-version invariant).
 - Customer-facing "service-pin override" UI surfaces (no — the version is the release, period).
 
 ## Image tag convention
 
-- **Release**: `ghcr.io/<owner>/phantom-<svc>:vX.Y.Z`. Immutable. Customers reference these via digest in the customer compose. Released to GHCR by `release.yml`'s `gh release create` — the GitHub Release association is what grants customer PATs (with `read:packages` scope) pull permission for these versions.
-- **Dev**: `ghcr.io/<owner>/phantom-<svc>:dev`. Overwritten on every push to main. Each push's `build-<svc>.yml` repushes `:dev` for the changed service; `build-dev-installer.yml` then rebuilds the dev installer with the new digests AND publishes the `dev-latest` GitHub **prerelease** that grants pull access to the freshly-pushed `:dev` versions. Forensics (which SHA does this `:dev` correspond to) are preserved via the dev installer's version string (`dev-<short-sha>`), the build-* workflow logs, and the SHA + digests embedded in the `dev-latest` prerelease body.
-- **Local `:local`** (deprecated): pre-v0.4.0 the monolithic build.yml produced `:local` tags. Going forward, the per-service `build-<svc>.yml` workflows push directly to `:dev` on GHCR so phantom-vm always pulls via the canonical GHCR path — there's no `:local` retag step.
+- **Release**: `ghcr.io/<owner>/guardian-<svc>:vX.Y.Z`. Immutable. Customers reference these via digest in the customer compose. Released to GHCR by `release.yml`'s `gh release create` — the GitHub Release association is what grants customer PATs (with `read:packages` scope) pull permission for these versions.
+- **Dev**: `ghcr.io/<owner>/guardian-<svc>:dev`. Overwritten on every push to main. Each push's `build-<svc>.yml` repushes `:dev` for the changed service; `build-dev-installer.yml` then rebuilds the dev installer with the new digests AND publishes the `dev-latest` GitHub **prerelease** that grants pull access to the freshly-pushed `:dev` versions. Forensics (which SHA does this `:dev` correspond to) are preserved via the dev installer's version string (`dev-<short-sha>`), the build-* workflow logs, and the SHA + digests embedded in the `dev-latest` prerelease body.
+- **Local `:local`** (deprecated): pre-v0.4.0 the monolithic build.yml produced `:local` tags. Going forward, the per-service `build-<svc>.yml` workflows push directly to `:dev` on GHCR so guardian-vm always pulls via the canonical GHCR path — there's no `:local` retag step.
 
 ## GHCR per-version access
 
 **GHCR enforces pull access per IMAGE VERSION, not per package and not per token scope alone.** This is the single most important fact about the dev cycle, and the v0.5.9 prerelease architecture exists to make it work.
 
-The actual rules, confirmed empirically against `ghcr.io/kite-production/phantom-*`:
+The actual rules, confirmed empirically against `ghcr.io/kite-production/guardian-*`:
 
 | Scenario | Customer PAT (`read:packages` only) | Operator PAT (`repo + read:packages`) | `GITHUB_TOKEN` from workflow |
 |---|---|---|---|
-| Pull `phantom-agent:vX.Y.Z` (a customer release tag) | **✅ works** | ✅ works | ✅ works |
-| Pull `phantom-agent:dev` (with NO prerelease association) | ❌ 403/404 | ❌ 403/404 | ✅ works (publisher context) |
-| Pull `phantom-agent:dev` (associated with `dev-latest` prerelease via release.yml-equivalent) | **✅ works** | ✅ works | ✅ works |
+| Pull `guardian-agent:vX.Y.Z` (a customer release tag) | **✅ works** | ✅ works | ✅ works |
+| Pull `guardian-agent:dev` (with NO prerelease association) | ❌ 403/404 | ❌ 403/404 | ✅ works (publisher context) |
+| Pull `guardian-agent:dev` (associated with `dev-latest` prerelease via release.yml-equivalent) | **✅ works** | ✅ works | ✅ works |
 
 Why "version-level" rather than "package-level": a package version becomes org-readable when it's associated with a GitHub Release. Versions published by a workflow run that ALSO creates a release (the v*.*.* path in `release.yml`) get this for free. Versions published by a workflow run that doesn't create a release (the per-service `build-<svc>.yml` workflows) stay scoped to the publishing workflow — even though the package itself shows up in the GHCR UI, third-party PATs cannot pull them.
 
@@ -735,25 +735,25 @@ What this means when changing the dev pipeline:
 
 ### PAT recipes
 
-Two distinct PAT types are used in the Phantom ecosystem. Get the scopes wrong and either type fails closed (validation fails, install aborts).
+Two distinct PAT types are used in the Guardian ecosystem. Get the scopes wrong and either type fails closed (validation fails, install aborts).
 
 #### Customer PAT — `read:packages` only
 
-Used by customers in their `/opt/phantom/.env` as `PHANTOM_REGISTRY_TOKEN=…`. Only ability needed: pull customer release tags (`vX.Y.Z`, `latest`, etc.) from `ghcr.io/kite-production/phantom-*`.
+Used by customers in their `/opt/guardian/.env` as `GUARDIAN_REGISTRY_TOKEN=…`. Only ability needed: pull customer release tags (`vX.Y.Z`, `latest`, etc.) from `ghcr.io/kite-production/guardian-*`.
 
 **Recipe (classic PAT — no-expiry option, simplest for customers)**:
 1. Visit [github.com/settings/tokens](https://github.com/settings/tokens) → **Generate new token (classic)**.
-2. Note: anything descriptive (e.g., `Phantom registry pull — vm-prod-1`).
+2. Note: anything descriptive (e.g., `Guardian registry pull — vm-prod-1`).
 3. Expiration: customer's choice. **Recommended: 90 days** with calendar reminder; or "No expiration" if the customer accepts the indefinite-secret risk.
 4. Scopes: check **`read:packages`** only. Do NOT add `repo`, `write:packages`, or any user/admin scopes.
 5. Generate token → copy the `ghp_…` value (shown once; copy it before navigating away).
 6. Test from any host with docker:
    ```bash
    echo "ghp_…" | docker login ghcr.io -u <github-username> --password-stdin
-   docker pull ghcr.io/kite-production/phantom-agent:latest
+   docker pull ghcr.io/kite-production/guardian-agent:latest
    ```
    Pull should succeed. If 403/404, the scope or org access is wrong.
-7. Paste into `/opt/phantom/.env` as `PHANTOM_REGISTRY_TOKEN=ghp_…`, OR paste at the installer's interactive prompt on first install.
+7. Paste into `/opt/guardian/.env` as `GUARDIAN_REGISTRY_TOKEN=ghp_…`, OR paste at the installer's interactive prompt on first install.
 
 **Recipe (fine-grained PAT — preferred if customer security policy requires expiry + minimal scope)**:
 1. [github.com/settings/tokens?type=beta](https://github.com/settings/tokens?type=beta) → **Generate new token**.
@@ -773,24 +773,24 @@ The v0.5.8+ installer's token-validation step catches all three modes BEFORE the
 
 #### Operator PAT — `read:packages + repo`
 
-Used by the maintainer/operator (currently just `thekite-dev`) on phantom-vm in `/opt/phantom/.env`. Needs strictly more access than the customer PAT because the dev cycle adds a layer:
+Used by the maintainer/operator (currently just `thekite-dev`) on guardian-vm in `/opt/guardian/.env`. Needs strictly more access than the customer PAT because the dev cycle adds a layer:
 - `read:packages`: pull `:dev` image versions from GHCR (granted via `dev-latest` prerelease association — see GHCR per-version access above).
 - `repo`: required as a contributor-side affordance for managing the `dev-latest` prerelease via `gh release` from a developer workstation (not strictly needed for the runtime install, but the operator's general workflow benefits from it).
 
 **Recipe (classic PAT — no-expiry recommended for operator use)**:
 1. [github.com/settings/tokens](https://github.com/settings/tokens) → **Generate new token (classic)**.
-2. Note: `Phantom operator — phantom-vm + workstation`.
+2. Note: `Guardian operator — guardian-vm + workstation`.
 3. Expiration: **No expiration** (operator manages rotation deliberately, not on a calendar).
 4. Scopes: **`read:packages`** + **`repo`** (entire `repo` scope, including all sub-checkboxes).
 5. Generate → copy.
-6. Same install flow as customer PAT — paste into `/opt/phantom/.env` or at the installer's interactive prompt.
+6. Same install flow as customer PAT — paste into `/opt/guardian/.env` or at the installer's interactive prompt.
 
 #### Rotation
 
 Both PAT types follow the same rotation pattern:
 1. Generate the replacement PAT (new value, same scopes).
-2. Edit `/opt/phantom/.env`: replace the `PHANTOM_REGISTRY_TOKEN=…` line with the new value.
-3. Re-run the installer (`sudo /opt/phantom/phantom-installer` for customers; `sudo /home/ayman/phantom-installer-dev` for operator). v0.5.8's validation step probes the new token; on success the install proceeds, on failure it re-prompts.
+2. Edit `/opt/guardian/.env`: replace the `GUARDIAN_REGISTRY_TOKEN=…` line with the new value.
+3. Re-run the installer (`sudo /opt/guardian/guardian-installer` for customers; `sudo /home/ayman/guardian-installer-dev` for operator). v0.5.8's validation step probes the new token; on success the install proceeds, on failure it re-prompts.
 4. Revoke the old PAT at [github.com/settings/tokens](https://github.com/settings/tokens) **after** confirming the install succeeded with the new one.
 
 Alternatively, the operator can just paste a fresh PAT at the installer's interactive prompt — v0.5.8+ doesn't auto-write the prompted PAT back to `.env`; that's a deliberate operator choice (some operators prefer env-var injection, some prefer `.env` persistence). When you DO want persistence, edit `.env` first, then run the installer.
@@ -821,15 +821,15 @@ For a new connector with id `<connector_id>` (lowercased, hyphenated):
 |---|---|---|---|
 | **1** | `bundles/spark/connectors/<id>/connector.yaml` | Full connector spec (id, version, runtimeMapping, configSchema, secretSlots, spec.tools) | Build fails — image has no entrypoint to load |
 | **2** | `bundles/spark/connectors/<id>/src/connector.py` (+ `__init__.py` + helpers) | Tool implementations | Build OK but tool calls return ImportError |
-| **3** | `bundles/spark/connectors/<id>/Dockerfile` | `FROM phantom-connector-runtime:${PHANTOM_RUNTIME_VERSION}` + `COPY src/ /app/connectors/<id>/src` + `ENV CONNECTOR_ID=<id>` | No image gets built |
+| **3** | `bundles/spark/connectors/<id>/Dockerfile` | `FROM guardian-connector-runtime:${GUARDIAN_RUNTIME_VERSION}` + `COPY src/ /app/connectors/<id>/src` + `ENV CONNECTOR_ID=<id>` | No image gets built |
 | **4** | **`bundles/spark/manifest.yaml`** — add entry to `toolConnectors:` block | `{id, path: "./connectors/<id>/", version, required}` | **Install fails with "not found in catalogue"** (the failure mode this section exists to prevent) |
 | **5** | `.github/workflows/build-connectors.yml` — add a new per-connector job | Mirror an existing job (e.g. `build-cortex-docs-connector`) with the new service-name + dockerfile-path | New image never gets built or pushed to GHCR — install would succeed in marketplace but container spawn fails because the digest doesn't exist |
 | **6** | `bundles/spark/mcp/src/usecase/connector_probes.py` — add to `PROBE_IMPLEMENTED` set + implement probe block | The probe block (POST/GET against the connector's upstream, returning `(ok, error, is_auth_error)`) | Test Connection in the UI returns `probe_implemented: false` — operator gets a misleading "no probe" message instead of an actual reachability check |
-| **7** | `mcp/agent/app/api/marketplace/connectors/route.ts` — append entry to `PHANTOM_CONNECTORS` array | Card metadata: id, name, description, tags, icon, config fields (must match #1's configSchema field names), tools list, setupGuide | Card doesn't render in `/connectors` UI (the synthetic-card list is what powers `/connectors`'s "Available Connectors" tab) |
+| **7** | `mcp/agent/app/api/marketplace/connectors/route.ts` — append entry to `GUARDIAN_CONNECTORS` array | Card metadata: id, name, description, tags, icon, config fields (must match #1's configSchema field names), tools list, setupGuide | Card doesn't render in `/connectors` UI (the synthetic-card list is what powers `/connectors`'s "Available Connectors" tab) |
 | **8** | `bundles/spark/mcp/src/usecase/connector_loader.py` — add entry to `_MANIFEST_TO_SETTINGS_KEYS` if the connector reads any env-var aliases | Field-name translation map. Empty dict OK for greenfield connectors with no legacy aliases | Connector code reads instance config OK but env-var first-time-setup paths (if any) don't translate field names |
-| **9** | **`updater/src/main.py`** — add `<connector_id>` to `KNOWN_CONNECTORS` set | The agent's `create_instance` route POSTs to phantom-updater's `/api/v1/connectors/<id>/instances/<name>/start` to spawn the per-instance container. The updater validates `connector_id` against this set | **phantom-updater returns HTTP 400 "unknown connector_id"** → no container spawns → tool calls fail at call time with "container_url — phantom-updater hasn't started the container yet". v0.5.61 introduced the cortex-xdr connector but missed THIS edit; v0.5.73 fixed it and added the entry to this checklist. |
-| **10** | **`.github/workflows/release.yml`** — six sites: (a) `IMAGES` array at the digest-manifest step, (b) first-release defaults at line ~224, (c) changed-detection at line ~266, (d) runtime-rebuild force list at line ~273, (e) outputs at line ~290, (f) a new "Build or retag phantom-connector-`<id>`" step mirroring an existing connector's. Also add a row to the rebuild-decisions summary table at line ~342. | Customer release manifests omit `DIGEST_PHANTOM_CONNECTOR_<ID>` → `/opt/phantom/connector-digests.env` on every install lacks it → phantom-updater's `_connector_image_ref()` falls to tag-pinning → eventually fails when the operator restarts the instance and the expected `:dev-<sha>` or `:<version>` tag doesn't exist for that commit. v0.5.61 introduced cortex-xdr; v0.6.20 fixed THIS edit retroactively (was missed for ~16 releases). |
-| **11** | **`.github/workflows/build-dev-installer.yml`** — two changes: add `<connector_id>` to the `CONN_IMGS` associative-array map (line ~242) AND to the `for KEY in DIGEST_PHANTOM_CONNECTOR_*` resolution loop (line ~251). | Dev installer manifests omit the digest → same downstream failure as #10 but on the dev cycle. The build-dev-installer's :dev-pull-with-fallback-to-stable loop won't include the connector at all. Surfaced when an operator restart of a dev-deployed connector hits the tag-pinning path and fails — same root cause as the customer-side failure mode in #10. |
+| **9** | **`updater/src/main.py`** — add `<connector_id>` to `KNOWN_CONNECTORS` set | The agent's `create_instance` route POSTs to guardian-updater's `/api/v1/connectors/<id>/instances/<name>/start` to spawn the per-instance container. The updater validates `connector_id` against this set | **guardian-updater returns HTTP 400 "unknown connector_id"** → no container spawns → tool calls fail at call time with "container_url — guardian-updater hasn't started the container yet". v0.5.61 introduced the cortex-xdr connector but missed THIS edit; v0.5.73 fixed it and added the entry to this checklist. |
+| **10** | **`.github/workflows/release.yml`** — six sites: (a) `IMAGES` array at the digest-manifest step, (b) first-release defaults at line ~224, (c) changed-detection at line ~266, (d) runtime-rebuild force list at line ~273, (e) outputs at line ~290, (f) a new "Build or retag guardian-connector-`<id>`" step mirroring an existing connector's. Also add a row to the rebuild-decisions summary table at line ~342. | Customer release manifests omit `DIGEST_GUARDIAN_CONNECTOR_<ID>` → `/opt/guardian/connector-digests.env` on every install lacks it → guardian-updater's `_connector_image_ref()` falls to tag-pinning → eventually fails when the operator restarts the instance and the expected `:dev-<sha>` or `:<version>` tag doesn't exist for that commit. v0.5.61 introduced cortex-xdr; v0.6.20 fixed THIS edit retroactively (was missed for ~16 releases). |
+| **11** | **`.github/workflows/build-dev-installer.yml`** — two changes: add `<connector_id>` to the `CONN_IMGS` associative-array map (line ~242) AND to the `for KEY in DIGEST_GUARDIAN_CONNECTOR_*` resolution loop (line ~251). | Dev installer manifests omit the digest → same downstream failure as #10 but on the dev cycle. The build-dev-installer's :dev-pull-with-fallback-to-stable loop won't include the connector at all. Surfaced when an operator restart of a dev-deployed connector hits the tag-pinning path and fails — same root cause as the customer-side failure mode in #10. |
 
 Plus two **operator-facing doc** edits (per CLAUDE.md's documentation discipline):
 
@@ -845,7 +845,7 @@ After making all 11 code edits, run this one-liner to confirm the bundle catalog
 ```bash
 # Every directory under bundles/spark/connectors/ that has a connector.yaml
 # should appear in ALL FOUR sites: manifest.yaml toolConnectors, the agent
-# UI's synthetic-card list, phantom-updater's KNOWN_CONNECTORS, release.yml's
+# UI's synthetic-card list, guardian-updater's KNOWN_CONNECTORS, release.yml's
 # IMAGES array, AND build-dev-installer.yml's CONN_IMGS map.
 DIRS=$(ls bundles/spark/connectors/ | grep -v _runtime | grep -v 'connector.schema.json' | sort)
 
@@ -860,26 +860,26 @@ comm -23 \
   <(grep -A 30 '^KNOWN_CONNECTORS' updater/src/main.py | grep -oE '"[a-z][a-z0-9-]+"' | tr -d '"' | sort -u)
 
 # v0.6.20+ — release.yml IMAGES array must list every connector. The grep
-# strips "phantom-connector-" prefix so we can compare directly with DIRS.
+# strips "guardian-connector-" prefix so we can compare directly with DIRS.
 echo "=== Connector dirs missing from release.yml IMAGES array ==="
 comm -23 \
   <(echo "$DIRS") \
-  <(grep -oE 'phantom-connector-[a-z][a-z0-9-]+' .github/workflows/release.yml \
-    | sed 's|^phantom-connector-||' | sort -u)
+  <(grep -oE 'guardian-connector-[a-z][a-z0-9-]+' .github/workflows/release.yml \
+    | sed 's|^guardian-connector-||' | sort -u)
 
 # v0.6.20+ — build-dev-installer.yml CONN_IMGS map must list every connector.
 echo "=== Connector dirs missing from build-dev-installer.yml CONN_IMGS map ==="
 comm -23 \
   <(echo "$DIRS") \
-  <(grep -oE 'phantom-connector-[a-z][a-z0-9-]+' .github/workflows/build-dev-installer.yml \
-    | sed 's|^phantom-connector-||' | sort -u)
+  <(grep -oE 'guardian-connector-[a-z][a-z0-9-]+' .github/workflows/build-dev-installer.yml \
+    | sed 's|^guardian-connector-||' | sort -u)
 ```
 
 Empty output under each of the FOUR headers = consistent. Any output means a connector dir was added without the corresponding registration — exactly the failure modes this section exists to prevent (manifest-not-found, updater-unknown-connector-id, customer-release-manifest-missing-digest, dev-installer-manifest-missing-digest).
 
 ### The v0.6.20 retrospective
 
-`cortex-xdr` was added in v0.5.61. Edits 1-8 of the original checklist were done. Edit 9 (`KNOWN_CONNECTORS`) was missed and added by v0.5.73. Edits 10-11 (release.yml + build-dev-installer.yml) were ALSO missed but went undetected for ~16 releases — until v0.6.18 forced a connector restart that fell to tag-pinning (because the digest was missing from connector-digests.env) and tried to pull `phantom-connector-cortex-xdr:dev-321d002` which didn't exist on the new dev cycle. v0.6.20 closed the plumbing gap retroactively AND added rows 10-11 to this checklist plus the two new quick-check entries above. The failure mode was latent — instances created during a release that had just pushed the connector image worked fine because tag-pinning happened to succeed at that moment.
+`cortex-xdr` was added in v0.5.61. Edits 1-8 of the original checklist were done. Edit 9 (`KNOWN_CONNECTORS`) was missed and added by v0.5.73. Edits 10-11 (release.yml + build-dev-installer.yml) were ALSO missed but went undetected for ~16 releases — until v0.6.18 forced a connector restart that fell to tag-pinning (because the digest was missing from connector-digests.env) and tried to pull `guardian-connector-cortex-xdr:dev-321d002` which didn't exist on the new dev cycle. v0.6.20 closed the plumbing gap retroactively AND added rows 10-11 to this checklist plus the two new quick-check entries above. The failure mode was latent — instances created during a release that had just pushed the connector image worked fine because tag-pinning happened to succeed at that moment.
 
 ### Forbidden when adding a connector
 
@@ -893,10 +893,10 @@ Empty output under each of the FOUR headers = consistent. Any output means a con
 
 | Workflow | Triggers on changes under | Produces |
 |---|---|---|
-| `build-xlog.yml` | `xlog/**` | Rebuilt `phantom-xlog:dev` |
-| `build-agent.yml` | `mcp/agent/**` or `bundles/spark/**` | Rebuilt `phantom-agent:dev` (+ runs pytest/lint inside the freshly built image) |
-| `build-caldera.yml` | `third_party/caldera/**` (submodule pin moves) | Rebuilt `phantom-caldera:dev` |
-| `build-connectors.yml` | `bundles/spark/connectors/**` or `phantom-connector-runtime/**` | Rebuilt per-connector images (FROM-dependency cascade rebuilds all six when the runtime base changes) |
+| `build-xlog.yml` | `xlog/**` | Rebuilt `guardian-xlog:dev` |
+| `build-agent.yml` | `mcp/agent/**` or `bundles/spark/**` | Rebuilt `guardian-agent:dev` (+ runs pytest/lint inside the freshly built image) |
+| `build-caldera.yml` | `third_party/caldera/**` (submodule pin moves) | Rebuilt `guardian-caldera:dev` |
+| `build-connectors.yml` | `bundles/spark/connectors/**` or `guardian-connector-runtime/**` | Rebuilt per-connector images (FROM-dependency cascade rebuilds all six when the runtime base changes) |
 | `build-dev-installer.yml` | `installer/**` OR `workflow_run` from any of the four above | Re-resolves current `:dev` digests + rebuilds the dev installer + republishes `dev-latest` |
 
 **v0.5.12 narrowing**: previously the `paths:` lists also included `.github/workflows/build-<svc>.yml` and `.github/actions/build-and-push-dev-image/**`. Workflow header edits were triggering rebuilds + `docker build --pull` was fetching fresh base layers, producing new image digests despite zero source changes. v0.5.12 removed those self-paths.
@@ -908,7 +908,7 @@ For services whose source did NOT change between releases (`xlog`, `caldera`, et
 - **NO new image build.** The per-service `build-<svc>.yml` workflow does not fire — its path-filter doesn't match.
 - **NO new release tag.** `release.yml`'s "Detect changed services" step diffs the source paths against the previous tag and marks unchanged services as `changed=0`. For those services, release.yml runs the retag-from-prev path: `docker pull` the previous tag → `docker tag` to the new tag → `docker push`. The PUSHED IMAGE IS BIT-IDENTICAL TO THE PREVIOUS RELEASE'S (same content digest).
 - **Same content digest pinned in the new manifest.** The new `release-manifest-vX.Y.Z+1.env` lists the unchanged service with the SAME `DIGEST_<SVC>` as the prior release.
-- **Customer compose does NOT recreate the container.** When the customer pulls the new manifest into `/opt/phantom/.env` and runs `docker compose up -d`, compose sees identical service-spec (same image digest) for the unchanged service → leaves the container running untouched.
+- **Customer compose does NOT recreate the container.** When the customer pulls the new manifest into `/opt/guardian/.env` and runs `docker compose up -d`, compose sees identical service-spec (same image digest) for the unchanged service → leaves the container running untouched.
 
 This is the load-bearing reason caldera + xlog preserve in-memory state across pushes that don't touch their code. Without this rule, every release would recreate every container, nuking caldera's live implant tracking + xlog's worker dict on every upgrade.
 
@@ -922,8 +922,8 @@ To confirm a release did NOT rebuild an untouched service:
 gh run list --workflow=build-xlog.yml --limit 5
 
 # 2. Compare the image digest between the two releases
-gh release view v5.29 --json assets,body | jq -r '.body' | grep DIGEST_PHANTOM_XLOG
-gh release view v5.30 --json assets,body | jq -r '.body' | grep DIGEST_PHANTOM_XLOG
+gh release view v5.29 --json assets,body | jq -r '.body' | grep DIGEST_GUARDIAN_XLOG
+gh release view v5.30 --json assets,body | jq -r '.body' | grep DIGEST_GUARDIAN_XLOG
 # Identical → unchanged service was retagged, not rebuilt.
 ```
 
@@ -938,7 +938,7 @@ The invariant in summary:
 A common misreading: the installer's Step 7 output
 
 ```
-✔ Image ghcr.io/.../phantom-caldera@sha256:97ed21b2…  Pulled  1.0s
+✔ Image ghcr.io/.../guardian-caldera@sha256:97ed21b2…  Pulled  1.0s
 ```
 
 says "Pulled" for EVERY image in the compose, not just the ones that changed. For an image whose digest matches what's already cached on the host, the "pull" is a manifest-verify against the registry (~0.5-1.5s round trip), NOT a layer fetch. The forensic indicator that nothing was actually downloaded is the followup `docker compose up`:
@@ -946,7 +946,7 @@ says "Pulled" for EVERY image in the compose, not just the ones that changed. Fo
 ```
 ✔ Container caldera   Running   0.0s   ← unchanged; container was NOT recreated
 ✔ Container xlog      Healthy   2.6s   ← unchanged; just confirming health
-✔ Container phantom_agent   Started   2.1s   ← REBUILT — digest changed → recreate
+✔ Container guardian_agent   Started   2.1s   ← REBUILT — digest changed → recreate
 ```
 
 `Running` / `Healthy` = container kept running. `Started` / `Recreated` = container was replaced (digest changed).
@@ -995,12 +995,12 @@ Paste the new `sha256:…` into the `FROM` line. Commit. Push. The next `build-<
 
 | Service | Dockerfile | Pinned base(s) |
 |---|---|---|
-| phantom-agent | `mcp/agent/Dockerfile` | `node:20-alpine` (Stage 1), `python:3.12-slim` (Stages 2 + 3) |
-| phantom-xlog | `xlog/Dockerfile` | `python:3.12` |
-| phantom-updater | `updater/Dockerfile` | `python:3.12-slim` |
-| phantom-browser | `phantom-browser/Dockerfile` | `chromedp/headless-shell:latest` (digest-pinned despite the `:latest` tag) |
-| phantom-connector-runtime | `phantom-connector-runtime/Dockerfile` | `python:3.12-slim` |
-| 6 per-connector images | `bundles/spark/connectors/*/Dockerfile` | `phantom-connector-runtime:${PHANTOM_RUNTIME_VERSION}` — internal, inherits stability from the runtime base |
+| guardian-agent | `mcp/agent/Dockerfile` | `node:20-alpine` (Stage 1), `python:3.12-slim` (Stages 2 + 3) |
+| guardian-xlog | `xlog/Dockerfile` | `python:3.12` |
+| guardian-updater | `updater/Dockerfile` | `python:3.12-slim` |
+| guardian-browser | `guardian-browser/Dockerfile` | `chromedp/headless-shell:latest` (digest-pinned despite the `:latest` tag) |
+| guardian-connector-runtime | `guardian-connector-runtime/Dockerfile` | `python:3.12-slim` |
+| 6 per-connector images | `bundles/spark/connectors/*/Dockerfile` | `guardian-connector-runtime:${GUARDIAN_RUNTIME_VERSION}` — internal, inherits stability from the runtime base |
 
 ### Carve-out: caldera
 
@@ -1016,7 +1016,7 @@ When per-service build times unexpectedly explode (e.g., `build-agent.yml` goes 
 
 ### Where caches live
 
-The self-hosted phantom-vm runner caches builds at three layers:
+The self-hosted guardian-vm runner caches builds at three layers:
 
 | Cache | Path | Used by | Size order-of-magnitude |
 |---|---|---|---|
@@ -1033,7 +1033,7 @@ Plus per-image RepoDigests + tag-to-digest mappings:
 
 ### Inspection commands
 
-Run all of these on phantom-vm (via the IAP tunnel + SSH):
+Run all of these on guardian-vm (via the IAP tunnel + SSH):
 
 ```bash
 # Disk usage by docker
@@ -1052,7 +1052,7 @@ sudo docker system df -v
 sudo docker ps --format '{{.Names}}\t{{.Image}}'
 
 # All images locally cached for our org
-sudo docker images "ghcr.io/kite-production/phantom-*" --format \
+sudo docker images "ghcr.io/kite-production/guardian-*" --format \
   'table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}'
 
 # Build cache details (per docker buildx — when buildx is used)
@@ -1089,7 +1089,7 @@ This removes:
 
 ```bash
 # Remove all our org's per-version images, keep :dev and :latest
-sudo docker images "ghcr.io/kite-production/phantom-*" \
+sudo docker images "ghcr.io/kite-production/guardian-*" \
   --format "{{.Repository}}:{{.Tag}}" \
   | grep -v ':dev$\|:latest$' \
   | xargs -r sudo docker rmi -f
@@ -1129,18 +1129,18 @@ Suggested operational alarms (not yet automated; check manually on a monthly cad
 
 ### Install location
 
-`/opt/phantom` — both installers. Runner user on phantom-vm has `NOPASSWD` sudo so the operator's `sudo /home/ayman/phantom-installer-dev` runs non-interactively, AND so the `build-dev-installer.yml` workflow can chmod the staged binary. The runner's working tree at `/home/ayman/actions-runner/_work/phantom/phantom` is **source code only** (CI checkout); the deployed runtime lives at `/opt/phantom`, owned by ayman (set up at runner-prep time), written by the installer at operator-driven install time. Smoke-test commands operate on `/opt/phantom` — not the runner workspace.
+`/opt/guardian` — both installers. Runner user on guardian-vm has `NOPASSWD` sudo so the operator's `sudo /home/ayman/guardian-installer-dev` runs non-interactively, AND so the `build-dev-installer.yml` workflow can chmod the staged binary. The runner's working tree at `/home/ayman/actions-runner/_work/guardian/guardian` is **source code only** (CI checkout); the deployed runtime lives at `/opt/guardian`, owned by ayman (set up at runner-prep time), written by the installer at operator-driven install time. Smoke-test commands operate on `/opt/guardian` — not the runner workspace.
 
 ### Volume management — NEVER in the installer (except Scenario 3)
 
 Neither installer touches docker volumes during Scenario 1 or Scenario 2 upgrades. The installer cares about image deployment only. When fresh-volume testing is needed:
 
 ```bash
-# On phantom-vm:
-sudo docker compose -f /opt/phantom/docker-compose.yml down --remove-orphans
-sudo docker volume ls --filter name=phantom    # identify volumes to wipe
+# On guardian-vm:
+sudo docker compose -f /opt/guardian/docker-compose.yml down --remove-orphans
+sudo docker volume ls --filter name=guardian    # identify volumes to wipe
 sudo docker volume rm <volume>                  # delete what you want gone
-sudo /opt/phantom/phantom-installer-dev         # re-run installer
+sudo /opt/guardian/guardian-installer-dev         # re-run installer
 ```
 
 The "wipe + install" sequence is a manual operator step. The installer must NEVER take a `--reset-volumes`, `--clean`, or `--fresh` flag — that's two responsibilities crammed into one tool.
@@ -1149,17 +1149,17 @@ The "wipe + install" sequence is a manual operator step. The installer must NEVE
 
 ### Host-side recovery utilities (v0.5.3+)
 
-The "wipe + install" recipe above is the canonical operation, but typing it under stress at 3 AM is error-prone. v0.5.3 promotes the recipe (and the previously-docker-exec'd password reset) to **two named host-side utilities** that ship in every install kit at `/opt/phantom/`:
+The "wipe + install" recipe above is the canonical operation, but typing it under stress at 3 AM is error-prone. v0.5.3 promotes the recipe (and the previously-docker-exec'd password reset) to **two named host-side utilities** that ship in every install kit at `/opt/guardian/`:
 
 | Utility | Purpose | Why host-side |
 |---|---|---|
-| `phantom-factory-reset` | Wipes all `phantom_*` docker volumes + re-runs the installer to bring fresh containers up. Preserves `.env` (KEK + registry creds + operator-managed settings survive). | **Required by physics**: a container can't delete the volume it's mounting. |
-| `phantom-reset-admin-password` | Resets the admin password via the in-container CLI (`/app/cli/reset-admin.mjs`). Thin host wrapper — validates the agent is running, exec-replaces into the CLI. | **For consistency**: both utilities take the form `sudo /opt/phantom/phantom-<utility>`. |
+| `guardian-factory-reset` | Wipes all `guardian_*` docker volumes + re-runs the installer to bring fresh containers up. Preserves `.env` (KEK + registry creds + operator-managed settings survive). | **Required by physics**: a container can't delete the volume it's mounting. |
+| `guardian-reset-admin-password` | Resets the admin password via the in-container CLI (`/app/cli/reset-admin.mjs`). Thin host wrapper — validates the agent is running, exec-replaces into the CLI. | **For consistency**: both utilities take the form `sudo /opt/guardian/guardian-<utility>`. |
 
 Both scripts are:
-- **Embedded** into the single-file `phantom-installer` binary via heredoc (same pattern as `docker-compose.yml`). The installer extracts them to `/opt/phantom/` during install.
+- **Embedded** into the single-file `guardian-installer` binary via heredoc (same pattern as `docker-compose.yml`). The installer extracts them to `/opt/guardian/` during install.
 - **Packed** into the multi-file install kit via direct file copy in `release.yml`.
-- **Source of truth**: `installer/phantom-factory-reset.sh` + `installer/phantom-reset-admin-password.sh`.
+- **Source of truth**: `installer/guardian-factory-reset.sh` + `installer/guardian-reset-admin-password.sh`.
 
 **Forbidden**:
 - Re-introducing the pre-v0.4.0 host-side parallel implementation of the password reset.
@@ -1168,15 +1168,15 @@ Both scripts are:
 
 ## Workflow file layout
 
-The dev flow lives in five workflow files + one composite action. Each per-service build is its own workflow with path-filter triggers so only changed services rebuild. **None of these workflows install anything on phantom-vm** — they build images + stage the dev installer; the operator drives the install.
+The dev flow lives in five workflow files + one composite action. Each per-service build is its own workflow with path-filter triggers so only changed services rebuild. **None of these workflows install anything on guardian-vm** — they build images + stage the dev installer; the operator drives the install.
 
 | File | Triggers | Purpose |
 |---|---|---|
-| `.github/workflows/build-xlog.yml` | push/PR + paths `xlog/**` | Build phantom-xlog → push `:dev` → capture digest |
-| `.github/workflows/build-agent.yml` | push/PR + paths `mcp/agent/**` or `bundles/spark/**` | Build phantom-agent → push `:dev` → run pytest + lint inside the freshly-built image |
-| `.github/workflows/build-caldera.yml` | push/PR + paths `third_party/caldera/**` | Build phantom-caldera → push `:dev` |
-| `.github/workflows/build-connectors.yml` | push/PR + paths `bundles/spark/connectors/**` or `phantom-connector-runtime/**` | Build per-instance connector images → push `:dev` |
-| `.github/workflows/build-dev-installer.yml` | `workflow_run` on any build-* above, OR push to `installer/**` | Resolve current `:dev` digests from GHCR + latest stable manifest for updater/browser → build phantom-installer-dev → **stage at `/home/ayman/phantom-installer-dev`** + upload artifact + **publish `dev-latest` prerelease** (load-bearing for operator-PAT pull access). NO install. |
+| `.github/workflows/build-xlog.yml` | push/PR + paths `xlog/**` | Build guardian-xlog → push `:dev` → capture digest |
+| `.github/workflows/build-agent.yml` | push/PR + paths `mcp/agent/**` or `bundles/spark/**` | Build guardian-agent → push `:dev` → run pytest + lint inside the freshly-built image |
+| `.github/workflows/build-caldera.yml` | push/PR + paths `third_party/caldera/**` | Build guardian-caldera → push `:dev` |
+| `.github/workflows/build-connectors.yml` | push/PR + paths `bundles/spark/connectors/**` or `guardian-connector-runtime/**` | Build per-instance connector images → push `:dev` |
+| `.github/workflows/build-dev-installer.yml` | `workflow_run` on any build-* above, OR push to `installer/**` | Resolve current `:dev` digests from GHCR + latest stable manifest for updater/browser → build guardian-installer-dev → **stage at `/home/ayman/guardian-installer-dev`** + upload artifact + **publish `dev-latest` prerelease** (load-bearing for operator-PAT pull access). NO install. |
 | `.github/workflows/release.yml` | `v*.*.*` tag push (AFTER explicit operator approval) | Build customer images (conditional rebuild via path diff) → publish GitHub Release → delete `dev-latest` prerelease |
 | `.github/actions/build-and-push-dev-image/action.yml` | composite action | Shared docker build + GHCR push + digest capture used by all per-service build workflows |
 
@@ -1186,38 +1186,38 @@ Properties this layout gives you:
 - **`:dev` is the source-of-truth for the latest dev digests.** Each per-service build overwrites `ghcr.io/<owner>/<svc>:dev`. build-dev-installer.yml queries GHCR for current digests instead of coordinating artifacts across workflow runs.
 - **Composite action enforces "only image tag differs."** The build + push + digest-capture mechanics live in ONE place.
 - **Installer-only changes still trigger a fresh installer build.** build-dev-installer.yml also triggers on push to `installer/**`.
-- **Operator drives every install.** The freshly-built binary sits at `/home/ayman/phantom-installer-dev`; the operator runs `sudo /home/ayman/phantom-installer-dev` on phantom-vm.
+- **Operator drives every install.** The freshly-built binary sits at `/home/ayman/guardian-installer-dev`; the operator runs `sudo /home/ayman/guardian-installer-dev` on guardian-vm.
 
-### Staged-binary contract (auto-copy to `/home/ayman/phantom-installer-dev`)
+### Staged-binary contract (auto-copy to `/home/ayman/guardian-installer-dev`)
 
-**Permanent contract — every successful `build-dev-installer.yml` run MUST stage the freshly-built binary at `/home/ayman/phantom-installer-dev` on phantom-vm before the workflow exits.** This is the operator's day-to-day upgrade path:
+**Permanent contract — every successful `build-dev-installer.yml` run MUST stage the freshly-built binary at `/home/ayman/guardian-installer-dev` on guardian-vm before the workflow exits.** This is the operator's day-to-day upgrade path:
 
 ```bash
-sudo /home/ayman/phantom-installer-dev
+sudo /home/ayman/guardian-installer-dev
 ```
 
-Without auto-staging, the operator would have to remember the runner workspace path (`/home/ayman/actions-runner/_work/phantom/phantom/dist/installer-dev/phantom-installer-dev`) or fetch the workflow artifact manually, and would risk running an outdated installer left over from a previous build.
+Without auto-staging, the operator would have to remember the runner workspace path (`/home/ayman/actions-runner/_work/guardian/guardian/dist/installer-dev/guardian-installer-dev`) or fetch the workflow artifact manually, and would risk running an outdated installer left over from a previous build.
 
-**Implementation** (`.github/workflows/build-dev-installer.yml` step `Stage dev installer at /home/ayman/phantom-installer-dev`):
+**Implementation** (`.github/workflows/build-dev-installer.yml` step `Stage dev installer at /home/ayman/guardian-installer-dev`):
 
 ```bash
-cp "$PWD/dist/installer-dev/phantom-installer-dev" /home/ayman/.phantom-installer-dev.new
-chmod +x /home/ayman/.phantom-installer-dev.new
-mv /home/ayman/.phantom-installer-dev.new /home/ayman/phantom-installer-dev
+cp "$PWD/dist/installer-dev/guardian-installer-dev" /home/ayman/.guardian-installer-dev.new
+chmod +x /home/ayman/.guardian-installer-dev.new
+mv /home/ayman/.guardian-installer-dev.new /home/ayman/guardian-installer-dev
 ```
 
 Three properties this gives you:
 
-1. **Atomic swap.** Write to a `.new` sidecar, chmod +x, then `mv` (atomic on the same filesystem). The operator can never observe a partial binary — even if `sudo /home/ayman/phantom-installer-dev` happens to fire while the workflow is mid-flight, they get the OLD binary or the NEW binary, never half of both.
-2. **Survives runner workspace cleanup.** It's a `cp`, not a symlink. If GitHub Actions cleans up `_work/` between runs (or the runner is reinstalled), the operator's installer at `/home/ayman/phantom-installer-dev` is unaffected.
-3. **No SSH, no inter-host transfer.** The self-hosted runner IS phantom-vm; the cp is a local filesystem write. No credentials to manage; no network hop to fail.
+1. **Atomic swap.** Write to a `.new` sidecar, chmod +x, then `mv` (atomic on the same filesystem). The operator can never observe a partial binary — even if `sudo /home/ayman/guardian-installer-dev` happens to fire while the workflow is mid-flight, they get the OLD binary or the NEW binary, never half of both.
+2. **Survives runner workspace cleanup.** It's a `cp`, not a symlink. If GitHub Actions cleans up `_work/` between runs (or the runner is reinstalled), the operator's installer at `/home/ayman/guardian-installer-dev` is unaffected.
+3. **No SSH, no inter-host transfer.** The self-hosted runner IS guardian-vm; the cp is a local filesystem write. No credentials to manage; no network hop to fail.
 
 **How to verify after a build**:
 
 ```bash
-# On phantom-vm
-ls -la /home/ayman/phantom-installer-dev      # mtime should match the most recent build run
-grep -ao 'dev-[a-f0-9]\{7\}' /home/ayman/phantom-installer-dev | head -1
+# On guardian-vm
+ls -la /home/ayman/guardian-installer-dev      # mtime should match the most recent build run
+grep -ao 'dev-[a-f0-9]\{7\}' /home/ayman/guardian-installer-dev | head -1
                                               # ↑ should equal the short SHA of the last
                                               #   build-dev-installer.yml run's commit
 ```
@@ -1226,36 +1226,36 @@ If the version-string in the binary doesn't match `HEAD` on `main`, either (a) t
 
 **Forbidden going forward**:
 
-- Removing the `Stage dev installer at /home/ayman/phantom-installer-dev` step from `build-dev-installer.yml`. Operators must not have to discover that their installer is stale by hitting an unexpected install-flow change.
+- Removing the `Stage dev installer at /home/ayman/guardian-installer-dev` step from `build-dev-installer.yml`. Operators must not have to discover that their installer is stale by hitting an unexpected install-flow change.
 - Replacing the `cp` with a symlink. The runner's `_work/` is volatile; a symlink there would silently break when GitHub Actions cleans up between runs.
-- Adding a non-atomic write (e.g. `cp` directly to `/home/ayman/phantom-installer-dev`). The operator could observe a half-written binary mid-run.
+- Adding a non-atomic write (e.g. `cp` directly to `/home/ayman/guardian-installer-dev`). The operator could observe a half-written binary mid-run.
 - Skipping the step "just on this PR" — the contract is permanent. PRs that break it must be reverted, not merged-and-fixed-later.
 
-**Failure-mode signal**: if you run `sudo /home/ayman/phantom-installer-dev` and the install output shows a `PHANTOM_VERSION=dev-<sha>` that's older than the most recent build-dev-installer.yml run, the auto-stage broke. Check the workflow run's job log for the `Stage dev installer` step's output. The step's `::notice::` lines confirm successful staging.
+**Failure-mode signal**: if you run `sudo /home/ayman/guardian-installer-dev` and the install output shows a `GUARDIAN_VERSION=dev-<sha>` that's older than the most recent build-dev-installer.yml run, the auto-stage broke. Check the workflow run's job log for the `Stage dev installer` step's output. The step's `::notice::` lines confirm successful staging.
 
 ### Auto-deploy contract (v0.6.8+ — dev cycle only)
 
-**Permanent contract — every successful `build-dev-installer.yml` run MUST auto-deploy the freshly-built installer on phantom-vm before the workflow exits**, then leave the agent to run a post-deploy smoke against the new code. Customer-release tags remain operator-gated — auto-deploy is a dev-cycle-only mechanic.
+**Permanent contract — every successful `build-dev-installer.yml` run MUST auto-deploy the freshly-built installer on guardian-vm before the workflow exits**, then leave the agent to run a post-deploy smoke against the new code. Customer-release tags remain operator-gated — auto-deploy is a dev-cycle-only mechanic.
 
-**Why this exists**: pre-v0.6.8 the cycle was push → wait for build → operator manually runs `sudo /home/ayman/phantom-installer-dev` → agent smokes. Three problems:
+**Why this exists**: pre-v0.6.8 the cycle was push → wait for build → operator manually runs `sudo /home/ayman/guardian-installer-dev` → agent smokes. Three problems:
 1. Operator had to remember to re-install after every push.
-2. Sometimes the operator ran an outdated install while a newer build was sitting at `/home/ayman/phantom-installer-dev` — the version-skew was easy to miss.
+2. Sometimes the operator ran an outdated install while a newer build was sitting at `/home/ayman/guardian-installer-dev` — the version-skew was easy to miss.
 3. Agent-side smoke happened against whatever code was deployed at the time of smoke, not necessarily the just-built code.
 
 v0.6.8+ collapses build + deploy into one workflow run, so by the time the workflow exits the running stack matches the workflow's commit SHA — no skew, no missed-install, no stale smoke.
 
-**Implementation** (`build-dev-installer.yml` step `Auto-deploy on phantom-vm (dev cycle)`, immediately after the `Stage dev installer` step):
+**Implementation** (`build-dev-installer.yml` step `Auto-deploy on guardian-vm (dev cycle)`, immediately after the `Stage dev installer` step):
 
 ```bash
-sudo /home/ayman/phantom-installer-dev 2>&1 | tee /tmp/phantom-install.log
+sudo /home/ayman/guardian-installer-dev 2>&1 | tee /tmp/guardian-install.log
 ```
 
-That one line works because the self-hosted runner IS phantom-vm running as `ayman` with `NOPASSWD` sudo. No SSH, no separate credentials, no inter-host transfer.
+That one line works because the self-hosted runner IS guardian-vm running as `ayman` with `NOPASSWD` sudo. No SSH, no separate credentials, no inter-host transfer.
 
 **Why this is safe**:
-- The installer is **idempotent + non-interactive on upgrade**. Preserves `/opt/phantom/.env` (secrets + KEK), preserves all named volumes, only image digests + compose refresh. Operators see the same UX as their manual install.
+- The installer is **idempotent + non-interactive on upgrade**. Preserves `/opt/guardian/.env` (secrets + KEK), preserves all named volumes, only image digests + compose refresh. Operators see the same UX as their manual install.
 - The installer is **load-bearing-clean on failure**: if anything goes wrong (e.g., GHCR pull fails, image digest mismatch, container fails healthcheck), it exits non-zero, which turns the workflow red. Clean signal. The operator can re-run manually after fixing the underlying issue.
-- The dev installer touches **only the dev compose state** at `/opt/phantom/` on phantom-vm. Customer installs at customer sites are unaffected because they pull from customer release tags via their own installer runs.
+- The dev installer touches **only the dev compose state** at `/opt/guardian/` on guardian-vm. Customer installs at customer sites are unaffected because they pull from customer release tags via their own installer runs.
 
 **Trade-offs vs the pre-v0.6.8 manual-install model**:
 
@@ -1267,23 +1267,23 @@ That one line works because the self-hosted runner IS phantom-vm running as `aym
 | Smoke-against-current-code | Best-effort (agent has to ASK what version is running) | Guaranteed (agent smokes the just-deployed code) |
 | Customer-mirror property | Identical install command path | Identical install command path (TRIGGER changes, not the path) |
 
-**Customer flow is unchanged**: customer release tags (`vX.Y.Z`) still require explicit operator approval in chat (per CLAUDE.md § Approval phrasing). Customer installs still happen via `sudo /opt/phantom/phantom-installer` driven by the customer manually, never by CI. Auto-deploy is a dev-cycle ergonomic improvement on phantom-vm specifically.
+**Customer flow is unchanged**: customer release tags (`vX.Y.Z`) still require explicit operator approval in chat (per CLAUDE.md § Approval phrasing). Customer installs still happen via `sudo /opt/guardian/guardian-installer` driven by the customer manually, never by CI. Auto-deploy is a dev-cycle ergonomic improvement on guardian-vm specifically.
 
 **Verification after a push**:
 
 ```bash
-# On phantom-vm (auto-deploy should have run, agent should now be at HEAD's commit):
-sudo grep ^PHANTOM_VERSION /opt/phantom/.env       # expect: dev-<short-sha-of-HEAD>
-sudo docker inspect phantom_agent --format '{{.Created}}'  # mtime should match the workflow run
+# On guardian-vm (auto-deploy should have run, agent should now be at HEAD's commit):
+sudo grep ^GUARDIAN_VERSION /opt/guardian/.env       # expect: dev-<short-sha-of-HEAD>
+sudo docker inspect guardian_agent --format '{{.Created}}'  # mtime should match the workflow run
 ```
 
-If `PHANTOM_VERSION` lags behind `git rev-parse HEAD`'s short SHA, the auto-deploy step failed silently or was skipped. Check the workflow run's `Auto-deploy on phantom-vm (dev cycle)` step log — it tees full installer output to the workflow log and to `/tmp/phantom-install.log` on phantom-vm.
+If `GUARDIAN_VERSION` lags behind `git rev-parse HEAD`'s short SHA, the auto-deploy step failed silently or was skipped. Check the workflow run's `Auto-deploy on guardian-vm (dev cycle)` step log — it tees full installer output to the workflow log and to `/tmp/guardian-install.log` on guardian-vm.
 
 **Forbidden going forward**:
 
 - **Removing the auto-deploy step** from `build-dev-installer.yml` without an operator-approved spec. The operator depends on this for their iteration loop.
 - **Extending auto-deploy to `release.yml`** (customer tags). That boundary stays — customer releases need explicit chat approval before any install happens anywhere.
-- **Running auto-deploy from a workflow that doesn't run on the phantom self-hosted runner.** The mechanism depends on the runner being on phantom-vm; transplanting it to ubuntu-latest runners would require SSH-and-key infrastructure that adds risk surface without benefit.
+- **Running auto-deploy from a workflow that doesn't run on the guardian self-hosted runner.** The mechanism depends on the runner being on guardian-vm; transplanting it to ubuntu-latest runners would require SSH-and-key infrastructure that adds risk surface without benefit.
 - **Disabling auto-deploy "just for this PR"** without a corresponding `workflow_dispatch` opt-out input. Drift between branches that auto-deploy and branches that don't will cause cascade failures when they merge.
 
 ### Post-auto-deploy agent smoke contract (v0.6.8+)
@@ -1300,7 +1300,7 @@ When `build-dev-installer.yml` completes with `conclusion=success` AND its auto-
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `service-name` | yes | — | `phantom-xlog` / `phantom-agent` / `phantom-caldera` / `phantom-connector-<id>` |
+| `service-name` | yes | — | `guardian-xlog` / `guardian-agent` / `guardian-caldera` / `guardian-connector-<id>` |
 | `build-context` | yes | — | Path passed to `docker build` as the build context |
 | `dockerfile-path` | no | empty | Optional `-f` flag for Dockerfile path; blank → infer from context |
 | `build-args` | no | empty | Multi-line `KEY=VALUE` list for `--build-arg` (one per line) |
@@ -1325,7 +1325,7 @@ When `build-dev-installer.yml` completes with `conclusion=success` AND its auto-
 
 **Why it's a composite action vs a reusable workflow**:
 - Composite actions run in the calling workflow's runner context — no separate VM provisioning, no artifact roundtrip between workflows.
-- Composite actions take their `runs-on` from the calling workflow — every per-service `build-<svc>.yml` runs on `[self-hosted, Linux, X64, phantom]` automatically.
+- Composite actions take their `runs-on` from the calling workflow — every per-service `build-<svc>.yml` runs on `[self-hosted, Linux, X64, guardian]` automatically.
 - Reusable workflows would require explicit artifact passing of the digest output, which is heavier than composite-action step outputs.
 
 **When changing this action**, remember:
@@ -1338,7 +1338,7 @@ When `build-dev-installer.yml` completes with `conclusion=success` AND its auto-
 **The four non-negotiable mechanics**:
 
 1. **All builds happen in GitHub Actions workflows, never on the operator's workstation, never via `docker compose build` over the tunnel.**
-2. **CI never installs anything on phantom-vm. The operator drives every install/upgrade.**
+2. **CI never installs anything on guardian-vm. The operator drives every install/upgrade.**
 3. **The IAP tunnel is for smoke testing AFTER the operator's install — read-only observation only.**
 4. **Customer releases require explicit operator approval in chat.** (Behavioral contract — full statement lives in CLAUDE.md § Approval phrasing.)
 
@@ -1357,15 +1357,15 @@ build-xlog.yml │ build-agent.yml │ build-caldera.yml │ build-connectors.ym
                                   ↓
               build-dev-installer.yml (workflow_run, fans in)
                                   ↓
-       phantom-installer-dev built + staged at /home/ayman/phantom-installer-dev
+       guardian-installer-dev built + staged at /home/ayman/guardian-installer-dev
        + dev-latest GitHub prerelease published  ← grants operator-PAT pull
                                                    access to :dev image versions
                                   ↓
        AGENT shares smoke-test bullet matrix in chat ← CLAUDE.md § Smoke-test contract
                                   ↓
-OPERATOR: sudo /home/ayman/phantom-installer-dev           ← manual install on phantom-vm
+OPERATOR: sudo /home/ayman/guardian-installer-dev           ← manual install on guardian-vm
                                   ↓
-                           phantom-vm now running the new dev build
+                           guardian-vm now running the new dev build
                                   ↓
        OPERATOR walks the smoke matrix; reports pass/fail per bullet
                                   ↓
@@ -1376,7 +1376,7 @@ git tag vX.Y.Z && git push origin vX.Y.Z         # release.yml fires → GHCR pu
    ↓
        AGENT delivers post-tag closure report ← CLAUDE.md § Closure deliverable
    ↓
-(customer downloads phantom-installer + runs it themselves — same manual flow)
+(customer downloads guardian-installer + runs it themselves — same manual flow)
 ```
 
 ### Pre-deploy gate (MANDATORY before push-to-main)
@@ -1413,7 +1413,7 @@ Pull requests against `main` trigger the SAME per-service `build-<svc>.yml` work
 | `docker push :dev` to GHCR | ❌ no — PRs build locally on the runner, don't publish | ✅ yes |
 | `build-dev-installer.yml` triggers (workflow_run fan-in) | ❌ no — only fires on push events from main, not on PR builds | ✅ yes |
 | `dev-latest` prerelease republished | ❌ no | ✅ yes |
-| Staged binary at `/home/ayman/phantom-installer-dev` updated | ❌ no | ✅ yes |
+| Staged binary at `/home/ayman/guardian-installer-dev` updated | ❌ no | ✅ yes |
 
 The conditional behavior is enforced two ways:
 - `build-dev-installer.yml`'s trigger block lists `workflow_run` filtered to `branches: [main]`, so PR-triggered upstream workflows don't fan in.
@@ -1427,9 +1427,9 @@ The conditional behavior is enforced two ways:
 
 #### What PRs are NOT for
 
-- **Shipping to phantom-vm**: PR builds don't publish images or stage installers. The phantom-vm dev cycle is exclusively driven by push-to-main.
+- **Shipping to guardian-vm**: PR builds don't publish images or stage installers. The guardian-vm dev cycle is exclusively driven by push-to-main.
 - **Tagging customer releases**: only `v*.*.*` tag pushes (which can only happen on main commits per release.yml's gating) trigger customer releases.
-- **Pre-release smoke testing on phantom-vm**: smoke testing happens AFTER the operator runs the dev installer post-push. PRs don't get that path.
+- **Pre-release smoke testing on guardian-vm**: smoke testing happens AFTER the operator runs the dev installer post-push. PRs don't get that path.
 
 #### When to use a PR vs push directly to main
 
@@ -1464,7 +1464,7 @@ Every issue progresses through these states. Labels are the visible signal in th
 | In progress | `status:in-progress` | Agent (mechanical — applied when first commit references the issue) | Work started; commits link back via "Refs #N" |
 | Dev built | `status:dev-built` | Agent (mechanical — applied after `build-dev-installer.yml` succeeds for a commit referencing the issue) | Dev image is on GHCR; `dev-latest` prerelease republished |
 | Ready for testing | `status:ready-for-testing` | Agent (mechanical — applied after the agent runs its own headless smoke against the dev tunnel and the smoke passes) | The agent has verified the change end-to-end through the GCP IAP tunnel (both API surface AND headless-browser UI walk-through). Operator's hands-on testing is now the gate. **Issue STAYS OPEN.** |
-| Testing complete | `status:testing-complete` | **Operator** | Manual hands-on smoke test on phantom-vm passed |
+| Testing complete | `status:testing-complete` | **Operator** | Manual hands-on smoke test on guardian-vm passed |
 | Release approved | `status:release-approved` | **Operator** | Customer release is approved (chat OR label — see below) |
 | Released | `status:released` | Agent (mechanical — applied after `release.yml` succeeds) | Shipped; issue closes automatically |
 
@@ -1502,7 +1502,7 @@ Not every issue follows the full lifecycle to `status:released`. Two distinct sh
 
 Before applying `status:ready-for-testing`, the agent MUST run a smoke pass through the GCP IAP tunnel covering both API surface AND UI experience. The smoke is in-process — the agent uses its own browser-control tools (Playwright / Chrome MCP) against the tunneled UI.
 
-**Setup** (already standard from CLAUDE.md § phantom-vm operator environment):
+**Setup** (already standard from CLAUDE.md § guardian-vm operator environment):
 
 ```bash
 set -a && source .env.vm && set +a
@@ -1526,7 +1526,7 @@ The agent runs `curl` against `/api/v1/<endpoint>` through the SSH tunnel for ea
 The agent uses Playwright (`mcp__plugin_playwright_playwright__*`) OR Claude-in-Chrome (`mcp__Claude_in_Chrome__*`) to:
 
 1. Navigate to `https://localhost:3001/<page>`.
-2. Log in via the existing `phantom_session` cookie flow (admin password from `.env.vm`).
+2. Log in via the existing `guardian_session` cookie flow (admin password from `.env.vm`).
 3. Click the affordances the issue added — buttons, dropdowns, form fields.
 4. Take a screenshot at each verification point.
 5. Confirm visible text / element state matches the smoke-test contract from the issue body.
@@ -1559,7 +1559,7 @@ The lifecycle is now genuinely two-stage where the second stage adds value beyon
 | `component:agent` | `mcp/agent/**` or `bundles/spark/**` |
 | `component:xlog` | `xlog/**` |
 | `component:caldera` | `third_party/caldera/**` (submodule pin) |
-| `component:connectors` | `bundles/spark/connectors/**` or `phantom-connector-runtime/**` |
+| `component:connectors` | `bundles/spark/connectors/**` or `guardian-connector-runtime/**` |
 | `component:installer` | `installer/**` |
 | `component:workflows` | `.github/workflows/**` or `.github/actions/**` |
 | `component:docs` | `docs/**`, `CLAUDE.md`, `CHANGELOG.md`, `mcp/agent/lib/release-notes.ts` |
@@ -1590,9 +1590,9 @@ Component labels mirror the per-service path-filter contract — they answer "wh
 | `area:backup-restore` | `/settings/backup-restore`, export / import flows |
 | `area:rest-api` | `/api/agent/*` REST surface (auth, schemas, contracts) |
 | `area:profile` | `/profile` page, password change flow |
-| `area:factory-reset` | `phantom-factory-reset` script + flow |
-| `area:password-reset` | `phantom-reset-admin-password` script + in-container CLI |
-| `area:auth` | login, session, `phantom_session` cookie + middleware.ts gate, SecretStore password hash |
+| `area:factory-reset` | `guardian-factory-reset` script + flow |
+| `area:password-reset` | `guardian-reset-admin-password` script + in-container CLI |
+| `area:auth` | login, session, `guardian_session` cookie + middleware.ts gate, SecretStore password hash |
 
 The `area:*` dimension is open-ended within reason — new feature areas get new labels as they ship. Add labels via a `scenario:docs-only` spec issue + `.github/scripts/sync-labels.sh`.
 
@@ -1659,7 +1659,7 @@ Future-work (Option C, deferred to v0.6.0+): a GitHub Action watches for `status
 
 ### Issue template
 
-The template at `.github/ISSUE_TEMPLATE/release.md` enforces the spec shape. Operators (and the agent) open new issues via [github.com/kite-production/phantom/issues/new?template=release.md](https://github.com/kite-production/phantom/issues/new?template=release.md) — the form pre-applies `status:spec` and pre-fills the spec sections.
+The template at `.github/ISSUE_TEMPLATE/release.md` enforces the spec shape. Operators (and the agent) open new issues via [github.com/kite-production/guardian/issues/new?template=release.md](https://github.com/kite-production/guardian/issues/new?template=release.md) — the form pre-applies `status:spec` and pre-fills the spec sections.
 
 The template body becomes the CHANGELOG entry at release time. The Summary + Why + What ships + Smoke-test + Forbidden sections each map 1:1 to the CHANGELOG entry's structure (with minor wording edits at release time). If you can't write the "What ships" section before starting work, the scope isn't clear enough yet — that's the design intent.
 
@@ -1700,19 +1700,19 @@ These get separate releases when their friction surfaces.
 - **Skipping spec for "I'll write it later"**. Once code lands without an issue, the spec retroactively becomes the CHANGELOG entry only, losing the pre-work audit trail. If you're tempted to skip, ask: would this change embarrass us if the customer asks "what motivated this?" Yes → issue first.
 - **Building auto-tagging off `status:release-approved` (Option B)** before v0.6.0+. Misclick risk on customer releases is too high; keep the chat-approval gate.
 
-## phantom-vm runner prerequisites
+## guardian-vm runner prerequisites
 
-One-time setup on phantom-vm for the dev-installer flow to work non-interactively. Confirmed in place on the current phantom-vm:
+One-time setup on guardian-vm for the dev-installer flow to work non-interactively. Confirmed in place on the current guardian-vm:
 
-- **`/opt/phantom` pre-created, runner-owned**: `sudo mkdir -p /opt/phantom && sudo chown -R ayman:ayman /opt/phantom`. With `INSTALL_DIR` already writable, the installer's smart-elevation check skips the sudo re-exec entirely.
+- **`/opt/guardian` pre-created, runner-owned**: `sudo mkdir -p /opt/guardian && sudo chown -R ayman:ayman /opt/guardian`. With `INSTALL_DIR` already writable, the installer's smart-elevation check skips the sudo re-exec entirely.
 - **`NOPASSWD` sudo for the runner user**: Confirmed via `google-sudoers` group membership.
 - **Docker group**: Runner user in `docker` group; `docker info` succeeds without sudo.
 
-If phantom-vm is rebuilt or the runner is migrated, redo all three.
+If guardian-vm is rebuilt or the runner is migrated, redo all three.
 
 ### Self-hosted runner capacity
 
-**Current state**: ONE self-hosted runner (`[self-hosted, Linux, X64, phantom]`) running on phantom-vm itself. Concurrent workflows queue serially per the runner's job slot.
+**Current state**: ONE self-hosted runner (`[self-hosted, Linux, X64, guardian]`) running on guardian-vm itself. Concurrent workflows queue serially per the runner's job slot.
 
 **Why one runner is sufficient today**:
 - Per-service builds are fast (build-xlog ~2 min, build-agent ~4-5 min, build-caldera ~3 min, build-connectors ~3-7 min depending on which connectors changed) — even with multiple per-service workflows triggered by the same push, total wall-clock is rarely > 10-12 min.
@@ -1725,26 +1725,26 @@ If phantom-vm is rebuilt or the runner is migrated, redo all three.
 |---|---|---|
 | Queue depth > 3 jobs for > 5 min on a typical push | Single runner saturating | Add second runner |
 | Operator-reported "I pushed 20 min ago and build-dev-installer still hasn't fired" | Upstream per-service build queued behind unrelated work | Investigate; consider second runner if recurrent |
-| Two tags pushed back-to-back, second tag's release.yml has to wait | `release.yml` runs on `ubuntu-latest` (GitHub-hosted), unaffected by phantom-vm runner | Not a runner-capacity issue; this is the PREV_V sequencing discipline |
+| Two tags pushed back-to-back, second tag's release.yml has to wait | `release.yml` runs on `ubuntu-latest` (GitHub-hosted), unaffected by guardian-vm runner | Not a runner-capacity issue; this is the PREV_V sequencing discipline |
 | Tests inside the freshly-built agent image run slowly | Build-agent's pytest job blocking other jobs | NOT a capacity issue (pytest is within the same job slot); investigate test speed instead |
 
 **Adding a second runner — when needed**:
 
-1. **Topology decision**: a second runner on the SAME phantom-vm (cheap; shares hardware + dockerd) OR a separate VM (resilient; isolates failures).
-   - Same-VM: lower cost, ~10 min setup, but a phantom-vm hardware/dockerd issue takes down BOTH runners.
+1. **Topology decision**: a second runner on the SAME guardian-vm (cheap; shares hardware + dockerd) OR a separate VM (resilient; isolates failures).
+   - Same-VM: lower cost, ~10 min setup, but a guardian-vm hardware/dockerd issue takes down BOTH runners.
    - Separate VM: ~30 min setup including GCP plumbing, but capacity-isolation + failover available.
-2. **Register the new runner** in the org's Actions settings with labels matching the existing one (`[self-hosted, Linux, X64, phantom]`) so existing workflows pick it up automatically without YAML changes.
+2. **Register the new runner** in the org's Actions settings with labels matching the existing one (`[self-hosted, Linux, X64, guardian]`) so existing workflows pick it up automatically without YAML changes.
 3. **Verify both runners pick up work**: push a test commit that triggers >1 per-service workflow, watch `gh run list --json runnerName` to confirm jobs distribute.
 
-**Runner failover plan (if phantom-vm goes down completely)**:
+**Runner failover plan (if guardian-vm goes down completely)**:
 
-Current state: NO failover. If phantom-vm is offline, the CI/CD pipeline stops. release.yml workflows still run (they're on `ubuntu-latest`), but build-<svc>.yml + build-dev-installer.yml halt until phantom-vm is back.
+Current state: NO failover. If guardian-vm is offline, the CI/CD pipeline stops. release.yml workflows still run (they're on `ubuntu-latest`), but build-<svc>.yml + build-dev-installer.yml halt until guardian-vm is back.
 
-Mitigation steps if phantom-vm becomes unavailable for > 1 hour:
-1. Verify the outage cause (GCP region issue, VM-specific failure, etc.). GCP status page + `gcloud compute instances describe phantom`.
-2. If the VM is permanently lost, **the running stack's state is lost too** unless `/opt/phantom/` volumes were backed up externally (currently not done — gap on phantom-vm operational resilience).
-3. Spin up a replacement VM following the runner-prerequisites checklist above. Re-run setup → repopulate `.env.vm` → operator runs `phantom-installer-dev` on the new VM (fresh-volume install).
-4. Customer-side: customers are unaffected (they don't depend on phantom-vm for their installs; they pull from GHCR directly). The dev cycle stops; customer-release tagging via release.yml still works.
+Mitigation steps if guardian-vm becomes unavailable for > 1 hour:
+1. Verify the outage cause (GCP region issue, VM-specific failure, etc.). GCP status page + `gcloud compute instances describe guardian`.
+2. If the VM is permanently lost, **the running stack's state is lost too** unless `/opt/guardian/` volumes were backed up externally (currently not done — gap on guardian-vm operational resilience).
+3. Spin up a replacement VM following the runner-prerequisites checklist above. Re-run setup → repopulate `.env.vm` → operator runs `guardian-installer-dev` on the new VM (fresh-volume install).
+4. Customer-side: customers are unaffected (they don't depend on guardian-vm for their installs; they pull from GHCR directly). The dev cycle stops; customer-release tagging via release.yml still works.
 
 **Forbidden in runner work**:
 - **Using `ubuntu-latest` for the per-service builds.** They produce `:dev` images for the operator's environment; GitHub-hosted runners are fine for releases (release.yml uses them deliberately) but bind the dev cycle to GitHub's runner availability.
@@ -1752,14 +1752,14 @@ Mitigation steps if phantom-vm becomes unavailable for > 1 hour:
 
 ## Code → VM contract
 
-**Source ships to phantom-vm exclusively through GitHub Actions** — see [build-dev-installer.yml](../.github/workflows/build-dev-installer.yml). The flow is `git push` → per-service `build-<svc>.yml` workflows push `:dev` image tags → `build-dev-installer.yml` builds + stages a fresh `phantom-installer-dev` binary at `/home/ayman/phantom-installer-dev` + publishes `dev-latest` prerelease → **operator** runs `sudo /home/ayman/phantom-installer-dev` to install.
+**Source ships to guardian-vm exclusively through GitHub Actions** — see [build-dev-installer.yml](../.github/workflows/build-dev-installer.yml). The flow is `git push` → per-service `build-<svc>.yml` workflows push `:dev` image tags → `build-dev-installer.yml` builds + stages a fresh `guardian-installer-dev` binary at `/home/ayman/guardian-installer-dev` + publishes `dev-latest` prerelease → **operator** runs `sudo /home/ayman/guardian-installer-dev` to install.
 
 There is no `tar+scp`, no `rsync`, no `sshpass -e ssh ... "git pull"` — the runner does its own checkout and builds in-place; the operator drives the install on their own cadence.
 
-**The IAP tunnel is for read-only smoke testing only.** Use it to observe what the operator's just-run install produced (`docker compose ps`, `docker compose logs`, `curl https://localhost:3000/...`, `docker exec phantom_agent sh -c '...'` for diagnostic reads). Do **NOT** use it to:
-- ❌ `tar+scp` source from your workstation to phantom-vm
-- ❌ `sshpass -e ssh ... "cd $VM_REMOTE_REPO && docker compose build phantom-agent"`
-- ❌ Edit files on phantom-vm directly
+**The IAP tunnel is for read-only smoke testing only.** Use it to observe what the operator's just-run install produced (`docker compose ps`, `docker compose logs`, `curl https://localhost:3000/...`, `docker exec guardian_agent sh -c '...'` for diagnostic reads). Do **NOT** use it to:
+- ❌ `tar+scp` source from your workstation to guardian-vm
+- ❌ `sshpass -e ssh ... "cd $VM_REMOTE_REPO && docker compose build guardian-agent"`
+- ❌ Edit files on guardian-vm directly
 - ❌ `git pull` on the VM
 - ❌ Anything that mutates source or images
 
@@ -1772,14 +1772,14 @@ Run via the IAP tunnel + `sshpass -e ssh`. **READ-ONLY** — observation only, n
 ```bash
 # Stack state
 … "cd $VM_REMOTE_REPO && docker compose ps"
-… "cd $VM_REMOTE_REPO && docker compose logs --tail=200 phantom-agent"
-… "docker inspect --format '{{.State.Health.Status}}' phantom_agent"
+… "cd $VM_REMOTE_REPO && docker compose logs --tail=200 guardian-agent"
+… "docker inspect --format '{{.State.Health.Status}}' guardian_agent"
 
 # Endpoint reachability inside running containers
-… "docker exec phantom_agent sh -c 'curl -sk -o /dev/null -w \"HTTP %{http_code}\" https://localhost:3000/api/agent/version'"
+… "docker exec guardian_agent sh -c 'curl -sk -o /dev/null -w \"HTTP %{http_code}\" https://localhost:3000/api/agent/version'"
 
 # Bearer-auth MCP probes (MCP_TOKEN reachable via /proc/1/environ inside the agent container)
-… "docker exec phantom_agent sh -c 'TOKEN=\$(tr \"\\0\" \"\\n\" </proc/1/environ | awk -F= \"/^MCP_TOKEN=/{sub(/^MCP_TOKEN=/,\\\"\\\");print;exit}\"); \\
+… "docker exec guardian_agent sh -c 'TOKEN=\$(tr \"\\0\" \"\\n\" </proc/1/environ | awk -F= \"/^MCP_TOKEN=/{sub(/^MCP_TOKEN=/,\\\"\\\");print;exit}\"); \\
    curl -sk -H \"Authorization: Bearer \$TOKEN\" https://localhost:8080/api/v1/instances'"
 ```
 
@@ -1807,36 +1807,36 @@ gcloud compute start-iap-tunnel "$VM_NAME" 8999 \
   --zone="$VM_ZONE" --project="$VM_PROJECT" &
 ```
 
-## `installer/build-phantom-installer.sh` env-var contract
+## `installer/build-guardian-installer.sh` env-var contract
 
 ```
 VERSION       (required)       — semver for release, "dev-<sha>" for dev
-MANIFEST_PATH (required)       — path to the .env file with DIGEST_PHANTOM_* values
+MANIFEST_PATH (required)       — path to the .env file with DIGEST_GUARDIAN_* values
 OUTPUT_DIR    (default `.`)    — where to write the binary
-OUTPUT_NAME   (default `phantom-installer`) — binary filename; set to
-                                 `phantom-installer-dev` for dev builds
+OUTPUT_NAME   (default `guardian-installer`) — binary filename; set to
+                                 `guardian-installer-dev` for dev builds
 ```
 
 Both `build-dev-installer.yml` and `release.yml` invoke this script with the same shape — only the four env-var values differ. The script body has zero branching on dev vs release; the manifest content is the only divergence.
 
 ## Image digest pinning contract (customer compose)
 
-v0.3.0+ replaced tag-based image references in the customer compose with **content-digest pinning**. The contract is operator-visible (containers retain in-memory state across upgrades that don't change image content) and intersects with multiple subsystems (release.yml, phantom-installer, phantom-updater, observability).
+v0.3.0+ replaced tag-based image references in the customer compose with **content-digest pinning**. The contract is operator-visible (containers retain in-memory state across upgrades that don't change image content) and intersects with multiple subsystems (release.yml, guardian-installer, guardian-updater, observability).
 
 ### The two compose files have different pinning modes
 
 | File | Pinning | Used by | Used when |
 |---|---|---|---|
 | **`docker-compose.yml`** (repo root) | `image: xlog:local` (tag, dev-only) | dev-workstation local-dev | Any time a developer runs `docker compose up` from the repo root |
-| **`installer/docker-compose.yml`** | `image: ghcr.io/.../xlog@${DIGEST_PHANTOM_XLOG}` (digest, customer + dev-installer) | The phantom-installer binaries; packaged into customer install kits + dev installer | On customer hosts + phantom-vm after running an installer |
+| **`installer/docker-compose.yml`** | `image: ghcr.io/.../xlog@${DIGEST_GUARDIAN_XLOG}` (digest, customer + dev-installer) | The guardian-installer binaries; packaged into customer install kits + dev installer | On customer hosts + guardian-vm after running an installer |
 
 Both shapes are valid Docker compose syntax. Don't try to unify them — the dev compose needs `:local` so it works without a manifest file, and the customer/dev-installer compose needs digests so upgrades are content-aware.
 
 ### Anti-patterns specific to digest pinning
 
 - **Mixing modes within one compose file.** Don't ship `image: xlog:0.3.0` in `installer/docker-compose.yml` for one service while every other service uses digest refs.
-- **Hand-editing `DIGEST_PHANTOM_*` lines in customer `.env`.** They're manifest-managed; the next `phantom-installer` run strips and rewrites the whole block.
-- **Forgetting the fail-loud fallback.** The compose pattern is `@${DIGEST_PHANTOM_<SVC>:-sha256:invalid_digest_run_installer_first}`.
+- **Hand-editing `DIGEST_GUARDIAN_*` lines in customer `.env`.** They're manifest-managed; the next `guardian-installer` run strips and rewrites the whole block.
+- **Forgetting the fail-loud fallback.** The compose pattern is `@${DIGEST_GUARDIAN_<SVC>:-sha256:invalid_digest_run_installer_first}`.
 
 ## Image signing, SBOM, provenance (future)
 
@@ -1854,7 +1854,7 @@ Both shapes are valid Docker compose syntax. Don't try to unify them — the dev
 
 **SBOM** (Software Bill of Materials):
 - Tool: `syft` for generating SBOMs from images; `grype` for vulnerability scanning the SBOMs.
-- Mechanic: `release.yml` runs `syft ghcr.io/.../phantom-agent:vX.Y.Z -o spdx-json > sbom.json` per image, attaches `sbom.json` as a release asset (per-image).
+- Mechanic: `release.yml` runs `syft ghcr.io/.../guardian-agent:vX.Y.Z -o spdx-json > sbom.json` per image, attaches `sbom.json` as a release asset (per-image).
 - Format: SPDX JSON (industry-standard, machine-readable).
 - Customer use: download the SBOM, feed to their vulnerability scanner, validate before install.
 
@@ -1867,7 +1867,7 @@ Both shapes are valid Docker compose syntax. Don't try to unify them — the dev
 ### Operational impact when implemented
 
 - `release.yml` runtime: +30s-60s for cosign + syft + provenance steps.
-- Customer install: +5-10s if `phantom-installer` runs verification (optional gate, off by default for v1, on by default once enterprise customers want it).
+- Customer install: +5-10s if `guardian-installer` runs verification (optional gate, off by default for v1, on by default once enterprise customers want it).
 - Maintenance: rotate signing identity if compromised (rare); update syft/cosign versions on a quarterly cadence.
 
 ### Forbidden when implementing (future)
@@ -1884,7 +1884,7 @@ When something in the pipeline fails, recognizing the pattern saves diagnostic t
 
 **Symptom**: `build-dev-installer.yml`'s "Login to GHCR" step fails with `request canceled while waiting for connection (Client.Timeout exceeded while awaiting headers)`. Exit code 1.
 
-**Cause**: Transient network blip between phantom-vm and ghcr.io. Cloud NAT egress contention, ghcr.io momentary slowness, etc.
+**Cause**: Transient network blip between guardian-vm and ghcr.io. Cloud NAT egress contention, ghcr.io momentary slowness, etc.
 
 **Remediation**: Re-run the workflow. `gh run rerun <run-id> --failed` re-runs only the failed jobs. The next workflow_run-triggered build-dev-installer.yml fan-in (from any per-service build completion) also unblocks the dev-latest republish.
 
@@ -1894,7 +1894,7 @@ When something in the pipeline fails, recognizing the pattern saves diagnostic t
 
 **Symptom**: `release.yml`'s docker-push step fails mid-upload with timeouts on individual blob HEAD probes. Worse when multiple services push in parallel.
 
-**Cause**: GCP Cloud NAT runs out of source-port allocations when docker push fans out parallel HEAD probes for blob existence. The self-hosted phantom-vm runner sits behind Cloud NAT; release.yml runs on GitHub-hosted runners specifically to avoid this path.
+**Cause**: GCP Cloud NAT runs out of source-port allocations when docker push fans out parallel HEAD probes for blob existence. The self-hosted guardian-vm runner sits behind Cloud NAT; release.yml runs on GitHub-hosted runners specifically to avoid this path.
 
 **Remediation**:
 - `release.yml`: already runs on `ubuntu-latest` (GitHub-hosted → datacenter-internal to ghcr.io → no NAT). No remediation needed if release.yml is the workflow that failed.
@@ -1913,7 +1913,7 @@ When something in the pipeline fails, recognizing the pattern saves diagnostic t
 ```bash
 gh run list --workflow=build-dev-installer.yml --branch main --limit 5
 # Look for the run that ran BETWEEN your push and the latest run
-gh run view <intermediate-run-id> --log | grep -E "phantom-(xlog|agent|caldera)\s+(UNCHANGED|REBUILT|FIRST-BUILD|STABLE-ADVANCED)"
+gh run view <intermediate-run-id> --log | grep -E "guardian-(xlog|agent|caldera)\s+(UNCHANGED|REBUILT|FIRST-BUILD|STABLE-ADVANCED)"
 ```
 
 **Prevention**: Future improvement: bake the rebuild summary into a workflow artifact / commit comment / similar so it survives even when the latest run sees "no delta." Not implemented today; the run-history workaround is sufficient.
@@ -1941,7 +1941,7 @@ git push origin v0.5.7
 
 **Symptom**: A workflow step calling `gh release create / view / delete` fails with `gh: command not found`. Exit code 127.
 
-**Cause**: The self-hosted phantom-vm runner doesn't have `gh` CLI installed. `curl + python3` are guaranteed; `gh` is not.
+**Cause**: The self-hosted guardian-vm runner doesn't have `gh` CLI installed. `curl + python3` are guaranteed; `gh` is not.
 
 **Remediation**: Rewrite the step to use `curl` + the GitHub REST API. The existing `build-dev-installer.yml`'s Resolve dev digests step + Publish dev-latest prerelease step both use this pattern; copy the structure (curl + python3 JSON parsing + HTTP-status discrimination).
 
@@ -1949,7 +1949,7 @@ git push origin v0.5.7
 
 ### 6. Token validation fails despite valid PAT (Accept header)
 
-**Symptom**: v0.5.8 installer's Step 4 prints `Token from /opt/phantom/.env failed validation against ghcr.io` even though the same PAT successfully pulls customer release tags from another VM.
+**Symptom**: v0.5.8 installer's Step 4 prints `Token from /opt/guardian/.env failed validation against ghcr.io` even though the same PAT successfully pulls customer release tags from another VM.
 
 **Cause** (pre-v0.5.10): the installer's `validate_ghcr_token()` Accept header listed only `application/vnd.docker.distribution.manifest.v2+json` — the legacy Docker single-arch format. Dev `:dev` tags are stored as OCI image indexes (multi-arch). GHCR refuses to serve the manifest in a format the client says it can't accept, returns 404 with body `MANIFEST_UNKNOWN: OCI index found, but Accept header does not support OCI indexes`.
 
@@ -1975,21 +1975,21 @@ Wait for completion, retry the install.
 
 **Symptom**: `build-<svc>.yml` workflows show queued for >5 minutes. `gh run list` shows runs stuck in `queued` state.
 
-**Cause**: The self-hosted runner service on phantom-vm has stopped, crashed, or lost network connectivity to GitHub Actions.
+**Cause**: The self-hosted runner service on guardian-vm has stopped, crashed, or lost network connectivity to GitHub Actions.
 
 **Remediation**:
-1. SSH to phantom-vm:
+1. SSH to guardian-vm:
    ```bash
    gcloud compute ssh "ayman@$VM_NAME" --zone="$VM_ZONE" --tunnel-through-iap
    ```
 2. Check the runner service:
    ```bash
-   systemctl status actions.runner.kite-production-phantom.phantom.service
-   journalctl -u actions.runner.kite-production-phantom.phantom.service --tail=100
+   systemctl status actions.runner.kite-production-guardian.guardian.service
+   journalctl -u actions.runner.kite-production-guardian.guardian.service --tail=100
    ```
 3. Restart:
    ```bash
-   sudo systemctl restart actions.runner.kite-production-phantom.phantom.service
+   sudo systemctl restart actions.runner.kite-production-guardian.guardian.service
    ```
 4. Verify it picks up queued work:
    ```bash
@@ -1997,7 +1997,7 @@ Wait for completion, retry the install.
    ```
 5. If restart doesn't help, check disk space (`df -h`), check docker daemon (`docker info`), check network (`curl https://github.com`).
 
-**Prevention**: Disk-space monitoring on phantom-vm (gh-actions builds accumulate layers under `/var/lib/docker`). Periodic `docker system prune -af --volumes=false` (CAREFUL: don't prune volumes — caldera state). A monthly cadence cleanup is healthy.
+**Prevention**: Disk-space monitoring on guardian-vm (gh-actions builds accumulate layers under `/var/lib/docker`). Periodic `docker system prune -af --volumes=false` (CAREFUL: don't prune volumes — caldera state). A monthly cadence cleanup is healthy.
 
 ### 9. `release.yml` partial failure mid-flight
 
@@ -2006,7 +2006,7 @@ Wait for completion, retry the install.
 **Cause**: Various — network blip, runner restart mid-job, GitHub API outage, a bug introduced in release.yml itself.
 
 **Remediation**:
-- Check what got published: `docker manifest inspect ghcr.io/kite-production/phantom-agent:vX.Y.Z`. Did the image-push step complete?
+- Check what got published: `docker manifest inspect ghcr.io/kite-production/guardian-agent:vX.Y.Z`. Did the image-push step complete?
 - If images are on GHCR but no release: dispatch release.yml manually with `version=X.Y.Z`:
   ```bash
   gh workflow run release.yml --ref main -f version=X.Y.Z
@@ -2022,48 +2022,48 @@ Wait for completion, retry the install.
 
 **Prevention**: The release.yml workflow is idempotent by design (per-step error handling, retry-on-push, conditional rebuild). Recovery should rarely require manual intervention; if it becomes routine, that's a release.yml regression to fix.
 
-### 10. Disk full on phantom-vm (build accumulates layers)
+### 10. Disk full on guardian-vm (build accumulates layers)
 
 **Symptom**: `build-<svc>.yml` fails with `no space left on device` somewhere mid-build. Multiple workflows queued and failing.
 
-**Cause**: phantom-vm's docker layer cache accumulates over many builds. Old images, dangling layers, build caches all pile up under `/var/lib/docker`.
+**Cause**: guardian-vm's docker layer cache accumulates over many builds. Old images, dangling layers, build caches all pile up under `/var/lib/docker`.
 
 **Remediation**:
-1. SSH to phantom-vm.
+1. SSH to guardian-vm.
 2. Check disk: `df -h /var/lib/docker`.
 3. Prune (CAREFUL — preserve volumes):
    ```bash
    # Safe: removes stopped containers, dangling images, unused networks
    sudo docker system prune -af --volumes=false
-   # Specifically dangerous: --volumes would wipe phantom_* (caldera state etc)
+   # Specifically dangerous: --volumes would wipe guardian_* (caldera state etc)
    ```
 4. If still tight, remove old `:vX.Y.Z` image tags on the runner (they're still on GHCR; runner-local cache is rebuildable):
    ```bash
-   docker images "ghcr.io/kite-production/phantom-*" --format "{{.Repository}}:{{.Tag}}" \
+   docker images "ghcr.io/kite-production/guardian-*" --format "{{.Repository}}:{{.Tag}}" \
      | grep -v ':dev$\|:latest$' \
      | xargs -r docker rmi -f
    ```
 
 **Prevention**: Monthly cadence cleanup as part of operator hygiene. Add an alarm/log for `<2 GB free under /var/lib/docker`.
 
-### 12. Per-connector docker build 401 on FROM phantom-connector-runtime:dev (chronic since v0.5.11; fixed in v0.5.60 #38)
+### 12. Per-connector docker build 401 on FROM guardian-connector-runtime:dev (chronic since v0.5.11; fixed in v0.5.60 #38)
 
 **Symptom**: every per-connector job in `build-connectors.yml` (xlog/xsiam/caldera/web/cortex-docs/cortex-content) fails in ~6s with:
 
 ```
-#2 [internal] load metadata for ghcr.io/<owner>/phantom-connector-runtime:dev
-#2 ERROR: unexpected status from HEAD request to https://ghcr.io/v2/<owner>/phantom-connector-runtime/manifests/dev: 401 Unauthorized
+#2 [internal] load metadata for ghcr.io/<owner>/guardian-connector-runtime:dev
+#2 ERROR: unexpected status from HEAD request to https://ghcr.io/v2/<owner>/guardian-connector-runtime/manifests/dev: 401 Unauthorized
 ```
 
 even though the SAME workflow run's `build-runtime` job succeeded seconds earlier.
 
-**Cause**: The composite action `.github/actions/build-and-push-dev-image/action.yml` ran `docker build --pull`, which forces docker to re-fetch the base image's manifest from GHCR. The freshly-pushed `phantom-connector-runtime:dev` version is **private by default** until associated with the `dev-latest` GitHub prerelease — and that association happens later in `build-dev-installer.yml`'s cascade, AFTER all per-connector jobs already tried (and failed) to build. So `docker build --pull` HEAD-checks the just-pushed manifest, gets 401, fails.
+**Cause**: The composite action `.github/actions/build-and-push-dev-image/action.yml` ran `docker build --pull`, which forces docker to re-fetch the base image's manifest from GHCR. The freshly-pushed `guardian-connector-runtime:dev` version is **private by default** until associated with the `dev-latest` GitHub prerelease — and that association happens later in `build-dev-installer.yml`'s cascade, AFTER all per-connector jobs already tried (and failed) to build. So `docker build --pull` HEAD-checks the just-pushed manifest, gets 401, fails.
 
 **Why silent for 5+ release cycles**: customer compose pins specific image digests baked at `release.yml` time. Customer releases run their own image-build path with different ordering. Dev-only failure that doesn't surface until a dev-iteration release needs FRESH per-connector image content (e.g. v0.5.59's XSIAM `src/connector.py` change carrying the dual-name read).
 
 **Remediation (v0.5.60+)**: `pull-policy: never` input on each per-connector job's `build-and-push-dev-image` invocation. The base image already exists in the local docker daemon's cache from `build-runtime`'s push step seconds earlier — `--pull` is removed for those builds. `build-runtime` keeps `--pull` (default 'always') because its base is `python:3.12-slim` from Docker Hub (publicly readable + benefits from CVE-fresh layers).
 
-**Prevention**: the comment in `build-connectors.yml` near the `build-runtime` job explains the rule + why `--pull` stays default for non-Phantom-own bases. Future per-connector workflows that inherit from a Phantom-own image just built in the same run MUST set `pull-policy: never`; any other base MUST keep the default.
+**Prevention**: the comment in `build-connectors.yml` near the `build-runtime` job explains the rule + why `--pull` stays default for non-Guardian-own bases. Future per-connector workflows that inherit from a Guardian-own image just built in the same run MUST set `pull-policy: never`; any other base MUST keep the default.
 
 ### 11. Stale `:dev` digest (build-dev-installer.yml's digest != what build-<svc>.yml just pushed)
 
@@ -2077,9 +2077,9 @@ even though the SAME workflow run's `build-runtime` job succeeded seconds earlie
 
 ### 13. release.yml per-service path-detection misses overlay content directory (fixed v0.6.2 retro)
 
-**Symptom**: customer release tag publishes a `release-manifest-vX.Y.Z.env` where the `phantom-caldera` digest is byte-identical to the PREVIOUS customer release, even though `bundles/spark/caldera-content/` had real changes between the two tags. Operator-visible: customers running the new installer get the OLD caldera image content under the NEW version tag. Adversaries / abilities added since the previous release are missing from the customer Caldera UI.
+**Symptom**: customer release tag publishes a `release-manifest-vX.Y.Z.env` where the `guardian-caldera` digest is byte-identical to the PREVIOUS customer release, even though `bundles/spark/caldera-content/` had real changes between the two tags. Operator-visible: customers running the new installer get the OLD caldera image content under the NEW version tag. Adversaries / abilities added since the previous release are missing from the customer Caldera UI.
 
-**Cause**: `release.yml`'s "Detect changed services since previous release" step had `CALDERA=$(changed third_party/caldera/)` — only the submodule path. But the caldera image is built by `build-caldera.yml` which overlays `bundles/spark/caldera-content/` into the image at build time (the "Overlay Phantom kill-chain content" step). When ONLY the overlay content changes (no submodule update), `changed third_party/caldera/` returns 0 and the conditional rebuild path takes the retag branch: `docker tag ghcr.io/.../phantom-caldera:${PREV_V} ghcr.io/.../phantom-caldera:${V}`. New version, same digest, customer image identical to PREV.
+**Cause**: `release.yml`'s "Detect changed services since previous release" step had `CALDERA=$(changed third_party/caldera/)` — only the submodule path. But the caldera image is built by `build-caldera.yml` which overlays `bundles/spark/caldera-content/` into the image at build time (the "Overlay Guardian kill-chain content" step). When ONLY the overlay content changes (no submodule update), `changed third_party/caldera/` returns 0 and the conditional rebuild path takes the retag branch: `docker tag ghcr.io/.../guardian-caldera:${PREV_V} ghcr.io/.../guardian-caldera:${V}`. New version, same digest, customer image identical to PREV.
 
 **v0.6.1 (the regression) — concrete example**:
 - v0.6.0 -> v0.6.1 commits: phishing v3.3 (`bundles/spark/caldera-content/abilities/01-initial-access/phishing-emailclient-spawn.yml`), T1518.001 PSh replacements (2 new files in `abilities/03-discovery/`), 2 swapped adversary YAMLs.
@@ -2098,9 +2098,9 @@ even though the SAME workflow run's `build-runtime` job succeeded seconds earlie
 - **Quick sanity check before tagging**: `diff <(yq '... build-caldera.yml path filters') <(grep CALDERA release.yml)`. Or just: when you add content overlay paths to a per-service build, ALSO add them to release.yml's detection in the same PR.
 - **Verify post-release**: after `release.yml` succeeds, download the `release-manifest-v*.env` and compare DIGEST_* lines vs the previous tag's manifest. Any service that had source changes since the previous tag MUST have a different digest. If a digest is unchanged when source changed, the detection missed it — recover via a new patch tag with the path-list fix.
 
-**Deeper bug also fixed in v0.6.3**: even after the detection-path fix, v0.6.2's caldera digest matched v0.6.0's. Root cause: release.yml's `docker build third_party/caldera/` had no overlay step — the Phantom plugin content and CTID emu plans were ONLY overlaid into the build context by `build-caldera.yml` (the `:dev` builder), never by `release.yml`. So even when the detection correctly fired CHANGED=1, the resulting customer image was vanilla Caldera. **Every customer release since v0.5.57 (when caldera-content overlay was introduced) through v0.6.2 shipped vanilla aymanam-style Caldera with no Phantom adversaries**.
+**Deeper bug also fixed in v0.6.3**: even after the detection-path fix, v0.6.2's caldera digest matched v0.6.0's. Root cause: release.yml's `docker build third_party/caldera/` had no overlay step — the Guardian plugin content and CTID emu plans were ONLY overlaid into the build context by `build-caldera.yml` (the `:dev` builder), never by `release.yml`. So even when the detection correctly fired CHANGED=1, the resulting customer image was vanilla Caldera. **Every customer release since v0.5.57 (when caldera-content overlay was introduced) through v0.6.2 shipped vanilla aymanam-style Caldera with no Guardian adversaries**.
 
-The v0.6.3 fix changes release.yml's caldera build to pull `:dev` (which build-caldera.yml correctly built with the full Phantom + CTID overlay) and retag it as the customer release version — instead of rebuilding from source. Falls back to vanilla rebuild only if `:dev` pull fails. Single source of truth for caldera image content: `build-caldera.yml`. No more 60-line duplication between two workflows.
+The v0.6.3 fix changes release.yml's caldera build to pull `:dev` (which build-caldera.yml correctly built with the full Guardian + CTID overlay) and retag it as the customer release version — instead of rebuilding from source. Falls back to vanilla rebuild only if `:dev` pull fails. Single source of truth for caldera image content: `build-caldera.yml`. No more 60-line duplication between two workflows.
 
 Trade-off accepted: customer release image = `:dev` digest at release time. This is intentional — `:dev` IS the canonical current-main-HEAD build; the release tag just FREEZES the digest customers should pin. Customers later upgrading get a NEWER frozen snapshot while `:dev` keeps moving.
 
@@ -2139,16 +2139,16 @@ curl -fsSL \
 | gh: command not found | self-hosted workflows | step fails exit 127 | Rewrite step using curl + REST |
 | Token Accept-header | installer Step 4 | "OCI index found" body | Upgrade to v0.5.10+ |
 | dev-latest missing | installer Step 7 | denied: denied on :dev pull | Re-run build-dev-installer.yml |
-| Self-hosted runner offline | any | runs stuck queued >5 min | Restart actions.runner service on phantom-vm |
+| Self-hosted runner offline | any | runs stuck queued >5 min | Restart actions.runner service on guardian-vm |
 | release.yml partial fail | release.yml | release created but assets missing OR vice-versa | Re-dispatch with workflow_run, or delete + re-tag |
 | Disk full | any build | `no space left on device` | `docker system prune -af --volumes=false` |
 | Stale :dev digest | build-dev-installer.yml | digest doesn't match latest build-svc | Re-run build-dev-installer.yml |
-| Per-connector 401 on runtime FROM | build-connectors.yml | per-connector job fails ~6s with HEAD 401 on phantom-connector-runtime:dev | Fixed in v0.5.60 #38 via `pull-policy: never` on per-connector jobs |
+| Per-connector 401 on runtime FROM | build-connectors.yml | per-connector job fails ~6s with HEAD 401 on guardian-connector-runtime:dev | Fixed in v0.5.60 #38 via `pull-policy: never` on per-connector jobs |
 | `/releases/latest` 404 | build-dev-installer.yml | `curl: (22) ... 404` in Resolve-dev-digests step despite valid stable release | Fixed in v0.17.84 via `curl --retry-all-errors` on the manifest-fetch calls |
 
 ## CI/CD pipeline observability
 
-**Status today**: no automated alerting. Workflow failures surface only when the operator runs `gh run list` or notices builds aren't appearing on phantom-vm. There are no Slack/email/PagerDuty notifications. Single-operator cadence means this works in practice — the operator is always actively involved in builds — but the gap matters when multiple things break overnight or when the pipeline grows.
+**Status today**: no automated alerting. Workflow failures surface only when the operator runs `gh run list` or notices builds aren't appearing on guardian-vm. There are no Slack/email/PagerDuty notifications. Single-operator cadence means this works in practice — the operator is always actively involved in builds — but the gap matters when multiple things break overnight or when the pipeline grows.
 
 This section documents:
 1. **What observability exists today** (workflow logs + step summary panels + the REBUILT/UNCHANGED diagnostic).
@@ -2169,10 +2169,10 @@ This section documents:
 - `release-manifest-vX.Y.Z.env` asset on each customer release — auditable digest manifest.
 
 **Per-image**:
-- `docker manifest inspect ghcr.io/.../phantom-agent:vX.Y.Z` — verifies an image is pullable.
+- `docker manifest inspect ghcr.io/.../guardian-agent:vX.Y.Z` — verifies an image is pullable.
 - GHCR UI's per-package version list — shows all published versions + their tag/digest mapping.
 
-**Per-install (on phantom-vm)**:
+**Per-install (on guardian-vm)**:
 - Installer's Step 7 output: visible "Pulled / Running / Started / Healthy / Recreated" per container — operator can identify which services recreated.
 - `docker compose ps` — currently-running stack state.
 - `/observability/connectors` UI page — surfaces image digests that are running.
@@ -2213,7 +2213,7 @@ This is enough for a single-operator pipeline where the operator is hands-on. Th
 - Catches "we pushed to main but build-dev-installer.yml has been stuck somewhere."
 
 **Customer install telemetry (privacy-preserving)**:
-- Anonymous opt-in tagged ping from `phantom-installer` Step 1 (sends `{phantom_version, install_outcome, anon_install_id}` if customer hasn't opted out).
+- Anonymous opt-in tagged ping from `guardian-installer` Step 1 (sends `{guardian_version, install_outcome, anon_install_id}` if customer hasn't opted out).
 - Stored in a single endpoint we control.
 - Estimated effort: ~2 days including the privacy + opt-out UX. NOT prioritized until customer-deployment-scale exceeds direct-relationship monitoring.
 
@@ -2230,13 +2230,13 @@ This is enough for a single-operator pipeline where the operator is hands-on. Th
 
 ### Forbidden in observability work
 
-- **Adding telemetry without an explicit opt-out for customers.** Phantom is privacy-preserving by default — any customer telemetry is opt-in only, with clear UI surface explaining what's sent + how to disable.
+- **Adding telemetry without an explicit opt-out for customers.** Guardian is privacy-preserving by default — any customer telemetry is opt-in only, with clear UI surface explaining what's sent + how to disable.
 - **Centralized log forwarding from customer installs.** Customer logs stay on customer infrastructure. Operator-side debugging happens through customer-provided artifacts (logs they choose to share), not via streaming.
 - **Routing CI/CD alerts to customer channels.** CI/CD observability is internal-team-facing; customers don't receive our build-failure notifications. (They'd see the eventual consequence — a release that didn't ship on time — which is a separate communication channel.)
 
 ## AI Layer review cadence (Pattern 2)
 
-The [Anthropic article](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start)'s Pattern 2 says *"actively maintain CLAUDE.md as models evolve."* This section codifies how the Phantom Platform Team does that — what triggers a review, what the review covers, and the concrete deliverable.
+The [Anthropic article](https://claude.com/blog/how-claude-code-works-in-large-codebases-best-practices-and-where-to-start)'s Pattern 2 says *"actively maintain CLAUDE.md as models evolve."* This section codifies how the Guardian Platform Team does that — what triggers a review, what the review covers, and the concrete deliverable.
 
 ### When to review
 
@@ -2289,14 +2289,14 @@ The review opens a GitHub issue with this checklist:
 - [ ] Hook execution time still fast (under 1s for SessionStart, under 5s for the propose-trigger)
 
 ### Subagents (`.claude/agents/`)
-- [ ] `phantom-explorer` still has only `Read, Grep, Glob` in frontmatter (the validator asserts this — but eyeball it)
+- [ ] `guardian-explorer` still has only `Read, Grep, Glob` in frontmatter (the validator asserts this — but eyeball it)
 - [ ] Are there NEW exploration patterns shipping repeatedly that would benefit from a dedicated subagent?
 
 ### MCP servers (`tooling/mcp/`, `.mcp.json`)
 - [ ] `codebase_search.py` handshake still passes: `python3 tooling/validate/check_mcp.py`
 - [ ] If TypeScript coverage was deferred, has it shipped yet? If not, is it still the right priority?
 
-### Plugin (`tooling/phantom-ai-layer/`)
+### Plugin (`tooling/guardian-ai-layer/`)
 - [ ] Plugin payload still matches `.claude/` originals (validator asserts via SHA)
 - [ ] Plugin manifest version bumped if any payload file changed since last review
 - [ ] README accurately describes what's bundled
@@ -2321,7 +2321,7 @@ The review opens a GitHub issue with this checklist:
 
 ### Ownership
 
-The **Platform Team** (the DRI for `.claude/` + `tooling/` + the `CLAUDE.md` hierarchy) owns this review. The first reviewer drafts the audit issue + opens the followup PR; a second reviewer signs off. For Phantom today the team is small enough that the same operator wears both hats — formalize when the team grows.
+The **Platform Team** (the DRI for `.claude/` + `tooling/` + the `CLAUDE.md` hierarchy) owns this review. The first reviewer drafts the audit issue + opens the followup PR; a second reviewer signs off. For Guardian today the team is small enough that the same operator wears both hats — formalize when the team grows.
 
 ---
 
@@ -2336,21 +2336,21 @@ The full forbidden list across all CI/CD areas — referenced from CLAUDE.md and
 - **Removing the rebuild-decision diagnostic step** from `build-dev-installer.yml`.
 - **Reverting any Dockerfile's pinned `FROM …@sha256:…` to a floating tag.**
 - **Skipping the base-image refresh on cadence** (pair with a CVE-feed subscription).
-- **Auto-deploy from the workflow.** The build workflows MUST NOT run `phantom-installer-dev` on phantom-vm.
+- **Auto-deploy from the workflow.** The build workflows MUST NOT run `guardian-installer-dev` on guardian-vm.
 - **Manually deleting `dev-latest` between releases.** It's the operator's pull-access mechanism for the current dev build.
 - **Marking `dev-latest` as `latest`** (`gh release edit dev-latest --latest`) and forgetting to revert.
 
 ### Source ↔ VM contract
 - `docker compose up -d` / `down -v` / `force-recreate` directly via the IAP tunnel for testing or deploy.
-- `tar+scp` / `rsync` / any path that mutates source on phantom-vm.
-- Editing files on phantom-vm directly.
+- `tar+scp` / `rsync` / any path that mutates source on guardian-vm.
+- Editing files on guardian-vm directly.
 - `git pull` on the VM.
 
 ### Installer
 - **Adding a `--reset-volumes` flag to the installer.** Factory reset is the answer; Scenario 3 has the only legitimate volume-wipe path and it's gated behind `UPGRADE` confirmation.
 - **Re-introducing the pre-v0.4.0 host-side parallel implementation** of the password reset.
 - **Implementing factory-reset INSIDE the container.**
-- **Hand-editing image digests** in the operator-managed section of `/opt/phantom/.env`.
+- **Hand-editing image digests** in the operator-managed section of `/opt/guardian/.env`.
 
 ### Scenarios discipline
 - **Treating Scenario 3 as opt-in via a flag.** Customers must confirm via the `UPGRADE` prompt. Bypass flags would defeat the safety net.

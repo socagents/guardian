@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 
@@ -445,7 +445,7 @@ class ProviderStore:
 # ─────────────────────────────────────────────────────────────────
 # Module-level singleton accessor — wired by main.py.
 #
-# Phantom convention (mirrors memory_store, kb_store, audit_log, etc.).
+# Guardian convention (mirrors memory_store, kb_store, audit_log, etc.).
 # Used by the agent-self-modification built-in tools (providers_list /
 # providers_get) so they don't need to be plumbed an explicit store
 # reference through every call site.

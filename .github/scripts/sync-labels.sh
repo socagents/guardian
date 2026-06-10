@@ -12,7 +12,7 @@
 #
 # Usage:
 #   .github/scripts/sync-labels.sh                # sync to current repo
-#   .github/scripts/sync-labels.sh kite-prod/phantom   # sync to specific repo
+#   .github/scripts/sync-labels.sh kite-prod/guardian   # sync to specific repo
 #
 # Requirements: gh CLI authenticated with `gh auth login`. Operator
 # PAT with `repo` scope works; customer PAT with only `read:packages`

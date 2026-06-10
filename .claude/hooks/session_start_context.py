@@ -1,11 +1,11 @@
-"""SessionStart hook — dynamic per-module orientation for Phantom.
+"""SessionStart hook — dynamic per-module orientation for Guardian.
 
 Prints a short orientation block at the start of every Claude Code session.
 Claude Code injects this stdout into the session context, so Claude starts
 already knowing which part of the codebase has active work — and the recent
 direction of travel from git history — without spending a turn re-exploring.
 
-Phantom-specific additions over the helpline reference:
+Guardian-specific additions over the helpline reference:
   * In-flight GitHub issues with `status:in-progress` label (the spec-driven
     workflow's load-bearing signal — see root CLAUDE.md § Spec-driven workflow).
   * Branch + divergence-from-main reminder (the dev cycle pushes to main; off-
@@ -167,7 +167,7 @@ def main() -> None:
     except (OSError, ValueError):
         pass
 
-    lines = ["## Phantom — session orientation", ""]
+    lines = ["## Guardian — session orientation", ""]
 
     # Branch + divergence
     branch = _current_branch()

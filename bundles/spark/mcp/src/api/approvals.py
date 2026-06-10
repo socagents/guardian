@@ -42,7 +42,7 @@ from usecase.approvals_bus import (
 )
 from usecase.audit_log import reset_current_actor, set_current_actor
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 _VALID_STATUS_FILTERS = {
     STATUS_PENDING, STATUS_APPROVED, STATUS_DENIED, STATUS_TIMEOUT

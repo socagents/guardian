@@ -47,7 +47,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Iterable
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _format_labels(labels: dict[str, str]) -> str:

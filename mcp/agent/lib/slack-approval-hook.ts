@@ -126,7 +126,7 @@ export function buildSlackApprovalHookPayload(
  *  so the docs and the helper stay in sync. */
 export const SLACK_APPROVAL_INSTRUCTIONS = `# Setting up Slack approval routing
 
-The Phantom hook framework (Phase H) supports HTTP-transport hooks
+The Guardian hook framework (Phase H) supports HTTP-transport hooks
 that can deny/ask/allow tool calls. A Slack approval is just an HTTP
 hook to a webhook receiver you deploy.
 
@@ -158,7 +158,7 @@ POST to \`/api/agent/hooks\` (or use the form in /settings/hooks):
   "transport": {
     "type": "http",
     "url": "https://your-receiver.example.com/pre-tool-approval-poll",
-    "headers": { "X-Phantom-Auth": "secret:SLACK_APPROVAL_TOKEN" }
+    "headers": { "X-Guardian-Auth": "secret:SLACK_APPROVAL_TOKEN" }
   },
   "timeoutMs": 60000,
   "failurePolicy": "allow",
@@ -174,7 +174,7 @@ POST to \`/api/agent/hooks\` (or use the form in /settings/hooks):
 - Your receiver pings Slack, waits for a click, returns the
   decision.
 - \`decision: "deny"\` aborts the tool call with the analyst's reason.
-- \`decision: "ask"\` triggers Phantom's standard inline approval
+- \`decision: "ask"\` triggers Guardian's standard inline approval
   card AS A FALLBACK (in case the Slack analyst defers to the
   in-chat operator).
 - \`decision: "allow"\` lets the call proceed without the standard

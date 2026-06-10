@@ -125,7 +125,7 @@ def test_retention_sweep_drops_old_rows(tmp_path) -> None:
 
 def test_metrics_counter_bumped_on_record(tmp_path) -> None:
     """The structured event log should increment the
-    phantom_mcp_runtime_events_total counter on every successful record.
+    guardian_mcp_runtime_events_total counter on every successful record.
 
     IMPORTANT: import via the unprefixed `usecase.metrics_registry`
     path here, not `src.usecase.metrics_registry`. Inside event_log.py
@@ -147,7 +147,7 @@ def test_metrics_counter_bumped_on_record(tmp_path) -> None:
         s.record("rt.job.started")
         s.record("rt.validation.completed")
 
-        c = reg.get("phantom_mcp_runtime_events_total")
+        c = reg.get("guardian_mcp_runtime_events_total")
         assert c is not None
         # Counter values render as floats per Prometheus exposition
         # format ("2.0" not "2"). Assert with the .0 suffix so future

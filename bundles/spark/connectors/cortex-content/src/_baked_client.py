@@ -33,7 +33,7 @@ from typing import Any
 
 from ._github_client import GitHubNotFoundError
 
-logger = logging.getLogger("Phantom MCP.cortex-content")
+logger = logging.getLogger("Guardian MCP.cortex-content")
 
 
 class BakedClient:

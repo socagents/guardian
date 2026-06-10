@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Phantom MCP Server startup script
+# Guardian MCP Server startup script
 
 set -e
 
-echo "Starting Phantom MCP Server..."
+echo "Starting Guardian MCP Server..."
 
 # Check if .env exists
 if [ ! -f .env ]; then

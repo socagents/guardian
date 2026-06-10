@@ -1,1 +1,1 @@
-"""Tests for Phantom MCP Server."""
+"""Tests for Guardian MCP Server."""

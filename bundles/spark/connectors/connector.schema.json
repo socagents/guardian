@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://phantom.kite-production.dev/connector.schema.json",
-  "title": "Phantom connector.yaml schema (v0.5.0)",
-  "description": "Canonical schema for every connector.yaml file Phantom loads. Applies uniformly to bundle-shipped connectors (bundles/spark/connectors/<id>/connector.yaml) and operator-uploaded connectors (/app/data/user_connectors/<id>/connector.yaml). The MCP validates every connector.yaml against this schema at boot via usecase.connector_schema.validate_connector_spec; load fails fast on drift. Schema-by-example was the pre-v0.5.0 state and produced silent drift between connectors; this file codifies the shape so a typo or missing field surfaces at boot, not at first tool call. Tracks Spark v1.2 agent-bundle spec §7.4 — kept in sync as that spec evolves.",
+  "$id": "https://guardian.kite-production.dev/connector.schema.json",
+  "title": "Guardian connector.yaml schema (v0.5.0)",
+  "description": "Canonical schema for every connector.yaml file Guardian loads. Applies uniformly to bundle-shipped connectors (bundles/spark/connectors/<id>/connector.yaml) and operator-uploaded connectors (/app/data/user_connectors/<id>/connector.yaml). The MCP validates every connector.yaml against this schema at boot via usecase.connector_schema.validate_connector_spec; load fails fast on drift. Schema-by-example was the pre-v0.5.0 state and produced silent drift between connectors; this file codifies the shape so a typo or missing field surfaces at boot, not at first tool call. Tracks Spark v1.2 agent-bundle spec §7.4 — kept in sync as that spec evolves.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -44,7 +44,7 @@
     "image": {
       "type": "string",
       "minLength": 1,
-      "description": "Optional. OCI image reference for the per-instance container. Required for user-uploaded connectors (must point to a published image the host's docker can pull, e.g. 'ghcr.io/your-org/your-connector:v1.2'). Bundle connectors leave this empty — phantom-updater derives 'ghcr.io/<repo-owner>/phantom-connector-<id>:<version>' from the connector id and the running stack version. v0.5.0+ field; pre-v0.5.0 connectors had no per-YAML image declaration."
+      "description": "Optional. OCI image reference for the per-instance container. Required for user-uploaded connectors (must point to a published image the host's docker can pull, e.g. 'ghcr.io/your-org/your-connector:v1.2'). Bundle connectors leave this empty — guardian-updater derives 'ghcr.io/<repo-owner>/guardian-connector-<id>:<version>' from the connector id and the running stack version. v0.5.0+ field; pre-v0.5.0 connectors had no per-YAML image declaration."
     },
     "logo": {
       "type": "string",
@@ -75,11 +75,11 @@
         "style": {
           "type": "string",
           "enum": ["container"],
-          "description": "Dispatch model. v0.5.0+ supports ONLY 'container' — every connector runs as a per-instance phantom-connector-<id>-<name> container, dispatched over MCP-over-HTTP. The pre-v0.5.0 'module' (in-process import) and 'class' (in-process instantiate) styles were deleted as part of the universal container-mode migration; the schema rejects them so a user-uploaded YAML can't reintroduce them."
+          "description": "Dispatch model. v0.5.0+ supports ONLY 'container' — every connector runs as a per-instance guardian-connector-<id>-<name> container, dispatched over MCP-over-HTTP. The pre-v0.5.0 'module' (in-process import) and 'class' (in-process instantiate) styles were deleted as part of the universal container-mode migration; the schema rejects them so a user-uploaded YAML can't reintroduce them."
         },
         "functionPrefix": {
           "type": "string",
-          "description": "Module-style legacy field — strips this prefix from underlying function names to produce tool names (e.g. 'phantom_' so phantom_create_data_worker becomes create_data_worker). Ignored when style: container."
+          "description": "Module-style legacy field — strips this prefix from underlying function names to produce tool names (e.g. 'guardian_' so guardian_create_data_worker becomes create_data_worker). Ignored when style: container."
         }
       }
     },
@@ -105,7 +105,7 @@
           "name": {
             "type": "string",
             "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
-            "description": "Slot name. The setup form renders one secret field per slot; the value is encrypted at rest under PHANTOM_SECRET_KEK; the connector reads it at call time via get_config().<name>."
+            "description": "Slot name. The setup form renders one secret field per slot; the value is encrypted at rest under GUARDIAN_SECRET_KEK; the connector reads it at call time via get_config().<name>."
           },
           "description": {
             "type": "string",

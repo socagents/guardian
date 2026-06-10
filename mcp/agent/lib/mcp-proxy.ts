@@ -34,14 +34,14 @@ export async function resolveMcp(): Promise<McpResolved | NextResponse> {
     (config.MCP_URL || '').trim() ||
     process.env.MCP_URL?.trim() ||
     // v0.6.48 — fallback URL updated to match v0.1.30+ architecture.
-    // Pre-v0.1.30 the MCP ran as a separate `phantom-mcp` container
+    // Pre-v0.1.30 the MCP ran as a separate `guardian-mcp` container
     // on the compose network; v0.1.30 collapsed it into a subprocess
-    // inside `phantom-agent` listening on localhost:8080. The old
-    // `http://phantom-mcp:8080/...` fallback pointed at a service
+    // inside `guardian-agent` listening on localhost:8080. The old
+    // `http://guardian-mcp:8080/...` fallback pointed at a service
     // that's been retired for ~5 releases — if it ever fired in
     // production (both config.MCP_URL AND process.env.MCP_URL must
     // be unset, which is rare since the installer always sets the env
-    // var), the request would fail with EAI_AGAIN: phantom-mcp.
+    // var), the request would fail with EAI_AGAIN: guardian-mcp.
     // entrypoint.sh in v0.4.0+ also flips the scheme to https:
     // when TLS_CERT_PEM is set; but the literal default below stays
     // http: because that's what the compose env sets.
@@ -141,7 +141,7 @@ export async function callMcpServer<T = unknown>(
      * Custom headers merged into the request. Reserved names
      * (Authorization, Content-Type) take precedence over extras
      * to keep the bearer + JSON contract intact. Used by the
-     * chat route to forward X-Phantom-Trigger so MCP-side audit
+     * chat route to forward X-Guardian-Trigger so MCP-side audit
      * rows inherit the trigger tag.
      */
     headers?: Record<string, string>;

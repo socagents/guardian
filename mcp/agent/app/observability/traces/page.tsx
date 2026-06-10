@@ -11,9 +11,9 @@ import { QueryBar } from "@/components/observability/query-bar";
 import { listJobs } from "@/lib/api/jobs";
 
 /**
- * Traces page — phantom version.
+ * Traces page — guardian version.
  *
- * Until phantom ships a real OTel collector + span ring buffer, this
+ * Until guardian ships a real OTel collector + span ring buffer, this
  * page is a "spans-flavored" view over the audit log. Filterable by
  * the same Lucene-light syntax as /observability/{events,logs}; rows
  * with duration_ms populated render as spans, rows without are still
@@ -24,7 +24,7 @@ import { listJobs } from "@/lib/api/jobs";
  * wrapped tools emit `action=tool_call` audits — see
  * connector_loader.py:_wrap_with_instance. Builtin tools that the
  * agent dispatches during a chat-action job (instances_list,
- * memory_search, jobs_list, phantom_get_*, …) don't go through that
+ * memory_search, jobs_list, guardian_get_*, …) don't go through that
  * wrapper and aren't recorded under tool_call. The user-reported
  * symptom: "View this run's traces" from a job that called
  * `instances_list` returned 0 entries because the action filter

@@ -62,7 +62,7 @@ from usecase.operator_state_store import (
     OperatorStateStore,
 )
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def _row_to_dict(row: OperatorState | None) -> dict[str, Any] | None:

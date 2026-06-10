@@ -16,7 +16,7 @@ export async function GET(
   // Fetch the catalog from our own /api/marketplace/connectors endpoint.
   // Server-to-server fetch needs an absolute URL.
   const base = (
-    process.env.PHANTOM_AGENT_INTERNAL_URL || "http://localhost:3000"
+    process.env.GUARDIAN_AGENT_INTERNAL_URL || "http://localhost:3000"
   ).replace(/\/+$/, "");
   const r = await fetch(`${base}/api/marketplace/connectors`, {
     cache: "no-store",

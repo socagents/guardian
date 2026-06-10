@@ -153,7 +153,7 @@ def test_fallback_kwarg_logged_but_ignored(caplog) -> None:
     """Constructing with a fallback emits an info log (helps operators
     spot stale call sites) but the embedder doesn't actually use it."""
     import logging
-    caplog.set_level(logging.INFO, logger="Phantom MCP")
+    caplog.set_level(logging.INFO, logger="Guardian MCP")
     fb = _StubFallback()
     VertexEmbedder(provider=_StubProvider(), fallback=fb)
     assert any(

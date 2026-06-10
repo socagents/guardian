@@ -35,7 +35,7 @@ import { NextResponse } from "next/server";
 
 import JSZip from "jszip";
 
-import { PhantomMCPClient } from "@/lib/mcp-client";
+import { GuardianMCPClient } from "@/lib/mcp-client";
 import {
   deriveMcpBaseUrl,
   getEffectiveRuntimeConfig,
@@ -103,7 +103,7 @@ async function _resolveMcp(): Promise<McpResolved | NextResponse> {
   const streamUrl =
     (cfg.MCP_URL || "").trim() ||
     process.env.MCP_URL?.trim() ||
-    "http://phantom-mcp:8080/api/v1/stream/mcp";
+    "http://guardian-mcp:8080/api/v1/stream/mcp";
   const base = deriveMcpBaseUrl(streamUrl);
   if (!base) {
     return NextResponse.json({ error: "bad MCP URL" }, { status: 500 });
@@ -114,7 +114,7 @@ async function _resolveMcp(): Promise<McpResolved | NextResponse> {
 export async function POST(request: Request) {
   // Auth: enforced upstream by middleware.ts (v0.9.1+). Pre-v0.9.1 this
   // route tried to enforce auth via a local cookie check that referenced
-  // the pre-v0.4.0 cookie name (`phantom_auth`) and always returned 401.
+  // the pre-v0.4.0 cookie name (`guardian_auth`) and always returned 401.
   // The middleware fix closes both bugs.
 
   const url = new URL(request.url);
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
   }
   let manifest: {
     schema_version?: number;
-    phantom_version?: string;
+    guardian_version?: string;
     sections?: string[];
     [k: string]: unknown;
   };
@@ -269,7 +269,7 @@ export async function POST(request: Request) {
     Authorization: `Bearer ${mcp.token}`,
     "Content-Type": "application/json",
   };
-  const mcpClient = new PhantomMCPClient(mcp.streamUrl, mcp.token);
+  const mcpClient = new GuardianMCPClient(mcp.streamUrl, mcp.token);
 
   /** Read-or-undefined — used by sections that conditionally restore. */
   async function readJsonFile<T>(name: string): Promise<T | undefined> {
@@ -786,7 +786,7 @@ export async function POST(request: Request) {
     dry_run: false,
     force,
     schema_version: manifest.schema_version,
-    backed_up_from: manifest.phantom_version,
+    backed_up_from: manifest.guardian_version,
     ...summary,
   });
 }

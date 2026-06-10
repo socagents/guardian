@@ -1,8 +1,8 @@
-# Phantom on-prem updater service.
+# Guardian on-prem updater service.
 #
 # Minimal sidecar that drives the host's docker daemon via the mounted
 # /var/run/docker.sock. Ships its own image so it can keep running while
-# phantom-agent (and the others) are being replaced during an update.
+# guardian-agent (and the others) are being replaced during an update.
 #
 # Image surface:
 #   - Python 3.12 + uvicorn + FastAPI app on :8090
@@ -15,7 +15,7 @@
 # v0.5.12 — base pinned by digest. Update via:
 #   docker pull python:3.12-slim && \
 #     docker inspect --format='{{index .RepoDigests 0}}' python:3.12-slim
-# Pinning keeps the phantom-updater image content-addressed across
+# Pinning keeps the guardian-updater image content-addressed across
 # source-unchanged rebuilds. See CLAUDE.md § Per-service path-filter
 # contract.
 FROM python:3.12-slim@sha256:401f6e1a67dad31a1bd78e9ad22d0ee0a3b52154e6bd30e90be696bb6a3d7461 AS runtime

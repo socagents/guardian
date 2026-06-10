@@ -50,7 +50,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 # Frontmatter delimiter regex. Matches the leading `---\n...\n---` block.
 _FRONTMATTER_RE = re.compile(

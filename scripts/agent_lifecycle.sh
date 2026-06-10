@@ -11,9 +11,9 @@ usage() {
 Usage: scripts/agent_lifecycle.sh <command>
 
 Commands:
-  start       Start the Phantom agent runtime with Docker Compose.
-  stop        Stop the Phantom agent runtime.
-  restart     Restart the Phantom agent runtime.
+  start       Start the Guardian agent runtime with Docker Compose.
+  stop        Stop the Guardian agent runtime.
+  restart     Restart the Guardian agent runtime.
   status      Show Compose service status.
   health      Run local health probes against the Compose network ports.
   logs        Follow Compose logs.
@@ -48,14 +48,14 @@ case "$command" in
     docker compose -f "$COMPOSE_FILE" ps
     ;;
   health)
-    health_probe phantom-mcp http://localhost:8080/ping/
-    health_probe phantom-agent http://localhost:3000/api/auth/status
+    health_probe guardian-mcp http://localhost:8080/ping/
+    health_probe guardian-agent http://localhost:3000/api/auth/status
     ;;
   logs)
     docker compose -f "$COMPOSE_FILE" logs -f
     ;;
   apply-setup)
-    generated_env="$ROOT_DIR/.phantom-agent/.env.generated"
+    generated_env="$ROOT_DIR/.guardian-agent/.env.generated"
     if [ ! -f "$generated_env" ]; then
       printf 'No generated setup env found at %s\n' "$generated_env" >&2
       exit 1

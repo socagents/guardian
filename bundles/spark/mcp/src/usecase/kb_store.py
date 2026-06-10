@@ -30,7 +30,7 @@ same row-by-row JSON-encoded metadata. The differences shape the API:
 
     kb_documents(
       id            TEXT PRIMARY KEY,    -- uuid4 (internal)
-      kb_name       TEXT NOT NULL,        -- "phantom-soc"
+      kb_name       TEXT NOT NULL,        -- "guardian-soc"
       doc_id        TEXT NOT NULL,        -- frontmatter.id, e.g. "PH-SOC-001"
       title         TEXT,
       category      TEXT,                 -- frontmatter.category (indexed)
@@ -63,7 +63,7 @@ from typing import Any
 
 from usecase.memory_store import Embedder, TextHashEmbedder
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 

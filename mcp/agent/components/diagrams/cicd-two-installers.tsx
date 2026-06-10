@@ -3,10 +3,10 @@
  *
  * Visualizes the load-bearing "local-mirrors-customer" design principle
  * from docs/CICD.md § The two installers:
- *   - Same install ceremony (extract → write /opt/phantom/.env → docker
+ *   - Same install ceremony (extract → write /opt/guardian/.env → docker
  *     compose pull + up -d → optional first-time setup)
  *   - Same compose template shape (installer/docker-compose.yml)
- *   - Same install location (/opt/phantom)
+ *   - Same install location (/opt/guardian)
  *   - Same env-file format
  *
  *   - Different ONLY in which image digests get baked at build time:
@@ -58,7 +58,7 @@ export function CicdTwoInstallers() {
           Two Installers, One Ceremony
         </text>
         <text x="600" y="68" textAnchor="middle" className="detail" fontSize="13">
-          Same compose shape · Same /opt/phantom layout · Same env-file format · Different image digests baked at build time
+          Same compose shape · Same /opt/guardian layout · Same env-file format · Different image digests baked at build time
         </text>
 
         {/* Track labels */}
@@ -70,7 +70,7 @@ export function CicdTwoInstallers() {
         <rect x="40" y="130" width="260" height="100" rx="12" className="node-shape" />
         <text x="170" y="158" textAnchor="middle" className="cicd-card-title">build-dev-installer.yml</text>
         <text x="170" y="180" textAnchor="middle" className="node-subtitle">resolves :dev tags</text>
-        <text x="170" y="200" textAnchor="middle" className="node-detail-small">→ DIGEST_PHANTOM_AGENT=&lt;today&apos;s :dev&gt;</text>
+        <text x="170" y="200" textAnchor="middle" className="node-detail-small">→ DIGEST_GUARDIAN_AGENT=&lt;today&apos;s :dev&gt;</text>
         <text x="170" y="216" textAnchor="middle" className="node-detail-small">+ updater/browser from stable</text>
 
         {/* SHARED column — top */}
@@ -83,7 +83,7 @@ export function CicdTwoInstallers() {
         <rect x="900" y="130" width="260" height="100" rx="12" className="node-shape" />
         <text x="1030" y="158" textAnchor="middle" className="cicd-card-title">release.yml on vX.Y.Z tag</text>
         <text x="1030" y="180" textAnchor="middle" className="node-subtitle">pins content digests</text>
-        <text x="1030" y="200" textAnchor="middle" className="node-detail-small">→ DIGEST_PHANTOM_AGENT=&lt;sha256:...&gt;</text>
+        <text x="1030" y="200" textAnchor="middle" className="node-detail-small">→ DIGEST_GUARDIAN_AGENT=&lt;sha256:...&gt;</text>
         <text x="1030" y="216" textAnchor="middle" className="node-detail-small">+ updater/browser rebuilt or retagged</text>
 
         {/* Down arrows */}
@@ -92,13 +92,13 @@ export function CicdTwoInstallers() {
 
         {/* DEV — middle: package */}
         <rect x="40" y="280" width="260" height="80" rx="12" className="node-shape" />
-        <text x="170" y="308" textAnchor="middle" className="cicd-card-title">phantom-installer-dev</text>
+        <text x="170" y="308" textAnchor="middle" className="cicd-card-title">guardian-installer-dev</text>
         <text x="170" y="332" textAnchor="middle" className="node-subtitle">self-extracting binary</text>
-        <text x="170" y="350" textAnchor="middle" className="muted" fontSize="11">staged at /home/$USER/phantom-installer-dev</text>
+        <text x="170" y="350" textAnchor="middle" className="muted" fontSize="11">staged at /home/$USER/guardian-installer-dev</text>
 
         {/* CUSTOMER — middle: package */}
         <rect x="900" y="280" width="260" height="80" rx="12" className="node-shape" />
-        <text x="1030" y="308" textAnchor="middle" className="cicd-card-title">phantom-installer</text>
+        <text x="1030" y="308" textAnchor="middle" className="cicd-card-title">guardian-installer</text>
         <text x="1030" y="332" textAnchor="middle" className="node-subtitle">self-extracting binary</text>
         <text x="1030" y="350" textAnchor="middle" className="muted" fontSize="11">attached to GHCR release vX.Y.Z</text>
 
@@ -106,10 +106,10 @@ export function CicdTwoInstallers() {
         <rect x="380" y="270" width="440" height="240" rx="14" className="cicd-shared-fill" />
         <text x="600" y="296" textAnchor="middle" className="cicd-card-title">Install ceremony (identical)</text>
         <text x="600" y="316" textAnchor="middle" className="detail" fontSize="12">
-          1. Extract installer payload to /opt/phantom
+          1. Extract installer payload to /opt/guardian
         </text>
         <text x="600" y="334" textAnchor="middle" className="detail" fontSize="12">
-          2. Write manifest.env → /opt/phantom/.env (DIGEST_* pins)
+          2. Write manifest.env → /opt/guardian/.env (DIGEST_* pins)
         </text>
         <text x="600" y="352" textAnchor="middle" className="detail" fontSize="12">
           3. docker login ghcr.io (operator&apos;s PAT)
@@ -127,7 +127,7 @@ export function CicdTwoInstallers() {
           Same compose template (installer/docker-compose.yml).
         </text>
         <text x="600" y="442" textAnchor="middle" className="muted" fontSize="11">
-          Same /opt/phantom location. Same volume names.
+          Same /opt/guardian location. Same volume names.
         </text>
         <text x="600" y="476" textAnchor="middle" className="node-subtitle" fontSize="13">
           Customer installer has ZERO knowledge of dev —
@@ -144,7 +144,7 @@ export function CicdTwoInstallers() {
         <rect x="380" y="540" width="440" height="100" rx="12" className="cicd-shared-fill" />
         <text x="600" y="568" textAnchor="middle" className="cicd-card-title">Running stack</text>
         <text x="600" y="592" textAnchor="middle" className="node-subtitle">5 containers + N per-instance connector containers</text>
-        <text x="600" y="612" textAnchor="middle" className="muted" fontSize="11">phantom-agent · xlog · caldera · phantom-updater · phantom-browser (profile-gated)</text>
+        <text x="600" y="612" textAnchor="middle" className="muted" fontSize="11">guardian-agent · xlog · caldera · guardian-updater · guardian-browser (profile-gated)</text>
         <text x="600" y="628" textAnchor="middle" className="muted" fontSize="11">Same image set on dev + customer; only the digest VALUES differ.</text>
 
         {/* Down arrow from ceremony to running */}

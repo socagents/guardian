@@ -11,7 +11,7 @@
  *        Lives only in the runtime DB; survives upgrades (volume).
  *
  *   2. Cron scheduler tick
- *      - Single in-process loop inside phantom-agent ticks every minute
+ *      - Single in-process loop inside guardian-agent ticks every minute
  *      - Reads runtime job DB, finds matching cron expressions
  *      - Submits matching jobs to the dispatcher
  *
@@ -160,7 +160,7 @@ export function JobsLifecycle() {
         <rect x="480" y="385" width="240" height="70" rx="8" className="scheduler" />
         <text x="600" y="412" textAnchor="middle" className="node-title-small">Cron loop tick</text>
         <text x="600" y="432" textAnchor="middle" className="muted" fontSize="11">
-          in-process inside phantom-agent · 1-min granularity
+          in-process inside guardian-agent · 1-min granularity
         </text>
         <text x="600" y="448" textAnchor="middle" className="muted" fontSize="10">
           reads jobs.db · matches cron exprs · submits to dispatcher

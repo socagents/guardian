@@ -1,10 +1,10 @@
 name: Build updater
 
-# v0.6.12 — per-service build workflow for phantom-updater. Brings
+# v0.6.12 — per-service build workflow for guardian-updater. Brings
 # the updater into the dev cycle so its source changes can be
-# tested on phantom-vm BEFORE any customer-release tag.
+# tested on guardian-vm BEFORE any customer-release tag.
 #
-# Pre-v0.6.12: phantom-updater was customer-release-only — its
+# Pre-v0.6.12: guardian-updater was customer-release-only — its
 # image was built solely by release.yml on tag push, and
 # build-dev-installer.yml fetched its digest from the latest
 # customer release manifest. That made updater changes impossible
@@ -13,13 +13,13 @@ name: Build updater
 # principle.
 #
 # Now updater/** changes trigger this workflow, which builds +
-# pushes phantom-updater:dev to GHCR. build-dev-installer.yml's
+# pushes guardian-updater:dev to GHCR. build-dev-installer.yml's
 # workflow_run cascade picks the run up and resolves the dev
 # digest. Operator-mirror dev cycle covers updater the same way
 # it covers the agent.
 #
 # Risk envelope: same as agent dev builds — a bug in
-# updater could break the dev install on phantom-vm. Mitigation:
+# updater could break the dev install on guardian-vm. Mitigation:
 # customer installs are unaffected because release.yml builds
 # updater independently on tag push.
 #
@@ -47,8 +47,8 @@ permissions:
 
 jobs:
   build:
-    name: Build phantom-updater image
-    runs-on: [self-hosted, Linux, X64, phantom]
+    name: Build guardian-updater image
+    runs-on: [self-hosted, Linux, X64, guardian]
     outputs:
       digest: ${{ steps.image.outputs.digest }}
     steps:
@@ -65,7 +65,7 @@ jobs:
       - id: image
         uses: ./.github/actions/build-and-push-dev-image
         with:
-          service-name: phantom-updater
+          service-name: guardian-updater
           build-context: 'updater'
           dockerfile-path: updater/Dockerfile
           owner: ${{ github.repository_owner }}

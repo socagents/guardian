@@ -10,20 +10,20 @@
  * Flow (per scenario):
  *
  *   SCENARIO 1 (code-only, minor bump):
- *     - Customer re-runs the EXISTING installer at /opt/phantom
+ *     - Customer re-runs the EXISTING installer at /opt/guardian
  *     - Installer self-updates the manifest pins
  *     - Compose pulls only changed digests
  *     - Unchanged containers (caldera, xlog if untouched) keep running
  *
  *   SCENARIO 2 (code + installer change, MAJOR bump, BC storage):
  *     - Customer downloads new installer from the GitHub release
- *     - Runs ./phantom-installer (default WIPE_VOLUMES=false)
+ *     - Runs ./guardian-installer (default WIPE_VOLUMES=false)
  *     - New compose template applies; named volumes round-trip
  *     - Container state survives (digest-pinning + volume preservation)
  *
  *   SCENARIO 3 (BC-incompatible storage, MAJOR bump):
  *     - Customer downloads new installer
- *     - Runs ./phantom-installer with WIPE_VOLUMES=true
+ *     - Runs ./guardian-installer with WIPE_VOLUMES=true
  *     - Operator-manual backup BEFORE the run (no auto-backup)
  *     - Volumes wiped, defaults re-seed at first boot
  *
@@ -78,7 +78,7 @@ export function CicdCustomerUpgrade() {
         <text x="180" y="155" textAnchor="middle" className="cicd-card-title" style={{fontSize: 15}}>Download (S2/S3 only)</text>
         <text x="180" y="180" textAnchor="middle" className="cust-outcome">From the GitHub release page:</text>
         <rect x="80" y="195" width="200" height="20" className="cust-cmd" />
-        <text x="180" y="209" textAnchor="middle" className="cust-cmd-text">phantom-installer</text>
+        <text x="180" y="209" textAnchor="middle" className="cust-cmd-text">guardian-installer</text>
         <text x="180" y="234" textAnchor="middle" className="muted" fontSize="11">+ release-manifest-vX.Y.Z.env</text>
         <text x="180" y="250" textAnchor="middle" className="muted" fontSize="11">+ install.tar.gz + sha256</text>
         <text x="180" y="270" textAnchor="middle" className="state-success-fill" fontSize="11">Scenario 1: skip — reuse existing</text>
@@ -88,9 +88,9 @@ export function CicdCustomerUpgrade() {
         <text x="360" y="130" className="cust-step-num">2</text>
         <text x="480" y="155" textAnchor="middle" className="cicd-card-title" style={{fontSize: 15}}>Run installer</text>
         <rect x="360" y="170" width="240" height="20" className="cust-cmd" />
-        <text x="480" y="184" textAnchor="middle" className="cust-cmd-text">sudo ./phantom-installer</text>
-        <text x="480" y="210" textAnchor="middle" className="cust-outcome">Extract payload to /opt/phantom</text>
-        <text x="480" y="226" textAnchor="middle" className="cust-outcome">+ overwrite /opt/phantom/.env</text>
+        <text x="480" y="184" textAnchor="middle" className="cust-cmd-text">sudo ./guardian-installer</text>
+        <text x="480" y="210" textAnchor="middle" className="cust-outcome">Extract payload to /opt/guardian</text>
+        <text x="480" y="226" textAnchor="middle" className="cust-outcome">+ overwrite /opt/guardian/.env</text>
         <text x="480" y="242" textAnchor="middle" className="cust-outcome">with manifest digest pins</text>
         <rect x="360" y="252" width="240" height="20" className="cust-cmd" />
         <text x="480" y="266" textAnchor="middle" className="cust-cmd-text">WIPE_VOLUMES=true # S3 only</text>
@@ -100,7 +100,7 @@ export function CicdCustomerUpgrade() {
         <text x="680" y="130" className="cust-step-num">3</text>
         <text x="780" y="155" textAnchor="middle" className="cicd-card-title" style={{fontSize: 15}}>docker compose pull</text>
         <rect x="680" y="170" width="200" height="20" className="cust-cmd" />
-        <text x="780" y="184" textAnchor="middle" className="cust-cmd-text">cd /opt/phantom</text>
+        <text x="780" y="184" textAnchor="middle" className="cust-cmd-text">cd /opt/guardian</text>
         <rect x="680" y="195" width="200" height="20" className="cust-cmd" />
         <text x="780" y="209" textAnchor="middle" className="cust-cmd-text">docker compose pull</text>
         <text x="780" y="234" textAnchor="middle" className="cust-outcome">Only images whose digest</text>
@@ -130,11 +130,11 @@ export function CicdCustomerUpgrade() {
         <rect x="60" y="360" width="360" height="220" rx="12" className="cust-step" stroke="var(--dgm-state-success)" strokeWidth="2.2" />
         <text x="80" y="388" className="cicd-card-title" style={{fontSize: 15}}>SCENARIO 1 — code-only</text>
         <text x="80" y="412" className="cust-outcome">Re-run existing installer → same compose template applies.</text>
-        <text x="80" y="430" className="cust-outcome">Updated agent image digest = phantom-agent recreates.</text>
+        <text x="80" y="430" className="cust-outcome">Updated agent image digest = guardian-agent recreates.</text>
         <text x="80" y="448" className="cust-outcome">Unchanged xlog/caldera digests = those containers</text>
         <text x="80" y="466" className="cust-outcome">keep running (in-memory state preserved).</text>
         <rect x="80" y="482" width="320" height="20" className="cust-cmd" />
-        <text x="240" y="496" textAnchor="middle" className="cust-cmd-text">DIGEST_PHANTOM_XLOG identical → no recreate</text>
+        <text x="240" y="496" textAnchor="middle" className="cust-cmd-text">DIGEST_GUARDIAN_XLOG identical → no recreate</text>
         <text x="80" y="528" className="state-success-fill" fontSize="12" fontWeight="700">Result:</text>
         <text x="140" y="528" className="cust-outcome" fontSize="12">all named volumes preserved.</text>
         <text x="80" y="548" className="state-success-fill" fontSize="12" fontWeight="700">Customer downtime:</text>

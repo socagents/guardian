@@ -4,7 +4,7 @@
  * Adapted from SnowAgent's Tool contract (snow-agent-complete/snow-
  * agent/06-tools-permissions/Tool.ts), which carries `readOnly`,
  * `destructive`, `openWorld`, `concurrencySafe` flags inline on the
- * tool definition. Phantom's MCP tools come from the FastMCP
+ * tool definition. Guardian's MCP tools come from the FastMCP
  * connector loader and don't expose these flags in their schemas;
  * this curated table fills the gap.
  *
@@ -110,7 +110,7 @@ export const TOOL_METADATA_TABLE: Record<string, ToolMetadata> = {
   },
 
   // ── Self-modification (Phase 11) ─────────────────────────────
-  // These mutate Phantom's own state. Always destructive=true so
+  // These mutate Guardian's own state. Always destructive=true so
   // the operator sees the red border AND humanRequired gates them.
 
   jobs_create: {

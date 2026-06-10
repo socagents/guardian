@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/scripts/run_snippet_code_script/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xdr_scripts_run_snippet`
-**Phantom connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
+**Guardian connector**: `cortex-xdr` (per-instance: see Tools tab on `/connectors/cortex-xdr-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api/cortex-xdr-apis/script-execution/run-snippet-code-script.html
 
@@ -45,5 +45,5 @@ A dict containing action_id and endpoints_count.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_scripts_run_snippet`
+- Guardian tool: `bundles/spark/connectors/cortex-xdr/src/connector.py` → `xdr_scripts_run_snippet`
 - Source mapping: `ebarti/cortex_xdr_client/api/scripts_api.py` → `run_snippet_code_script`

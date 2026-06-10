@@ -93,7 +93,7 @@ def test_pdf_processor_extracts_real_text() -> None:
     # without erroring, which is what we care about.
     writer = PdfWriter()
     writer.add_blank_page(width=72, height=72)
-    writer.add_metadata({"/Title": "Phantom Test Document"})
+    writer.add_metadata({"/Title": "Guardian Test Document"})
     buf = io.BytesIO()
     writer.write(buf)
     pdf_bytes = buf.getvalue()

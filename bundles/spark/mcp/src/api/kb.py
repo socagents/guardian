@@ -26,7 +26,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.kb_store import SqliteKnowledgeBase
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:

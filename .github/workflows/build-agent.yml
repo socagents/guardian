@@ -9,14 +9,14 @@ name: Build agent
 # images each have their own build workflow; only the ones whose
 # paths matched on this push actually run.
 #
-# Fires when phantom-agent source changes — either the Next.js
+# Fires when guardian-agent source changes — either the Next.js
 # surface (mcp/agent/) or the bundle Python + skills + connectors
 # baked into the image (bundles/spark/). Also runs pytest + lint
 # inside the freshly-built image so test failures surface on the
 # same push that introduced them, not on a later deploy.
 #
 # DO NOT add unconditional triggers or remove the paths: filter —
-# every push to main would rebuild phantom-agent, defeating the
+# every push to main would rebuild guardian-agent, defeating the
 # digest-pinning invariant that lets unchanged services survive.
 #
 # Security note: this workflow only consumes built-in GitHub contexts
@@ -58,8 +58,8 @@ permissions:
 
 jobs:
   build:
-    name: Build phantom-agent image (with embedded MCP)
-    runs-on: [self-hosted, Linux, X64, phantom]
+    name: Build guardian-agent image (with embedded MCP)
+    runs-on: [self-hosted, Linux, X64, guardian]
     outputs:
       digest: ${{ steps.image.outputs.digest }}
     steps:
@@ -81,7 +81,7 @@ jobs:
       - id: image
         uses: ./.github/actions/build-and-push-dev-image
         with:
-          service-name: phantom-agent
+          service-name: guardian-agent
           # The agent Dockerfile lives at mcp/agent/Dockerfile but
           # needs the REPO ROOT as build context so it can COPY
           # both mcp/agent/ and bundles/spark/.
@@ -93,7 +93,7 @@ jobs:
 
   test-mcp-server:
     name: pytest (inside freshly-built agent image)
-    runs-on: [self-hosted, Linux, X64, phantom]
+    runs-on: [self-hosted, Linux, X64, guardian]
     needs: build
     env:
       REGISTRY: ghcr.io
@@ -121,14 +121,14 @@ jobs:
           # mcp-deps stage that pip-installs Python deps).
           docker run --rm \
             -v "$PWD:/work" -w /work/bundles/spark/mcp \
-            "$REGISTRY/$OWNER/phantom-agent:dev" \
+            "$REGISTRY/$OWNER/guardian-agent:dev" \
             sh -c 'pip install --quiet --user pytest pytest-asyncio && \
                    PYTHONPATH=/work/bundles/spark/mcp/src \
                      /root/.local/bin/pytest tests/ -q'
 
   lint-agent:
     name: lint mcp/agent
-    runs-on: [self-hosted, Linux, X64, phantom]
+    runs-on: [self-hosted, Linux, X64, guardian]
     steps:
       - name: Reset workspace ownership (pre-checkout)
         run: |

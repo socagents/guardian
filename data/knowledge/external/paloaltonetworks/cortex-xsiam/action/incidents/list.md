@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/incidents/get_incidents/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xsiam_incidents_list`
-**Phantom connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
+**Guardian connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/xsiam/xsiam-api/xsiam-apis/incident-management/get-incidents.html
 
@@ -53,5 +53,5 @@ Returns a GetIncidentsResponse object if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_incidents_list`
+- Guardian tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_incidents_list`
 - Source mapping: `ebarti/cortex_xdr_client/api/incidents_api.py` → `get_incidents`

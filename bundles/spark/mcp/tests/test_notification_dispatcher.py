@@ -31,15 +31,15 @@ class FakeNotification:
 
 
 def test_env_var_for_simple_channel() -> None:
-    assert env_var_for("soc") == "PHANTOM_NOTIFICATION_CHANNEL_SOC"
+    assert env_var_for("soc") == "GUARDIAN_NOTIFICATION_CHANNEL_SOC"
 
 
 def test_env_var_for_hyphenated_channel() -> None:
-    assert env_var_for("purple-team") == "PHANTOM_NOTIFICATION_CHANNEL_PURPLE_TEAM"
+    assert env_var_for("purple-team") == "GUARDIAN_NOTIFICATION_CHANNEL_PURPLE_TEAM"
 
 
 def test_env_var_for_strips_special_chars() -> None:
-    assert env_var_for("a.b/c") == "PHANTOM_NOTIFICATION_CHANNEL_A_B_C"
+    assert env_var_for("a.b/c") == "GUARDIAN_NOTIFICATION_CHANNEL_A_B_C"
 
 
 # ─── target gating ────────────────────────────────────────────────
@@ -96,7 +96,7 @@ def test_successful_post(monkeypatch) -> None:
     monkeypatch.setattr(mod.httpx, "Client", _StubClient)
 
     d = WebhookDispatcher(env={
-        "PHANTOM_NOTIFICATION_CHANNEL_SOC": "https://example/webhook",
+        "GUARDIAN_NOTIFICATION_CHANNEL_SOC": "https://example/webhook",
     })
     n = FakeNotification(target="channel:soc", payload={"detection_id": "X"})
     assert d(n) is None
@@ -131,7 +131,7 @@ def test_4xx_response_raises(monkeypatch) -> None:
     monkeypatch.setattr(mod.httpx, "Client", _StubClient)
 
     d = WebhookDispatcher(env={
-        "PHANTOM_NOTIFICATION_CHANNEL_SOC": "https://example/webhook",
+        "GUARDIAN_NOTIFICATION_CHANNEL_SOC": "https://example/webhook",
     })
     with pytest.raises(RuntimeError, match="400.*invalid_payload"):
         d(FakeNotification(target="channel:soc"))
@@ -159,7 +159,7 @@ def test_network_error_raises_with_context(monkeypatch) -> None:
     monkeypatch.setattr(mod.httpx, "Client", _StubClient)
 
     d = WebhookDispatcher(env={
-        "PHANTOM_NOTIFICATION_CHANNEL_SOC": "https://example/webhook",
+        "GUARDIAN_NOTIFICATION_CHANNEL_SOC": "https://example/webhook",
     })
     with pytest.raises(RuntimeError, match="ConnectError.*nope"):
         d(FakeNotification(target="channel:soc"))

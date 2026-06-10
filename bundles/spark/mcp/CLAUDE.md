@@ -10,7 +10,7 @@ The Python FastMCP server that runs as a subprocess inside the agent container. 
 |------|------------|
 | `src/main.py` | Entry point. Registers the built-in tools in one block inside `async_main` — `mcp.tool()(module.fn)` per tool. |
 | `src/config/config.py` | `pydantic-settings`, reads env vars via `validation_alias`. **Never** read `os.environ` directly. |
-| `src/service/phantom_mcp/server.py` | FastMCP instance factory. |
+| `src/service/guardian_mcp/server.py` | FastMCP instance factory. |
 | `src/usecase/builtin_components/` | Tool implementations. Each module groups related tools. |
 | `src/usecase/connector_loader.py` | Dynamic registration of connector tools at boot. Holds `_BUILTIN_LEGACY_TOOLS` — the list of tools that are agent-callable. |
 | `src/api/<resource>.py` | REST routes (the Next.js side proxies to these at `/api/v1/<resource>`). |

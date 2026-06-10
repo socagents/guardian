@@ -103,7 +103,7 @@ export function CicdChangeScenarios() {
 
         <text x="120" y="450" className="scn-row-label">CUSTOMER ACTION</text>
         <text x="280" y="468" textAnchor="middle" className="detail" fontSize="12">Re-run EXISTING installer on disk</text>
-        <text x="280" y="484" textAnchor="middle" className="muted" fontSize="11">/opt/phantom/phantom-installer</text>
+        <text x="280" y="484" textAnchor="middle" className="muted" fontSize="11">/opt/guardian/guardian-installer</text>
         <text x="280" y="500" textAnchor="middle" className="muted" fontSize="11">(no fresh download required)</text>
 
         <text x="120" y="528" className="scn-row-label">VOLUME FATE</text>

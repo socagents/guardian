@@ -569,12 +569,12 @@ def test_metrics_emitted_on_successful_index(monkeypatch):
     # Run counter: one succeeded entry for this pack.
     reg = metrics_registry_module.metrics_registry()
     assert _counter_value(
-        reg, "phantom_cortex_content_index_runs_total",
+        reg, "guardian_cortex_content_index_runs_total",
         pack="F5APM", result="succeeded",
     ) == 1
     # Doc counter: one insert.
     assert _counter_value(
-        reg, "phantom_cortex_content_indexed_docs_total", action="insert",
+        reg, "guardian_cortex_content_indexed_docs_total", action="insert",
     ) == 1
 
 
@@ -605,14 +605,14 @@ def test_metrics_doc_counter_distinguishes_unchanged(monkeypatch):
 
     reg = metrics_registry_module.metrics_registry()
     assert _counter_value(
-        reg, "phantom_cortex_content_indexed_docs_total", action="insert",
+        reg, "guardian_cortex_content_indexed_docs_total", action="insert",
     ) == 1
     assert _counter_value(
-        reg, "phantom_cortex_content_indexed_docs_total", action="unchanged",
+        reg, "guardian_cortex_content_indexed_docs_total", action="unchanged",
     ) == 1
     # Two successful runs both at result=succeeded for the same pack.
     assert _counter_value(
-        reg, "phantom_cortex_content_index_runs_total",
+        reg, "guardian_cortex_content_index_runs_total",
         pack="F5APM", result="succeeded",
     ) == 2
 
@@ -645,7 +645,7 @@ def test_metrics_run_counter_records_partial_on_per_rule_failure(monkeypatch):
     assert len(out["errors"]) > 0
     reg = metrics_registry_module.metrics_registry()
     assert _counter_value(
-        reg, "phantom_cortex_content_index_runs_total",
+        reg, "guardian_cortex_content_index_runs_total",
         pack="P", result="failed",
     ) == 1
 

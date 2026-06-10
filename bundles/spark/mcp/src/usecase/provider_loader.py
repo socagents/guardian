@@ -30,7 +30,7 @@ import yaml
 from usecase.provider_store import ProviderInstance, ProviderStore
 from usecase.secret_store import SecretStore
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_BUNDLE_ROOT = "/app/bundle"
 

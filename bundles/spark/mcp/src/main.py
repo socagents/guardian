@@ -1,7 +1,7 @@
 """
-Phantom MCP Server Main Module
+Guardian MCP Server Main Module
 
-This module serves as the entry point for the Phantom MCP (Model Context Protocol) Server.
+This module serves as the entry point for the Guardian MCP (Model Context Protocol) Server.
 It handles server initialization, signal handling for graceful shutdown, and manages
 the async event loop for the MCP server operations.
 """
@@ -54,7 +54,7 @@ from api.telemetry import register_telemetry_routes
 from api.update import register_update_routes
 from config.config import get_config
 from pkg.setup_logging import setup_logging
-from service.phantom_mcp.server import create_mcp_server
+from service.guardian_mcp.server import create_mcp_server
 from usecase.approvals_bus import InProcessApprovalsBus, set_approvals_bus
 from usecase.audit_log import SqliteAuditLog, set_audit_log
 from usecase.connector_loader import (
@@ -106,12 +106,12 @@ from usecase.personality_store import (
 from usecase.settings_store import SqliteSettingsStore, set_settings_store
 from usecase.telemetry import SqliteTelemetryStore, set_telemetry_store
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 async def shutdown(sig: signal.Signals, loop: asyncio.AbstractEventLoop):
     """
-    Handle graceful shutdown of the Phantom MCP Server.
+    Handle graceful shutdown of the Guardian MCP Server.
 
     Args:
         sig: The signal that triggered the shutdown (SIGINT or SIGTERM)
@@ -132,14 +132,14 @@ async def shutdown(sig: signal.Signals, loop: asyncio.AbstractEventLoop):
 
 async def async_main(transport: str):
     """
-    Main async function that initializes and runs the Phantom MCP Server.
+    Main async function that initializes and runs the Guardian MCP Server.
 
     Args:
         transport: The transport mechanism for the MCP server ('stdio' or 'streamable-http')
     """
     config = get_config()
     setup_logging(config)
-    logger.info("Starting Phantom MCP Server")
+    logger.info("Starting Guardian MCP Server")
 
     loop = asyncio.get_running_loop()
 
@@ -185,19 +185,19 @@ async def async_main(transport: str):
     metrics = MetricsRegistry()
     set_metrics_registry(metrics)
     metrics.counter(
-        "phantom_mcp_http_requests_total",
+        "guardian_mcp_http_requests_total",
         "Total HTTP requests served by the embedded MCP.",
     )
     metrics.histogram(
-        "phantom_mcp_http_request_duration_seconds",
+        "guardian_mcp_http_request_duration_seconds",
         "HTTP request duration in seconds, bucketed.",
     )
     metrics.counter(
-        "phantom_mcp_tool_calls_total",
+        "guardian_mcp_tool_calls_total",
         "Total tool dispatches. Labels: tool, status.",
     )
     metrics.gauge(
-        "phantom_mcp_active_sessions",
+        "guardian_mcp_active_sessions",
         "Currently active operator sessions.",
     )
 
@@ -256,7 +256,7 @@ async def async_main(transport: str):
     set_operator_state_store(operator_state_store)
 
     # v0.5.0 upgrade migration — for v0.4.x customers carrying
-    # instances in the persisted phantom_data volume: every connector
+    # instances in the persisted guardian_data volume: every connector
     # that already has an instance gets auto-installed. Otherwise
     # v0.5.0's "install gate" would refuse to register their tools.
     # Idempotent (re-running just no-ops). See marketplace_store
@@ -507,7 +507,7 @@ async def async_main(transport: str):
 
     # Stash mode for /api/v1/health to surface to the UI.
     import os as _os
-    _os.environ["PHANTOM_EMBEDDER_MODE"] = embedder_mode
+    _os.environ["GUARDIAN_EMBEDDER_MODE"] = embedder_mode
 
     memory_store = SqliteMemoryStore(embedder=embedder)
     set_memory_store(memory_store)
@@ -650,7 +650,7 @@ async def async_main(transport: str):
     # API keys for external integrations. Wired AFTER audit so create()/
     # revoke() can record `api_key_created` / `api_key_revoked` events.
     # Set as a module-level singleton so api/auth.py's require_bearer()
-    # can verify presented `phantom_ak_...` tokens against the store
+    # can verify presented `guardian_ak_...` tokens against the store
     # without needing per-route dependency injection.
     api_keys = SqliteApiKeyStore(audit_log=audit)
     set_api_key_store(api_keys)
@@ -671,7 +671,7 @@ async def async_main(transport: str):
             except ValueError as exc:
                 logger.warning("Skipping invalid manifest topic: %s", exc)
     # Phase 13 — channel:* webhook fan-out. Reads
-    # PHANTOM_NOTIFICATION_CHANNEL_<NAME> env vars at construction;
+    # GUARDIAN_NOTIFICATION_CHANNEL_<NAME> env vars at construction;
     # channels with no URL configured raise a clear "no webhook
     # URL" error per dispatch (folded into dispatch_status=failed
     # by publish()). Operators add a new channel by setting the env
@@ -744,7 +744,7 @@ async def async_main(transport: str):
     # the storage layer; this just exposes filter/summary read paths.
     register_audit_routes(mcp, audit)
     # v0.1.31 — UI password verify + change endpoints, backed by the
-    # SecretStore (AES-256-GCM at rest when PHANTOM_SECRET_KEK is set).
+    # SecretStore (AES-256-GCM at rest when GUARDIAN_SECRET_KEK is set).
     # The Next.js login route calls /verify; the /profile page calls
     # /password to rotate. Stays bundle-internal (MCP_TOKEN bearer)
     # so an attacker who steals an operator browser session can't
@@ -808,7 +808,7 @@ async def async_main(transport: str):
     # for pip-driven plugin lifecycle.
     register_plugin_entry_points_routes(mcp)
     # v0.5.48 / Issue #29 final wire — plugin handler invocation
-    # bridge. Plugin-contributed handlers in the phantom.hooks
+    # bridge. Plugin-contributed handlers in the guardian.hooks
     # entry-point group become callable from the agent's hook-
     # runner via /api/v1/plugin-hooks/{name}/invoke. Closes the
     # cross-language hook-handler bridge.
@@ -854,7 +854,7 @@ async def async_main(transport: str):
     # Admin endpoints (operator-driven runtime reloads). Today this
     # is just /api/v1/admin/reload_tools, which the setup endpoint
     # also calls automatically after replace:true so the operator
-    # doesn't need to restart phantom-agent for new tools to surface.
+    # doesn't need to restart guardian-agent for new tools to surface.
     register_admin_routes(mcp)
     # Update introspection — exposes manifest.update + current build
     # provenance. autoUpdate machinery itself is documented future work
@@ -1076,12 +1076,12 @@ async def async_main(transport: str):
 
         # Observability — request-log middleware. One structured access
         # log line per HTTP call + metrics observation
-        # (phantom_mcp_http_requests_total / _duration_seconds). Toggle
-        # off via PHANTOM_REQUEST_LOG=0 if an operator wants silence.
+        # (guardian_mcp_http_requests_total / _duration_seconds). Toggle
+        # off via GUARDIAN_REQUEST_LOG=0 if an operator wants silence.
         from api.request_log import install as install_request_log
         install_request_log(app)
 
-        # Trigger-context middleware — reads `X-Phantom-Trigger` from
+        # Trigger-context middleware — reads `X-Guardian-Trigger` from
         # the inbound request and sets a contextvar that audit_log's
         # record() picks up. This is what tags audit rows with the
         # source of activity (e.g. `job:nightly-report`) so
@@ -1091,7 +1091,7 @@ async def async_main(transport: str):
         from api.trigger_context import install as install_trigger_context
         install_trigger_context(app)
 
-        # OTel tracing — opt-in via PHANTOM_OTEL=1 + OTEL_EXPORTER_OTLP_
+        # OTel tracing — opt-in via GUARDIAN_OTEL=1 + OTEL_EXPORTER_OTLP_
         # ENDPOINT. No-op when either is unset. Auto-instruments the
         # Starlette app + outbound httpx (Vertex, XSIAM
         # PAPI) so operators get a per-request waterfall in Jaeger /
@@ -1158,14 +1158,14 @@ async def async_main(transport: str):
 
 def main():
     """
-    Entry point for the Phantom MCP Server application.
+    Entry point for the Guardian MCP Server application.
     """
     try:
         asyncio.run(async_main(get_config().mcp_transport))
     except Exception as e:
         logger.exception(f"Main loop stopped: {e}")
     finally:
-        logger.info("Phantom MCP Server has shut down.")
+        logger.info("Guardian MCP Server has shut down.")
 
 
 if __name__ == "__main__":

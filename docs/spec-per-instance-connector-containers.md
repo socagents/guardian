@@ -1,6 +1,6 @@
 # Spec patch: per-instance connector containers (v0.2 architecture)
 
-> **Audience**: Phantom maintainers + Spark v1.3 spec contributors. This is
+> **Audience**: Guardian maintainers + Spark v1.3 spec contributors. This is
 > a roadmap spec — code changes land across multiple v0.1.x → v0.2.0
 > releases. Write-once / read-often.
 >
@@ -20,31 +20,31 @@ The `agent-bundle-architecture.md` defines the connector model as
 materializes connector tools in the agent's MCP at boot." The Spark
 spec v1.2 hints at a per-call lifecycle ("connector functions are
 spawned per-invocation in the runtime") without nailing down the
-deployment shape. Phantom's v0.1.x implementation collapses this
+deployment shape. Guardian's v0.1.x implementation collapses this
 distinction by running every connector's code **in-process inside the
-phantom-agent container**, treating connectors as Python modules that
+guardian-agent container**, treating connectors as Python modules that
 the embedded MCP imports at boot.
 
 That choice was right for v0.1: lowest possible latency, simplest
-debug story, no new infrastructure. As Phantom approaches v0.2 the
+debug story, no new infrastructure. As Guardian approaches v0.2 the
 trade-offs are flipping:
 
 - **Dependency footprint**: every new connector adds its deps into
-  the phantom-agent image. v0.1.27 added playwright + trafilatura
+  the guardian-agent image. v0.1.27 added playwright + trafilatura
   (~10 MB lib + ~250 MB if Chromium were inline). v0.1.x added
   google-auth + chromadb-clients-since-removed + pypdf. The image is
   growing monotonically.
 - **Crash blast radius**: a buggy connector or runaway tool call
-  takes down phantom-agent (and thus the chat UI + the embedded MCP
+  takes down guardian-agent (and thus the chat UI + the embedded MCP
   + all other connectors).
 - **Cross-instance state isolation**: web connector v0.1.27 has page
   registries keyed by session_id; if a customer ever runs two web
   connector instances (one for proxy A, one for proxy B), they share
   the same Python process and all that implies.
 - **No third-party connector story**: the only way to add a
-  connector today is to write Python in the Phantom monorepo and
+  connector today is to write Python in the Guardian monorepo and
   ship it bundled. There's no path for a customer or partner to
-  ship their own connector image without a Phantom release.
+  ship their own connector image without a Guardian release.
 
 Per-instance containers solve all four. The cost is non-trivial
 engineering complexity, which is why this is a v0.2 program rather
@@ -54,7 +54,7 @@ than a v0.1.x patch.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ phantom-agent container (Python 3.12, Next.js, single proc) │
+│ guardian-agent container (Python 3.12, Next.js, single proc) │
 │                                                               │
 │  Embedded MCP (FastMCP, port 8080)                           │
 │   ├─ xlog connector code      ← bundles/spark/connectors/    │
@@ -72,14 +72,14 @@ than a v0.1.x patch.
 │      - xlog → http://xlog:8000                               │
 │      - caldera → http://caldera:8888                         │
 │      - xsiam → https://api-tenant.../public_api/v1           │
-│      - web → http://phantom-browser:9222 (CDP)               │
+│      - web → http://guardian-browser:9222 (CDP)               │
 │   5. function returns; result wraps back through FastMCP     │
 └──────────────────────────────────────────────────────────────┘
         │
-        │ Docker network "phantom_default"
+        │ Docker network "guardian_default"
         ↓
 ┌─────────────────┐  ┌──────────────┐  ┌──────────────────┐
-│ xlog            │  │ caldera      │  │ phantom-browser  │
+│ xlog            │  │ caldera      │  │ guardian-browser  │
 │ container       │  │ container    │  │ container        │
 │ (synthetic logs)│  │ (red team)   │  │ (chromedp/chrome)│
 └─────────────────┘  └──────────────┘  └──────────────────┘
@@ -99,7 +99,7 @@ than a v0.1.x patch.
 
 ```
 ┌──────────────────────────────────┐    ┌──────────────────────────────────┐
-│ phantom-agent container          │    │ phantom-connector-xlog-primary  │
+│ guardian-agent container          │    │ guardian-connector-xlog-primary  │
 │                                   │    │ (one container per instance)    │
 │  Embedded MCP (port 8080)        │    │                                  │
 │   ├─ Routing table:              │←──→│  FastMCP (port 9000)            │
@@ -115,8 +115,8 @@ than a v0.1.x patch.
         │
         ↓
 ┌──────────────────────────────────┐
-│ phantom-connector-web-primary    │
-│ (FastMCP + playwright client)    │ ←—→ phantom-browser:9222 (CDP)
+│ guardian-connector-web-primary    │
+│ (FastMCP + playwright client)    │ ←—→ guardian-browser:9222 (CDP)
 └──────────────────────────────────┘
 ```
 
@@ -159,7 +159,7 @@ long as the instance does in `instance_store.db`.
 - *Persistent shared per connector* (the current shape): Brings back
   the cross-instance state-bleed problem we're trying to solve.
 
-The persistent-per-instance choice maps cleanly onto Phantom's
+The persistent-per-instance choice maps cleanly onto Guardian's
 existing instance-store mental model: an `instance` is a running
 thing the operator manages. The container becomes the runtime
 embodiment of that conceptual instance.
@@ -174,7 +174,7 @@ known port. The agent's embedded MCP becomes a router that proxies
 
 1. **Reuses code paths**: agent already speaks MCP. The proxy logic
    is shorter than inventing a new RPC protocol.
-2. **Standardizes the connector contract**: "a Phantom connector is
+2. **Standardizes the connector contract**: "a Guardian connector is
    an MCP server" — same surface, language-agnostic, testable with
    any MCP client.
 3. **Streaming support**: MCP supports streaming responses out of
@@ -182,9 +182,9 @@ known port. The agent's embedded MCP becomes a router that proxies
 4. **Capability negotiation built-in**: connector containers
    advertise their tool catalog via `tools/list` at proxy-init time;
    agent doesn't need a separate config layer.
-5. **Third-party connector story**: anyone writing a Phantom
+5. **Third-party connector story**: anyone writing a Guardian
    connector can deliver a standard MCP server in any language
-   (Python, Go, Node, Rust). No custom Phantom SDK required.
+   (Python, Go, Node, Rust). No custom Guardian SDK required.
 
 **Alternatives ruled out**:
 
@@ -206,22 +206,22 @@ the routing table and forward.
 ### D3: Hosting = Docker, on the same Compose network
 
 **Chosen**: Connector containers run on the same Docker daemon as
-phantom-agent. phantom-updater (already in the stack with
+guardian-agent. guardian-updater (already in the stack with
 docker.sock mounted) becomes the lifecycle manager.
 
 **Why**:
 
-- Phantom's customer-on-prem deployment is Docker Compose on a
+- Guardian's customer-on-prem deployment is Docker Compose on a
   single VM. No Kubernetes, no Cloud Run.
-- phantom-updater already has the docker.sock plumbing and
+- guardian-updater already has the docker.sock plumbing and
   authentication — extending it to manage connector containers is
   additive, not new infrastructure.
-- The phantom-agent and connector containers share the
-  `phantom_default` Docker network — networking "just works."
+- The guardian-agent and connector containers share the
+  `guardian_default` Docker network — networking "just works."
 
 **Trade-offs accepted**:
 
-- Single-host scaling limit. Phantom isn't multi-host today; this
+- Single-host scaling limit. Guardian isn't multi-host today; this
   doesn't change that.
 - N_instances containers on the host. Resource ceiling depends on
   customer deployment size; per-instance memory limits cap blast
@@ -230,7 +230,7 @@ docker.sock mounted) becomes the lifecycle manager.
 **Alternatives ruled out**:
 
 - *Kubernetes*: would require k8s in every customer environment.
-  Outside Phantom's deployment model.
+  Outside Guardian's deployment model.
 - *Cloud Run / Lambda*: vendor lock-in; complicates customer-on-prem.
 - *Compose service per instance*: docker-compose isn't designed for
   dynamic services. Generating compose at runtime defeats the
@@ -238,17 +238,17 @@ docker.sock mounted) becomes the lifecycle manager.
 
 ### D4: Image strategy = one image per connector, retagged per release
 
-**Chosen**: Each connector ships as `ghcr.io/kite-production/phantom-connector-<id>:<version>`.
+**Chosen**: Each connector ships as `ghcr.io/kite-production/guardian-connector-<id>:<version>`.
 The release.yml conditional rebuild logic from v0.1.29 already knows
 how to skip unchanged services — adding new entries here is purely
 additive.
 
 Image inheritance:
-- A small `phantom-connector-runtime:<version>` base image holds
+- A small `guardian-connector-runtime:<version>` base image holds
   the shared runtime: FastMCP, the SecretStore client library, the
   contextvar plumbing for per-instance config, observability
   (logging + audit hooks back to the agent's audit pipeline).
-- Each connector's image is `FROM phantom-connector-runtime:<version>`
+- Each connector's image is `FROM guardian-connector-runtime:<version>`
   + the connector's source + its specific deps.
 
 **Why this shape**:
@@ -272,17 +272,17 @@ Image inheritance:
 ### D5: Per-instance config delivery = SecretStore mount + env vars
 
 **Chosen**: Container starts with:
-- `PHANTOM_SECRET_KEK` env var (the existing AES-256-GCM key).
-- `phantom_secret_store` volume mounted read-only.
+- `GUARDIAN_SECRET_KEK` env var (the existing AES-256-GCM key).
+- `guardian_secret_store` volume mounted read-only.
 - `INSTANCE_ID` env var pointing the connector at its instance row.
 
 At container boot, the connector reads its instance's config +
 secrets from the SecretStore using the same library code that
-phantom-agent uses today. No new secret-distribution mechanism.
+guardian-agent uses today. No new secret-distribution mechanism.
 
 **Why**:
 
-- Reuses Phantom's existing Phase 5 SecretStore (encrypted-at-rest,
+- Reuses Guardian's existing Phase 5 SecretStore (encrypted-at-rest,
   KEK-bound). No new key plumbing.
 - Operator UX: rotating a secret is the same operation
   whether the connector is in-process or in its own container.
@@ -296,32 +296,32 @@ phantom-agent uses today. No new secret-distribution mechanism.
 - *Operator-creds-style file-mount*: works for some categories, but
   SecretStore is the unified path.
 
-### D6: Lifecycle management = phantom-updater extends to connectors
+### D6: Lifecycle management = guardian-updater extends to connectors
 
-phantom-updater today handles agent + service updates via docker.sock.
+guardian-updater today handles agent + service updates via docker.sock.
 Extending it to connector containers means:
 
 - `POST /api/v1/connectors/<id>/instances/<name>/start` →
-  phantom-updater pulls image, runs container, registers it on the
+  guardian-updater pulls image, runs container, registers it on the
   Docker network, returns IP+port.
 - `POST /api/v1/connectors/<id>/instances/<name>/stop` →
-  phantom-updater stops + removes container.
+  guardian-updater stops + removes container.
 - `GET /api/v1/connectors/<id>/instances/<name>/status` → reports
   container health, restart count, resource usage.
 - `POST /api/v1/connectors/<id>/instances/<name>/restart` → forced
   restart (used by the operator when a container is wedged).
 
-The agent's UI calls these via the existing phantom-updater proxy
+The agent's UI calls these via the existing guardian-updater proxy
 path. Operators get a clean management surface without learning
 docker commands.
 
-**Container naming**: `phantom-connector-<id>-<instance-name>` (e.g.
-`phantom-connector-xlog-primary`, `phantom-connector-web-acme-vetted`).
-Predictable, greppable, matches Phantom's existing naming for caldera/xlog.
+**Container naming**: `guardian-connector-<id>-<instance-name>` (e.g.
+`guardian-connector-xlog-primary`, `guardian-connector-web-acme-vetted`).
+Predictable, greppable, matches Guardian's existing naming for caldera/xlog.
 
-**Network naming**: same `phantom_default` Docker network, so the
+**Network naming**: same `guardian_default` Docker network, so the
 agent reaches connectors via container hostname + port:
-`http://phantom-connector-xlog-primary:9000/mcp`.
+`http://guardian-connector-xlog-primary:9000/mcp`.
 
 ### D7: Failure modes
 
@@ -332,7 +332,7 @@ to chat). Audit row records the crash.
 
 **Container hang**: Per-call timeout in the agent's MCP proxy
 (default 60 s, configurable). After timeout, agent surfaces
-timeout error; phantom-updater optionally kills + restarts the
+timeout error; guardian-updater optionally kills + restarts the
 container.
 
 **OOM**: Docker memory limit per container (default 256 MB,
@@ -346,14 +346,14 @@ already do this for some tools; the per-container model makes it
 mandatory for any tool exceeding the per-call timeout.
 
 **Connector image pull failure** (first-time start with offline
-deploy): phantom-updater retries with backoff; surfaces error to
-the operator UI with actionable text ("phantom-connector-xlog:0.2.0
+deploy): guardian-updater retries with backoff; surfaces error to
+the operator UI with actionable text ("guardian-connector-xlog:0.2.0
 not in local cache and registry unreachable; check network").
 
 ### D8: Observability
 
 Each connector container's stdout/stderr lands in Docker's normal
-log stream (greppable via `docker logs phantom-connector-xlog-primary`).
+log stream (greppable via `docker logs guardian-connector-xlog-primary`).
 Audit events from connector code → posted to the agent's audit
 endpoint via HTTP (the connector container has an env var pointing
 at the agent's audit URL). Same audit pipeline, no new sinks.
@@ -374,7 +374,7 @@ A connector container must:
 4. Implement `tools/list` and `tools/call` per the MCP spec (FastMCP
    does this automatically from registered tools).
 5. Implement a `/health` HTTP endpoint that returns 200 when ready
-   to serve. Used by Docker healthcheck + phantom-updater readiness.
+   to serve. Used by Docker healthcheck + guardian-updater readiness.
 6. Forward audit events via `POST <agent-audit-url>` for tools that
    want durable audit rows. Optional but encouraged.
 7. Respect a `SHUTDOWN` signal cleanly (SIGTERM → drain in-flight
@@ -392,12 +392,12 @@ This spec deliberately does NOT change:
   but old `module`-style connectors keep working until migrated.
 - **Per-instance config + secrets shape**: same keys, same
   SecretStore. The only change is *who* reads them (the connector
-  container instead of phantom-agent).
+  container instead of guardian-agent).
 - **Approval gate**: still enforced agent-side (the approval bus
-  lives in phantom-agent's MCP, where the chat session originates).
+  lives in guardian-agent's MCP, where the chat session originates).
   Connector containers don't need approval logic; they just execute
   what the proxied call asks.
-- **Audit log**: still one durable store in phantom-agent. Connector
+- **Audit log**: still one durable store in guardian-agent. Connector
   containers POST to the agent's audit endpoint; same rows, same
   queries.
 - **Marketplace UX**: install/uninstall/instance-create flow stays
@@ -422,13 +422,13 @@ machinery is dormant.
 
 **Ships**:
 
-- New base image `phantom-connector-runtime`: FastMCP +
+- New base image `guardian-connector-runtime`: FastMCP +
   SecretStore client + audit forwarder + a "connector
   entrypoint" that loads the connector source and starts the MCP
   server.
-- Empty per-connector image stubs (`phantom-connector-xlog`,
-  `phantom-connector-xsiam`, `phantom-connector-caldera`,
-  `phantom-connector-web`) that build on the runtime + bundle the
+- Empty per-connector image stubs (`guardian-connector-xlog`,
+  `guardian-connector-xsiam`, `guardian-connector-caldera`,
+  `guardian-connector-web`) that build on the runtime + bundle the
   connector source. They're built and pushed by release.yml but
   no instance uses them yet.
 - Agent's MCP gains a routing layer: tools whose connector has
@@ -436,7 +436,7 @@ machinery is dormant.
   container's MCP; tools with `runtime: module` (the default for
   v0.1.30) keep the in-process path. Both paths supported
   side-by-side.
-- phantom-updater gains the `/api/v1/connectors/<id>/instances/<name>/start`
+- guardian-updater gains the `/api/v1/connectors/<id>/instances/<name>/start`
   / stop / status / restart endpoints. Not yet exercised by any
   flow.
 - A new `bundles/spark/connectors/_runtime/` skeleton showing
@@ -444,7 +444,7 @@ machinery is dormant.
 
 **Acceptance**:
 
-- `docker compose --profile dev up phantom-connector-xlog` brings
+- `docker compose --profile dev up guardian-connector-xlog` brings
   up the xlog connector container in standalone mode; `curl
   http://localhost:9000/health` returns 200; `mcp tools/list`
   returns xlog's tools.
@@ -455,7 +455,7 @@ machinery is dormant.
 ### Phase 2 (v0.1.31): Pilot — migrate `web` to container runtime
 
 **Why web first**: it's new (no production customers depend on its
-in-process behavior), it already has a sidecar (phantom-browser),
+in-process behavior), it already has a sidecar (guardian-browser),
 and its state model (per-session BrowserContext) is exactly the
 kind of thing the per-container model handles cleanly.
 
@@ -466,7 +466,7 @@ kind of thing the per-container model handles cleanly.
 - Web connector image gets a real implementation (FastMCP server
   wrapping the existing browser.py code).
 - When operator creates a web instance via /connectors UI, agent
-  calls phantom-updater to start a `phantom-connector-web-<name>`
+  calls guardian-updater to start a `guardian-connector-web-<name>`
   container. Tool calls flow through the proxy.
 - /connectors UI surfaces container health (running / restarting /
   unhealthy) per instance.
@@ -476,7 +476,7 @@ kind of thing the per-container model handles cleanly.
 
 **Acceptance**:
 
-- Smoke test on phantom-vm: create web instance → container
+- Smoke test on guardian-vm: create web instance → container
   starts → agent calls `web/navigate` → connector container
   executes Playwright → response flows back through the proxy.
 - Latency observation: per-call overhead vs. v0.1.30 baseline.
@@ -505,7 +505,7 @@ connector.yaml + the image build. The proxy machinery from
 Phase 1 handles routing. No agent code changes per connector.
 
 **Acceptance per release**: Smoke test of every tool in the
-migrated connector against phantom-vm. Latency parity with the
+migrated connector against guardian-vm. Latency parity with the
 v0.1.31 baseline (web).
 
 ### Phase 4 (v0.2.0): Drop in-process runtime
@@ -559,16 +559,16 @@ expect to learn the answer to during Phase 1 implementation.
    overhead. Measure; if > 1 s, consider warming the proxy
    connection at instance create time.
 
-5. **SecretStore client library packaging.** Phantom's SecretStore
-   today is a Python class in phantom-agent's source tree. Need
-   to extract a `phantom-connector-runtime-py` library that
+5. **SecretStore client library packaging.** Guardian's SecretStore
+   today is a Python class in guardian-agent's source tree. Need
+   to extract a `guardian-connector-runtime-py` library that
    connectors import. Decide: vendored copy or shared volume? Vendored
    is simpler, shared volume is DRY.
 
 6. **Where does the routing table live?** Agent's MCP needs to know
    "for connector instance X, the container is at hostname Y port Z."
-   Options: (a) phantom-updater pushes the table to the agent on
-   instance create/destroy, (b) agent queries phantom-updater on
+   Options: (a) guardian-updater pushes the table to the agent on
+   instance create/destroy, (b) agent queries guardian-updater on
    demand, (c) the table lives in instance_store with the instance
    row. (c) is probably cleanest but Phase 1 will tell us.
 
@@ -583,7 +583,7 @@ expect to learn the answer to during Phase 1 implementation.
 Things this spec deliberately doesn't address — each is a
 legitimate concern but solving it here would balloon the program:
 
-- **Multi-host / multi-node deployment.** Phantom is single-VM
+- **Multi-host / multi-node deployment.** Guardian is single-VM
   today. Per-instance containers don't preclude multi-host
   later, but the routing + service-discovery machinery for that
   is a separate spec.
@@ -612,7 +612,7 @@ The per-instance container architecture is "done" when:
 2. Operator UX in /connectors is unchanged from v0.1.x — install,
    create instance, configure, test, use. No new concepts the
    operator must learn.
-3. phantom-agent image size is smaller in v0.2.0 than v0.1.29
+3. guardian-agent image size is smaller in v0.2.0 than v0.1.29
    (specifically: connector-specific deps removed).
 4. Per-call latency overhead vs. v0.1.x in-process baseline is
    < 50 ms median for the first three connectors and < 100 ms
@@ -643,7 +643,7 @@ Two motivations:
    (install button, marketplace polish, etc.) that can ship
    sequentially without coupling. This architectural change
    needs a spec first because it touches every layer:
-   release.yml, agent's MCP, phantom-updater, instance store,
+   release.yml, agent's MCP, guardian-updater, instance store,
    secret store, every connector's source layout. Doing it
    without writing it down means re-deciding the same questions
    on every PR review for the next 4-6 weeks.
@@ -662,7 +662,7 @@ connector — chosen because it's the newest (smallest blast
 radius), has the least production usage, and exercises the most
 "foreign" code path (CDP to a sidecar Chromium). The flip
 shipped on 2026-05-07 alongside v0.1.31. Five real bugs surfaced
-during the smoke test on phantom-vm; all are documented here so
+during the smoke test on guardian-vm; all are documented here so
 future connector migrations (xsiam → v0.1.32, xlog → v0.1.33,
 caldera → v0.1.34) don't re-discover them.
 
@@ -682,7 +682,7 @@ schema definition.
 
 **Fix.** Renamed the runtime client's SELECT columns +
 JSON-decode keys to match the agent. See
-`phantom-connector-runtime/runtime/instance_store_client.py`
+`guardian-connector-runtime/runtime/instance_store_client.py`
 commit 8ca7c0d.
 
 **Going-forward.** For Phase 4 (third-party connectors), the
@@ -722,27 +722,27 @@ array). Yaml unions, enums, and nested object schemas are
 not yet expressed in `connector.yaml` `args` — when the first
 connector wants them, extend the map. Today's connectors don't.
 
-### 3. PHANTOM_TLS_VERIFY not honored by updater
+### 3. GUARDIAN_TLS_VERIFY not honored by updater
 
 **Symptom.** Container started fine, but the
 `PUT /api/v1/instances/{id}/container_url` callback from
-phantom-updater to the agent failed with
+guardian-updater to the agent failed with
 `CERTIFICATE_VERIFY_FAILED: self-signed certificate`.
 Container_url stayed `None` in the DB; tool calls failed
 with "no container_url" until manually restarted.
 
 **Root cause.** v0.1.27's TLS work flipped the agent's MCP
 endpoint to HTTPS with a self-signed cert in the customer
-compose. The agent honors `PHANTOM_TLS_VERIFY=0` for its
-own self-loopback calls. phantom-updater didn't — it built
+compose. The agent honors `GUARDIAN_TLS_VERIFY=0` for its
+own self-loopback calls. guardian-updater didn't — it built
 its httpx clients with default `verify=True`, which fails
 chain validation against a self-signed cert.
 
-**Fix.** Updater now reads `PHANTOM_TLS_VERIFY` (defaults to
+**Fix.** Updater now reads `GUARDIAN_TLS_VERIFY` (defaults to
 verify-on; "0" disables) and passes `verify=verify_tls` to
 both `_agent_set_container_url`'s PUT and the reconcile
 endpoint's GET. Customer compose sets the env var on
-phantom-updater the same way it does on phantom-agent.
+guardian-updater the same way it does on guardian-agent.
 
 **Going-forward.** A future cert-rotation feature should
 issue compose-internal CA-signed certs to all services,
@@ -752,7 +752,7 @@ removing the need for verify-off mode entirely.
 
 **Symptom.** Even after `container_url` propagated to the DB
 correctly, tool calls kept failing with "connector 'web'
-instance has no container_url — phantom-updater hasn't
+instance has no container_url — guardian-updater hasn't
 started the container yet". A manual agent restart fixed
 each occurrence.
 
@@ -761,7 +761,7 @@ startup via `iter_registrations()`. The proxy closures close
 over those `Instance` references. `merged_config()` is
 called fresh on each tool call, but it reads
 `self.container_url` from the cached `Instance`, which was
-loaded with `container_url=None` before phantom-updater ran.
+loaded with `container_url=None` before guardian-updater ran.
 DB updates don't invalidate Python references.
 
 **Fix.** `set_container_url` now triggers
@@ -771,7 +771,7 @@ current `merged_config()`. Reload is best-effort — if it
 fails, the PUT still returns 200 since the row IS updated;
 operator can recover with an agent restart.
 
-**Going-forward.** Reload latency on phantom-vm: ~860ms
+**Going-forward.** Reload latency on guardian-vm: ~860ms
 (vs ~8ms for the row-only PUT). Acceptable for the relatively
 infrequent container_url update events. If/when this becomes
 hot (e.g. operators churning through 100s of instances per
@@ -812,7 +812,7 @@ Mitigations for v0.1.32+ migrations:
   contract entirely (Phase 4 work, but worth pulling forward
   if any subsequent connector has a non-trivial config
   shape).
-- **TLS:** standard `verify=PHANTOM_TLS_VERIFY` boilerplate
+- **TLS:** standard `verify=GUARDIAN_TLS_VERIFY` boilerplate
   in `pkg/agent_client.py` (new module) that all
   agent-callers (updater, future webhooks) import — no more
   scattered `httpx.AsyncClient(verify=True)` calls.

@@ -47,7 +47,7 @@
     ]
   },
   "env": {
-    "PHANTOM_ENV": "development"
+    "GUARDIAN_ENV": "development"
   },
   "hooks": {
     "SessionStart": [

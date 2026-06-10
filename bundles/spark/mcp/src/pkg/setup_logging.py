@@ -1,4 +1,4 @@
-"""Logging configuration for Phantom MCP Server."""
+"""Logging configuration for Guardian MCP Server."""
 
 import logging
 import sys

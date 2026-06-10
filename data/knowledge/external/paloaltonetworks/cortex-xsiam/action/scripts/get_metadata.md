@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/scripts/get_script_metadata/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xsiam_scripts_get_metadata`
-**Phantom connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
+**Guardian connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
 
 **Official docs**: https://docs.paloaltonetworks.com/cortex/xsiam/xsiam-api/xsiam-apis/script-execution/get-script-metadata.html
 
@@ -42,5 +42,5 @@ An object of type GetScriptMetadataResponse if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_scripts_get_metadata`
+- Guardian tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_scripts_get_metadata`
 - Source mapping: `ebarti/cortex_xdr_client/api/scripts_api.py` → `get_script_metadata`

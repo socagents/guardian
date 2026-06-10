@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Phantom — full Phase 5-11a smoke test.
+# Guardian — full Phase 5-11a smoke test.
 #
 # Walks every capability introduced in the v1.2-conformance refactor and
-# reports PASS/FAIL for each check. Designed to run ON THE PHANTOM VM
+# reports PASS/FAIL for each check. Designed to run ON THE GUARDIAN VM
 # HOST. It hits the embedded MCP at localhost:8080 and the Next.js
 # agent UI at localhost:3000 (both host ports docker-compose maps).
-# In-container filesystem checks reach into phantom_agent via
+# In-container filesystem checks reach into guardian_agent via
 # `docker compose exec` — that container ships both the Next.js UI
 # and the embedded MCP per the v1.2 bundle design (no separate
-# phantom-mcp container).
+# guardian-mcp container).
 #
-# Usage (on the phantom VM):
+# Usage (on the guardian VM):
 #   cd $VM_REMOTE_REPO
 #   MCP_TOKEN=<token> ./bundles/spark/mcp/scripts/smoke_test.sh
 #
@@ -51,11 +51,11 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 2
 fi
 
-# Filesystem checks reach into phantom_agent (which now hosts the
-# embedded MCP — no separate phantom-mcp container exists).
+# Filesystem checks reach into guardian_agent (which now hosts the
+# embedded MCP — no separate guardian-mcp container exists).
 DOCKER_EXEC=""
 if command -v docker >/dev/null 2>&1 && [[ -f "$COMPOSE_DIR/docker-compose.yml" ]]; then
-  DOCKER_EXEC="docker compose -f $COMPOSE_DIR/docker-compose.yml exec -T phantom-agent"
+  DOCKER_EXEC="docker compose -f $COMPOSE_DIR/docker-compose.yml exec -T guardian-agent"
 fi
 
 PASSED=0
@@ -157,7 +157,7 @@ expect_json_field() {
 # ─── Banner ──────────────────────────────────────────────────────
 
 cat <<EOF
-${C_BOLD}Phantom v1.2 Smoke Test${C_RESET}
+${C_BOLD}Guardian v1.2 Smoke Test${C_RESET}
   MCP base   : $MCP_BASE
   Agent base : $AGENT_BASE
   Token      : ${MCP_TOKEN:0:8}…
@@ -480,20 +480,20 @@ else
 fi
 
 # T10.2 — fetch a specific doc by frontmatter id
-PHANTOM_DOC=$(mcp_curl GET "/api/v1/kbs/phantom-soc/docs/PH-SOC-001")
-DOC_TITLE=$(echo "${PHANTOM_DOC#*:}" | python3 -c "
+GUARDIAN_DOC=$(mcp_curl GET "/api/v1/kbs/guardian-soc/docs/PH-SOC-001")
+DOC_TITLE=$(echo "${GUARDIAN_DOC#*:}" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 print(d.get('document', {}).get('title', ''))
 " 2>/dev/null)
 if [[ -n "$DOC_TITLE" ]]; then
-  pass "T10.2 GET /kbs/phantom-soc/docs/PH-SOC-001: '$DOC_TITLE'"
+  pass "T10.2 GET /kbs/guardian-soc/docs/PH-SOC-001: '$DOC_TITLE'"
 else
   fail "T10.2 doc fetch" "PH-SOC-001 not retrievable"
 fi
 
 # T10.3 — KB-scoped semantic search
-KB_SEARCH=$(mcp_curl POST "/api/v1/kbs/phantom-soc/search" '{"query":"detection validation XSIAM","limit":1}')
+KB_SEARCH=$(mcp_curl POST "/api/v1/kbs/guardian-soc/search" '{"query":"detection validation XSIAM","limit":1}')
 TOP_DOC=$(echo "${KB_SEARCH#*:}" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
@@ -525,10 +525,10 @@ HOME_HTML=$(curl $CURL_K -sw '\n%{http_code}' "${AGENT_BASE}/" 2>&1)
 HOME_CODE=$(echo "$HOME_HTML" | tail -n1)
 HOME_BODY=$(echo "$HOME_HTML" | sed '$d')
 if [[ "$HOME_CODE" =~ ^2[0-9][0-9]$ ]] && \
-   echo "$HOME_BODY" | grep -q "Phantom Agent"; then
+   echo "$HOME_BODY" | grep -q "Guardian Agent"; then
   pass "T11.1 / renders shell + chat (HTTP $HOME_CODE)"
 else
-  fail "T11.1 / chat page" "HTTP $HOME_CODE, body lacks 'Phantom Agent'"
+  fail "T11.1 / chat page" "HTTP $HOME_CODE, body lacks 'Guardian Agent'"
 fi
 
 # T11.2 — admin pages return 2xx (the routes the new grouped sidebar

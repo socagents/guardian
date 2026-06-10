@@ -76,7 +76,7 @@ export interface ChatHeaderProps {
    * the inline approval card on every gated tool; 'bypass' auto-
    * approves with audit row. Persisted in session.metadata via
    * /api/agent/sessions/[id] PATCH; the chat handler reads it on
-   * each turn and forwards X-Phantom-Approval-Bypass when active.
+   * each turn and forwards X-Guardian-Approval-Bypass when active.
    */
   approvalMode?: "manual" | "bypass";
   onApprovalModeChange?: (mode: "manual" | "bypass") => void;

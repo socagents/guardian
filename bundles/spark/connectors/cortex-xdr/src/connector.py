@@ -111,8 +111,8 @@ __all__ = [
 ]
 # v0.5.75-followup (issue #48 amendment): function names are BARE
 # (no xdr_ prefix). The connector-runtime's prefix-stripping
-# (phantom-connector-runtime/runtime/entrypoint.py) only knows about
-# `phantom_<connector_id>_`, `<connector_id>_`, `phantom_` forms;
+# (guardian-connector-runtime/runtime/entrypoint.py) only knows about
+# `guardian_<connector_id>_`, `<connector_id>_`, `guardian_` forms;
 # `cortex-xdr_` doesn't match `xdr_` so the prefix wouldn't be
 # stripped at runtime — container would register tools as
 # `xdr_get_cases_and_issues` but the agent proxy calls bare names.

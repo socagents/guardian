@@ -16,13 +16,13 @@
 # (NOT this file).
 #
 # This file uses TAG-BASED image references (e.g.
-# `image: phantom-agent:local`). That's intentional — the dev/CI flow
+# `image: guardian-agent:local`). That's intentional — the dev/CI flow
 # doesn't have a release manifest, and the `:local` tag is what
 # `docker compose build` produces from the Dockerfile.
 #
 # v0.3.0+ — the CUSTOMER-facing compose lives at
 # `installer/docker-compose.yml` and uses DIGEST-BASED image references
-# (e.g. `image: ghcr.io/.../phantom-agent@${DIGEST_PHANTOM_AGENT}`).
+# (e.g. `image: ghcr.io/.../guardian-agent@${DIGEST_GUARDIAN_AGENT}`).
 # Customer installations get that file (bundled in the installer + the
 # kit tarball), populate `.env` with digests from the release manifest,
 # and the resulting compose pinning is content-aware so unchanged
@@ -39,19 +39,19 @@
 
 services:
 
-  # phantom-mcp is intentionally NOT a separate compose service.
+  # guardian-mcp is intentionally NOT a separate compose service.
   # Per the spark-agents v1.2 bundle design, the embedded MCP is
   # part of the agent's trust boundary and lives inside the
-  # phantom-agent container. See `phantom-agent` below — its
+  # guardian-agent container. See `guardian-agent` below — its
   # Dockerfile spawns the MCP as a subprocess on localhost:8080
   # alongside Next.js on :3000.
 
   # v0.1.27 — Optional headless-browser sidecar for the `web` connector.
   #
   # chromedp/headless-shell is a minimal Chromium build (~150MB) that
-  # exposes Chrome DevTools Protocol on a TCP port. The phantom-agent's
+  # exposes Chrome DevTools Protocol on a TCP port. The guardian-agent's
   # `web` connector connects via Playwright Python's
-  # `connect_over_cdp("http://phantom-browser:9222")`, drives the
+  # `connect_over_cdp("http://guardian-browser:9222")`, drives the
   # browser, and never has to bundle Chromium binaries itself — saves
   # ~250MB on the agent image and isolates browser crashes from the
   # agent process.
@@ -59,28 +59,28 @@ services:
   # PROFILE-GATED: this service does NOT start with `docker compose up`.
   # The operator brings it up explicitly when they want web access:
   #
-  #   docker compose --profile browser up -d phantom-browser
+  #   docker compose --profile browser up -d guardian-browser
   #
   # Then create a `web` connector instance via the /connectors UI in
   # the agent (the connector_loader is instance-gated — tools don't
   # advertise until at least one instance exists). Take it down again
-  # with: `docker compose --profile browser stop phantom-browser`.
+  # with: `docker compose --profile browser stop guardian-browser`.
   #
   # Internal-network only: no host port published. Reachable from the
-  # phantom-agent container as `phantom-browser:9222`. If the operator
+  # guardian-agent container as `guardian-browser:9222`. If the operator
   # wants to debug, attach to the compose network:
-  #   `docker run --rm --network phantom_default -p 9222:9222 ...`
-  # Phantom-built image (NOT pulled from upstream directly), based on
-  # chromedp/headless-shell:latest with Phantom-specific Chromium flags
-  # and a CDP healthcheck baked in. See ./phantom-browser/Dockerfile.
-  # Tagged `phantom-browser:local` for the build pipeline; the GHCR
-  # release publishes it as `ghcr.io/kite-production/phantom-browser:<version>`
+  #   `docker run --rm --network guardian_default -p 9222:9222 ...`
+  # Guardian-built image (NOT pulled from upstream directly), based on
+  # chromedp/headless-shell:latest with Guardian-specific Chromium flags
+  # and a CDP healthcheck baked in. See ./guardian-browser/Dockerfile.
+  # Tagged `guardian-browser:local` for the build pipeline; the GHCR
+  # release publishes it as `ghcr.io/kite-production/guardian-browser:<version>`
   # alongside the agent image.
-  phantom-browser:
-    container_name: phantom_browser
-    image: phantom-browser:local
+  guardian-browser:
+    container_name: guardian_browser
+    image: guardian-browser:local
     build:
-      context: ./phantom-browser
+      context: ./guardian-browser
       dockerfile: Dockerfile
     restart: unless-stopped
     profiles: ["browser"]
@@ -96,12 +96,12 @@ services:
     # `unhealthy` despite CDP working. The agent connector verifies
     # liveness on first navigate() call instead — a friendlier check
     # because the error is operator-actionable ("Is the
-    # phantom-browser container up? Bring it up with: docker compose
-    # --profile browser up -d phantom-browser").
+    # guardian-browser container up? Bring it up with: docker compose
+    # --profile browser up -d guardian-browser").
 
 
-  phantom-agent:
-    image: phantom-agent:local
+  guardian-agent:
+    image: guardian-agent:local
     build:
       # Build context is the REPO ROOT so the Dockerfile can COPY
       # both `mcp/agent/` (Next.js) and `bundles/spark/mcp/` (the
@@ -109,7 +109,7 @@ services:
       # multi-stage layout.
       context: .
       dockerfile: mcp/agent/Dockerfile
-    container_name: phantom_agent
+    container_name: guardian_agent
     restart: unless-stopped
     # Credential boundary: this block carries ONLY compose-internal
     # hostnames + runtime mount paths. Everything operator-supplied
@@ -125,7 +125,7 @@ services:
       - MCP_URL=http://localhost:8080/api/v1/stream/mcp
       # Pinned image version (from .env), surfaced to the UI via
       # /api/agent/version for the sidebar chip + About modal.
-      - PHANTOM_VERSION
+      - GUARDIAN_VERSION
       # Bundle-internal MCP coordination token (auto-generated by
       # the entrypoint when unset).
       - MCP_TOKEN
@@ -133,7 +133,7 @@ services:
       # .env (`openssl rand -base64 32`). v0.3.7+ REQUIRED — the
       # SecretStore refuses to construct without it. Loss is
       # unrecoverable — back the value up alongside the volume.
-      - PHANTOM_SECRET_KEK
+      - GUARDIAN_SECRET_KEK
       # Operator-acknowledged escape hatch — set to "1" to allow the
       # SecretStore to fall back to plaintext-on-disk mode when KEK
       # is unset. v0.3.7+: pre-v0.3.7 silently fell back to plaintext;
@@ -142,19 +142,19 @@ services:
       # the installer never need it (installer always generates a
       # KEK); only manual / test deployments that knowingly skip
       # encryption should set it.
-      - PHANTOM_SECRET_KEK_ALLOW_PLAINTEXT
+      - GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT
       # v0.5.5+ admin bootstrap password. Consumed only by the
       # entrypoint seed step on first boot of a fresh SecretStore.
       # Pre-v0.5.5 this was a hardcoded literal in the agent image;
       # v0.5.5 moves it to .env so no credential is baked anywhere
       # in any image. Forced first-login change at /profile makes
       # it irrelevant after the first login.
-      - PHANTOM_DEFAULT_ADMIN_PASSWORD
+      - GUARDIAN_DEFAULT_ADMIN_PASSWORD
       # v0.6.36 — operator-tunable chat-route turn cap. v0.6.32
       # added the read site in chat/route.ts ("Operators can tune
-      # via PHANTOM_CHAT_MAX_TURNS") but forgot the compose plumbing.
+      # via GUARDIAN_CHAT_MAX_TURNS") but forgot the compose plumbing.
       # Default of 30 (clamped to [5,200]) lives in route.ts.
-      - PHANTOM_CHAT_MAX_TURNS
+      - GUARDIAN_CHAT_MAX_TURNS
       # XSIAM connector seed values (Cortex PAPI for issues / cases /
       # XQL). Operator-supplied via .env for dev convenience; customer
       # installs configure these per-instance via the /connectors UI.
@@ -165,13 +165,13 @@ services:
       - WEBHOOK_ENDPOINT
       - WEBHOOK_KEY
       # Runtime mount paths consumed by both the agent and the MCP:
-      - PHANTOM_AGENT_SETUP_PATH=/app/runtime/setup.json
-      - PHANTOM_AGENT_ENV_EXPORT_PATH=/app/runtime/.env.generated
+      - GUARDIAN_AGENT_SETUP_PATH=/app/runtime/setup.json
+      - GUARDIAN_AGENT_ENV_EXPORT_PATH=/app/runtime/.env.generated
       - BUNDLE_ROOT=/app/bundle
       - DATA_ROOT=/app/data
       # Force re-seed of /app/skills from /app/mcp/skills-default on
       # boot. Bare-name forwarding so `FORCE_SKILLS_SYNC=1 docker
-      # compose up -d --force-recreate phantom-agent` flows the value
+      # compose up -d --force-recreate guardian-agent` flows the value
       # through to entrypoint.sh's skill-bootstrap block. Without
       # this, the entry in the compose process env is never visible
       # to the container, and the documented re-seed path is a no-op.
@@ -188,19 +188,19 @@ services:
       - SPARK_PLATFORM_GATEWAY
     volumes:
       # Operator setup mount (Phase 5 SecretStore + setup.json land here).
-      - ./.phantom-agent:/app/runtime
+      - ./.guardian-agent:/app/runtime
       # Phase 2B — bundle source mounted read-only so the embedded
       # MCP can import connectors.<id>.src.*, read manifest.yaml, etc.
       - ./bundles/spark:/app/bundle:ro
       # MCP runtime state (audit log, instance store, KB, etc.).
-      - phantom_mcp_data:/app/data
+      - guardian_mcp_data:/app/data
       # Skills volume (seeded from /app/mcp/skills-default at first run).
-      - phantom_mcp_skills:/app/skills
+      - guardian_mcp_skills:/app/skills
       # TLS volume — the agent writes auto-generated or
       # operator-supplied cert.pem + key.pem here on boot/setup-save.
       # Single source of truth for TLS material across the stack;
       # replaces the old SSL_CERT_PEM compose-env passthrough.
-      - phantom_tls:/tls
+      - guardian_tls:/tls
     ports:
       - "3000:3000"   # Next.js UI
       - "8080:8080"   # Embedded MCP admin + JSON-RPC transport
@@ -220,11 +220,11 @@ services:
 
 
 volumes:
-  # phantom_mcp_* volumes are mounted into phantom-agent (the
+  # guardian_mcp_* volumes are mounted into guardian-agent (the
   # embedded MCP runs there). Names kept for data continuity across
   # the embed-MCP refactor — the volumes themselves don't move.
-  phantom_mcp_skills:
+  guardian_mcp_skills:
   # TLS volume — written by the agent, read by its tls-proxy sidecar
-  # process. See the phantom-agent volumes: block above.
-  phantom_tls:
-  phantom_mcp_data:        # instance store, secrets, audit, kb, jobs, sessions, memory
+  # process. See the guardian-agent volumes: block above.
+  guardian_tls:
+  guardian_mcp_data:        # instance store, secrets, audit, kb, jobs, sessions, memory

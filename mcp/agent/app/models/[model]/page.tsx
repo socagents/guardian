@@ -6,9 +6,9 @@ import { useParams, useSearchParams } from "next/navigation";
 import type { ModelInfo, InteractionPattern } from "@/lib/api/types";
 
 /**
- * Phantom model detail page — simplified version of the Spark detail
+ * Guardian model detail page — simplified version of the Spark detail
  * route. Spark fetches a single model via /api/v1/models/{id} and
- * /api/v1/config (for the default-model badge); phantom serves a
+ * /api/v1/config (for the default-model badge); guardian serves a
  * static catalog from /api/agent/models, so we fetch the whole list
  * and find the requested entry client-side. Keeps the detail panel
  * available without needing a separate per-model endpoint.

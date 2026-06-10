@@ -57,7 +57,7 @@ export default function HelpLandingPage() {
             </h1>
           </div>
           <p className="text-base text-on-surface-variant leading-relaxed max-w-3xl">
-            Phantom is a continuous SOC simulation platform: synthetic
+            Guardian is a continuous SOC simulation platform: synthetic
             security log generation, MITRE ATT&amp;CK scenario execution,
             detection validation, and AI-orchestrated red/blue workflows.
             The documentation is split into two focused guides so you
@@ -88,7 +88,7 @@ export default function HelpLandingPage() {
             icon="schema"
             title="Architecture Guide"
             audience="Architects · plugin authors · platform extenders"
-            description="Deep technical reference for how Phantom is built. Use this when you're extending the platform: the 5-service stack, boot lifecycle, chat-route pipeline, every subsystem (memory, knowledge, skills, hooks, tasks, plan mode, subagents, plugins, jobs, notifications, approvals, models, providers, secret store), the seven external connectors (xlog / CALDERA / XSIAM / Cortex XDR / Cortex Docs / Cortex Content / Web Browser), audit-row schemas, and the design decisions that shaped each substrate."
+            description="Deep technical reference for how Guardian is built. Use this when you're extending the platform: the 5-service stack, boot lifecycle, chat-route pipeline, every subsystem (memory, knowledge, skills, hooks, tasks, plan mode, subagents, plugins, jobs, notifications, approvals, models, providers, secret store), the seven external connectors (xlog / CALDERA / XSIAM / Cortex XDR / Cortex Docs / Cortex Content / Web Browser), audit-row schemas, and the design decisions that shaped each substrate."
             highlights={[
               "5-service stack + boot lifecycle + setup wiring",
               "Chat pipeline: lifecycle, fire-sites, tool dispatch, SSE",
@@ -128,7 +128,7 @@ export default function HelpLandingPage() {
               href="/help/cicd"
               icon="rocket_launch"
               title="CI/CD Guide"
-              description="How Phantom is built, released, and upgraded — the two installers (dev vs customer), build pipeline cascade, three change scenarios, release.yml lifecycle, customer upgrade flow. Diagram-driven, distilled from docs/CICD.md into a 10-minute read."
+              description="How Guardian is built, released, and upgraded — the two installers (dev vs customer), build pipeline cascade, three change scenarios, release.yml lifecycle, customer upgrade flow. Diagram-driven, distilled from docs/CICD.md into a 10-minute read."
             />
           </div>
         </section>

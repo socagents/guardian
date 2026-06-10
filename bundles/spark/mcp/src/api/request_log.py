@@ -5,13 +5,13 @@ recording. Drops into the FastMCP-built Starlette app via
 `app.add_middleware(RequestLogMiddleware)`.
 
 Per-request output (one line per request, JSON if any structured
-sink picks it up — readable as text in `docker logs phantom_agent`):
+sink picks it up — readable as text in `docker logs guardian_agent`):
 
     [http] method=GET path=/api/v1/audit status=200 dur_ms=12 actor=mcp_token
 
 Counters + histogram observed:
-    phantom_mcp_http_requests_total{method, path, status_class}
-    phantom_mcp_http_request_duration_seconds{method, path, status_class}
+    guardian_mcp_http_requests_total{method, path, status_class}
+    guardian_mcp_http_request_duration_seconds{method, path, status_class}
 
 The `path` label is the route TEMPLATE (e.g. /api/v1/api_keys/{key_id})
 not the literal URL — Prometheus would otherwise blow up its label
@@ -41,7 +41,7 @@ from starlette.routing import Match
 
 from usecase.metrics_registry import metrics_registry
 
-logger = logging.getLogger("Phantom MCP.http")
+logger = logging.getLogger("Guardian MCP.http")
 
 
 class RequestLogMiddleware(BaseHTTPMiddleware):
@@ -85,8 +85,8 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
 
             reg = metrics_registry()
             if reg is not None:
-                req_counter = reg.get("phantom_mcp_http_requests_total")
-                dur_hist = reg.get("phantom_mcp_http_request_duration_seconds")
+                req_counter = reg.get("guardian_mcp_http_requests_total")
+                dur_hist = reg.get("guardian_mcp_http_request_duration_seconds")
                 if req_counter is not None and hasattr(req_counter, "inc"):
                     try:
                         req_counter.inc(
@@ -147,14 +147,14 @@ def _route_template(request: Request) -> str:
 def install(app, *, enabled: bool = True) -> None:
     """Attach the middleware to the FastMCP-built Starlette app.
 
-    Toggleable via PHANTOM_REQUEST_LOG=0 in case an operator wants
+    Toggleable via GUARDIAN_REQUEST_LOG=0 in case an operator wants
     to silence access logs without rebuilding the bundle.
     """
     if not enabled:
         logger.info("Request-log middleware disabled via flag.")
         return
-    if os.getenv("PHANTOM_REQUEST_LOG", "1") not in {"1", "true", "yes"}:
-        logger.info("Request-log middleware disabled via PHANTOM_REQUEST_LOG env.")
+    if os.getenv("GUARDIAN_REQUEST_LOG", "1") not in {"1", "true", "yes"}:
+        logger.info("Request-log middleware disabled via GUARDIAN_REQUEST_LOG env.")
         return
     app.add_middleware(RequestLogMiddleware)
     logger.info("Request-log middleware attached.")

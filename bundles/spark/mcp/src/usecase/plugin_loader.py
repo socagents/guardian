@@ -42,7 +42,7 @@ skipped. Operators can toggle via /api/v1/plugins.
 
 Why filesystem-discovered (vs API-installed):
 
-  Phantom is an internal SOC platform deployed once per org. There's
+  Guardian is an internal SOC platform deployed once per org. There's
   no marketplace, no install flow. "Drop a folder, restart, the
   plugin's contributions are live" is the right shape. SnowAgent's
   full plugin lifecycle (download / install / version-pin) is
@@ -60,7 +60,7 @@ from typing import Any
 
 import yaml
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 @dataclass

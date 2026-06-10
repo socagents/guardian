@@ -7,12 +7,12 @@ Demonstrates the runtime contract:
   * Returns a dict that flows back through the agent's MCP proxy
     unchanged.
   * Uses async (FastMCP supports both sync + async; async is the
-    convention in Phantom's connector code).
+    convention in Guardian's connector code).
 
-Naming: function is `phantom__runtime_demo_echo`. The runtime
-entrypoint strips the `phantom__runtime_` prefix at registration
+Naming: function is `guardian__runtime_demo_echo`. The runtime
+entrypoint strips the `guardian__runtime_` prefix at registration
 time, so the agent's MCP proxy sees the tool as `demo_echo`. This
-matches how web uses `phantom_web_<tool>`. Either prefix style
+matches how web uses `guardian_web_<tool>`. Either prefix style
 works; the runtime handles them all.
 """
 
@@ -23,10 +23,10 @@ from typing import Any
 from config.config import get_config
 
 
-__all__ = ["phantom__runtime_demo_echo"]
+__all__ = ["guardian__runtime_demo_echo"]
 
 
-async def phantom__runtime_demo_echo(message: str, **extra: Any) -> dict[str, Any]:
+async def guardian__runtime_demo_echo(message: str, **extra: Any) -> dict[str, Any]:
     """Return {greeting, message} where greeting comes from instance config.
 
     Args:

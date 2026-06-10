@@ -15,7 +15,7 @@ scaled down for v0.5.29's scope:
 
 What's deferred to a follow-up release:
   - `/observability/bench` page + compare view + drill-down
-  - CLI binary `phantom bench run` / `phantom bench compare`
+  - CLI binary `guardian bench run` / `guardian bench compare`
   - Larger corpus (10-20 cases) + val/test split via salted hash
   - Bench scheduling job (weekly auto-run)
   - Regression flag integration with release-gating
@@ -62,7 +62,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 
@@ -72,7 +72,7 @@ DEFAULT_DATA_ROOT = Path("/app/data")
 
 class BenchCase(BaseModel):
     """One case in a manifest. Mirrors Octagon's BenchCase but scaled
-    down to Phantom's chat-route semantics — we dispatch a prompt and
+    down to Guardian's chat-route semantics — we dispatch a prompt and
     score the resulting tool calls + output text, rather than running
     a phased pipeline."""
 
@@ -279,7 +279,7 @@ class BenchRunStore:
     @staticmethod
     def _resolve_data_root() -> Path:
         from os import environ
-        return Path(environ.get("PHANTOM_DATA_ROOT", str(DEFAULT_DATA_ROOT)))
+        return Path(environ.get("GUARDIAN_DATA_ROOT", str(DEFAULT_DATA_ROOT)))
 
     @property
     def db_path(self) -> Path:

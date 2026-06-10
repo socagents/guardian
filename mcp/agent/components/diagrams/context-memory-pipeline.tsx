@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom Context & Memory Pipeline.
+ * Guardian Context & Memory Pipeline.
  *
  * What happens to chat history before every turn: load → token-budget
  * walk → maybe-compact → maybe-cache-hit → memory-augment. Two

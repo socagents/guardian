@@ -8,7 +8,7 @@
  * cost on every subsequent turn until compaction. Octagon hit the
  * same wall in Verify phase and added evidence truncation: replace
  * the middle of a large output with a marker, keep the head + tail.
- * v0.5.27 brings the same primitive to Phantom's chat route.
+ * v0.5.27 brings the same primitive to Guardian's chat route.
  *
  * Truncation strategy: when output exceeds `maxBytes`, take the
  * first `headKeep` bytes + the last `tailKeep` bytes + a marker

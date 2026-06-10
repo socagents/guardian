@@ -8,17 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 For local conventions, read the directory's own `CLAUDE.md`:
 
-- [`mcp/agent/CLAUDE.md`](mcp/agent/CLAUDE.md) — Next.js + embedded MCP host (the `phantom-agent` container)
+- [`mcp/agent/CLAUDE.md`](mcp/agent/CLAUDE.md) — Next.js + embedded MCP host (the `guardian-agent` container)
 - [`bundles/spark/mcp/CLAUDE.md`](bundles/spark/mcp/CLAUDE.md) — Python FastMCP server
 - [`bundles/spark/connectors/CLAUDE.md`](bundles/spark/connectors/CLAUDE.md) — connector authoring conventions
 - [`xlog/CLAUDE.md`](xlog/CLAUDE.md) — log-generation backend (GraphQL + Rosetta)
 - [`installer/CLAUDE.md`](installer/CLAUDE.md) — customer installer template
-- [`updater/CLAUDE.md`](updater/CLAUDE.md) — phantom-updater container-lifecycle daemon
+- [`updater/CLAUDE.md`](updater/CLAUDE.md) — guardian-updater container-lifecycle daemon
 
 For the structural map, read [`CODEBASE_MAP.md`](CODEBASE_MAP.md).
 For the AI Layer (hooks, skills, MCP servers, subagents, plugin marketplace) read [`AI-LAYER.md`](AI-LAYER.md).
 
-## What Phantom is
+## What Guardian is
 
 Continuous SOC simulation platform: synthetic security log generation, scenario-based MITRE ATT&CK telemetry, and AI-orchestrated red/blue workflows over MCP. Ships as a 5-service Docker Compose stack — see [`CODEBASE_MAP.md`](CODEBASE_MAP.md) for the topology.
 
@@ -38,7 +38,7 @@ When you finish a release that touched the architecture or user-guide pages, tel
 
 ## CI/CD pipeline → see [`docs/CICD.md`](docs/CICD.md)
 
-**Phantom's build/test/release pipeline mechanics, change scenarios, workflow contracts, and customer upgrade flows all live in [`docs/CICD.md`](docs/CICD.md).** This file (CLAUDE.md) keeps the **agent-behavior contracts** that touch CI/CD; the pipeline mechanics those contracts enforce live in the CI/CD guide.
+**Guardian's build/test/release pipeline mechanics, change scenarios, workflow contracts, and customer upgrade flows all live in [`docs/CICD.md`](docs/CICD.md).** This file (CLAUDE.md) keeps the **agent-behavior contracts** that touch CI/CD; the pipeline mechanics those contracts enforce live in the CI/CD guide.
 
 ### The three change scenarios (the most important thing to know before planning a release)
 
@@ -69,8 +69,8 @@ The full mechanics are in docs/CICD.md. The agent-behavior contracts below are M
 
 | Action | Operator approval needed? |
 |---|---|
-| `git push origin main` (triggers per-service builds + dev-latest prerelease publish + **auto-deploy on phantom-vm via `build-dev-installer.yml`**) | **NO.** Builds + prerelease publish + dev-cycle install are fully automated. Push freely. |
-| **Auto-deploy on phantom-vm** (CI runs `sudo /home/ayman/phantom-installer-dev` as the last step of `build-dev-installer.yml`, v0.6.8+) | **NO.** I do NOT wait for the operator to install. |
+| `git push origin main` (triggers per-service builds + dev-latest prerelease publish + **auto-deploy on guardian-vm via `build-dev-installer.yml`**) | **NO.** Builds + prerelease publish + dev-cycle install are fully automated. Push freely. |
+| **Auto-deploy on guardian-vm** (CI runs `sudo /home/ayman/guardian-installer-dev` as the last step of `build-dev-installer.yml`, v0.6.8+) | **NO.** I do NOT wait for the operator to install. |
 | Smoke test via IAP tunnel (read-only) | **NO.** Standard part of the dev loop — runs against the auto-deployed install. |
 | Mid-arc iteration: fix smoke-uncovered bug + push next commit | **NO.** Under a multi-release arc the agent iterates autonomously. See § Release-readiness gate below. |
 | `git tag vX.Y.Z && git push origin vX.Y.Z` **at arc completion** (triggers release.yml → customer release) | **YES.** Always ask explicitly. AND ONLY when the multi-release arc's capability acceptance check passes end-to-end on the deployed install. |
@@ -80,7 +80,7 @@ Pattern: **build freely (CI), auto-deploy in the dev cycle (CI), smoke test the 
 
 ### "Local-mirrors-customer" — the design principle
 
-The dev path and the customer path use the SAME install ceremony, SAME compose, SAME env file format, SAME install location (`/opt/phantom/`). The only divergence is which image digests get baked into the installer binary at build time. See [`installer/CLAUDE.md`](installer/CLAUDE.md) for the contract and [docs/CICD.md § The two installers](docs/CICD.md#the-two-installers).
+The dev path and the customer path use the SAME install ceremony, SAME compose, SAME env file format, SAME install location (`/opt/guardian/`). The only divergence is which image digests get baked into the installer binary at build time. See [`installer/CLAUDE.md`](installer/CLAUDE.md) for the contract and [docs/CICD.md § The two installers](docs/CICD.md#the-two-installers).
 
 ### Customer-onboarding access semantics
 
@@ -95,7 +95,7 @@ When a workflow or install fails in a way that doesn't immediately reveal its ca
 - **Customer onboarding** — [docs/CICD.md § Customer onboarding flow](docs/CICD.md#customer-onboarding-flow-first-time-install).
 - **PAT recipes** — [docs/CICD.md § PAT recipes](docs/CICD.md#pat-recipes).
 - **Rollback procedure** — [docs/CICD.md § Rollback procedure](docs/CICD.md#rollback-procedure).
-- **phantom-updater's role in releases** — [docs/CICD.md § phantom-updater in the release loop](docs/CICD.md#phantom-updater-in-the-release-loop). Also see [`updater/CLAUDE.md`](updater/CLAUDE.md).
+- **guardian-updater's role in releases** — [docs/CICD.md § guardian-updater in the release loop](docs/CICD.md#guardian-updater-in-the-release-loop). Also see [`updater/CLAUDE.md`](updater/CLAUDE.md).
 - **Monorepo release invariant** — [docs/CICD.md § Monorepo release invariant](docs/CICD.md#monorepo-release-invariant). All 11 images ship at the same `vX.Y.Z`.
 - **PR cycle vs main-push cycle** — [docs/CICD.md § PR cycle](docs/CICD.md#pr-cycle-vs-main-push-cycle).
 
@@ -156,20 +156,20 @@ Two operator-managed config files on a customer install. Each has a precise role
 
 | File | Owns | Read by |
 |---|---|---|
-| **`/opt/phantom/.env`** | Service credentials + the 5 core compose-substitution digests + runtime version marker | `docker compose` + phantom-updater (`/host/.env`) |
-| **`/opt/phantom/connector-digests.env`** | Per-connector image pins (`DIGEST_PHANTOM_CONNECTOR_*`) | phantom-updater ONLY (`/host/connector-digests.env`) |
+| **`/opt/guardian/.env`** | Service credentials + the 5 core compose-substitution digests + runtime version marker | `docker compose` + guardian-updater (`/host/.env`) |
+| **`/opt/guardian/connector-digests.env`** | Per-connector image pins (`DIGEST_GUARDIAN_CONNECTOR_*`) | guardian-updater ONLY (`/host/connector-digests.env`) |
 
-**Forbidden going forward**: adding `DIGEST_PHANTOM_CONNECTOR_*` writes to `.env`, adding connector configuration to `.env`, documenting the connector-digest workflow in `.env`. See [`installer/CLAUDE.md`](installer/CLAUDE.md) + [`updater/CLAUDE.md`](updater/CLAUDE.md) for the full contract.
+**Forbidden going forward**: adding `DIGEST_GUARDIAN_CONNECTOR_*` writes to `.env`, adding connector configuration to `.env`, documenting the connector-digest workflow in `.env`. See [`installer/CLAUDE.md`](installer/CLAUDE.md) + [`updater/CLAUDE.md`](updater/CLAUDE.md) for the full contract.
 
-## phantom-vm operator environment
+## guardian-vm operator environment
 
-Operational details for working with phantom-vm. CI/CD pipeline mechanics live in [`docs/CICD.md`](docs/CICD.md); this section covers the operator-environment-specific knowledge (VM coordinates, credentials, IAP access) that the agent needs to do anything against phantom-vm.
+Operational details for working with guardian-vm. CI/CD pipeline mechanics live in [`docs/CICD.md`](docs/CICD.md); this section covers the operator-environment-specific knowledge (VM coordinates, credentials, IAP access) that the agent needs to do anything against guardian-vm.
 
 ### VM coordinates
 
 - Project: `cortex-gcp-labs`
 - Zone: `us-central1-f`
-- Instance: `phantom` (internal IP `10.10.0.81`, no external IP)
+- Instance: `guardian` (internal IP `10.10.0.81`, no external IP)
 - Firewall tag: `allow-ssh`
 - Access path: **IAP tunnel → password SSH** as user `ayman`
 
@@ -183,21 +183,21 @@ set -a && source .env.vm && set +a
 
 Required keys: `VM_NAME`, `VM_ZONE`, `VM_PROJECT`, `VM_USER`, `VM_PASSWORD`, `VM_LOCAL_SSH_PORT`, `VM_REMOTE_REPO`.
 
-**`VM_REMOTE_REPO` must point at the live runner workspace.** Set: `VM_REMOTE_REPO=/home/ayman/actions-runner/_work/phantom/phantom`.
+**`VM_REMOTE_REPO` must point at the live runner workspace.** Set: `VM_REMOTE_REPO=/home/ayman/actions-runner/_work/guardian/guardian`.
 
 **Avoid multi-line values when sourcing.** `set -a && source .env.vm` parses the file as bash; multi-line values (typically service-account JSON) trip on every nested line. Store JSON at `.gcp/service-account.json` (gitignored, mode 0600) and reference: `GOOGLE_APPLICATION_CREDENTIALS="${PWD}/.gcp/service-account.json"`.
 
-### Agent-API auth — authenticate with `PHANTOM_API_KEY` (v0.17.108+)
+### Agent-API auth — authenticate with `GUARDIAN_API_KEY` (v0.17.108+)
 
-The Next.js agent surface (`/api/chat`, `/api/agent/*`, `/api/skills/*`) accepts **API-key bearer auth** as of v0.17.108. The operator minted a superset-scope (`*`) key and stored it as **`PHANTOM_API_KEY`** in `.env.vm` (gitignored). **Always authenticate to the agent API with this key** — the credential guardrail blocks me from logging in with the admin password, but a bearer key needs no interactive login:
+The Next.js agent surface (`/api/chat`, `/api/agent/*`, `/api/skills/*`) accepts **API-key bearer auth** as of v0.17.108. The operator minted a superset-scope (`*`) key and stored it as **`GUARDIAN_API_KEY`** in `.env.vm` (gitignored). **Always authenticate to the agent API with this key** — the credential guardrail blocks me from logging in with the admin password, but a bearer key needs no interactive login:
 
 ```bash
 set -a && source .env.vm && set +a
 # Reach the agent's TLS proxy (remote :3000) via an IAP service-port tunnel, then:
-curl -sk -H "Authorization: Bearer $PHANTOM_API_KEY" https://localhost:3000/api/agent/jobs
+curl -sk -H "Authorization: Bearer $GUARDIAN_API_KEY" https://localhost:3000/api/agent/jobs
 ```
 
-- **Never embed the key value** in any tracked file (this file, commits, `git log`, scripts). It lives ONLY in `.env.vm`; always reference `$PHANTOM_API_KEY`.
+- **Never embed the key value** in any tracked file (this file, commits, `git log`, scripts). It lives ONLY in `.env.vm`; always reference `$GUARDIAN_API_KEY`.
 - **Scope model (v0.17.108):** `agent:read` → GETs, `agent:write` → mutations + `/api/chat`, `agent:*` → both, legacy `*` → admin-equivalent. The operator's key is `*`.
 - **Security invariant holds even at `*`:** API keys are REFUSED with **403** on credential-management routes (`/api/agent/providers`, `/api/agent/instances`, `/api/agent/api-keys`). Minting/rotating/revoking keys still requires the MCP_TOKEN-gated REST surface — a bearer key can never escalate to manage credentials.
 
@@ -290,7 +290,7 @@ If any fails locally, fix before pushing. CI catches the same things but slower.
 - **SCOPE**: cumulative — covers every unreleased commit since the last customer `vX.Y.Z`. Resets when a tag fires `release.yml`.
 - **SHAPE**: 5-15 operator-facing bullets. Each bullet: specific user-journey action + surface to verify + unambiguous pass/fail signal.
 - **SOURCE OF TRUTH**: the unreleased CHANGELOG.md entries' "What ships" + "Files" sections.
-- **OUTCOME**: auto-deploy already landed the install on phantom-vm (v0.6.8+). I run the matrix myself via IAP tunnel + report back. Passed → I summarize + operator decides on release approval. Failed → I push a fix; cycle re-runs automatically.
+- **OUTCOME**: auto-deploy already landed the install on guardian-vm (v0.6.8+). I run the matrix myself via IAP tunnel + report back. Passed → I summarize + operator decides on release approval. Failed → I push a fix; cycle re-runs automatically.
 
 **Forbidden**: skipping the bullet list because "the change is small"; posting bullets that aren't checkable; posting bullets without a corresponding CHANGELOG entry.
 
@@ -298,11 +298,11 @@ If any fails locally, fix before pushing. CI catches the same things but slower.
 
 **The bullets I write are commitments to RUN them.** Pre-v0.5.75 my "headless smoke" was API-shape only — five regressions in a row taught the lesson.
 
-**v0.6.8 auto-deploy contract**: `build-dev-installer.yml` auto-deploys to phantom-vm at the end of every successful run. By the time I'm smoking, the running stack ALREADY matches `HEAD`.
+**v0.6.8 auto-deploy contract**: `build-dev-installer.yml` auto-deploys to guardian-vm at the end of every successful run. By the time I'm smoking, the running stack ALREADY matches `HEAD`.
 
 Concretely:
 - Monitor `build-dev-installer.yml` to completion.
-- Verify version: `ssh phantom 'sudo grep ^PHANTOM_VERSION /opt/phantom/.env'` matches `git rev-parse --short HEAD`.
+- Verify version: `ssh guardian 'sudo grep ^GUARDIAN_VERSION /opt/guardian/.env'` matches `git rev-parse --short HEAD`.
 - Run bullets against the deployed install via IAP tunnel.
 
 **Going forward, agent-side headless smoke for `dev-built` → `ready-for-testing` requires:**
@@ -314,13 +314,13 @@ Concretely:
    - Hit the agent-side probe via `POST /api/v1/instances/<id>/test`
    - Hit the MCP tool dispatch via `tools/call`
    - Confirm a non-error response or a clean expected error
-4. **Dev-cycle gap awareness in the smoke matrix.** When a fix touches `updater/src/main.py` or `phantom-browser/`, the matrix LEADS with: *"This release ships agent-side code that pairs with an updater-side change. The updater image is not rebuilt on the dev cycle — only on customer release tags. Until `vX.Y.Z` ships, the agent-side change works but the end-to-end loop returns `<specific error message>` until then."* DO NOT bury this.
+4. **Dev-cycle gap awareness in the smoke matrix.** When a fix touches `updater/src/main.py` or `guardian-browser/`, the matrix LEADS with: *"This release ships agent-side code that pairs with an updater-side change. The updater image is not rebuilt on the dev cycle — only on customer release tags. Until `vX.Y.Z` ships, the agent-side change works but the end-to-end loop returns `<specific error message>` until then."* DO NOT bury this.
 5. **Smoke-matrix state-classification.** Each bullet annotated:
    - `✓ agent-verified` — ran through the tunnel + got expected result
    - `⨯ agent-verified-blocked` — known gap prevented full verification; needs operator hands-on
    - `? agent-skipped` — needs operator hands-on as primary verification
 6. **Bug-found-in-released-code postmortem.** Every time the operator catches a bug in `dev-built` code my smoke missed, the next release ships a CLAUDE.md/CICD.md addendum naming the specific gap.
-7. **Bug-family audit.** When fixing a bug in a connector-system file, audit sibling files in the same release. Identify the bug as a grep expression. Run across `bundles/spark/connectors/*/src/` + `bundles/spark/mcp/src/` + `phantom-connector-runtime/runtime/`. For each hit, fix in the same release OR document the gap inline with a tracking-issue reference. **The fix isn't done until the grep returns no hits or every remaining hit has a documented reason.**
+7. **Bug-family audit.** When fixing a bug in a connector-system file, audit sibling files in the same release. Identify the bug as a grep expression. Run across `bundles/spark/connectors/*/src/` + `bundles/spark/mcp/src/` + `guardian-connector-runtime/runtime/`. For each hit, fix in the same release OR document the gap inline with a tracking-issue reference. **The fix isn't done until the grep returns no hits or every remaining hit has a documented reason.**
 
 **Forbidden**: claiming `ready-for-testing` without an end-to-end probe per touched subsystem; burying dev-cycle gaps in prose; authoring bullets without an unambiguous pass signal; skipping state-verification on persistence-touching releases.
 
@@ -333,11 +333,11 @@ After pushing any commit, **I own the verification end-to-end**. Don't punt to t
 Concretely, after every push that produces an operator-visible change:
 
 1. **Watch the build chain to completion** — `gh run watch <id>` in the background or polling. Don't ask the operator to wait for me.
-2. **Watch the auto-deploy** — `build-dev-installer.yml` runs `sudo /home/ayman/phantom-installer-dev` on phantom-vm at the end of the build chain (v0.6.8+). Verify it actually ran by checking `PHANTOM_VERSION` on the VM.
+2. **Watch the auto-deploy** — `build-dev-installer.yml` runs `sudo /home/ayman/guardian-installer-dev` on guardian-vm at the end of the build chain (v0.6.8+). Verify it actually ran by checking `GUARDIAN_VERSION` on the VM.
 3. **Verify the change is live** — for backend changes, hit the relevant REST endpoint via the bearer + IAP tunnel. For UI changes, fetch the page or read the affected JSON endpoint and confirm the rendered/served content matches expectations.
 4. **Catch dev-cycle gaps before reporting back** — if the agent image rebuilt but the connector image didn't (or vice versa), surface this AS PART OF MY REPORT. The R5 cascade-cancel CI bug was undetected because I assumed the build chain "just worked" after each push.
 5. **Concurrency-cancel awareness.** GitHub Actions cancels in-progress workflows on the same branch when a newer commit pushes. If I'm shipping a multi-sub-release arc, the connector-build workflow may get cancelled before completing — I must either (a) pace pushes so each connector-build finishes (~3-5 min apart) OR (b) re-dispatch `Build connectors` after the final arc push to ensure the final state has a published image. **Failing silently because CI cancelled is on me, not on the operator.**
-6. **Container vs image vs catalog mismatch is mine to detect.** When phantom-updater doesn't auto-recreate a connector container after a digest change, I MUST trigger the restart via `POST /api/v1/connectors/<connector_id>/instances/<instance_name>/start` on the updater (port 8090, with the bearer + `{"instance_id": "<uuid>"}` body). Operator should never have to ask me "is the new image actually running?"
+6. **Container vs image vs catalog mismatch is mine to detect.** When guardian-updater doesn't auto-recreate a connector container after a digest change, I MUST trigger the restart via `POST /api/v1/connectors/<connector_id>/instances/<instance_name>/start` on the updater (port 8090, with the bearer + `{"instance_id": "<uuid>"}` body). Operator should never have to ask me "is the new image actually running?"
 
 **Phrasing forbidden in responses to the operator**:
 - ❌ "Wait for the CI build to finish + I'll check then"
@@ -407,7 +407,7 @@ After `release.yml` reports `success`, BEFORE I announce the release URL, I MUST
 
 ## Pre-build context refresh (MANDATORY — every build)
 
-**Before starting work on any new build (issue, feature, fix), refresh context by reading the docs that describe what was already implemented and how it's specified.** Phantom is an enterprise product; drift between code, spec, UI, and docs is the single largest source of regressions. The way to prevent drift is to enter every build with current knowledge of what exists.
+**Before starting work on any new build (issue, feature, fix), refresh context by reading the docs that describe what was already implemented and how it's specified.** Guardian is an enterprise product; drift between code, spec, UI, and docs is the single largest source of regressions. The way to prevent drift is to enter every build with current knowledge of what exists.
 
 ### What to read before touching code
 
@@ -444,11 +444,11 @@ The "read before code, write after build" pattern is symmetric. Skip either side
 
 When onboarding, simulating, or validating a data source against Cortex XSIAM, follow the **`data-source-xdm-validation` skill** (auto-activates on `bundles/spark/data-sources/**`).
 
-**What counts as a data source (the admission rule — check this BEFORE adding any vendor):** A Phantom data source MUST correspond to a real Cortex XSIAM **log-ingestion + parsing path** — the vendor has a **parsing rule and/or modeling rule** (shipped in a content pack OR built-in/native to the platform, e.g. PingFederate's native authentication parser) so its logs land in a dataset and get *structured*. **A vendor whose only Cortex presence is an XSOAR/Marketplace integration with no Parsing/Modeling rules is NOT a data source — it is an action integration** (it fetches alerts/incidents or runs response actions via API; it does not ingest+parse logs into a dataset). **Do not add action integrations to the data-source catalog.** SIEMs that are log *destinations* (IBM QRadar, Rapid7 InsightIDR) are likewise not sources. Litmus: does Cortex ship/native a parsing or modeling rule that produces structured columns/`xdm.*` for this vendor? No rule anywhere → not a data source. (v0.17.144 removed 12 vendors that failed this test — CrowdStrike, Sophos ×2, PingOne, Wiz, Rapid7 ×2, SAP, ESET, Snowflake, Veeam, QRadar — keeping only PingFederate.)
+**What counts as a data source (the admission rule — check this BEFORE adding any vendor):** A Guardian data source MUST correspond to a real Cortex XSIAM **log-ingestion + parsing path** — the vendor has a **parsing rule and/or modeling rule** (shipped in a content pack OR built-in/native to the platform, e.g. PingFederate's native authentication parser) so its logs land in a dataset and get *structured*. **A vendor whose only Cortex presence is an XSOAR/Marketplace integration with no Parsing/Modeling rules is NOT a data source — it is an action integration** (it fetches alerts/incidents or runs response actions via API; it does not ingest+parse logs into a dataset). **Do not add action integrations to the data-source catalog.** SIEMs that are log *destinations* (IBM QRadar, Rapid7 InsightIDR) are likewise not sources. Litmus: does Cortex ship/native a parsing or modeling rule that produces structured columns/`xdm.*` for this vendor? No rule anywhere → not a data source. (v0.17.144 removed 12 vendors that failed this test — CrowdStrike, Sophos ×2, PingOne, Wiz, Rapid7 ×2, SAP, ESET, Snowflake, Veeam, QRadar — keeping only PingFederate.)
 
 The load-bearing rules, which govern every data-source decision:
 
-1. **Phantom ALWAYS delivers synthetic logs over syslog/CEF to the Cortex Broker. NEVER an HTTP collector or API integration — full stop.** This holds even when the real-world vendor is collected that way in production (CrowdStrike FDR pulling from S3, Snowflake/Wiz/Rapid7/PingOne API pollers, HTTP event collectors). `phantom_create_data_worker` is always `type=CEF` (or SYSLOG/LEEF) to a `udp:<broker>:514` destination.
+1. **Guardian ALWAYS delivers synthetic logs over syslog/CEF to the Cortex Broker. NEVER an HTTP collector or API integration — full stop.** This holds even when the real-world vendor is collected that way in production (CrowdStrike FDR pulling from S3, Snowflake/Wiz/Rapid7/PingOne API pollers, HTTP event collectors). `guardian_create_data_worker` is always `type=CEF` (or SYSLOG/LEEF) to a `udp:<broker>:514` destination.
 2. **Why it's sound:** the broker, parsing rules, and modeling rules are **protocol-agnostic** — they map on the **data shape** (field/column/JSON structure), not on how the event arrived. A rule reading `json_extract_scalar(evt, "$.a.b")` maps our event whether it came via API or syslog, as long as it carries `a.b` in the expected shape.
 3. **The job is reverse-engineering, not transport.** Read the vendor's parsing + modeling rules → derive the exact field shape they expect (names, types, JSON paths, value types, the gate) → encode it into `data_source.yaml` `fields[]` (name + type + description + example) and `how_to_use` → the agent crafts events of that shape → ships them as CEF → the rules parse + map → `xdm.*` populates → validated.
 4. **Corrections this enforces:** a vendor being "native-collector-only"/"API-integration" is **irrelevant** to validatability — never dismiss it for that reason. `raw>0, xdm=0` means **no modeling rule is bound** (not "can't map") — obtain + reverse-engineer the rule. The `how_to_use` documents the **data shape + syslog/CEF routing literal**, NOT the vendor's real-world collection plumbing (describing "FDR S3/SQS" as the *mechanism* misleads the agent into thinking it needs an HTTP collector — it never does).
@@ -457,7 +457,7 @@ See the skill's `## Delivery doctrine` section + `references/diagnostic-playbook
 
 ## Architecture page is the spec (MANDATORY — read before editing)
 
-[mcp/agent/app/help/architecture/page.tsx](mcp/agent/app/help/architecture/page.tsx) is the **canonical specification** for how Phantom's substrate behaves. It describes the target state — not just what the code currently does. When the code and the architecture page disagree, **the architecture page wins** and the code is the gap that needs fixing.
+[mcp/agent/app/help/architecture/page.tsx](mcp/agent/app/help/architecture/page.tsx) is the **canonical specification** for how Guardian's substrate behaves. It describes the target state — not just what the code currently does. When the code and the architecture page disagree, **the architecture page wins** and the code is the gap that needs fixing.
 
 **Before editing any of the following code paths, READ the architecture page sections that govern them:**
 
@@ -519,7 +519,7 @@ After `release.yml` reports `success`, BEFORE announcing the release URL, produc
 - mcp/agent/lib/release-notes.ts — same entry, customer-readable in About modal
 
 ### Image digests published
-- phantom-agent@<digest> [REBUILT|RETAGGED from v<prev>]
+- guardian-agent@<digest> [REBUILT|RETAGGED from v<prev>]
 - (all images)
 
 ### Operator review checklist
@@ -535,7 +535,7 @@ After `release.yml` reports `success`, BEFORE announcing the release URL, produc
 
 ## Quality-first principle (MANDATORY — enterprise product)
 
-Phantom is an **enterprise product**. The bar for code quality is not "the test passes"; it's "the change fits cohesively into the existing architecture, the spec stays consistent, and the next person inheriting it doesn't have to untangle a shortcut."
+Guardian is an **enterprise product**. The bar for code quality is not "the test passes"; it's "the change fits cohesively into the existing architecture, the spec stays consistent, and the next person inheriting it doesn't have to untangle a shortcut."
 
 When fixing issues during a build, the priority order is:
 
@@ -551,7 +551,7 @@ When fixing issues during a build, the priority order is:
 - **Symptom suppression.** try/except that swallows an unexpected error to make the test pass. Investigate.
 - **Magic-number config.** Wire through `pydantic-settings` from the start.
 - **Drive-by partial documentation.** Updating CHANGELOG but not release-notes.ts; updating architecture but not user-guide. Either do the full doc cycle or don't claim the build is done.
-- **"It works on my machine."** Phantom is a multi-container stack. Always smoke-test against phantom-vm post-deploy.
+- **"It works on my machine."** Guardian is a multi-container stack. Always smoke-test against guardian-vm post-deploy.
 
 ### Inter-service connections — emphasize these
 
@@ -563,7 +563,7 @@ When updating architecture docs, **the connections between services matter as mu
 - Failure mode (retries? circuit breaker? graceful degrade?)
 - Whether the call is sync or async
 
-Example: *`phantom-agent` (Next.js, port 3000) → embedded MCP subprocess (Python FastMCP, port 8080) — bearer auth via `MCP_TOKEN`, in-process loopback over HTTPS, ~5s timeout, no retry. The agent proxies every `/api/agent/*` call to the MCP at `/api/v1/*` via [lib/mcp-proxy.ts](mcp/agent/lib/mcp-proxy.ts).*
+Example: *`guardian-agent` (Next.js, port 3000) → embedded MCP subprocess (Python FastMCP, port 8080) — bearer auth via `MCP_TOKEN`, in-process loopback over HTTPS, ~5s timeout, no retry. The agent proxies every `/api/agent/*` call to the MCP at `/api/v1/*` via [lib/mcp-proxy.ts](mcp/agent/lib/mcp-proxy.ts).*
 
 Boxes-with-labels diagrams are not enough. Drift hides in the wires.
 
@@ -581,7 +581,7 @@ Every persisted value lives in **exactly one** place. No fallback chains, no env
 
 Migration code is a regression magnet: more branches than the new path, more failure modes, operators trip on it for years after the cutover. Concrete v0.4.0 example: when the `SecretStore` hash path became canonical, the `setup.json` plaintext compare path didn't get a deprecation warning — it was deleted from the route handler, env vars deleted from compose, `setup.json` deleted from the repo + install kit, and the operator-facing `/setup` page deleted entirely.
 
-**Safety requirement**: a complete operator-facing communication plan (CHANGELOG + release-notes + architecture #section + user-guide #section + journeys) AND a fresh-volume install test on phantom-vm before the deletion lands.
+**Safety requirement**: a complete operator-facing communication plan (CHANGELOG + release-notes + architecture #section + user-guide #section + journeys) AND a fresh-volume install test on guardian-vm before the deletion lands.
 
 **Does NOT require**: automatic migration tooling. Operators get clear release notes + a CLI to recover.
 
@@ -612,7 +612,7 @@ Deleting a host script isn't done until the journey that walked operators throug
 3. **Plan the deletion calendar**: what code gets deleted, what env vars get removed from compose, what files get removed from the install kit, **AND what CI workflows / release scripts / installer templates reference the file.** The cheap check: `grep -rn <filename> .github/ installer/ scripts/ mcp/agent/lib/ mcp/agent/app/help/` BEFORE declaring the deletion plan complete.
 4. **Plan the docs calendar**: architecture-page section to rewrite, user-guide section, journeys to retire, CHANGELOG + release-notes entries, diagrams.
 5. **Plan the observability surface**: what events does the new path emit? Are they visible in `/observability/events`?
-6. **Test the full operator path on phantom-vm** via the customer-mirror dev installer (NOT `docker compose up -d --force-recreate`).
+6. **Test the full operator path on guardian-vm** via the customer-mirror dev installer (NOT `docker compose up -d --force-recreate`).
 7. **Same release ships** code deletion + docs replacement + journey retirement + diagram update.
 
 If you find yourself thinking "I'll delete the legacy fallback later" or "the docs can lag one release," you're recreating the v0.3.x trap. **Do it together or don't do it at all.**

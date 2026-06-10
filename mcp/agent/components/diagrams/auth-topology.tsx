@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phantom auth topology — static component graph for v0.4.0.
+ * Guardian auth topology — static component graph for v0.4.0.
  *
  * Companion to auth-flows.tsx. The flow diagrams there show TEMPORAL
  * interactions for three operator journeys (login, change-password,
@@ -408,7 +408,7 @@ export function AuthTopology() {
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         xmlns="http://www.w3.org/2000/svg"
         role="img"
-        aria-label="Phantom authentication topology: User → Edge (tls-proxy + Next.js) → Auth Service (MCP) → Storage (SecretStore + auth_sessions.db), with audit log observing on the right and CLI reset bypass on the left."
+        aria-label="Guardian authentication topology: User → Edge (tls-proxy + Next.js) → Auth Service (MCP) → Storage (SecretStore + auth_sessions.db), with audit log observing on the right and CLI reset bypass on the left."
       >
         <DiagramMarkers />
 
@@ -528,7 +528,7 @@ export function AuthTopology() {
           variant="user"
           title="Operator browser"
           sub="https://host:3000"
-          detail="cookie: phantom_session"
+          detail="cookie: guardian_session"
         />
 
         {/* Edge tier */}
@@ -661,7 +661,7 @@ export function AuthTopology() {
           h={CLI.h}
           variant="cli"
           title="Host shell"
-          sub="docker exec phantom_agent"
+          sub="docker exec guardian_agent"
           detail="reset-admin.mjs"
         />
         <text
@@ -694,7 +694,7 @@ export function AuthTopology() {
         <TopologyEdge
           from={{ x: COLUMN_CENTER, y: userBox.y + BOX.h }}
           to={{ x: edge2.x + BOX.w / 2, y: edge1.y }}
-          label="HTTPS + phantom_session cookie"
+          label="HTTPS + guardian_session cookie"
           labelOffsetY={-2}
           labelW={260}
         />

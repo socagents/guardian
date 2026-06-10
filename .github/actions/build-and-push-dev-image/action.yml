@@ -1,6 +1,6 @@
 name: Build and push dev image
 description: >
-  Builds a single Phantom service image with docker build, retags it for
+  Builds a single Guardian service image with docker build, retags it for
   GHCR with the dev tag (overwritten on every push to main), pushes it
   to ghcr.io, captures the resulting digest, and surfaces the digest as
   an output for downstream jobs. Shared by build-agent.yml,
@@ -11,7 +11,7 @@ description: >
 
 inputs:
   service-name:
-    description: 'Service name (e.g. phantom-agent, phantom-updater, phantom-connector-xsiam)'
+    description: 'Service name (e.g. guardian-agent, guardian-updater, guardian-connector-xsiam)'
     required: true
   build-context:
     description: 'Path passed to docker build as the build context'
@@ -43,9 +43,9 @@ inputs:
       first-party base layers (python:3.12-slim, node:20-alpine, etc.)
       come fresh so a stale runner cache can't ship a base image with
       known CVEs. Set to 'never' ONLY for builds whose FROM is a
-      Phantom-own image just built locally by a prior job in the same
+      Guardian-own image just built locally by a prior job in the same
       workflow run (e.g. per-connector builds whose base is
-      phantom-connector-runtime:dev — see #38). The chronic 401 those
+      guardian-connector-runtime:dev — see #38). The chronic 401 those
       hit is because --pull races GHCR's per-version prerelease-
       association check; staying on the local layer cache avoids it.
     required: false
@@ -85,7 +85,7 @@ runs:
         # v0.5.60 (issue #38) — pull-policy honors the input. Default
         # 'always' keeps --pull for first-party base layers (CVE-fresh).
         # 'never' skips --pull so per-connector builds inherit the
-        # locally-cached phantom-connector-runtime:dev base their
+        # locally-cached guardian-connector-runtime:dev base their
         # prior build-runtime job just produced, avoiding the GHCR
         # HEAD-request 401 race against per-version prerelease
         # association. See action header + #38 for full rationale.

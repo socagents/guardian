@@ -1,7 +1,7 @@
 /**
  * Running-version proxy.
  *
- * Returns the agent stack's pinned `PHANTOM_VERSION` so the UI can
+ * Returns the agent stack's pinned `GUARDIAN_VERSION` so the UI can
  * render an authoritative "you're on v0.1.X" indicator in the sidebar
  * + the About modal's release-notes view.
  *
@@ -12,10 +12,10 @@
  * authoritative "what bytes is this container running" info.
  *
  * Source-of-truth resolution:
- *   1. process.env.PHANTOM_VERSION   → version label (set by installer
- *      from /opt/phantom/.env; .env in turn populated from the
+ *   1. process.env.GUARDIAN_VERSION   → version label (set by installer
+ *      from /opt/guardian/.env; .env in turn populated from the
  *      release manifest)
- *   2. process.env.DIGEST_PHANTOM_*  → per-image content digests
+ *   2. process.env.DIGEST_GUARDIAN_*  → per-image content digests
  *      (same source: installer-managed manifest in .env)
  *   3. fallback "dev" / undefined    → local development image with
  *      no manifest applied
@@ -42,19 +42,19 @@ interface VersionResponse {
 
 export async function GET() {
   const version =
-    process.env.PHANTOM_VERSION?.trim() ||
-    process.env.NEXT_PUBLIC_PHANTOM_VERSION?.trim() ||
+    process.env.GUARDIAN_VERSION?.trim() ||
+    process.env.NEXT_PUBLIC_GUARDIAN_VERSION?.trim() ||
     'dev';
 
   // Stack-tier digests, sourced from compose-injected env vars. The
-  // customer compose forwards each DIGEST_PHANTOM_* env var into
-  // phantom-agent's environment block; those values come from
-  // /opt/phantom/.env which was populated by the phantom-installer
+  // customer compose forwards each DIGEST_GUARDIAN_* env var into
+  // guardian-agent's environment block; those values come from
+  // /opt/guardian/.env which was populated by the guardian-installer
   // from the release manifest.
   const digestSources: Record<string, string | undefined> = {
-    'phantom-agent': process.env.DIGEST_PHANTOM_AGENT,
-    'phantom-updater': process.env.DIGEST_PHANTOM_UPDATER,
-    'phantom-browser': process.env.DIGEST_PHANTOM_BROWSER,
+    'guardian-agent': process.env.DIGEST_GUARDIAN_AGENT,
+    'guardian-updater': process.env.DIGEST_GUARDIAN_UPDATER,
+    'guardian-browser': process.env.DIGEST_GUARDIAN_BROWSER,
   };
 
   const digests: Record<string, string> = {};

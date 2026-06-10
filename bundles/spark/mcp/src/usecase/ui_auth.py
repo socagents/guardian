@@ -10,13 +10,13 @@ What this module owns:
     isn't possible.
   - SecretStore as the on-disk format: one file per username at
     `/ui/auth/<username>/password_hash`, AES-256-GCM encrypted at
-    rest when PHANTOM_SECRET_KEK is set.
+    rest when GUARDIAN_SECRET_KEK is set.
 
 What this module does NOT do:
   - Session cookies / JWTs — handled by the Next.js side (the agent's
-    /api/auth/login/route.ts sets the phantom_auth cookie after a
+    /api/auth/login/route.ts sets the guardian_auth cookie after a
     successful verify here).
-  - Multi-user — there's a single operator account on Phantom in
+  - Multi-user — there's a single operator account on Guardian in
     v0.1.x. The username is still stored separately so we can grow
     into multi-user without breaking the schema.
 
@@ -43,7 +43,7 @@ from typing import Any
 from usecase.secret_store import SecretStore, SecretStoreError
 
 
-logger = logging.getLogger("Phantom MCP.ui_auth")
+logger = logging.getLogger("Guardian MCP.ui_auth")
 
 
 # Tunable. 600k matches OWASP 2023's PBKDF2-SHA256 recommendation for
@@ -270,7 +270,7 @@ _store: UiAuthStore | None = None
 def ui_auth_store() -> UiAuthStore:
     global _store
     if _store is None:
-        # SecretStore() picks up DATA_ROOT + PHANTOM_SECRET_KEK from env,
+        # SecretStore() picks up DATA_ROOT + GUARDIAN_SECRET_KEK from env,
         # same as every other SecretStore consumer (instance_store,
         # provider_store).
         _store = UiAuthStore(SecretStore())

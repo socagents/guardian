@@ -3,7 +3,7 @@
 **HTTP**: `POST /public_api/v1/indicators/insert_jsons/`
 **Auth**: Bearer (`Authorization` + `x-xdr-auth-id` + `x-xdr-nonce` + `x-xdr-timestamp` when advanced)
 **MCP tool**: `xsiam_ioc_insert_json`
-**Phantom connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
+**Guardian connector**: `xsiam` (per-instance: see Tools tab on `/connectors/xsiam-<instance>`)
 
 ## Purpose
 
@@ -41,5 +41,5 @@ Returns an IoCResponse object if successful.
 
 ## Cross-references
 
-- Phantom tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_ioc_insert_json`
+- Guardian tool: `bundles/spark/connectors/xsiam/src/connector.py` → `xsiam_ioc_insert_json`
 - Source mapping: `ebarti/cortex_xdr_client/api/ioc_api.py` → `insert_json`

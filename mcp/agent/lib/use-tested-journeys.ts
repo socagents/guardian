@@ -8,7 +8,7 @@
  *   /api/agent/operator-state/tested_journeys.
  *
  * Pre-v0.5.1 history: this hook used to write to browser localStorage
- * under `phantom.help.tested-journeys`. That violated v0.4.0's
+ * under `guardian.help.tested-journeys`. That violated v0.4.0's
  * canonical-state discipline (single source of truth) — volume wipes
  * didn't clear it, cross-device + cross-browser progress disagreed,
  * backups missed it. v0.5.1 moves to the canonical home; the hook's
@@ -43,7 +43,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SERVER_KEY = "tested_journeys";
-const LEGACY_LOCAL_STORAGE_KEY = "phantom.help.tested-journeys";
+const LEGACY_LOCAL_STORAGE_KEY = "guardian.help.tested-journeys";
 const SERVER_URL = `/api/agent/operator-state/${SERVER_KEY}`;
 
 export interface UseTestedJourneysReturn {

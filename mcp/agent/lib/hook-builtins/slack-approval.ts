@@ -44,7 +44,7 @@ export const slackApprovalBuiltin: BuiltinHookSpec = {
       key: "authHeaderName",
       label: "Auth header name (optional)",
       type: "string",
-      placeholder: "X-Phantom-Auth",
+      placeholder: "X-Guardian-Auth",
       helper:
         "If your receiver requires an auth header, name it here. " +
         "Leave blank for no auth header.",

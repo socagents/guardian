@@ -73,7 +73,7 @@ def _friendly_embed_error(exc: Exception, tool_label: str) -> str:
     # Fallback — preserve the original error so debug isn't lost.
     return f"{tool_label} failed: {msg}"
 
-logger = logging.getLogger("Phantom MCP")
+logger = logging.getLogger("Guardian MCP")
 
 
 # ─────────────────────────────────────────────────────────────────
