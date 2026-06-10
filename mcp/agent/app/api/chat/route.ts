@@ -289,15 +289,15 @@ const SUBAGENT_CREATE_TOOL_SPEC = {
     'Use when a task needs a different operating posture than this ' +
     "session — don't use it for trivial sub-questions you can answer " +
     'directly. Available agent_name values come from /api/v1/' +
-    'agent-definitions; common builtins: red-team-emulator, ' +
-    'blue-team-validator, coverage-reporter.',
+    'agent-definitions; typical examples: case-triage, ' +
+    'evidence-collector, asset-context.',
   parameters: {
     type: 'object' as const,
     properties: {
       agent_name: {
         type: 'string' as const,
         description:
-          'Name of the agent definition (e.g. "red-team-emulator"). ' +
+          'Name of the agent definition (e.g. "case-triage"). ' +
           'Must exist + be enabled in /api/v1/agent-definitions.',
       },
       prompt: {

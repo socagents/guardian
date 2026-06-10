@@ -93,9 +93,9 @@ export const HOOK_EVENTS = [
    *  notifications. */
   "RunEnd",
   /** Round-15 / Phase S — fired BEFORE a subagent dispatch. A hook
-   *  may deny the spawn (e.g. "no red-team subagent against
-   *  production tenant"). Receives parent session id, agent name,
-   *  the subagent's prompt. */
+   *  may deny the spawn (e.g. "no write-capable subagent against
+   *  the production tenant"). Receives parent session id, agent
+   *  name, the subagent's prompt. */
   "SubagentStart",
   /** Round-15 / Phase S — fired AFTER a subagent run. Non-decisional;
    *  hooks typically forward result to a notification channel.

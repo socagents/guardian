@@ -20,7 +20,7 @@ Why a store (vs. inline in code):
 
     AgentDefinition {
       id              uuid
-      name            human-friendly identifier ("red-team-emulator")
+      name            human-friendly identifier ("case-triage")
       description     one-line operator-facing summary
       system_prompt   the system instruction the subagent runs with;
                       the parent's system prompt is NOT inherited

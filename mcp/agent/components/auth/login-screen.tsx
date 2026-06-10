@@ -16,15 +16,11 @@
  *     shape but the original LoginScreen here checked `data.success`.
  *     This file uses the v0.4.0 shape.
  *  3. Branding + copy: "Spark AI" / "Powered by Claude, GPT-4o, …"
- *     replaced with Guardian-relevant. v0.4.0 used "Powered by [Cortex
- *     XSIAM, CALDERA, Gemini, MCP, Vertex AI, MITRE ATT&CK]" framing.
- *     v0.17.39 switched the framing from third-party brands ("powered
- *     by") to first-person capabilities ("Guardian can [simulate logs,
- *     simulate attacks, create workers, send logs, validate detections,
- *     orchestrate workflows]") — operator's call: the brand-name cycle
- *     suggested Guardian was a thin shim over those products; the
- *     capability cycle communicates what Guardian actually does for
- *     them.
+ *     replaced with Guardian-relevant first-person capabilities
+ *     ("Guardian can [investigate incidents, run XQL hunts, …]") —
+ *     operator's call: a brand-name cycle ("powered by …") suggested
+ *     Guardian was a thin shim over those products; the capability
+ *     cycle communicates what Guardian actually does for them.
  *
  * # Interface contract (unchanged from pre-v0.4.0)
  *
@@ -199,37 +195,34 @@ export const LoginScreen = ({ onSuccess }: { onSuccess: () => void }) => {
                 </div>
 
                 {/* Description column.
-                  * v0.17.39 — "Guardian can [FlippingText]" framing
-                  * (was "Powered by …" through v0.17.38). Same
-                  * typewriter cycle, same cyan color, same 6-item
-                  * cycle length — just swapped to first-person
-                  * capabilities. The cycle reads as "Guardian can
-                  * simulate logs · Guardian can simulate attacks · …"
-                  * so the operator sees what Guardian does rather
-                  * than what it sits on top of. */}
+                  * "Guardian can [FlippingText]" framing — first-person
+                  * capabilities on a typewriter cycle (cyan, 6-item
+                  * cycle). The cycle reads as "Guardian can investigate
+                  * incidents · Guardian can run XQL hunts · …" so the
+                  * operator sees what Guardian does rather than what
+                  * it sits on top of. */}
                 <div className="md:pl-2 md:pt-1">
                   <p className="text-lg font-semibold text-slate-200">
                     Guardian can{" "}
                     <FlippingText
                       words={[
-                        "simulate logs",
-                        "simulate attacks",
-                        "create workers",
-                        "send logs",
-                        "validate detections",
-                        "run workflows",
+                        "investigate incidents",
+                        "run XQL hunts",
+                        "enrich XDR cases",
+                        "scope impacted assets",
+                        "gather evidence",
+                        "orchestrate response",
                       ]}
                       className="text-cyan-300"
                     />
                   </p>
                   <p className="mt-3 text-sm leading-6 text-slate-300">
-                    Continuous SOC simulation. Synthetic security log
-                    generation.
+                    AI incident response for Cortex XSIAM and XSOAR.
                     <br />
-                    Scenario-based MITRE ATT&CK telemetry across
-                    firewall, EDR, NDR, SaaS.
+                    Evidence-grounded investigations — XQL queries, case
+                    enrichment, asset context.
                     <br />
-                    AI-orchestrated red/blue workflows with full audit
+                    Orchestrated response workflows with a full audit
                     trail.
                   </p>
                 </div>

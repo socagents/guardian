@@ -386,7 +386,7 @@ class PluginLoader:
         agent_definition_store: Any,
     ) -> bool:
         """Apply one agent definition contribution. The entry can be:
-          - a relative path string ("agents/red-team-emulator.yaml")
+          - a relative path string ("agents/case-triage.yaml")
             pointing to a YAML file under the plugin dir
           - an inline dict matching the AgentDefinition shape
 

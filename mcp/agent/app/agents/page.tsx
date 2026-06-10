@@ -157,10 +157,10 @@ export default function AgentsPage() {
               Add an agent above, OR drop a plugin under{" "}
               <code className="font-mono">bundles/spark/plugins/</code>{" "}
               with an{" "}
-              <code className="font-mono">agents:</code> block. The
-              reference plugin <code className="font-mono">example-vendor</code>{" "}
-              ships three: red-team-emulator, blue-team-validator,
-              coverage-reporter.
+              <code className="font-mono">agents:</code> block — e.g.
+              a case-triage subagent scoped to{" "}
+              <code className="font-mono">xsiam_get_*</code>, or an
+              evidence-collector with read-only XDR tools.
             </p>
           </div>
         ) : (
@@ -429,7 +429,7 @@ function AgentEditor({
             onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
             disabled={!isNew}
             className="input-base font-mono"
-            placeholder="e.g. red-team-emulator"
+            placeholder="e.g. case-triage"
           />
         </Field>
 

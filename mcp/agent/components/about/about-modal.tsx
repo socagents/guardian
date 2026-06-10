@@ -137,11 +137,12 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
               About this product
             </p>
             <p className="text-[13px] text-on-surface-variant leading-relaxed">
-              Continuous SOC simulation platform: synthetic security log
-              generation, scenario-based MITRE ATT&amp;CK telemetry, and
-              AI-orchestrated red/blue workflows over MCP. Ships as a
-              Docker Compose stack (guardian-agent, guardian-mcp,
-              xlog, caldera).
+              AI incident-response agent for Cortex XSIAM and XSOAR:
+              evidence-grounded investigations, XQL hunts, case
+              enrichment, and orchestrated response workflows over MCP.
+              Ships as a Docker Compose stack (guardian-agent,
+              guardian-browser, guardian-updater, per-instance
+              connector containers).
             </p>
           </section>
 
