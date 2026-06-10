@@ -1,0 +1,259 @@
+# =============================================================================
+# Agent Token Tracking Workflow
+# =============================================================================
+# Runs after agent workflows complete. Reads token usage logs from the runner
+# filesystem (each agent writes directly), generates daily summaries, and
+# checks budget alerts.
+#
+# IMPORTANT: This workflow does NOT download or merge artifacts. Each agent
+# workflow writes its token log entry directly to
+# $TOKEN_LOG_DIR/{agent}/{date}.jsonl on the self-hosted runner. The old
+# artifact merge was removed because it caused O(n²) processing hangs on
+# large Claude output streams (1.8MB+), blocking the runner for 10+ min.
+#
+# Triggers:
+#   - workflow_run (after planning, dispatch, review, deploy workflows)
+#   - Daily at 23:55 UTC (end-of-day summary)
+#
+# References:
+#   - workforce-orchestration.md §7 Token Budget Management
+#   - cicd-agent-integration.md §5 Token Tracking Workflow
+# =============================================================================
+
+name: Agent – Token Tracking
+
+on:
+  workflow_dispatch:                    # Manual trigger for testing
+
+  workflow_run:
+    workflows:
+      - "Agent – Planning"
+      - "Agent – Dispatch"
+      - "Agent – Review"
+      - "Agent – Deploy"
+    types: [completed]
+
+  schedule:
+    - cron: "55 23 * * *"              # Daily summary at 23:55 UTC
+
+# Only one token tracking run at a time. If a new one starts while the
+# previous is running, cancel the old one — the new run reads the same
+# logs from the runner filesystem, so no data is lost.
+concurrency:
+  group: kite-token-tracking
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+
+env:
+  TOKEN_LOG_DIR: /home/{{RUNNER_USER}}/kite-token-logs
+  # Daily invocation limits (must match other workflow files)
+  PLANNING_DAILY_LIMIT: {{LIMIT_PLANNING}}                 # agent-planning.yml
+  CLAUDE_CODE_DAILY_LIMIT: {{LIMIT_CODING}}              # agent-dispatch.yml (claude-code)
+  CODEX_CLI_DAILY_LIMIT: {{LIMIT_CODING}}               # agent-dispatch.yml (codex-cli)
+  REVIEW_DAILY_LIMIT: {{LIMIT_REVIEW}}                  # agent-review.yml
+  VALIDATION_DAILY_LIMIT: {{LIMIT_VALIDATION}}              # agent-design-validation.yml
+  DEPLOYMENT_DAILY_LIMIT: {{LIMIT_DEPLOY}}             # agent-deploy.yml
+  # Alert threshold (% of daily limit)
+  ALERT_THRESHOLD: 80
+
+jobs:
+  track:
+    name: Track Token Usage
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    # Skip tracking when the triggering workflow was cancelled (no useful data).
+    # This prevents noise from dispatch concurrency cancellations cascading here.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion != 'cancelled'
+    timeout-minutes: 3
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Artifact merge removed ─────────────────────────────────────
+      # Each agent workflow writes its token log entry directly to
+      # $TOKEN_LOG_DIR/{agent}/{date}.jsonl on the self-hosted runner.
+      # The old artifact download + merge was removed because:
+      #   - It downloaded ALL artifacts (including 1.8MB+ Claude output streams)
+      #   - Processed each JSONL line with jq + grep dedup → O(n²)
+      #   - Blocked the runner for 10+ minutes per run
+      #   - Multiple instances queued up, starving dispatch of runner time
+      # Direct logging is the canonical source. No data is lost.
+
+      # ── 3. Generate daily summary ──────────────────────────────────────
+      - name: Generate daily summary
+        id: summary
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+          SUMMARY_DIR="${TOKEN_LOG_DIR}/summaries"
+          mkdir -p "$SUMMARY_DIR"
+
+          # Aggregate usage per agent for today
+          SUMMARY=$(cat <<SCRIPT_EOF
+          import json, os, glob
+          from collections import defaultdict
+
+          log_dir = os.environ["TOKEN_LOG_DIR"]
+          today = "${TODAY}"
+          agents = defaultdict(int)
+
+          for agent_dir in glob.glob(f"{log_dir}/*/"):
+              agent = os.path.basename(agent_dir.rstrip("/"))
+              if agent == "summaries":
+                  continue
+              log_file = f"{agent_dir}{today}.jsonl"
+              if os.path.exists(log_file):
+                  with open(log_file) as f:
+                      for line in f:
+                          try:
+                              data = json.loads(line)
+                              agents[agent] += data.get("tokens_used", 0)
+                          except json.JSONDecodeError:
+                              pass
+
+          total = sum(agents.values())
+          summary = {
+              "date": today,
+              "total_tokens": total,
+              "by_agent": dict(agents),
+              "generated_at": "${TODAY}T23:55:00Z"
+          }
+          print(json.dumps(summary, indent=2))
+          SCRIPT_EOF
+          )
+
+          if command -v python3 &>/dev/null; then
+            echo "$SUMMARY" | python3 > "${SUMMARY_DIR}/${TODAY}.json"
+          else
+            # Fallback: shell-based summary
+            TOTAL=0
+            echo "{" > "${SUMMARY_DIR}/${TODAY}.json"
+            echo "  \"date\": \"${TODAY}\"," >> "${SUMMARY_DIR}/${TODAY}.json"
+            echo "  \"by_agent\": {" >> "${SUMMARY_DIR}/${TODAY}.json"
+            FIRST=true
+            for AGENT_DIR in "${TOKEN_LOG_DIR}"/*/; do
+              AGENT=$(basename "$AGENT_DIR")
+              [ "$AGENT" = "summaries" ] && continue
+              LOG="${AGENT_DIR}${TODAY}.jsonl"
+              if [ -f "$LOG" ]; then
+                AGENT_TOTAL=$(jq -s '[.[].tokens_used] | add // 0' "$LOG")
+                TOTAL=$((TOTAL + AGENT_TOTAL))
+                if [ "$FIRST" = true ]; then
+                  FIRST=false
+                else
+                  echo "," >> "${SUMMARY_DIR}/${TODAY}.json"
+                fi
+                printf "    \"%s\": %d" "$AGENT" "$AGENT_TOTAL" >> "${SUMMARY_DIR}/${TODAY}.json"
+              fi
+            done
+            echo "" >> "${SUMMARY_DIR}/${TODAY}.json"
+            echo "  }," >> "${SUMMARY_DIR}/${TODAY}.json"
+            echo "  \"total_tokens\": ${TOTAL}" >> "${SUMMARY_DIR}/${TODAY}.json"
+            echo "}" >> "${SUMMARY_DIR}/${TODAY}.json"
+          fi
+
+          cat "${SUMMARY_DIR}/${TODAY}.json"
+          echo "summary_file=${SUMMARY_DIR}/${TODAY}.json" >> "$GITHUB_OUTPUT"
+
+      # ── 5. Check budget alerts ─────────────────────────────────────────
+      - name: Check budget alerts
+        id: alerts
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+          ALERTS=""
+
+          check_limit() {
+            local LOG_NAME="$1"
+            local LIMIT="$2"
+            local DISPLAY_NAME="${3:-$1}"
+            local LOG="${TOKEN_LOG_DIR}/${LOG_NAME}/${TODAY}.jsonl"
+
+            if [ -f "$LOG" ]; then
+              USED=$(wc -l < "$LOG")
+              PCT=$((USED * 100 / LIMIT))
+              if [ "$PCT" -ge "$ALERT_THRESHOLD" ]; then
+                ALERTS="${ALERTS}⚠️ **${DISPLAY_NAME}**: ${USED}/${LIMIT} invocations (${PCT}%)\n"
+              fi
+            fi
+          }
+
+          check_limit "planning-agent" "$PLANNING_DAILY_LIMIT"
+          check_limit "claude-code" "$CLAUDE_CODE_DAILY_LIMIT" "coding-claude"
+          check_limit "codex-cli" "$CODEX_CLI_DAILY_LIMIT" "coding-codex"
+          check_limit "review-agent" "$REVIEW_DAILY_LIMIT"
+          check_limit "validation-agent" "$VALIDATION_DAILY_LIMIT"
+          check_limit "deployment-agent" "$DEPLOYMENT_DAILY_LIMIT"
+
+          if [ -n "$ALERTS" ]; then
+            echo "has_alerts=true" >> "$GITHUB_OUTPUT"
+            # Write alerts to a file to avoid shell interpolation issues
+            printf '%b' "$ALERTS" > /tmp/budget-alerts.txt
+          else
+            echo "has_alerts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── 6. Post budget alert issue ─────────────────────────────────────
+      - name: Post budget alert
+        if: steps.alerts.outputs.has_alerts == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+
+          # Check if an alert issue already exists for today
+          EXISTING=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --label "reason:budget" \
+            --search "Budget Alert ${TODAY}" \
+            --json number \
+            --limit 1 \
+            --jq 'length')
+
+          if [ "$EXISTING" = "0" ]; then
+            ALERT_BODY=$(cat /tmp/budget-alerts.txt)
+            ISSUE_URL=$(gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Budget Alert ${TODAY}" \
+              --label "needs-human,reason:budget" \
+              -F - <<EOF
+          <!-- AGENT_MSG agent=token-tracker action=budget-alert -->
+          ## Daily Invocation Limit Alert
+
+          The following agents are approaching their daily invocation limit:
+
+          ${ALERT_BODY}
+
+          **Action Required:** Review usage and decide whether to:
+          1. Allow agents to continue (they will pause at 100%)
+          2. Increase the daily limit for specific agents
+          3. Investigate high-usage patterns
+          EOF
+            )
+
+            # Trigger Slack escalation notification for the new budget alert
+            ALERT_NUMBER=$(echo "$ISSUE_URL" | grep -oP '\d+$' || true)
+            if [ -n "$ALERT_NUMBER" ]; then
+              gh workflow run agent-slack-notify.yml \
+                --repo "$GITHUB_REPOSITORY" \
+                -f escalation_issue="$ALERT_NUMBER" || true
+            fi
+          fi
+
+      # ── 7. Token logs persist on host ──────────────────────────────────
+      # Logs live at /home/{{RUNNER_USER}}/kite-token-logs/ on the self-hosted runner.
+      # No git commit needed — the host filesystem persists across runs.
+      - name: Verify token logs on host
+        run: |
+          echo "Token logs stored at: ${TOKEN_LOG_DIR}"
+          ls -la "${TOKEN_LOG_DIR}"/ 2>/dev/null || echo "No token logs yet"

@@ -1,0 +1,68 @@
+[
+  {
+    "_comment": "STATUS LABELS — track the spec-driven workflow lifecycle.",
+    "_comment2": "Color progression follows lifecycle: gray (early) → green (testing) → orange/purple (release).",
+    "_comment3": "See docs/CICD.md § Spec-driven workflow for full lifecycle."
+  },
+  { "name": "status:spec",                "color": "C5CAD3", "description": "Spec being drafted; not yet approved for implementation" },
+  { "name": "status:spec-approved",       "color": "5B9BD5", "description": "Operator agreed scope; implementation can begin" },
+  { "name": "status:in-progress",         "color": "FBCA04", "description": "Implementation underway; commits reference this issue" },
+  { "name": "status:dev-built",           "color": "1D76DB", "description": "Dev image published to GHCR; dev-latest prerelease updated" },
+  { "name": "status:ready-for-testing",   "color": "0E8A16", "description": "Agent's headless smoke (API + UI) passed; operator's hands-on smoke pending. ISSUE STAYS OPEN — see CLAUDE.md ready-for-testing discipline" },
+  { "name": "status:testing-complete",    "color": "0E8A16", "description": "Operator finished manual smoke test on phantom-vm" },
+  { "name": "status:release-approved",    "color": "F4B400", "description": "Operator approved customer release (chat or label)" },
+  { "name": "status:released",            "color": "5319E7", "description": "Released to customers; issue closed" },
+
+  {
+    "_comment": "COMPONENT LABELS — track which module/area the issue touches.",
+    "_comment2": "Multiple allowed per issue.",
+    "_comment3": "Mirrors the per-service path-filter contract in docs/CICD.md."
+  },
+  { "name": "component:agent",       "color": "1F6FEB", "description": "phantom-agent (mcp/agent/** or bundles/spark/**)" },
+  { "name": "component:xlog",        "color": "1F6FEB", "description": "phantom-xlog (xlog/**)" },
+  { "name": "component:caldera",     "color": "1F6FEB", "description": "phantom-caldera (third_party/caldera/** submodule)" },
+  { "name": "component:connectors",  "color": "1F6FEB", "description": "per-instance connectors (bundles/spark/connectors/** or phantom-connector-runtime/**)" },
+  { "name": "component:installer",   "color": "1F6FEB", "description": "phantom-installer template / build script (installer/**)" },
+  { "name": "component:workflows",   "color": "1F6FEB", "description": "GitHub Actions workflows + composite actions (.github/workflows/, .github/actions/)" },
+  { "name": "component:docs",        "color": "1F6FEB", "description": "docs/, CLAUDE.md, CHANGELOG.md, release-notes.ts" },
+  { "name": "component:help-pages",  "color": "1F6FEB", "description": "in-product help (mcp/agent/app/help/**)" },
+  { "name": "component:journeys",    "color": "1F6FEB", "description": "user journeys (mcp/agent/lib/journeys.ts)" },
+
+  {
+    "_comment": "AREA LABELS — feature-aligned, complement component labels (v0.5.18+).",
+    "_comment2": "Zero or more per issue. Orthogonal to component:* (build-aligned).",
+    "_comment3": "An issue answers TWO questions: 'which build workflow fires' (component:*) + 'which feature area' (area:*).",
+    "_comment4": "Color #14B8A6 (teal) — distinct from component blue + scenario multi-color.",
+    "_comment5": "See docs/CICD.md § Spec-driven workflow → Area dimension."
+  },
+  { "name": "area:chat",            "color": "14B8A6", "description": "/ chat UI · streaming · conversation surface" },
+  { "name": "area:skills",          "color": "14B8A6", "description": "/skills page · skills library · runtime" },
+  { "name": "area:memory",          "color": "14B8A6", "description": "agent memory store · context handling" },
+  { "name": "area:knowledge",       "color": "14B8A6", "description": "knowledge base · RAG · vector index" },
+  { "name": "area:jobs",            "color": "14B8A6", "description": "/jobs page · job scheduler · definitions · runs" },
+  { "name": "area:instances",       "color": "14B8A6", "description": "/instances page · connector instance lifecycle" },
+  { "name": "area:approvals",       "color": "14B8A6", "description": "approval queue · approval-flow UX · bypass-approvals semantics" },
+  { "name": "area:api-keys",        "color": "14B8A6", "description": "/settings/api-keys · API key create / rotate / revoke" },
+  { "name": "area:observability",   "color": "14B8A6", "description": "/observability/* (logs · events · traces · metrics · cost · runtime-events · pipeline · connectors)" },
+  { "name": "area:settings",        "color": "14B8A6", "description": "/settings page + sub-pages" },
+  { "name": "area:models",          "color": "14B8A6", "description": "model selection · per-job model override · model config" },
+  { "name": "area:providers",       "color": "14B8A6", "description": "/providers page · Vertex AI / Gemini provider config" },
+  { "name": "area:personality",     "color": "14B8A6", "description": "/settings/personality · agent personality customization" },
+  { "name": "area:backup-restore",  "color": "14B8A6", "description": "/settings/backup-restore · export / import flows" },
+  { "name": "area:rest-api",        "color": "14B8A6", "description": "/api/agent/* REST surface (auth · schemas · contracts)" },
+  { "name": "area:profile",         "color": "14B8A6", "description": "/profile page · password change flow" },
+  { "name": "area:factory-reset",   "color": "14B8A6", "description": "phantom-factory-reset script + flow" },
+  { "name": "area:password-reset",  "color": "14B8A6", "description": "phantom-reset-admin-password script + in-container CLI" },
+  { "name": "area:auth",            "color": "14B8A6", "description": "login · session · phantom_auth cookie · SecretStore password hash" },
+
+  {
+    "_comment": "SCENARIO LABELS — classify per docs/CICD.md § Change scenarios.",
+    "_comment2": "Exactly one per issue. Colors match the SVG diagram.",
+    "_comment3": "Determines versioning (patch vs major) + customer experience + volume policy."
+  },
+  { "name": "scenario:1",           "color": "22C55E", "description": "Code-only · patch bump · volumes preserved · customer uses UI Update OR re-downloads installer" },
+  { "name": "scenario:2",           "color": "2563EB", "description": "Installer change · patch bump · volumes preserved · customer downloads new installer" },
+  { "name": "scenario:3",           "color": "DC2626", "description": "Backwards-incompatible · MAJOR bump · volumes wiped (with backup) · customer types UPGRADE" },
+  { "name": "scenario:docs-only",   "color": "94A3B8", "description": "Docs only — rides along with next code release (no separate tag unless substantial)" },
+  { "name": "scenario:trivial",     "color": "E2E8F0", "description": "Typo / comment / whitespace / formatting only — bypasses spec ceremony" }
+]

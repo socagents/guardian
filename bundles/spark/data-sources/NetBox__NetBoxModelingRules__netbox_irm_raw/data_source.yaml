@@ -1,0 +1,144 @@
+schema_version: 1
+id: NetBox
+pack_name: NetBox
+rule_name: NetBoxModelingRules
+dataset_name: netbox_irm_raw
+vendor: NetBox
+product: NetBox
+description: This is the NetBox event collector integration for XSIAM
+categories:
+- Analytics & SIEM
+version: 1.0.25
+origin: bundle
+author: phantom-bundle
+uploaded_by: null
+created_at: '2026-05-23T09:26:17Z'
+updated_at: '2026-05-23T09:26:17Z'
+logo:
+  mime_type: image/svg+xml
+  data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgNjAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIG1lZXQiPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgZm9udC1mYW1pbHk9IkludGVyLCAtYXBwbGUtc3lzdGVtLCBCbGlua01hY1N5c3RlbUZvbnQsIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzIiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyQjZDQjAiPk5ldEJveDwvdGV4dD48L3N2Zz4=
+  source: phantom-bundle (v0.13.0 migration)
+  license: MIT
+  fidelity: branded
+formats:
+- SYSLOG
+- CEF
+- JSON
+is_rawlog_only: false
+fields:
+- name: action
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: value
+    (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: assigned_object
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: name (each
+    key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: assigned_object_type
+  type: string_short
+  description: Type/category classifier emitted by NetBox. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: authentication
+- name: changed_object
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: display
+    (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: changed_object_id
+  type: string_short
+  description: Opaque identifier emitted by NetBox. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: net-f644b106
+- name: changed_object_type
+  type: string_short
+  description: Type/category classifier emitted by NetBox. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: authentication
+- name: comments
+  type: string
+  description: Vendor-emitted field 'Comments'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_comments
+- name: display
+  type: string
+  description: Vendor-emitted field 'Display'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_display
+- name: kind
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: value
+    (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: prechange_data
+  type: json
+  description: 'Destination resource before name. JSON object with keys: name (each
+    key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: request_id
+  type: string_short
+  description: Unique identifier — assigned by NetBox per event. Short opaque token,
+    typically without whitespace; max ~64 chars.
+  example: req-5e6935cc-0b7
+- name: user
+  type: string
+  description: User account associated with the event. Free-form text; may contain
+    whitespace and punctuation.
+  example: jdoe
+- name: user_name
+  type: user
+  description: Human-readable name as displayed by NetBox. Account name as the vendor
+    reports it — login name, UPN, or sAMAccountName; no domain prefix unless vendor
+    emits one.
+  example: jsmith
+- name: action.value
+  type: string
+  description: Vendor-emitted field 'Action › value'. Leaf of the 'action' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_value
+- name: assigned_object.name
+  type: string
+  description: Human-readable name as displayed by NetBox. Free-form text; may contain
+    whitespace and punctuation.
+  example: sample_name
+- name: changed_object.display
+  type: string
+  description: Vendor-emitted field 'Changed object › display'. Leaf of the 'changed_object'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_display
+- name: kind.value
+  type: string
+  description: Vendor-emitted field 'Kind › value'. Leaf of the 'kind' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_value
+- name: prechange_data.name
+  type: string
+  description: Human-readable name as displayed by NetBox. Free-form text; may contain
+    whitespace and punctuation.
+  example: sample_name
+use_cases:
+- Network
+how_to_use: |
+  ## NetBox NetBox → Cortex XSIAM (dataset `netbox_irm_raw`)
+  
+    **Routing** — the broker lowercases the CEF/syslog header `vendor`/`product`, replaces
+    non-alphanumerics with `_`, and appends `_raw` to choose the dataset (target: `netbox_irm_raw`).
+  
+    **Required CEF header for XSIAM** — the header must normalize to `netbox_irm`. The marketplace pack's display name `NetBox` / `NetBox` normalizes to `netbox_netbox_raw`, a **different dataset** (vendor rename / legacy CEF identity), so use the vendor's actual CEF `deviceVendor`/`deviceProduct` that yields `netbox_irm` and confirm which dataset the events land in.
+  
+    **Ingestion shape**: **JSON-native.** The modeling rule reads nested JSON (e.g. `$.value`). CEF/syslog routes + lands and the broker extracts top-level columns; the nested reads need the composite present, so Phantom's worker JSON-stringifies `type: json` composites onto the wire (keep the dotted-leaf fields).
+  
+    - **Modeling-rule gate**: `user = null` — seed that field with an accepted value or the rule drops the row (XDM stays 0).
+  
+    **XDM mapping**: ~9 fields mapped to the unified data model (`xdm.*`), including: `xdm.alert.subcategory`, `xdm.event.description`, `xdm.event.id`, `xdm.event.operation`, `xdm.source.user.username`, `xdm.target.resource.id`.
+  
+    **Operator setup**: This data source has typed-column data that doesn't look like CEF (columns are camelCase API fields, JSON sub-objects, etc.). Most likely arrives via the XSIAM HTTP Collector with a source tag mapped to vendor=`NetBox`, product=`NetBox`, or via a vendor-specific XDR connector pull. Phantom can POST JSON to the HTTP collector; the operator must configure the collector's source tag to land events in this dataset.
+  
+    **Status**: Reverse-engineered 2026-06-04 from the parsing/modeling rules — routing, gate, and field
+    inventory documented. **NOT yet XDM-validated on a live tenant** (no `validated` pill); validate by
+    streaming a CEF batch and confirming a rich `xdm.*` count over a wide window.
+  
+    **Verify** (once the dataset is XDM-bound, wide ≥7d window):
+  
+        config timeframe = 30d | datamodel dataset = netbox_irm_raw | sort desc _time | fields xdm.* | limit 20

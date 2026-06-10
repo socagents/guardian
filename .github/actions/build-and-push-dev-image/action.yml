@@ -1,0 +1,148 @@
+name: Build and push dev image
+description: >
+  Builds a single Phantom service image with docker build, retags it for
+  GHCR with the dev tag (overwritten on every push to main), pushes it
+  to ghcr.io, captures the resulting digest, and surfaces the digest as
+  an output for downstream jobs. Shared by build-xlog.yml,
+  build-agent.yml, build-caldera.yml so the build + push + digest-capture
+  mechanics live in one place — the mechanical enforcement of
+  CLAUDE.md's "only image tag differs" rule. See input/output
+  descriptions on each field below.
+
+inputs:
+  service-name:
+    description: 'Service name (phantom-xlog, phantom-agent, phantom-caldera)'
+    required: true
+  build-context:
+    description: 'Path passed to docker build as the build context'
+    required: true
+  dockerfile-path:
+    description: 'Optional Dockerfile path (-f flag); leave blank to use the context'
+    required: false
+    default: ''
+  build-args:
+    description: 'Multi-line KEY=VALUE list for --build-arg (one per line)'
+    required: false
+    default: ''
+  registry:
+    description: 'Container registry hostname'
+    required: false
+    default: 'ghcr.io'
+  owner:
+    description: 'GitHub org / user (the image namespace component)'
+    required: true
+  github-token:
+    description: 'GitHub token for docker login (typically secrets.GITHUB_TOKEN)'
+    required: true
+  github-actor:
+    description: 'GitHub actor for docker login (typically github.actor)'
+    required: true
+  pull-policy:
+    description: >
+      Whether to pass --pull to docker build. Default 'always' guarantees
+      first-party base layers (python:3.12-slim, node:20-alpine, etc.)
+      come fresh so a stale runner cache can't ship a base image with
+      known CVEs. Set to 'never' ONLY for builds whose FROM is a
+      Phantom-own image just built locally by a prior job in the same
+      workflow run (e.g. per-connector builds whose base is
+      phantom-connector-runtime:dev — see #38). The chronic 401 those
+      hit is because --pull races GHCR's per-version prerelease-
+      association check; staying on the local layer cache avoids it.
+    required: false
+    default: 'always'
+
+outputs:
+  digest:
+    description: 'sha256:... digest of the pushed image'
+    value: ${{ steps.capture-digest.outputs.digest }}
+  ref:
+    description: 'Full digest-pinned image ref'
+    value: ${{ steps.capture-digest.outputs.ref }}
+
+runs:
+  using: composite
+  steps:
+    - name: Login to GHCR
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        GHCR_TOKEN: ${{ inputs.github-token }}
+        GHCR_USER: ${{ inputs.github-actor }}
+      run: |
+        # Pipe the token via stdin so it never appears in argv. Same
+        # pattern release.yml has used since v0.3.0.
+        echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$GHCR_USER" --password-stdin
+
+    - name: Build
+      shell: bash
+      env:
+        IMG: ${{ inputs.registry }}/${{ inputs.owner }}/${{ inputs.service-name }}
+        CONTEXT: ${{ inputs.build-context }}
+        DOCKERFILE: ${{ inputs.dockerfile-path }}
+        BUILD_ARGS: ${{ inputs.build-args }}
+        PULL_POLICY: ${{ inputs.pull-policy }}
+      run: |
+        # v0.5.60 (issue #38) — pull-policy honors the input. Default
+        # 'always' keeps --pull for first-party base layers (CVE-fresh).
+        # 'never' skips --pull so per-connector builds inherit the
+        # locally-cached phantom-connector-runtime:dev base their
+        # prior build-runtime job just produced, avoiding the GHCR
+        # HEAD-request 401 race against per-version prerelease
+        # association. See action header + #38 for full rationale.
+        cmd=(docker build -t "$IMG:dev")
+        if [[ "$PULL_POLICY" != "never" ]]; then
+          cmd+=(--pull)
+        fi
+        if [[ -n "$DOCKERFILE" ]]; then
+          cmd+=(-f "$DOCKERFILE")
+        fi
+        # Multi-line build-args support: split on newlines, prepend
+        # each with --build-arg. Empty / whitespace-only lines are
+        # ignored so a trailing newline in inputs is harmless.
+        if [[ -n "$BUILD_ARGS" ]]; then
+          while IFS= read -r line; do
+            [[ -z "${line// }" ]] && continue
+            cmd+=(--build-arg "$line")
+          done <<< "$BUILD_ARGS"
+        fi
+        cmd+=("$CONTEXT")
+        echo "::group::docker build (pull-policy=$PULL_POLICY)"
+        printf '+ %q ' "${cmd[@]}"; echo
+        "${cmd[@]}"
+        echo "::endgroup::"
+
+    - name: Push
+      shell: bash
+      env:
+        IMG: ${{ inputs.registry }}/${{ inputs.owner }}/${{ inputs.service-name }}
+      run: |
+        # Use the shared push-with-retry script that retry-on-flaky-
+        # network behavior we've battle-tested on this runner since
+        # v0.3.0. Cloud NAT occasionally throttles concurrent egress
+        # to ghcr.io during large blob uploads — without retry, those
+        # transient errors fail the workflow.
+        .github/scripts/push-with-retry.sh "$IMG:dev"
+
+    - name: Capture digest
+      id: capture-digest
+      shell: bash
+      env:
+        IMG: ${{ inputs.registry }}/${{ inputs.owner }}/${{ inputs.service-name }}
+      run: |
+        # After push, the local docker daemon's image record carries
+        # the registry digest under RepoDigests. We parse the FIRST
+        # entry that matches our registry/owner/service to extract
+        # the sha256:... portion. This is the same pattern release.yml
+        # uses for its manifest-capture step.
+        digest=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$IMG:dev" \
+          | grep "^${IMG}@" | head -1 | cut -d@ -f2)
+        if [[ -z "$digest" || "$digest" != sha256:* ]]; then
+          echo "ERROR: could not capture digest for $IMG:dev (RepoDigests output:" >&2
+          docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$IMG:dev" >&2
+          echo ")" >&2
+          exit 1
+        fi
+        ref="${IMG}@${digest}"
+        echo "digest=$digest" >> "$GITHUB_OUTPUT"
+        echo "ref=$ref"       >> "$GITHUB_OUTPUT"
+        echo "::notice::$IMG:dev → $digest"

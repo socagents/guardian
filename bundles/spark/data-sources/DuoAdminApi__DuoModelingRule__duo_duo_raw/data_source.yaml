@@ -1,0 +1,308 @@
+schema_version: 1
+id: DuoAdminApi
+pack_name: DuoAdminApi
+rule_name: DuoModelingRule
+dataset_name: duo_duo_raw
+vendor: Duo Security
+product: DuoAdminApi
+description: 'DUO for admins.
+
+  Must have access to the admin api in order to use this'
+categories:
+- Identity and Access Management
+version: 4.0.33
+origin: bundle
+author: phantom-bundle
+uploaded_by: null
+created_at: '2026-05-23T09:26:17Z'
+updated_at: '2026-05-23T09:26:17Z'
+logo:
+  mime_type: image/svg+xml
+  data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMTYgNjAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIG1lZXQiPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgZm9udC1mYW1pbHk9IkludGVyLCAtYXBwbGUtc3lzdGVtLCBCbGlua01hY1N5c3RlbUZvbnQsIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzIiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMzNTdBNTkiPkR1byBTZWN1cml0eTwvdGV4dD48L3N2Zz4=
+  source: phantom-bundle (v0.13.0 migration)
+  license: MIT
+  fidelity: branded
+formats:
+- SYSLOG
+- CEF
+- JSON
+is_rawlog_only: false
+fields:
+- name: _id
+  type: string_short
+  description: Opaque identifier emitted by Duo Security. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: e4511be6-977b-5e86-a10b-24fb481757dc
+- name: access_device
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: browser,
+    browser_version, epkey, hostname, ip, location, os, os_version (each key defined
+    as a dotted-path leaf below).'
+  example: '{}'
+- name: action
+  type: string
+  description: Action taken by the vendor's enforcement engine. Free-form text; may
+    contain whitespace and punctuation.
+  example: allow
+- name: adaptive_trust_assessments
+  type: string
+  description: Vendor-emitted field 'Adaptive trust assessments'. Free-form text;
+    may contain whitespace and punctuation.
+  example: sample_assessments
+- name: alias
+  type: string
+  description: Vendor-emitted field 'Alias'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_alias
+- name: application
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: key, name
+    (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: auth_device
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: ip, location,
+    name (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: context
+  type: string
+  description: Vendor-emitted field 'Context'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_context
+- name: description
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: email,
+    factor, ip_address, role (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: email
+  type: email
+  description: Email address — RFC 5322 `local@domain`. RFC 5322 `local@domain`; one
+    address only.
+  example: user@example.com
+- name: event_type
+  type: string
+  description: Event type or category as the vendor classifies it. Free-form text;
+    may contain whitespace and punctuation.
+  example: authentication
+- name: eventtype
+  type: string
+  description: Event type or category as the vendor classifies it. Free-form text;
+    may contain whitespace and punctuation.
+  example: authentication
+- name: factor
+  type: string
+  description: Vendor-emitted field 'Factor'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_factor
+- name: host
+  type: host
+  description: Hostname or FQDN as reported by Duo Security. Hostname or fully-qualified
+    domain name (RFC 1035 dotted labels); no protocol prefix.
+  example: host01.example.com
+- name: integration
+  type: string
+  description: Vendor-emitted field 'Integration'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_integration
+- name: object
+  type: string
+  description: Vendor-emitted field 'Object'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_object
+- name: ood_software
+  type: string
+  description: Vendor-emitted field 'Ood software'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_software
+- name: phone
+  type: host
+  description: Vendor-emitted field 'Phone'. Hostname or fully-qualified domain name
+    (RFC 1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: reason
+  type: string
+  description: Reason/explanation accompanying the action or outcome. Free-form text;
+    may contain whitespace and punctuation.
+  example: normal_operation
+- name: result
+  type: string
+  description: Authentication result (success/failure/fraud). Free-form text; may
+    contain whitespace and punctuation.
+  example: success
+- name: telephony_id
+  type: string_short
+  description: Opaque identifier emitted by Duo Security. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: duo-59b189aa
+- name: txid
+  type: string
+  description: Vendor-emitted field 'Txid'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_txid
+- name: type
+  type: string_short
+  description: Type/category classifier emitted by Duo Security. Short opaque token,
+    typically without whitespace; max ~64 chars.
+  example: authentication
+- name: user
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: groups,
+    key, name (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: username
+  type: user
+  description: User account associated with the event. Account name as the vendor
+    reports it — login name, UPN, or sAMAccountName depending on the source; no domain
+    prefix unless the vendor emits one.
+  example: jsmith
+- name: access_device.browser
+  type: string
+  description: Vendor-emitted field 'Access device › browser'. Leaf of the 'access_device'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_browser
+- name: access_device.browser_version
+  type: string_short
+  description: Version string of the emitting component. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: 1.0.0
+- name: access_device.epkey
+  type: string
+  description: Vendor-emitted field 'Access device › epkey'. Leaf of the 'access_device'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_epkey
+- name: access_device.hostname
+  type: host
+  description: Hostname or FQDN as reported by Duo Security. Hostname or fully-qualified
+    domain name (RFC 1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: access_device.ip
+  type: string
+  description: Vendor-emitted field 'Access device › ip'. Leaf of the 'access_device'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: 192.0.2.45
+- name: access_device.location.city
+  type: string
+  description: Vendor-emitted field 'Access device › location › city'. Leaf of the
+    'access_device' composite. Free-form text; may contain whitespace and punctuation.
+  example: San Francisco
+- name: access_device.location.country
+  type: country_code
+  description: Country (ISO 3166-1 alpha-2 code or descriptive label). ISO 3166-1
+    alpha-2 uppercase country code (e.g., US, DE, JP).
+  example: US
+- name: access_device.location.state
+  type: string
+  description: Vendor-emitted field 'Access device › location › state'. Leaf of the
+    'access_device' composite. Free-form text; may contain whitespace and punctuation.
+  example: CA
+- name: access_device.os
+  type: string
+  description: Vendor-emitted field 'Access device › os'. Leaf of the 'access_device'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: Linux
+- name: access_device.os_version
+  type: string_short
+  description: Version string of the emitting component. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: 1.0.0
+- name: application.key
+  type: string
+  description: Vendor-emitted field 'Application › key'. Leaf of the 'application'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_key
+- name: application.name
+  type: string
+  description: Human-readable name as displayed by Duo Security. Free-form text; may
+    contain whitespace and punctuation.
+  example: sample_name
+- name: auth_device.ip
+  type: string
+  description: Vendor-emitted field 'Auth device › ip'. Leaf of the 'auth_device'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: 192.0.2.45
+- name: auth_device.location.city
+  type: string
+  description: Vendor-emitted field 'Auth device › location › city'. Leaf of the 'auth_device'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: San Francisco
+- name: auth_device.location.country
+  type: country_code
+  description: Country (ISO 3166-1 alpha-2 code or descriptive label). ISO 3166-1
+    alpha-2 uppercase country code (e.g., US, DE, JP).
+  example: US
+- name: auth_device.location.state
+  type: string
+  description: Vendor-emitted field 'Auth device › location › state'. Leaf of the
+    'auth_device' composite. Free-form text; may contain whitespace and punctuation.
+  example: CA
+- name: auth_device.name
+  type: host
+  description: Human-readable name as displayed by Duo Security. Hostname or fully-qualified
+    domain name (RFC 1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: description.email
+  type: email
+  description: Email address — RFC 5322 `local@domain`. RFC 5322 `local@domain`; one
+    address only.
+  example: user@example.com
+- name: description.factor
+  type: string
+  description: Vendor-emitted field 'Description › factor'. Leaf of the 'description'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_factor
+- name: description.ip_address
+  type: string
+  description: Vendor-emitted field 'Description › ip address'. Leaf of the 'description'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: 192.0.2.45
+- name: description.role
+  type: string
+  description: Vendor-emitted field 'Description › role'. Leaf of the 'description'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: Admin
+- name: user.groups
+  type: string
+  is_array: true
+  description: Vendor-emitted field 'User › groups'. Leaf of the 'user' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_groups
+- name: user.key
+  type: string
+  description: Vendor-emitted field 'User › key'. Leaf of the 'user' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_key
+- name: user.name
+  type: user
+  description: Human-readable name as displayed by Duo Security. Account name as the
+    vendor reports it — login name, UPN, or sAMAccountName; no domain prefix unless
+    vendor emits one.
+  example: jsmith
+use_cases:
+- MFA
+how_to_use: |
+  ## Sending Cisco Duo logs to Cortex XSIAM
+
+  Phantom emits Duo's admin-API events as CEF over UDP to your XSIAM broker.
+
+  Required CEF header for XSIAM:
+
+  - vendor: `duo`
+  - product: `duo`
+
+  Broker derives -> `duo_duo_raw`.
+
+  MR pattern: GATED on `eventtype`. The modeling rule fires only when eventtype
+  is in {administrator, authentication, telephony}; the authentication branch is
+  richest. Seed it: observables_dict={"eventtype": ["authentication"]} (the
+  bundled eventtype example is already authentication). Pack the full field set
+  as CEF extensions.
+
+  Validated 2026-06-03 (#117): 54 XDM fields.
+
+  Verify XDM (use a WIDE >=7d window — synthetic _time may be in the past):
+
+      config timeframe = 30d | datamodel dataset = duo_duo_raw
+        | sort desc _time | fields xdm.* | limit 60
+
+  Count distinct non-null xdm.* keys (expect ~54).
+validated: true

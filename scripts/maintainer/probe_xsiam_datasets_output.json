@@ -1,0 +1,318 @@
+{
+  "total_datasets_in_tenant": 327,
+  "vendor_summary": [
+    {
+      "slug": "Okta__OktaModelingRules_2_0__okta_okta_raw",
+      "vendor": "Okta",
+      "product": "Okta",
+      "yaml_dataset": "okta_okta_raw",
+      "broker_derived": "okta_okta_raw",
+      "names_match": true,
+      "yaml_has_events": true,
+      "derived_has_events": true
+    },
+    {
+      "slug": "Okta__OktaModelingRules_2_0__okta_sso_raw",
+      "vendor": "Okta",
+      "product": "Okta",
+      "yaml_dataset": "okta_sso_raw",
+      "broker_derived": "okta_okta_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": true
+    },
+    {
+      "slug": "AlibabaActionTrail__AlibabaModelingRules__alibaba_action_trail_raw",
+      "vendor": "Alibaba ActionTrail",
+      "product": "Alibaba ActionTrail",
+      "yaml_dataset": "alibaba_action_trail_raw",
+      "broker_derived": "alibaba_actiontrail_alibaba_actiontrail_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    },
+    {
+      "slug": "AWS-CloudTrail__AWSCloudTrail__amazon_aws_raw",
+      "vendor": "Amazon Web Services",
+      "product": "AWS-CloudTrail",
+      "yaml_dataset": "amazon_aws_raw",
+      "broker_derived": "amazon_web_services_aws_cloudtrail_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": true
+    },
+    {
+      "slug": "AWS-SecurityHub__AWSSecurityHubModelingRules__aws_security_hub_raw",
+      "vendor": "Amazon Web Services",
+      "product": "AWS-SecurityHub",
+      "yaml_dataset": "aws_security_hub_raw",
+      "broker_derived": "amazon_web_services_aws_securityhub_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": true
+    },
+    {
+      "slug": "AWS_WAF__AWS_WAF__aws_waf_raw",
+      "vendor": "Amazon Web Services",
+      "product": "AWS_WAF",
+      "yaml_dataset": "aws_waf_raw",
+      "broker_derived": "amazon_web_services_aws_waf_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": true
+    },
+    {
+      "slug": "Jira__JiraEventCollector__atlassian_jira_raw",
+      "vendor": "Atlassian",
+      "product": "Jira",
+      "yaml_dataset": "atlassian_jira_raw",
+      "broker_derived": "atlassian_jira_raw",
+      "names_match": true,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    },
+    {
+      "slug": "ServiceNow__ServiceNow__servicenow_servicenow_raw",
+      "vendor": "ServiceNow",
+      "product": "ServiceNow",
+      "yaml_dataset": "servicenow_servicenow_raw",
+      "broker_derived": "servicenow_servicenow_raw",
+      "names_match": true,
+      "yaml_has_events": true,
+      "derived_has_events": true
+    },
+    {
+      "slug": "CyberArkPAS__CyberArkISP__cyberark_isp_raw",
+      "vendor": "CyberArk",
+      "product": "ISP",
+      "yaml_dataset": "cyberark_isp_raw",
+      "broker_derived": "cyberark_isp_raw",
+      "names_match": true,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    },
+    {
+      "slug": "MicrosoftEntraID__MicrosoftEntraID__msft_azure_ad_audit_raw",
+      "vendor": "Microsoft",
+      "product": "Entra ID",
+      "yaml_dataset": "msft_azure_ad_audit_raw",
+      "broker_derived": "microsoft_entra_id_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    },
+    {
+      "slug": "MicrosoftEntraID__MicrosoftEntraID__msft_azure_ad_raw",
+      "vendor": "Microsoft",
+      "product": "Entra ID",
+      "yaml_dataset": "msft_azure_ad_raw",
+      "broker_derived": "microsoft_entra_id_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_general_raw",
+      "vendor": "Microsoft",
+      "product": "Office365",
+      "yaml_dataset": "msft_o365_general_raw",
+      "broker_derived": "microsoft_office365_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": true
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_exchange_online_raw",
+      "vendor": "Microsoft",
+      "product": "Office365",
+      "yaml_dataset": "msft_o365_exchange_online_raw",
+      "broker_derived": "microsoft_office365_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": true
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_sharepoint_online_raw",
+      "vendor": "Microsoft",
+      "product": "Office365",
+      "yaml_dataset": "msft_o365_sharepoint_online_raw",
+      "broker_derived": "microsoft_office365_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": true
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_emails_raw",
+      "vendor": "Microsoft",
+      "product": "Office365",
+      "yaml_dataset": "msft_o365_emails_raw",
+      "broker_derived": "microsoft_office365_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": true
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_dlp_raw",
+      "vendor": "Microsoft",
+      "product": "Office365",
+      "yaml_dataset": "msft_o365_dlp_raw",
+      "broker_derived": "microsoft_office365_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": true
+    },
+    {
+      "slug": "qualys__QualysModelingRules__qualys_qualys_raw",
+      "vendor": "Qualys",
+      "product": "Qualys",
+      "yaml_dataset": "qualys_qualys_raw",
+      "broker_derived": "qualys_qualys_raw",
+      "names_match": true,
+      "yaml_has_events": true,
+      "derived_has_events": true
+    },
+    {
+      "slug": "ProofpointEmailSecurity__ProofpointEmailSecurity__proofpoint_email_security_raw",
+      "vendor": "Proofpoint",
+      "product": "Email Security",
+      "yaml_dataset": "proofpoint_email_security_raw",
+      "broker_derived": "proofpoint_email_security_raw",
+      "names_match": true,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    },
+    {
+      "slug": "ProofpointTAP__ProofpointTAPModelingRules__proofpoint_tap_raw",
+      "vendor": "Proofpoint",
+      "product": "TAP",
+      "yaml_dataset": "proofpoint_tap_raw",
+      "broker_derived": "proofpoint_tap_raw",
+      "names_match": true,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    },
+    {
+      "slug": "AzureFlowLogs__AzureFlowLogs__msft_azure_flowlogs_raw",
+      "vendor": "Microsoft",
+      "product": "Azure",
+      "yaml_dataset": "msft_azure_flowlogs_raw",
+      "broker_derived": "microsoft_azure_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    },
+    {
+      "slug": "AzureWAF__AzureWAF__msft_azure_waf_raw",
+      "vendor": "Microsoft",
+      "product": "Azure WAF",
+      "yaml_dataset": "msft_azure_waf_raw",
+      "broker_derived": "microsoft_azure_waf_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    },
+    {
+      "slug": "AzureKubernetesServices__AzureKubernetesServices__msft_azure_aks_raw",
+      "vendor": "Microsoft",
+      "product": "Azure Kubernetes Services",
+      "yaml_dataset": "msft_azure_aks_raw",
+      "broker_derived": "microsoft_azure_kubernetes_services_raw",
+      "names_match": false,
+      "yaml_has_events": false,
+      "derived_has_events": false
+    }
+  ],
+  "recommended_overrides": [
+    {
+      "slug": "Okta__OktaModelingRules_2_0__okta_sso_raw",
+      "yaml_dataset": "okta_sso_raw",
+      "broker_vendor": "okta",
+      "broker_product": "sso"
+    },
+    {
+      "slug": "AlibabaActionTrail__AlibabaModelingRules__alibaba_action_trail_raw",
+      "yaml_dataset": "alibaba_action_trail_raw",
+      "broker_vendor": "alibaba",
+      "broker_product": "action_trail"
+    },
+    {
+      "slug": "AWS-CloudTrail__AWSCloudTrail__amazon_aws_raw",
+      "yaml_dataset": "amazon_aws_raw",
+      "broker_vendor": "amazon",
+      "broker_product": "aws"
+    },
+    {
+      "slug": "AWS-SecurityHub__AWSSecurityHubModelingRules__aws_security_hub_raw",
+      "yaml_dataset": "aws_security_hub_raw",
+      "broker_vendor": "aws",
+      "broker_product": "security_hub"
+    },
+    {
+      "slug": "AWS_WAF__AWS_WAF__aws_waf_raw",
+      "yaml_dataset": "aws_waf_raw",
+      "broker_vendor": "aws",
+      "broker_product": "waf"
+    },
+    {
+      "slug": "MicrosoftEntraID__MicrosoftEntraID__msft_azure_ad_audit_raw",
+      "yaml_dataset": "msft_azure_ad_audit_raw",
+      "broker_vendor": "msft",
+      "broker_product": "azure_ad_audit"
+    },
+    {
+      "slug": "MicrosoftEntraID__MicrosoftEntraID__msft_azure_ad_raw",
+      "yaml_dataset": "msft_azure_ad_raw",
+      "broker_vendor": "msft",
+      "broker_product": "azure_ad"
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_general_raw",
+      "yaml_dataset": "msft_o365_general_raw",
+      "broker_vendor": "msft",
+      "broker_product": "o365_general"
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_exchange_online_raw",
+      "yaml_dataset": "msft_o365_exchange_online_raw",
+      "broker_vendor": "msft",
+      "broker_product": "o365_exchange_online"
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_sharepoint_online_raw",
+      "yaml_dataset": "msft_o365_sharepoint_online_raw",
+      "broker_vendor": "msft",
+      "broker_product": "o365_sharepoint_online"
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_emails_raw",
+      "yaml_dataset": "msft_o365_emails_raw",
+      "broker_vendor": "msft",
+      "broker_product": "o365_emails"
+    },
+    {
+      "slug": "Office365__Office365__msft_o365_dlp_raw",
+      "yaml_dataset": "msft_o365_dlp_raw",
+      "broker_vendor": "msft",
+      "broker_product": "o365_dlp"
+    },
+    {
+      "slug": "AzureFlowLogs__AzureFlowLogs__msft_azure_flowlogs_raw",
+      "yaml_dataset": "msft_azure_flowlogs_raw",
+      "broker_vendor": "msft",
+      "broker_product": "azure_flowlogs"
+    },
+    {
+      "slug": "AzureWAF__AzureWAF__msft_azure_waf_raw",
+      "yaml_dataset": "msft_azure_waf_raw",
+      "broker_vendor": "msft",
+      "broker_product": "azure_waf"
+    },
+    {
+      "slug": "AzureKubernetesServices__AzureKubernetesServices__msft_azure_aks_raw",
+      "yaml_dataset": "msft_azure_aks_raw",
+      "broker_vendor": "msft",
+      "broker_product": "azure_aks"
+    }
+  ],
+  "probed_at": 1779964745
+}

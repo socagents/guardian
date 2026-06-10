@@ -1,0 +1,10 @@
+/* Palo Alto Networks NGFW (Next-Generation Firewall)
+   Parsing rule: catch-all no-hit drop route for `vendor="panw", product="ngfw_cef"`.
+
+   This vendor does NOT have a per-dataset INGEST block. Cortex routes each CEF event
+   into one of 6 dataset destinations (globalprotect, hipmatch, traffic, filedata,
+   threat, url) by matching event content against the 6 MODEL blocks in the modeling
+   rule. The catch-all here exists only to drop events that don't match any of the
+   6 modeling rules. */
+
+[INGEST:vendor="panw", product="ngfw_cef", target_dataset="panw_ngfw_cef_raw", no_hit=drop]

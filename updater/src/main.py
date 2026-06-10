@@ -1,0 +1,2677 @@
+"""
+Phantom — on-prem updater service.
+
+Runs as a sidecar container in the customer's compose stack. Drives
+the host's docker daemon via the mounted /var/run/docker.sock and
+shells out to `docker compose` (using the host install dir mounted at
+/host) to swap services after a pull.
+
+Why a separate service (not a phantom-agent route): during an update,
+phantom-agent's container is replaced. If the updater code lived inside
+that image, the user's progress stream would die mid-update. Living in
+its own container — its own image, its own version — means the updater
+keeps streaming even when phantom-agent restarts.
+
+V1 scope (per product direction):
+  - No rollback. If a post-update healthcheck times out, we surface the
+    error and stop; recovery is a manual SSH job.
+  - No data-volume snapshots. Customers may lose in-flight jobs/chats
+    during an update; this is acceptable for the early version where
+    the goal is "push-button-update-when-something-breaks."
+  - Updater never updates itself. A future `update-updater.sh` ships
+    with the install kit for the rare cases that's needed.
+
+API:
+  GET  /healthz                       no auth, container healthcheck
+  GET  /api/v1/version/current        running container image versions
+  GET  /api/v1/version/check          compare running vs GHCR latest
+  GET  /api/v1/update/status          {in_progress: bool}
+  POST /api/v1/update                 SSE stream of update progress
+
+Auth: every endpoint except /healthz requires
+  Authorization: Bearer <MCP_TOKEN>
+where MCP_TOKEN matches the env var (same shared secret phantom-agent
+uses for its own MCP coordination). If MCP_TOKEN is unset, all
+authenticated routes return 401 — fail-closed by design.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import pathlib
+import re
+import subprocess
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from typing import AsyncGenerator
+
+import docker
+import httpx
+from docker.errors import DockerException, NotFound
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+
+
+# ─── Configuration ────────────────────────────────────────────────────
+# All knobs come from env vars. Defaults match the customer compose.
+
+REGISTRY = os.environ.get("PHANTOM_REGISTRY", "ghcr.io")
+OWNER = os.environ.get("PHANTOM_OWNER", "kite-production")
+REGISTRY_USER = os.environ.get("PHANTOM_REGISTRY_USER", "")
+REGISTRY_TOKEN = os.environ.get("PHANTOM_REGISTRY_TOKEN", "")
+MCP_TOKEN = os.environ.get("MCP_TOKEN", "")
+HOST_INSTALL_DIR = os.environ.get("HOST_INSTALL_DIR", "/host")
+
+# How long we'll wait for a service to become healthy after restart
+# before declaring the update failed. Longer than the longest
+# healthcheck.start_period in the customer compose (caldera at 60s).
+HEALTHY_TIMEOUT_S = int(os.environ.get("HEALTHY_TIMEOUT_S", "240"))
+
+
+# ─── /host/.env reads (v0.5.51) ───────────────────────────────────────
+# Pre-v0.5.51, PHANTOM_VERSION + DIGEST_PHANTOM_* were passed to the
+# phantom-updater container as `environment:` entries in the customer
+# compose. That gave docker compose's config-hash a reason to recreate
+# this container on every upgrade — even when phantom-updater's own
+# image digest hadn't changed — because the resolved env block flipped
+# any time the stack version flipped. v0.5.51 moves these reads to
+# /host/.env at runtime so the updater's container config stays
+# stable across stack upgrades that don't touch its image.
+#
+# Cache: parses /host/.env once per `_HOST_ENV_TTL_S` seconds. Long
+# enough to amortize hot-path API calls (e.g. /api/v1/version/current
+# fires on every observability-panel refresh), short enough that an
+# operator's manual .env edit or a successful _apply_manifest_to_env
+# call propagates within ~30s.
+import time as _time_for_env_cache
+
+_HOST_ENV_CACHE: dict[str, str] = {}
+_HOST_ENV_CACHE_AT: float = 0.0
+_HOST_ENV_TTL_S = 30.0
+
+
+def _read_host_env() -> dict[str, str]:
+    """Parse /host/.env, return {KEY: VALUE}. Cached with a 30s TTL.
+
+    Bypassed (cache cleared) when `_apply_manifest_to_env` writes a
+    new manifest — that path calls `_invalidate_host_env_cache()` to
+    force the next read to re-parse fresh.
+
+    Failure semantics: a missing /host/.env returns {} (callers
+    handle missing keys gracefully). A malformed line is skipped
+    with a debug log; we don't crash the updater over .env edits.
+    """
+    global _HOST_ENV_CACHE_AT
+    now = _time_for_env_cache.monotonic()
+    if _HOST_ENV_CACHE and (now - _HOST_ENV_CACHE_AT) < _HOST_ENV_TTL_S:
+        return _HOST_ENV_CACHE
+    env_path = pathlib.Path(HOST_INSTALL_DIR) / ".env"
+    if not env_path.is_file():
+        # Empty cache, freshly stamped — avoid hammering the FS while
+        # /host isn't writable yet (compose timing edge case at boot).
+        _HOST_ENV_CACHE_AT = now
+        return _HOST_ENV_CACHE
+    parsed: dict[str, str] = {}
+    try:
+        for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            if not key:
+                continue
+            # Strip surrounding quotes if present (the installer doesn't
+            # quote, but operators editing by hand might).
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                value = value[1:-1]
+            parsed[key] = value
+    except OSError as exc:
+        log.warning("Failed reading %s: %s", env_path, exc)
+    _HOST_ENV_CACHE.clear()
+    _HOST_ENV_CACHE.update(parsed)
+    _HOST_ENV_CACHE_AT = now
+    return _HOST_ENV_CACHE
+
+
+def _invalidate_host_env_cache() -> None:
+    """Force the next _read_host_env() to re-parse fresh. Called by
+    _apply_manifest_to_env after writing the new digest manifest so
+    the in-process state reflects on-disk reality immediately."""
+    global _HOST_ENV_CACHE_AT
+    _HOST_ENV_CACHE_AT = 0.0
+
+
+def _host_env_get(key: str, default: str | None = None) -> str | None:
+    """Lookup `key` in /host/.env. Returns `default` if absent."""
+    return _read_host_env().get(key, default)
+
+
+def _running_phantom_version() -> str | None:
+    """Currently-running stack version, sourced from /host/.env. Pre-
+    v0.5.51 this came from `os.environ['PHANTOM_VERSION']` — moved to
+    .env read so changes (via _apply_manifest_to_env or operator hand-
+    edit) propagate without a container restart."""
+    return _host_env_get("PHANTOM_VERSION")
+
+
+def _stack_digest_env_var(service: str) -> str:
+    """Map a compose service name to its DIGEST_PHANTOM_<SVC> env-var
+    name. Centralized so callers don't duplicate the casing rule."""
+    return f"DIGEST_PHANTOM_{service.replace('phantom-', '').upper().replace('-', '_')}"
+
+
+def _stack_digest(service: str) -> str | None:
+    """Currently-pinned digest for `service`, sourced from /host/.env.
+    Returns None if missing."""
+    return _host_env_get(_stack_digest_env_var(service))
+
+
+def _connector_digest_env_var(connector_id: str) -> str:
+    """Map a connector id to its DIGEST_PHANTOM_CONNECTOR_<ID> env-var
+    name. Centralized so callers don't duplicate the casing rule."""
+    return f"DIGEST_PHANTOM_CONNECTOR_{connector_id.upper().replace('-', '_')}"
+
+
+# ─── /host/connector-digests.env reads (v0.6.7) ────────────────────────
+# Pre-v0.6.7, DIGEST_PHANTOM_CONNECTOR_* lived in /host/.env alongside
+# service credentials + core compose-substitution digests. That broke
+# the operator config-file separation principle (see CLAUDE.md):
+#   - .env is for service credentials + the 5 core compose-substitution
+#     variables that docker-compose interpolates.
+#   - Per-instance connector image refs are NOT compose substitutions;
+#     they're runtime data this updater uses to spawn dynamic instance
+#     containers. They belong in a dedicated file.
+#
+# v0.6.7+: read connector image digests from /host/connector-digests.env.
+# Same env-format as .env (KEY=VALUE per line), but isolated. The
+# installer writes this file when applying a release manifest, with the
+# 7 DIGEST_PHANTOM_CONNECTOR_* keys.
+#
+# Backward-compat: during the transition (operators upgrading from
+# pre-v0.6.7 customer releases), the .env may still carry stale
+# connector digests. We fall through to /host/.env if the new file
+# is missing, AND log a one-shot deprecation warning so the operator
+# (or their next installer re-run) cleans it up.
+
+_HOST_CONNECTOR_DIGESTS_CACHE: dict[str, str] = {}
+_HOST_CONNECTOR_DIGESTS_CACHE_AT: float = 0.0
+_LEGACY_CONNECTOR_FALLBACK_WARNED: bool = False
+
+
+def _read_host_connector_digests_env() -> dict[str, str]:
+    """Parse /host/connector-digests.env, return {KEY: VALUE}. 30s TTL.
+
+    Failure semantics: a missing file returns {} (callers handle
+    missing keys gracefully; the legacy /host/.env path will be
+    consulted as fallback by _connector_digest()).
+    """
+    global _HOST_CONNECTOR_DIGESTS_CACHE_AT
+    now = _time_for_env_cache.monotonic()
+    if (
+        _HOST_CONNECTOR_DIGESTS_CACHE
+        and (now - _HOST_CONNECTOR_DIGESTS_CACHE_AT) < _HOST_ENV_TTL_S
+    ):
+        return _HOST_CONNECTOR_DIGESTS_CACHE
+    env_path = pathlib.Path(HOST_INSTALL_DIR) / "connector-digests.env"
+    if not env_path.is_file():
+        _HOST_CONNECTOR_DIGESTS_CACHE_AT = now
+        return _HOST_CONNECTOR_DIGESTS_CACHE
+    parsed: dict[str, str] = {}
+    try:
+        for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            if not key:
+                continue
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                value = value[1:-1]
+            parsed[key] = value
+    except OSError as exc:
+        log.warning("Failed reading %s: %s", env_path, exc)
+    _HOST_CONNECTOR_DIGESTS_CACHE.clear()
+    _HOST_CONNECTOR_DIGESTS_CACHE.update(parsed)
+    _HOST_CONNECTOR_DIGESTS_CACHE_AT = now
+    return _HOST_CONNECTOR_DIGESTS_CACHE
+
+
+def _invalidate_host_connector_digests_cache() -> None:
+    """Force re-parse on next _read_host_connector_digests_env() call."""
+    global _HOST_CONNECTOR_DIGESTS_CACHE_AT
+    _HOST_CONNECTOR_DIGESTS_CACHE_AT = 0.0
+
+
+# v0.6.12 build-updater.yml — this file is now in the dev cycle.
+# Source changes here trigger build-updater.yml → push :dev →
+# build-dev-installer.yml cascade → auto-deploy on phantom-vm.
+# Pre-v0.6.12 updater changes only shipped via customer release.
+
+# ─── Agent URL resolution (v0.6.11 — TLS-aware) ────────────────────────
+# Pre-v0.6.11 phantom-updater hard-coded `http://phantom-agent:8080`
+# for its agent calls (instance container_url updates, audit log
+# writes, reconcile's `/api/v1/instances` fetch). v0.4.0+ the agent
+# runs behind a TLS proxy on that port — HTTP requests fail with
+# "Server disconnected without sending a response" (TLS handshake
+# rejects plain HTTP). This is the bug that surfaced when the
+# operator first tried POST /api/v1/connectors/reconcile.
+#
+# Per CLAUDE.md § "Rule 3 — Derive runtime state from observable
+# evidence, not env vars that mid-process scripts mutate" (v0.4.0
+# retrospective): we derive the agent URL scheme from observable
+# state. The agent's TLS config lives in /host/.env under
+# SSL_CERT_PEM. If that's non-empty, the agent serves HTTPS; if
+# empty, HTTP. Same source of truth the agent's entrypoint uses
+# to flip MCP_URL.
+
+_DEFAULT_AGENT_URL = "https://phantom-agent:8080"
+
+
+def _agent_tls_verify() -> bool:
+    """Return whether to verify TLS for agent calls.
+
+    v0.6.14 — the architectural truth: when phantom-updater hits
+    the DEFAULT compose-internal URL (https://phantom-agent:8080),
+    the agent's cert is the auto-generated self-signed one in
+    /tls/cert.pem. That cert has no CA chain, so verify=True can
+    NEVER succeed. The intra-cluster trust boundary is the docker
+    network alias (only the legitimate phantom-agent container
+    answers on that DNS name), not the cert chain.
+
+    Pre-v0.6.14 the call sites read PHANTOM_TLS_VERIFY with default
+    "1" (verify=True). On every customer install + dev install
+    this produced
+        SSL: CERTIFICATE_VERIFY_FAILED: self-signed certificate
+    Empirically reproduced on the v0.6.13 deploy of phantom-vm:
+    the v0.6.13 always-https fix got us past the TLS handshake,
+    only to land at the verify step.
+
+    v0.6.14 default: verify=False when using the default agent URL.
+    When the operator explicitly overrides PHANTOM_AGENT_INTERNAL_URL
+    to a CA-signed endpoint, they can also set PHANTOM_TLS_VERIFY=1
+    to opt in to chain validation.
+
+    v0.6.18 (bug-family audit completion for the v0.6.17 KEK fix) —
+    PHANTOM_AGENT_INTERNAL_URL + PHANTOM_TLS_VERIFY are read from
+    /host/.env via _host_env_get(), NOT from os.environ. Same pattern
+    as PHANTOM_SECRET_KEK (v0.6.17), PHANTOM_VERSION, and the
+    DIGEST_PHANTOM_* reads. Reason: the compose phantom-updater.environment
+    block INTENTIONALLY doesn't pass them — per v0.5.51's stability
+    invariant, any env-block change there forces phantom-updater
+    container recreate on stack upgrade and defeats digest-pinning
+    state preservation. So os.environ.get() would always return ""
+    even when the operator had set the override in .env, silently
+    making the escape hatch a no-op.
+    """
+    override = (_host_env_get("PHANTOM_AGENT_INTERNAL_URL", "") or "").strip()
+    if override:
+        # Honor operator's verify preference for non-default URLs.
+        return (_host_env_get("PHANTOM_TLS_VERIFY", "1") or "1").strip() not in (
+            "0", "false", "False", "no", "NO",
+        )
+    # Default URL is compose-internal self-signed; never verify.
+    return False
+
+
+def _resolve_agent_internal_url() -> str:
+    """Return https://phantom-agent:8080 (or operator override).
+
+    v0.6.13 — corrected from the v0.6.11 SSL_CERT_PEM-based detection.
+    Per CLAUDE.md § "Rule 3 — Derive runtime state from observable
+    evidence, not env vars that mid-process scripts mutate"
+    (v0.4.0 retrospective):
+
+    The agent's TLS state was never reliably signaled by .env's
+    `SSL_CERT_PEM`. That env var is non-empty only when the operator
+    EXPLICITLY pasted a cert at install time. In every customer
+    install we've seen, the agent's entrypoint auto-generates a
+    self-signed cert at `/tls/cert.pem` if SSL_CERT_PEM is empty,
+    and the TLS proxy serves HTTPS unconditionally on port 8080.
+    So phantom-agent:8080 is ALWAYS https from any compose-network
+    client's perspective.
+
+    The v0.6.11 SSL_CERT_PEM-based detection was the wrong signal:
+    on dev-installer'd installs (where SSL_CERT_PEM is never set in
+    .env), the helper picked http and the TLS proxy rejected the
+    connection. "Server disconnected without sending a response."
+
+    v0.6.13 default: always https. Operator override stays for
+    legacy non-TLS configurations (none in practice today, but
+    keeps the escape hatch).
+
+    The TLS verify=False path that callers already use is still
+    correct — the agent's self-signed cert isn't chain-validatable;
+    trust boundary is at the compose network edge, not the cert.
+
+    v0.6.18 — read PHANTOM_AGENT_INTERNAL_URL from /host/.env via
+    _host_env_get(), NOT from os.environ. See the matching note in
+    _agent_tls_verify(). Same v0.5.51 env-stability invariant as
+    PHANTOM_SECRET_KEK (v0.6.17 fix). Pre-v0.6.18 the override
+    branch was dead code: os.environ.get() always returned ""
+    because the compose env block intentionally doesn't pass it
+    through, so an operator's .env override was silently ignored.
+    """
+    override = (_host_env_get("PHANTOM_AGENT_INTERNAL_URL", "") or "").strip()
+    if override:
+        return override.rstrip("/")
+    return "https://phantom-agent:8080"
+
+
+# httpx-equivalent verify flag for intra-cluster HTTPS calls. The
+# agent's TLS cert is self-signed (per /tls/cert.pem); we don't
+# verify here because the connection is within the compose
+# internal network — trust boundary is at the docker network edge,
+# not the cert chain. Used by the .get/.put/.post calls below.
+_INTERNAL_HTTPS_VERIFY = False
+
+
+def _connector_digest(connector_id: str) -> str | None:
+    """Currently-pinned digest for the named connector.
+
+    v0.6.7+ source of truth: /host/connector-digests.env. Falls back to
+    /host/.env for the transition period (operators upgrading from
+    pre-v0.6.7 customer releases will have stale connector digests in
+    .env; we read them with a one-shot deprecation warning so the next
+    installer re-run cleans them up).
+
+    Returns None if missing in both sources.
+    """
+    global _LEGACY_CONNECTOR_FALLBACK_WARNED
+    key = _connector_digest_env_var(connector_id)
+    value = _read_host_connector_digests_env().get(key)
+    if value:
+        return value
+    # Fallback: legacy /host/.env path. Log once per process; we don't
+    # want to flood the logs while the operator's installer-upgrade
+    # path lands.
+    legacy = _host_env_get(key)
+    if legacy and not _LEGACY_CONNECTOR_FALLBACK_WARNED:
+        log.warning(
+            "%s read from /host/.env (legacy pre-v0.6.7 path). The "
+            "operator config-file separation principle (CLAUDE.md) "
+            "moves connector digests to /host/connector-digests.env "
+            "in v0.6.7+. Re-run phantom-installer to migrate.",
+            key,
+        )
+        _LEGACY_CONNECTOR_FALLBACK_WARNED = True
+    return legacy
+
+# Maps compose service name → (GHCR package name, container_name).
+# The container_name comes from the `container_name:` field in the
+# customer compose; we look up containers by that. Order of this dict
+# is the order updates are applied.
+MANAGED_SERVICES: dict[str, tuple[str, str]] = {
+    "xlog":          ("phantom-xlog",    "xlog"),
+    "caldera":       ("phantom-caldera", "caldera"),
+    "phantom-agent": ("phantom-agent",   "phantom_agent"),
+}
+
+
+# ─── Logging ──────────────────────────────────────────────────────────
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+log = logging.getLogger("phantom-updater")
+
+
+# ─── Globals ──────────────────────────────────────────────────────────
+# Single-update mutex: prevents two browser tabs from triggering
+# concurrent updates against the same daemon. The lock is module-level
+# (process-scoped). The updater is single-instance per compose stack
+# so this is sufficient.
+
+_update_lock = asyncio.Lock()
+_update_active = False
+_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────
+
+
+def _docker_client() -> docker.DockerClient:
+    """
+    Lazy-construct a Docker SDK client. Done per-request so failures
+    surface as 503s rather than crashing the whole service at startup
+    (e.g. when /var/run/docker.sock isn't mounted yet).
+    """
+    return docker.from_env()
+
+
+# Memoized at first use; never changes for the lifetime of the
+# container so a module-global is safe.
+_COMPOSE_PROJECT_NAME: str | None = None
+
+
+def _compose_project_name() -> str:
+    """Return the docker compose project name THIS container belongs to.
+
+    Why this is needed: when we shell out to `docker compose -f
+    /host/docker-compose.yml ... up -d <service>` from inside the
+    updater container, compose derives the project name from the
+    directory containing the compose file → "host". But the host
+    started the stack from /opt/phantom → project "phantom". The
+    customer compose pins `container_name: caldera` etc., so the
+    existing project-"phantom" caldera owns the name. Compose's
+    project-"host" view tries to CREATE a fresh caldera and 409s
+    on the name conflict → restart fails with rc=1.
+
+    Reading our own container's `com.docker.compose.project` label
+    aligns the project name automatically, so it works for any
+    install dir (customer's /opt/phantom → "phantom", a developer's
+    ~/dev/phantom → "phantom", a CI worktree → whatever). No
+    customer-side env var to set, no installer-side stamping needed.
+
+    Falls back to "phantom" if label lookup fails for any reason —
+    that's the right default for the customer installer path which
+    is overwhelmingly the deployment shape this code runs in.
+    """
+    global _COMPOSE_PROJECT_NAME
+    if _COMPOSE_PROJECT_NAME is not None:
+        return _COMPOSE_PROJECT_NAME
+    try:
+        # /etc/hostname inside a container is the container's short id
+        # (12-hex), which the docker socket can resolve to the full
+        # container object.
+        own_id = pathlib.Path("/etc/hostname").read_text().strip()
+        client = _docker_client()
+        c = client.containers.get(own_id)
+        proj = c.labels.get("com.docker.compose.project")
+        if proj:
+            _COMPOSE_PROJECT_NAME = proj
+            log.info("compose project detected from labels: %s", proj)
+            return proj
+    except Exception as exc:
+        log.warning(
+            "could not auto-detect compose project (%s); "
+            "falling back to default 'phantom'",
+            exc,
+        )
+    _COMPOSE_PROJECT_NAME = "phantom"
+    return _COMPOSE_PROJECT_NAME
+
+
+def _parse_image_ref(image_ref: str) -> tuple[str, str, str]:
+    """
+    Parse 'ghcr.io/kite-production/phantom-agent:1.2.0' into
+    (registry, package, tag). Tolerates short forms like
+    'phantom-agent' (no registry, no tag → defaults to 'latest').
+    """
+    if "/" in image_ref:
+        first, rest = image_ref.split("/", 1)
+        registry = first if "." in first else ""
+        package = rest if registry else image_ref
+    else:
+        registry = ""
+        package = image_ref
+    if ":" in package:
+        package, tag = package.rsplit(":", 1)
+    else:
+        tag = "latest"
+    return registry, package, tag
+
+
+def _semver_gt(a: str, b: str) -> bool:
+    """True iff a > b as semver tuples. Strings must match N.N.N."""
+    if not (_SEMVER_RE.match(a) and _SEMVER_RE.match(b)):
+        return False
+    return tuple(int(x) for x in a.split(".")) > tuple(
+        int(x) for x in b.split(".")
+    )
+
+
+def _current_version_for(service: str) -> dict:
+    """
+    Inspect the running container for `service` and return its version.
+    Returns {service, image, version, digest, container_id, running}
+    where `version` is the parsed tag (e.g. "1.2.0") or None if the
+    container isn't running or its image has no semver tag.
+
+    v0.3.0+: also returns `digest` — the sha256:... content digest of
+    the running image, sourced from the image's RepoDigests if the
+    image was pulled (vs. built locally). For dev/CI builds with no
+    RepoDigests entry, returns None for digest. The /observability/connectors
+    panel uses this to show a "running digest" column.
+    """
+    package, container_name = MANAGED_SERVICES[service]
+    client = _docker_client()
+    try:
+        c = client.containers.get(container_name)
+    except NotFound:
+        return {
+            "service": service,
+            "image": None,
+            "version": None,
+            "digest": None,
+            "container_id": None,
+            "running": False,
+        }
+    image_tags = c.image.tags or []
+    image_ref = image_tags[0] if image_tags else (c.image.id or "")
+    _, _, tag = _parse_image_ref(image_ref)
+
+    # v0.3.0+: extract digest from RepoDigests. Format is
+    # ['ghcr.io/.../package@sha256:abc...', ...]. Multiple entries
+    # possible if the image was tagged from multiple repos; pick the
+    # first that matches our REGISTRY/OWNER/package shape.
+    digest: str | None = None
+    repo_digests = c.image.attrs.get("RepoDigests") or []
+    expected_prefix = f"{REGISTRY}/{OWNER}/{package}@"
+    for rd in repo_digests:
+        if rd.startswith(expected_prefix):
+            digest = rd.split("@", 1)[1]
+            break
+    if digest is None and repo_digests:
+        # Fallback: take the first RepoDigest's hash even if the prefix
+        # doesn't match (e.g. operator built locally with different tag).
+        digest = repo_digests[0].split("@", 1)[1] if "@" in repo_digests[0] else None
+
+    return {
+        "service": service,
+        "image": image_ref,
+        # Don't return non-semver tags as `version` — they confuse the
+        # comparison logic. Customers running off `:latest` for some
+        # reason will see version=None and `update=False`.
+        "version": tag if _SEMVER_RE.match(tag) else None,
+        "digest": digest,
+        "container_id": c.short_id,
+        "running": c.status == "running",
+    }
+
+
+async def _latest_version_for(package: str) -> str | None:
+    """
+    Hit GHCR's package-versions endpoint to find the highest semver
+    tag. Returns 'N.N.N' string, or None if no auth/no tags/error.
+
+    Endpoint:
+      GET /orgs/{owner}/packages/container/{package}/versions
+    Requires Bearer auth with read:packages scope (the customer's
+    PHANTOM_REGISTRY_TOKEN — same one docker uses to pull).
+    """
+    if not REGISTRY_TOKEN:
+        log.warning("PHANTOM_REGISTRY_TOKEN unset; cannot query GHCR.")
+        return None
+    url = (
+        f"https://api.github.com/orgs/{OWNER}"
+        f"/packages/container/{package}/versions"
+    )
+    headers = {
+        "Authorization": f"Bearer {REGISTRY_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            versions = r.json()
+    except httpx.HTTPError as e:
+        log.error("GHCR API error for %s: %s", package, e)
+        return None
+
+    # GHCR's `versions` list has many entries (one per pushed digest);
+    # each carries .metadata.container.tags. Flatten and pick the
+    # highest semver tag. Non-semver tags (latest, 1.2, etc.) are
+    # ignored intentionally — the floating tags can shift unexpectedly.
+    semver_tags: list[tuple[int, int, int]] = []
+    for v in versions:
+        tags = (
+            (v.get("metadata") or {}).get("container", {}).get("tags") or []
+        )
+        for t in tags:
+            if _SEMVER_RE.match(t):
+                semver_tags.append(tuple(int(x) for x in t.split(".")))
+    if not semver_tags:
+        return None
+    semver_tags.sort(reverse=True)
+    return ".".join(str(x) for x in semver_tags[0])
+
+
+# ─── v0.3.0+ manifest-driven update helpers ─────────────────────────────
+
+async def _latest_release_version() -> str | None:
+    """Return the highest semver tag published as a GitHub Release.
+
+    v0.3.0+: this replaces _latest_version_for() (which queried GHCR
+    package-versions) as the primary mechanism for "what version is
+    available?". The reason for the switch:
+      - GHCR carries every pushed image, including pre-release CI builds
+        and manual debug pushes. Tags there don't always correspond to
+        a customer-installable release.
+      - GitHub Releases carry exactly the customer-installable releases
+        (one Release per `release.yml` run on a v*.*.* tag push). The
+        manifest needed for the upgrade is attached as a Release asset.
+
+    So: ask GitHub Releases "what's the latest version?", then fetch
+    its manifest. One question, one source of truth.
+
+    Returns 'N.N.N' string or None on error.
+    """
+    if not REGISTRY_TOKEN:
+        log.warning("PHANTOM_REGISTRY_TOKEN unset; cannot query GitHub.")
+        return None
+    url = f"https://api.github.com/repos/{OWNER}/phantom/releases/latest"
+    headers = {
+        "Authorization": f"Bearer {REGISTRY_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            release = r.json()
+    except httpx.HTTPError as e:
+        log.error("GitHub Releases API error: %s", e)
+        return None
+    tag = release.get("tag_name", "").lstrip("v")
+    if not _SEMVER_RE.match(tag):
+        log.warning("Latest release tag is not semver: %r", tag)
+        return None
+    return tag
+
+
+async def _fetch_release_manifest(version: str) -> dict[str, str] | None:
+    """Fetch release-manifest-vX.Y.Z.env from the GitHub Release for
+    `version` and parse it into a dict of env-var-style key→value.
+
+    Returns None on any error (network, missing asset, parse failure).
+    The caller decides what to surface as an SSE error event.
+
+    Authoritative source for digest values during in-app updates. The
+    same manifest is embedded in the phantom-installer binary for fresh
+    installs; this fetcher is the upgrade path's equivalent.
+    """
+    if not REGISTRY_TOKEN:
+        log.warning("PHANTOM_REGISTRY_TOKEN unset; cannot fetch manifest.")
+        return None
+    asset_name = f"release-manifest-v{version}.env"
+    download_url = (
+        f"https://github.com/{OWNER}/phantom/releases/download/"
+        f"v{version}/{asset_name}"
+    )
+    headers = {
+        # Release assets allow Bearer token auth for private repos.
+        "Authorization": f"Bearer {REGISTRY_TOKEN}",
+        "Accept": "application/octet-stream",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            r = await client.get(download_url, headers=headers)
+            r.raise_for_status()
+            content = r.text
+    except httpx.HTTPError as e:
+        log.error("Manifest fetch error for v%s: %s", version, e)
+        return None
+
+    # Parse env-style. Skip blank lines and # comments. Each remaining
+    # line should be KEY=VALUE; we split on first `=` only because
+    # digest values like sha256:... don't contain `=`.
+    parsed: dict[str, str] = {}
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            log.warning("Skipping malformed manifest line: %r", line)
+            continue
+        k, v = line.split("=", 1)
+        parsed[k.strip()] = v.strip()
+
+    # Validate required keys are present. We need at minimum
+    # PHANTOM_VERSION + 5 stack digests; per-instance connectors are
+    # validated by phantom-updater at runtime (look up DIGEST_PHANTOM_CONNECTOR_*
+    # only when an instance is created). If the stack-tier validation
+    # fails, the manifest is corrupted and we shouldn't proceed.
+    required = [
+        "PHANTOM_VERSION",
+        "DIGEST_PHANTOM_AGENT",
+        "DIGEST_PHANTOM_XLOG",
+        "DIGEST_PHANTOM_CALDERA",
+        "DIGEST_PHANTOM_UPDATER",
+        "DIGEST_PHANTOM_BROWSER",
+    ]
+    missing = [k for k in required if k not in parsed]
+    if missing:
+        log.error("Manifest for v%s is missing required keys: %s",
+                  version, missing)
+        return None
+    if parsed["PHANTOM_VERSION"] != version:
+        log.error("Manifest version mismatch: asked for v%s, got v%s",
+                  version, parsed["PHANTOM_VERSION"])
+        return None
+    return parsed
+
+
+def _apply_manifest_to_env(manifest: dict[str, str]) -> None:
+    """Mirror the phantom-installer's .env-update logic: strip stale
+    PHANTOM_VERSION + DIGEST_PHANTOM_* lines from /host/.env, then
+    append the new manifest as a clean block.
+
+    The updater operates on /host/.env (the customer's install dir
+    bind-mounted read-write). Read-only mode is incompatible with this
+    operation — see the note on the volume mount in installer/docker-compose.yml.
+    """
+    env_path = pathlib.Path(HOST_INSTALL_DIR) / ".env"
+    if not env_path.is_file():
+        raise RuntimeError(
+            f"{env_path} not found — updater cannot apply manifest. "
+            "Verify /host is mounted read-write in the updater compose service."
+        )
+
+    # Read existing content, strip stale lines.
+    existing = env_path.read_text()
+    kept_lines: list[str] = []
+    for line in existing.splitlines():
+        # Match the same patterns the installer strips: lines starting
+        # with PHANTOM_VERSION= or DIGEST_PHANTOM_ (with the trailing _
+        # ensuring we don't false-positive on PHANTOM_VERSION_<other>).
+        if line.startswith("PHANTOM_VERSION="):
+            continue
+        if line.startswith("DIGEST_PHANTOM_"):
+            continue
+        kept_lines.append(line)
+
+    # Trim trailing blank lines from the original (they'd accumulate
+    # otherwise across repeat updates) and ensure exactly one
+    # separator before the manifest block.
+    while kept_lines and not kept_lines[-1].strip():
+        kept_lines.pop()
+
+    new_lines = list(kept_lines) + [
+        "",
+        f"# ─── Digest manifest (managed by phantom-updater "
+        f"v{manifest['PHANTOM_VERSION']}) ──",
+        "# DO NOT EDIT BY HAND. Re-running phantom-installer or the in-app "
+        "updater",
+        "# strips and rewrites these lines as a unit.",
+    ]
+    # Preserve a deterministic order for diff-readability.
+    ordered_keys = ["PHANTOM_VERSION"] + sorted(
+        k for k in manifest if k.startswith("DIGEST_PHANTOM_")
+    )
+    for k in ordered_keys:
+        if k in manifest:
+            new_lines.append(f"{k}={manifest[k]}")
+
+    new_lines.append("")  # trailing newline
+    env_path.write_text("\n".join(new_lines))
+    # v0.5.51 — invalidate the in-process /host/.env cache so the next
+    # _running_phantom_version() / _stack_digest() / _connector_digest()
+    # call sees the freshly-applied values, not a stale cache hit.
+    _invalidate_host_env_cache()
+    log.info("Applied manifest v%s to %s (%d digest entries)",
+             manifest["PHANTOM_VERSION"], env_path,
+             sum(1 for k in manifest if k.startswith("DIGEST_PHANTOM_")))
+
+
+async def _pull_streaming(
+    package: str, ref: str, service_name: str,
+) -> AsyncGenerator[dict, None]:
+    """
+    Pull `<REGISTRY>/<OWNER>/<package>` at the given ref (a tag like
+    "1.3.0" OR a digest like "sha256:abc...") and yield progress events
+    suitable for SSE forwarding. Each event is a dict like:
+      {
+        "service": "phantom-agent",
+        "package": "phantom-agent",
+        "ref": "sha256:abc..." or "1.3.0",
+        "ref_kind": "digest" | "tag",
+        "raw": {"status": "Downloading", "id": "abc123",
+                "progressDetail": {"current": 12345, "total": 67890}},
+      }
+
+    v0.3.0+: digest pulls use the `name@digest` form (set as repository,
+    no tag arg). Tag pulls keep the existing (repository, tag) shape.
+    docker-py's `client.api.pull()` accepts both — when the repository
+    string contains `@`, the tag arg is ignored.
+
+    docker-py's pull() returns a blocking generator of the dockerd
+    pull-event JSON; we run it in a thread and bridge to asyncio via
+    a queue so we don't block the event loop.
+    """
+    client = _docker_client()
+    repository = f"{REGISTRY}/{OWNER}/{package}"
+    is_digest = ref.startswith("sha256:")
+    ref_kind = "digest" if is_digest else "tag"
+
+    # docker-py's `pull(repository, tag)` builds the image reference as
+    # `repository:tag` (or `repository@digest` if repository has `@`).
+    # For digest pulls we pre-join into the repository arg; for tag
+    # pulls we pass them separately (existing v0.2.x behavior).
+    if is_digest:
+        pull_repository = f"{repository}@{ref}"
+        pull_tag = None
+    else:
+        pull_repository = repository
+        pull_tag = ref
+
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=500)
+    SENTINEL = object()
+
+    def _producer():
+        try:
+            for event in client.api.pull(
+                repository=pull_repository, tag=pull_tag,
+                stream=True, decode=True,
+            ):
+                loop.call_soon_threadsafe(queue.put_nowait, event)
+        except Exception as e:
+            loop.call_soon_threadsafe(
+                queue.put_nowait, {"error": str(e)},
+            )
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, SENTINEL)
+
+    loop.run_in_executor(None, _producer)
+
+    while True:
+        event = await queue.get()
+        if event is SENTINEL:
+            break
+        yield {
+            "service": service_name,
+            "package": package,
+            "ref": ref,
+            "ref_kind": ref_kind,
+            "raw": event,
+        }
+
+
+def _compose_base_args() -> list[str]:
+    """Common flags shared by every compose subprocess we spawn."""
+    return [
+        "docker", "compose",
+        # --project-name aligns with the project we're a member of so
+        # compose recognizes the existing containers as ours. Without
+        # this, compose derives the project from the compose-file
+        # directory ("/host" inside us) and treats the running stack
+        # as a different project, which then collides on container_name
+        # pins. See _compose_project_name() for the full story.
+        "--project-name", _compose_project_name(),
+        "-f", f"{HOST_INSTALL_DIR}/docker-compose.yml",
+        "--env-file", f"{HOST_INSTALL_DIR}/.env",
+    ]
+
+
+def _compose_up_services(services: list[str]) -> tuple[int, str]:
+    """
+    Run `docker compose ... up -d --no-deps <services>` in the host
+    install dir. Returns (exitcode, combined_output).
+
+    Used by the update flow (POST /api/v1/update) — `up -d` is the
+    right verb there because that's where compose detects new image
+    tags pulled by the updater and recreates the containers with
+    them. For containers whose config didn't change, `up -d` is a
+    no-op, which is what we want during an update.
+
+    NOT the right verb for the restart endpoint — that needs to
+    bounce the container even when nothing about its config has
+    changed, so the entrypoint re-runs (re-reads operator-creds,
+    re-templates configs, etc.). Use `_compose_restart_service` for
+    that path.
+
+    CRITICAL: never include 'phantom-updater' in `services` — that
+    would recreate THIS container mid-update and kill the SSE stream
+    we're feeding the UI. Compose only acts on the services listed.
+    """
+    if "phantom-updater" in services:
+        raise ValueError("refusing to recreate self")
+    cmd = _compose_base_args() + ["up", "-d", "--no-deps", *services]
+    log.info("compose up: %s", " ".join(cmd))
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=180,
+    )
+    return result.returncode, (result.stdout or "") + (result.stderr or "")
+
+
+def _compose_restart_service(service: str) -> tuple[int, str]:
+    """
+    Run `docker compose ... restart <service>` in the host install dir.
+    Returns (exitcode, combined_output).
+
+    Used by the restart endpoint (POST /api/v1/services/{svc}/restart).
+    `restart` (NOT `up -d`) is the right verb here: it kills the main
+    process inside the existing container with SIGTERM and starts it
+    back up, which means the image entrypoint runs again. That's what
+    we need for services whose entrypoint re-templates config from a
+    sidecar volume (caldera reads /operator-creds/caldera.yaml on
+    every startup).
+
+    `up -d --no-deps` would be a no-op here for an already-running
+    healthy container — compose sees no config diff and exits 0 with
+    "Container caldera Running". The endpoint would return 200 but
+    nothing actually restarted (silent failure of the user's actual
+    intent).
+
+    CRITICAL: 'phantom-updater' is rejected upstream by the route
+    handler — same reason as _compose_up_services.
+    """
+    cmd = _compose_base_args() + ["restart", service]
+    log.info("compose restart: %s", " ".join(cmd))
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=120,
+    )
+    return result.returncode, (result.stdout or "") + (result.stderr or "")
+
+
+async def _wait_healthy(service: str, timeout_s: int = HEALTHY_TIMEOUT_S) -> bool:
+    """
+    Poll the docker daemon until `service`'s container reports healthy
+    (or `running` for containers without a healthcheck). Returns True
+    on healthy, False on timeout.
+
+    We deliberately re-fetch the container each iteration because
+    `docker compose up -d` replaces it — the previous Container
+    object's id becomes stale.
+    """
+    _, container_name = MANAGED_SERVICES[service]
+    client = _docker_client()
+    deadline = asyncio.get_running_loop().time() + timeout_s
+    while asyncio.get_running_loop().time() < deadline:
+        try:
+            c = client.containers.get(container_name)
+            state = c.attrs.get("State") or {}
+            health = (state.get("Health") or {}).get("Status")
+            if health == "healthy":
+                return True
+            # Containers without healthchecks: accept "running".
+            if health is None and state.get("Status") == "running":
+                return True
+        except NotFound:
+            # Container was just torn down — keep polling for the
+            # replacement to come up.
+            pass
+        await asyncio.sleep(2)
+    return False
+
+
+def _docker_login() -> bool:
+    """
+    `docker login` against REGISTRY using the customer's PAT. Idempotent
+    — safe to call on every startup. Returns True on success.
+
+    Uses --password-stdin so the token never appears in `ps` output or
+    in any process inspection of the updater container.
+    """
+    if not (REGISTRY_USER and REGISTRY_TOKEN):
+        log.warning(
+            "PHANTOM_REGISTRY_USER/TOKEN unset; pulls will fail unless "
+            "the host's docker is already logged in.",
+        )
+        return False
+    try:
+        proc = subprocess.run(
+            [
+                "docker", "login", REGISTRY,
+                "-u", REGISTRY_USER,
+                "--password-stdin",
+            ],
+            input=REGISTRY_TOKEN.encode(),
+            capture_output=True, timeout=15,
+        )
+    except Exception as e:
+        log.error("docker login raised: %s", e)
+        return False
+    if proc.returncode == 0:
+        log.info("docker login OK against %s", REGISTRY)
+        return True
+    log.error("docker login FAILED: %s", proc.stderr.decode(errors="replace"))
+    return False
+
+
+# ─── Lifespan ─────────────────────────────────────────────────────────
+
+
+# v0.17.128 (#123) — how often the PERIODIC digest-drift reconcile runs.
+# The v0.6.66 reconcile fired only at updater startup; but phantom-updater
+# rarely restarts (its image isn't rebuilt on the dev cycle), so a connector
+# pin that changes while it keeps running was never reconciled into the
+# running container until the next restart — the cortex-xdr container went
+# stale TWICE this way. A periodic loop closes that gap. Override via
+# PHANTOM_UPDATER_RECONCILE_INTERVAL_S; default 5 minutes.
+PERIODIC_RECONCILE_INTERVAL_S = float(
+    os.environ.get("PHANTOM_UPDATER_RECONCILE_INTERVAL_S", "300")
+)
+
+
+async def _periodic_drift_reconcile(interval_s: float) -> None:
+    """Run `_reconcile_connector_digest_drift()` forever on a timer.
+
+    The v0.6.66 startup reconcile only catches drift present at boot. This
+    loop picks up pin changes that happen WHILE the updater keeps running
+    (a dev-cycle install or an installer run that doesn't recreate the
+    updater container), so running connector containers track their pinned
+    digest without needing an updater restart. Same reconcile function,
+    same safety (only recreates on digest mismatch); a failure in one tick
+    is logged and the loop continues.
+    """
+    while True:
+        await asyncio.sleep(interval_s)
+        try:
+            result = await _reconcile_connector_digest_drift()
+            if result["recreated"] or result["failed"]:
+                log.info(
+                    "periodic digest-drift reconcile: drifted=%d recreated=%d "
+                    "unchanged=%d failed=%d",
+                    len(result["drifted"]), len(result["recreated"]),
+                    len(result["unchanged"]), len(result["failed"]),
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("periodic digest-drift reconcile errored: %s", exc)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup tasks. v0.6.66 adds the digest-drift auto-reconcile.
+
+    Sequence:
+      1. `docker login` — needed for subsequent image pulls. Always
+         runs synchronously before serving requests (the original
+         contract since v0.1.x).
+      2. Schedule an async digest-drift reconcile that fires ~30s
+         after startup. Backgrounded because: (a) it does HTTP calls
+         to ourselves + to the agent, which means we must be serving
+         requests already; (b) the agent (which the recreate path
+         calls back into for container_url tracking) takes 10-30s to
+         come up after phantom-updater. The delay covers both.
+
+    Why background rather than yield-wait: blocking startup on the
+    drift reconcile would delay /healthz responses, which can fail
+    docker-compose's healthcheck + cascade. Background-tasks fire
+    asynchronously and any errors are logged + don't crash the
+    process. Operators can call POST /api/v1/connectors/reconcile/digests
+    if they want to wait for the result synchronously.
+    """
+    _docker_login()
+
+    # v0.6.66 — fire-and-forget digest-drift reconcile after a delay.
+    # asyncio.create_task without awaiting lets us yield immediately.
+    async def _delayed_drift_reconcile() -> None:
+        try:
+            await asyncio.sleep(30.0)  # let the agent finish booting
+            log.info(
+                "v0.6.66 startup: running auto digest-drift reconcile",
+            )
+            result = await _reconcile_connector_digest_drift()
+            log.info(
+                "digest-drift reconcile finished: "
+                "drifted=%d recreated=%d unchanged=%d failed=%d",
+                len(result["drifted"]),
+                len(result["recreated"]),
+                len(result["unchanged"]),
+                len(result["failed"]),
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "v0.6.66 startup digest-drift reconcile errored: %s",
+                exc,
+            )
+
+    asyncio.create_task(_delayed_drift_reconcile())
+
+    # v0.17.128 (#123) — and keep reconciling on a timer. The one-shot above
+    # only catches drift present at boot; the updater rarely restarts, so
+    # pin changes between restarts need a periodic sweep to land.
+    asyncio.create_task(_periodic_drift_reconcile(PERIODIC_RECONCILE_INTERVAL_S))
+
+    yield
+
+
+app = FastAPI(
+    lifespan=lifespan,
+    title="phantom-updater",
+    version="1.0.0",
+    docs_url=None,        # no docs UI — internal API
+    redoc_url=None,
+    openapi_url=None,
+)
+
+
+# ─── Auth middleware ──────────────────────────────────────────────────
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Validate MCP_TOKEN bearer auth on every endpoint except /healthz."""
+    if request.url.path == "/healthz":
+        return await call_next(request)
+    if not MCP_TOKEN:
+        # Fail closed: never run unauthenticated even if the operator
+        # forgot to set MCP_TOKEN. The compose default sets one.
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "MCP_TOKEN unset on updater; denying."},
+        )
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401, content={"detail": "missing bearer token"},
+        )
+    if auth.removeprefix("Bearer ") != MCP_TOKEN:
+        return JSONResponse(
+            status_code=401, content={"detail": "invalid token"},
+        )
+    return await call_next(request)
+
+
+# ─── Routes ───────────────────────────────────────────────────────────
+
+
+@app.get("/healthz")
+async def healthz():
+    return {"ok": True, "ts": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/api/v1/version/current")
+async def version_current():
+    """Read currently-running image versions from the docker daemon."""
+    try:
+        return {svc: _current_version_for(svc) for svc in MANAGED_SERVICES}
+    except DockerException as e:
+        raise HTTPException(503, f"docker unavailable: {e}")
+
+
+@app.get("/api/v1/version/check")
+async def version_check():
+    """
+    Compare currently-running stack against the latest GitHub Release.
+
+    v0.3.0+: this is now manifest-driven, not GHCR-tag-driven. Steps:
+      1. Find the latest released version (highest `v*.*.*` tag with a
+         GitHub Release). If we can't query GitHub, return None for
+         latest and updates_available=False — the UI shows a graceful
+         "couldn't reach GitHub" indicator instead of pretending we're
+         current.
+      2. If our running PHANTOM_VERSION already matches latest, we're
+         up to date at the version level. We still report per-service
+         digest comparisons so the UI can show "v0.3.0 → v0.3.0 (no
+         change)" rather than just being silent.
+      3. Otherwise, fetch the manifest for the latest version and
+         compare each service's current digest vs. target digest.
+         updates_available is true iff at least one service's digest
+         differs.
+
+    Returns:
+      {
+        running_version: str | None,
+        latest_version: str | None,
+        updates_available: bool,
+        services: {
+          svc: {current_version, current_digest, target_digest,
+                update: bool, running: bool},
+          ...
+        },
+        checked_at: ISO timestamp,
+        error: str | None  (set if the GitHub query failed)
+      }
+    """
+    running_version = _running_phantom_version()
+    services: dict[str, dict] = {}
+
+    latest_version = await _latest_release_version()
+    if not latest_version:
+        # Can't reach GitHub. Still return per-service current state
+        # so the UI's diagnostics aren't blank.
+        for svc in MANAGED_SERVICES:
+            try:
+                cur = _current_version_for(svc)
+            except DockerException as e:
+                log.error("docker error reading %s: %s", svc, e)
+                cur = {"version": None, "digest": None, "running": False}
+            services[svc] = {
+                "current_version": cur.get("version"),
+                "current_digest": cur.get("digest"),
+                "target_digest": None,
+                "update": False,
+                "running": cur.get("running", False),
+            }
+        return {
+            "running_version": running_version,
+            "latest_version": None,
+            "updates_available": False,
+            "services": services,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "error": "could not reach GitHub Releases API",
+        }
+
+    # Got a latest version — fetch its manifest to compare digests.
+    target_manifest: dict[str, str] | None = None
+    if latest_version != running_version:
+        target_manifest = await _fetch_release_manifest(latest_version)
+
+    any_update = False
+    for svc, (package, _) in MANAGED_SERVICES.items():
+        try:
+            cur = _current_version_for(svc)
+        except DockerException as e:
+            log.error("docker error reading %s: %s", svc, e)
+            cur = {"version": None, "digest": None, "running": False}
+        # Map service name to manifest env-var name.
+        # phantom-agent → DIGEST_PHANTOM_AGENT, etc. (v0.5.51 centralized
+        # in `_stack_digest_env_var`.)
+        env_var = _stack_digest_env_var(svc)
+        target_digest = target_manifest.get(env_var) if target_manifest else None
+        update = bool(
+            target_digest and cur.get("digest") != target_digest
+        )
+        services[svc] = {
+            "current_version": cur.get("version"),
+            "current_digest": cur.get("digest"),
+            "target_digest": target_digest,
+            "update": update,
+            "running": cur.get("running", False),
+        }
+        if update:
+            any_update = True
+
+    return {
+        "running_version": running_version,
+        "latest_version": latest_version,
+        "updates_available": any_update,
+        "services": services,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "error": None,
+    }
+
+
+@app.get("/api/v1/update/status")
+async def update_status():
+    """Whether an update is currently in progress on this updater."""
+    return {"in_progress": _update_active}
+
+
+def _sse(event: str, data: dict) -> bytes:
+    """
+    Format an SSE event. Each event MUST end with a blank line — that's
+    how the SSE protocol delimits records. Newlines inside the JSON
+    payload would also break the protocol; json.dumps escapes them.
+    """
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n".encode()
+
+
+@app.post("/api/v1/update")
+async def update_apply():
+    """
+    Trigger a manifest-driven update.
+
+    v0.3.0+ flow:
+      1. Resolve target version from latest GitHub Release.
+      2. Fetch release-manifest-vX.Y.Z.env from the GH Release.
+      3. For each MANAGED_SERVICE, compare current digest vs target
+         digest. If unchanged, skip (no recreate). Build to_update list.
+      4. Pull each to-update image by digest (digest pulls are no-op
+         when the digest is already in the local cache).
+      5. Apply manifest to /host/.env (strip stale, append new).
+      6. docker compose up -d --no-deps <to_update services>. Compose
+         sees the new digests in .env, recreates only those services.
+      7. Wait for healthy.
+
+    Concurrent requests get rejected via _update_lock — only one
+    update can run at a time per process.
+
+    Event types streamed:
+      phase           {phase: "checking" | "fetching_manifest" |
+                       "comparing_digests" | "pulling" | "pulled" |
+                       "applying_manifest" | "swapping" | "waiting_healthy" |
+                       "complete" | "noop", service?, target?, target_version?}
+      pull_progress   raw docker pull events with service/package/ref/ref_kind
+      error           {phase, detail, ...}
+    """
+    global _update_active
+
+    # Reject early so the client gets 409, not a stuck SSE stream.
+    if _update_lock.locked():
+        raise HTTPException(409, "update already in progress")
+
+    async def stream() -> AsyncGenerator[bytes, None]:
+        global _update_active
+        async with _update_lock:
+            _update_active = True
+            try:
+                # ── Phase 1: resolve target version. ─────────────────
+                yield _sse("phase", {"phase": "checking"})
+                target_version = await _latest_release_version()
+                if not target_version:
+                    yield _sse("error", {
+                        "phase": "checking",
+                        "detail": (
+                            "could not reach GitHub Releases API. "
+                            "Check PHANTOM_REGISTRY_TOKEN scope + network "
+                            "egress to api.github.com."
+                        ),
+                    })
+                    return
+
+                running_version = _running_phantom_version()
+                if running_version == target_version:
+                    yield _sse("phase", {
+                        "phase": "noop",
+                        "message": (
+                            f"already at v{running_version} (latest)"
+                        ),
+                    })
+                    yield _sse("phase", {"phase": "complete"})
+                    return
+
+                # ── Phase 2: fetch + validate the manifest. ─────────
+                yield _sse("phase", {
+                    "phase": "fetching_manifest",
+                    "target_version": target_version,
+                })
+                manifest = await _fetch_release_manifest(target_version)
+                if not manifest:
+                    yield _sse("error", {
+                        "phase": "fetching_manifest",
+                        "detail": (
+                            f"failed to fetch or validate "
+                            f"release-manifest-v{target_version}.env from "
+                            f"GitHub Release. The asset may be missing or "
+                            f"the registry token may not have read access."
+                        ),
+                    })
+                    return
+
+                # ── Phase 3: compare digests, decide what to update. ─
+                yield _sse("phase", {
+                    "phase": "comparing_digests",
+                    "target_version": target_version,
+                })
+                to_update: list[tuple[str, str, str]] = []
+                for svc, (package, _) in MANAGED_SERVICES.items():
+                    cur = _current_version_for(svc)
+                    env_var = _stack_digest_env_var(svc)
+                    target_digest = manifest.get(env_var)
+                    if target_digest and cur.get("digest") != target_digest:
+                        to_update.append((svc, package, target_digest))
+
+                if not to_update:
+                    # PHANTOM_VERSION differs but no service's digest
+                    # actually changed (e.g. release.yml retagged
+                    # everything from the previous version with
+                    # conditional rebuild). Apply the manifest anyway
+                    # so .env reflects the new version label, but
+                    # don't touch any container.
+                    yield _sse("phase", {
+                        "phase": "applying_manifest",
+                        "target_version": target_version,
+                        "note": "no digest changes; only version label updates",
+                    })
+                    _apply_manifest_to_env(manifest)
+                    yield _sse("phase", {
+                        "phase": "noop",
+                        "message": (
+                            f"v{running_version} → v{target_version}: "
+                            "all service digests unchanged. .env updated, "
+                            "containers not recreated."
+                        ),
+                    })
+                    yield _sse("phase", {"phase": "complete"})
+                    return
+
+                # ── Phase 4: pull each changed image by digest. ──────
+                for svc, package, target_digest in to_update:
+                    yield _sse("phase", {
+                        "phase": "pulling",
+                        "service": svc,
+                        "target": target_digest[:19] + "…",
+                    })
+                    async for ev in _pull_streaming(package, target_digest, svc):
+                        yield _sse("pull_progress", ev)
+                    yield _sse("phase", {
+                        "phase": "pulled",
+                        "service": svc,
+                        "target": target_digest[:19] + "…",
+                    })
+
+                # ── Phase 5: apply the manifest to /host/.env. ───────
+                # Done AFTER pulling so a pull failure leaves .env
+                # intact (operators can retry without partial state).
+                yield _sse("phase", {
+                    "phase": "applying_manifest",
+                    "target_version": target_version,
+                })
+                try:
+                    _apply_manifest_to_env(manifest)
+                except Exception as e:
+                    yield _sse("error", {
+                        "phase": "applying_manifest",
+                        "detail": str(e),
+                    })
+                    return
+
+                # ── Phase 6: swap services via `docker compose up -d`.
+                # IMPORTANT ordering: MANAGED_SERVICES is intentionally
+                # ordered (xlog first, caldera, phantom-agent last) so
+                # phantom-agent's depends_on healthcheck sees its
+                # dependencies up before it restarts. _compose_up_services
+                # respects MANAGED_SERVICES iteration order.
+                update_services = [s[0] for s in to_update]
+                yield _sse("phase", {
+                    "phase": "swapping",
+                    "services": update_services,
+                })
+                rc, output = _compose_up_services(update_services)
+                if rc != 0:
+                    yield _sse("error", {
+                        "phase": "swapping",
+                        "exitcode": rc,
+                        "detail": output[-2000:],
+                    })
+                    return
+
+                # ── Phase 7: wait for each service to be healthy. ────
+                for svc, _, _ in to_update:
+                    yield _sse("phase", {
+                        "phase": "waiting_healthy",
+                        "service": svc,
+                    })
+                    healthy = await _wait_healthy(svc)
+                    if not healthy:
+                        yield _sse("error", {
+                            "phase": "waiting_healthy",
+                            "service": svc,
+                            "detail": (
+                                f"service {svc} did not become healthy "
+                                f"within {HEALTHY_TIMEOUT_S}s"
+                            ),
+                        })
+                        return
+
+                yield _sse("phase", {
+                    "phase": "complete",
+                    "target_version": target_version,
+                    "services_updated": update_services,
+                })
+
+            except Exception as e:
+                # Any unhandled exception is a service-level bug. Log
+                # the traceback for ops, surface a sanitized message
+                # to the UI.
+                log.exception("update failed")
+                yield _sse("error", {"detail": str(e)})
+            finally:
+                _update_active = False
+
+    # Headers chosen for SSE: text/event-stream, no buffering, keep
+    # connection alive. Cache-Control:no-cache prevents intermediaries
+    # from holding events. X-Accel-Buffering:no is for nginx (no-op
+    # if no proxy is in front, which is our default).
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/v1/services/{service}/restart")
+async def restart_service(service: str):
+    """Restart a single managed service.
+
+    Used by phantom-agent's /api/setup endpoint after writing operator
+    creds to a shared volume — the target service (e.g. caldera) needs
+    to come back up so its entrypoint re-templates its config from the
+    new file.
+
+    Calls `docker compose restart` (NOT `up -d`). The restart verb
+    actually bounces the container — kills the main process with
+    SIGTERM and starts it back up — so the image entrypoint runs
+    again and re-reads the operator-creds bridge file. `up -d` would
+    be a no-op for an already-running healthy container with
+    unchanged config (silent failure of the user's actual intent;
+    pre-v0.1.19 bug).
+
+    Refuses to act on phantom-updater (would kill self mid-call) and
+    on services not in MANAGED_SERVICES (no need to expose arbitrary
+    docker-compose action).
+    """
+    if service == "phantom-updater":
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "refusing to recreate self"},
+        )
+    if service not in MANAGED_SERVICES:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": f"unknown service {service!r}",
+                "known": sorted(MANAGED_SERVICES.keys()),
+            },
+        )
+
+    try:
+        rc, output = _compose_restart_service(service)
+    except Exception as exc:
+        log.exception("restart failed for %s", service)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(exc)},
+        )
+    if rc != 0:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": f"compose restart exited {rc}",
+                "output": output[-2000:],
+            },
+        )
+    return {"restarted": service, "output": output[-500:]}
+
+
+# ─── Per-instance connector container lifecycle (v0.1.30+) ────────────
+#
+# Endpoints used by phantom-agent's /connectors UI (or future
+# automation) to start/stop/restart per-instance connector
+# containers introduced by the v0.2 architecture (see
+# docs/spec-per-instance-connector-containers.md).
+#
+# Phase 1 (v0.1.30) ships these endpoints DORMANT — no connector
+# instance has runtime: container yet, so the endpoints exist but
+# operators don't hit them. Phase 2 (v0.1.31) flips the web
+# connector to runtime: container, which is the first real
+# exercise of this code path.
+#
+# Naming convention (matches docs/spec-per-instance-connector-containers.md
+# §D6):
+#
+#   container_name = f"phantom-connector-{connector_id}-{instance_name}"
+#
+#   image          = f"{REGISTRY}/{OWNER}/phantom-connector-{connector_id}:{VERSION}"
+#                    where VERSION defaults to PHANTOM_VERSION env var
+#                    (= the running stack's version), falls back to
+#                    "latest" if unset.
+#
+# After start/stop/restart, the endpoint POSTs back to the agent's
+# MCP at PUT /api/v1/instances/{id}/container_url to update the
+# routing entry the loader's container branch reads at tool-call time.
+
+# Connectors that have a phantom-connector-<id> image published. Used
+# to validate the connector_id path param. Mirrors the per-connector
+# images in release.yml (P1.4); when a new connector ships, add its
+# id here.
+#
+# v0.3.1 — cortex-docs added. Module-style today (style: "module" in
+# connector.yaml), so per-instance container creation isn't exercised
+# from here, but the image IS published so the digest manifest can
+# pin it. Future container-mode flip is automatic once we add the
+# style: "container" override; no additional code changes needed
+# beyond this set membership.
+KNOWN_CONNECTORS = {
+    "xlog",
+    "xsiam",
+    "caldera",
+    "web",
+    "cortex-docs",
+    "cortex-content",
+    # v0.5.73 (issue #46): cortex-xdr was missing. v0.5.61 added the XDR
+    # connector code + synthetic-card + (v0.5.67) manifest.yaml entry,
+    # but the agent's container-start path posts to phantom-updater's
+    # /api/v1/connectors/<id>/instances/<name>/start which validates
+    # connector_id against THIS set. Missing here → updater returns 400
+    # "unknown connector_id 'cortex-xdr'" → no container spawns → tool
+    # calls later error with "container_url — phantom-updater hasn't
+    # started the container yet, or the routing entry was deleted."
+    # Same family of bug as v0.5.67's manifest miss; the new-connector
+    # checklist in docs/CICD.md (v0.5.67+) now lists THIS file as a
+    # required edit too.
+    "cortex-xdr",
+}
+
+
+def _connector_image_ref(connector_id: str, version: str | None = None) -> str:
+    """Compose the connector image ref using digest pinning (v0.3.0+).
+
+    Resolution order:
+      1. If `version` arg is set AND matches the running stack's
+         PHANTOM_VERSION → use the corresponding DIGEST_PHANTOM_CONNECTOR_<ID>
+         from env (set by the installer-managed manifest in /opt/phantom/.env).
+         This is the typical happy path: operator creates a connector
+         instance, agent passes no `version`, we pin to the running
+         stack's manifest digest.
+      2. If `version` arg is set AND differs from running PHANTOM_VERSION
+         → unsupported in v0.3.0+ (operator can't legitimately ask for a
+         different version's digest because we don't have its manifest in
+         our env). Fall back to tag-pinning with a loud warning so the
+         drift is observable in /observability/connectors.
+      3. If env doesn't have the matching DIGEST_*_CONNECTOR var (e.g. an
+         operator-managed compose missing the bare-name forwarding) →
+         tag fallback with a loud warning.
+
+    The function NEVER raises. Returns a usable image ref, with the
+    warning logged in failure cases. The observability layer queries
+    `image_pinning_for(connector_id)` (below) to surface the pinning
+    mode in the connectors panel.
+    """
+    running_version = _running_phantom_version()
+    requested_version = version or running_version
+
+    # Happy path: requested version matches running stack version.
+    # Use the digest from /host/.env (v0.5.51 — formerly os.environ).
+    if running_version and requested_version == running_version:
+        env_var = _connector_digest_env_var(connector_id)
+        digest = _connector_digest(connector_id)
+        if digest and digest.startswith("sha256:"):
+            return f"{REGISTRY}/{OWNER}/phantom-connector-{connector_id}@{digest}"
+        log.warning(
+            "%s missing or invalid in /host/.env (got: %r); falling back to tag-pinning. "
+            "This indicates the customer's .env is missing manifest-managed "
+            "DIGEST_* values — re-run phantom-installer to refresh.",
+            env_var, digest,
+        )
+
+    # Fallback: tag pinning. Logged loudly so the drift surfaces in
+    # observability + structured-log searches. Operators should never
+    # be in this path on a clean install.
+    v = requested_version or "latest"
+    log.warning(
+        "Tag-pinning connector %s to v%s. Pre-v0.3.0 fallback path; "
+        "the connector instance will be recreated on the next stack "
+        "upgrade even if its image content didn't change.",
+        connector_id, v,
+    )
+    return f"{REGISTRY}/{OWNER}/phantom-connector-{connector_id}:{v}"
+
+
+def image_pinning_for(connector_id: str) -> dict:
+    """Return {pinning: 'digest'|'tag', digest|tag: '...'} for the given
+    connector_id. Used by the /observability/connectors panel to render
+    a pinning-mode badge per connector instance.
+
+    v0.5.51 — sources from /host/.env via the cached reader, not env
+    vars. See module-level "/host/.env reads" block for the rationale.
+    """
+    digest = _connector_digest(connector_id)
+    if digest and digest.startswith("sha256:"):
+        return {"pinning": "digest", "digest": digest}
+    return {
+        "pinning": "tag",
+        "tag": _running_phantom_version() or "latest",
+    }
+
+
+def _connector_container_name(connector_id: str, instance_name: str) -> str:
+    """Container name = phantom-connector-<id>-<instance_name>.
+
+    Both segments are validated against [a-zA-Z0-9_-]+ at the
+    endpoint surface so a malicious instance name can't break out
+    into shell-meta territory. Operators have free rein over
+    instance names within that character class.
+    """
+    return f"phantom-connector-{connector_id}-{instance_name}"
+
+
+def _compose_network_name() -> str:
+    """The compose default network name = `<project>_default`. The
+    connector container needs to attach to this network so the agent
+    (also on it) can reach the connector at <container-name>:9000."""
+    return f"{_compose_project_name()}_default"
+
+
+def _compose_data_volume_name() -> str:
+    """Volume holding instance_store.db + secrets/. The connector
+    container mounts this read-only at /app/data so the runtime
+    entrypoint can resolve INSTANCE_ID → config + secrets."""
+    return f"{_compose_project_name()}_phantom_mcp_data"
+
+
+def _pull_with_retry(
+    client: docker.DockerClient,
+    image: str,
+    *,
+    max_attempts: int = 5,
+    base_delay_s: float = 1.0,
+    max_delay_s: float = 30.0,
+) -> str:
+    """Pull a connector image with exponential backoff.
+
+    Returns one of:
+      "pulled"           — fresh pull from registry succeeded
+      "cached"           — pull failed but image is in local cache
+                           (offline-deploy success path)
+
+    Raises HTTPException(502) when:
+      - Pull failed AND image not in local cache (no way to start
+        the container)
+      - All retry attempts exhausted on a transient error
+
+    Why retry: Phantom customers run on-prem with variable network
+    quality (corporate proxies, slow VPNs). A single transient
+    DNS / TLS / connection-reset error during `docker pull`
+    shouldn't fail the whole start endpoint. The exponential
+    backoff (1s → 2s → 4s → 8s → 16s, capped at 30s) gives ~30s
+    of total recovery window, then bails.
+
+    Why fall through to local cache: customers may run with the
+    registry temporarily unreachable (firewall change, registry
+    outage). If the image was previously pulled, the start should
+    still work — that's the customer's "we're offline today, but
+    we already have what we need" scenario. Surface this to the
+    operator via the return value so audit logs show "cached"
+    when the registry was down.
+
+    Why not retry forever: if the registry is genuinely
+    unreachable AND the image isn't local, no amount of retrying
+    helps. Bail at max_attempts so the operator gets a fast,
+    actionable error instead of a 5-minute hang.
+    """
+    import time as _time
+
+    last_exc: Exception | None = None
+    delay = base_delay_s
+    for attempt in range(1, max_attempts + 1):
+        try:
+            client.images.pull(image)
+            log.info("pulled image %s (attempt %d)", image, attempt)
+            return "pulled"
+        except DockerException as exc:
+            last_exc = exc
+            log.warning(
+                "image pull attempt %d/%d failed for %s: %s",
+                attempt, max_attempts, image, exc,
+            )
+            # Last attempt — fall through to cache check below
+            if attempt == max_attempts:
+                break
+            _time.sleep(delay)
+            delay = min(delay * 2, max_delay_s)
+
+    # All attempts exhausted. Check local cache as a last resort.
+    try:
+        client.images.get(image)
+        log.warning(
+            "image %s pulled from cache after %d failed registry attempts "
+            "(operator may be offline)",
+            image, max_attempts,
+        )
+        return "cached"
+    except NotFound:
+        raise HTTPException(
+            502,
+            f"image {image!r} not in local cache and registry unreachable "
+            f"after {max_attempts} attempts: {last_exc}",
+        ) from last_exc
+
+
+async def _agent_set_container_url(
+    instance_id: str, container_url: str | None,
+) -> None:
+    """Call back to the agent's MCP to update the routing entry.
+
+    This is the contract: phantom-updater starts/stops the container,
+    then notifies the agent. The agent's MCP set_container_url
+    endpoint (api/instances.py) updates the row; the connector_loader's
+    container branch reads it via merged_config()→contextvar at the
+    next tool call.
+
+    Best-effort — failures here log a WARNING but don't fail the
+    start/stop call. Reason: the container is up (or down); the
+    routing entry is a downstream concern that an agent restart or
+    a follow-up sync would correct. Hard-failing the start endpoint
+    on a transient agent-MCP unreachable would be worse UX than
+    succeeding with a warning.
+    """
+    # v0.6.11 — TLS-aware default. Pre-v0.6.11 defaulted to http;
+    # v0.4.0+ the agent runs behind a TLS proxy on port 8080.
+    agent_url = _resolve_agent_internal_url()
+    url = f"{agent_url}/api/v1/instances/{instance_id}/container_url"
+    headers = {"Content-Type": "application/json"}
+    if MCP_TOKEN:
+        headers["Authorization"] = f"Bearer {MCP_TOKEN}"
+    body = {"container_url": container_url}
+    # v0.6.14 — use the centralized helper. Default compose-internal
+    # URL has a self-signed cert; verify=False is the architecturally
+    # correct setting (trust boundary = docker network alias, not
+    # cert chain). Operator override paths can opt in via
+    # PHANTOM_TLS_VERIFY=1.
+    verify_tls = _agent_tls_verify()
+    try:
+        async with httpx.AsyncClient(timeout=10.0, verify=verify_tls) as client:
+            resp = await client.put(url, json=body, headers=headers)
+        if resp.status_code >= 300:
+            log.warning(
+                "agent set_container_url returned %d for instance %s "
+                "(body=%.200s)",
+                resp.status_code, instance_id, resp.text,
+            )
+    except Exception as exc:  # noqa: BLE001
+        log.warning(
+            "could not notify agent of container_url change for instance %s: %s",
+            instance_id, exc,
+        )
+
+
+def _normalize_instance_name(name: str) -> str:
+    """Normalize an operator-supplied instance name to a docker-safe
+    form.
+
+    Operators routinely create instances with names like "Cortex XDR"
+    or "Cortex Docs Search" — spaces are valid in the agent's UI and
+    in the underlying instances.db. But docker container names can't
+    contain spaces, so we normalize whitespace → underscore at every
+    use site that constructs a container name.
+
+    Pre-v0.6.43 this normalization happened only at instance-CREATE
+    time (the original container was named "Cortex_XDR" with an
+    underscore). Other endpoints (reconcile, restart, stop) received
+    the RAW name "Cortex XDR" from the agent's database, passed it
+    through `_validate_path_segments`, and got rejected with
+    "invalid path segment 'Cortex XDR'; allowed: A-Z, a-z, 0-9, _, -".
+    The reconcile endpoint couldn't manage existing instances at all
+    if their names had spaces.
+
+    The normalization is conservative:
+      - Whitespace → "_" (so "Cortex XDR" → "Cortex_XDR")
+      - Other chars left alone (validator catches them after)
+
+    Idempotent — re-applying produces the same string.
+    """
+    return re.sub(r"\s+", "_", name)
+
+
+def _validate_path_segments(*parts: str) -> None:
+    """Defense-in-depth: connector_id + instance_name come from URL
+    path. FastAPI's path-param parsing is permissive; we explicitly
+    validate against shell-meta and dangerous chars before passing
+    them into Docker container names.
+
+    Callers should pass instance_name already normalized via
+    `_normalize_instance_name` so this validation accepts the
+    docker-safe form (spaces have been replaced with underscores by
+    that point).
+    """
+    safe = re.compile(r"^[a-zA-Z0-9_-]+$")
+    for p in parts:
+        if not safe.match(p):
+            raise HTTPException(
+                400, f"invalid path segment {p!r}; allowed: A-Z, a-z, 0-9, _, -",
+            )
+
+
+@app.post("/api/v1/connectors/{connector_id}/instances/{instance_name}/start")
+async def start_connector_instance(
+    connector_id: str, instance_name: str, request: Request,
+):
+    """Start a per-instance connector container.
+
+    Body (JSON):
+        instance_id: str    — the agent's instance row id (UUID)
+        version:     str?   — optional image version override
+                              (defaults to PHANTOM_VERSION)
+
+    The endpoint:
+      1. Validates connector_id is known + path segments are safe.
+      2. Removes any existing container with the same name (so
+         start is idempotent / equivalent to recreate).
+      3. Pulls the image (best-effort — falls back to local cache
+         if registry is unreachable; see P1.10 for retry).
+      4. Starts the container, attached to the compose default
+         network with the data volume mounted read-only.
+      5. POSTs back to the agent's MCP to populate the
+         container_url routing entry.
+    """
+    # v0.6.43 — normalize spaces in operator-supplied names BEFORE
+    # validation so the start endpoint can manage instances named
+    # like "Cortex XDR" (spaces). Container names use underscore;
+    # operator UI accepts spaces. See _normalize_instance_name docstring.
+    instance_name = _normalize_instance_name(instance_name)
+    _validate_path_segments(connector_id, instance_name)
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    instance_id = body.get("instance_id")
+    if not isinstance(instance_id, str) or not instance_id.strip():
+        raise HTTPException(400, "instance_id (string) required in body")
+
+    # v0.5.0: explicit image_ref support for user-uploaded connectors.
+    # The agent's instances.py reads `image:` from connector.yaml (which
+    # is required for user uploads, optional for bundle) and passes it
+    # through here. When present, skips KNOWN_CONNECTORS gating + the
+    # derivation path; uses the explicit ref directly. Bundle connectors
+    # leave it empty and fall through to derivation as before.
+    explicit_image = body.get("image_ref")
+    if isinstance(explicit_image, str) and explicit_image.strip():
+        image = explicit_image.strip()
+    else:
+        if connector_id not in KNOWN_CONNECTORS:
+            raise HTTPException(
+                400,
+                f"unknown connector_id {connector_id!r}; "
+                f"allowed bundle ids: {sorted(KNOWN_CONNECTORS)}. "
+                f"For user-uploaded connectors, pass image_ref in the "
+                f"body — see api/marketplace.py upload route.",
+            )
+        image = _connector_image_ref(connector_id, body.get("version"))
+    container_name = _connector_container_name(connector_id, instance_name)
+
+    client = _docker_client()
+
+    # Remove any existing container with the same name (idempotent
+    # restart). The Docker SDK raises NotFound if none exists; that's
+    # the happy first-time-start case.
+    try:
+        existing = client.containers.get(container_name)
+        log.info("removing existing container %s before start", container_name)
+        try:
+            existing.stop(timeout=10)
+        except DockerException:
+            pass
+        existing.remove(force=True)
+    except NotFound:
+        pass
+
+    # Pull image with exponential backoff (P1.10). Returns "pulled"
+    # on fresh pull success or "cached" when the registry was
+    # unreachable but a previous pull still lives in local cache
+    # (offline-deploy recovery path). Raises HTTPException(502) when
+    # both fail.
+    pull_status = _pull_with_retry(client, image)
+
+    # Start the container. Env wiring + volume mount + network
+    # attach mirrors what phantom-agent + xlog + phantom-browser
+    # already do in customer compose.
+    try:
+        container = client.containers.run(
+            image,
+            name=container_name,
+            environment={
+                "CONNECTOR_ID": connector_id,
+                "INSTANCE_ID": instance_id,
+                "PORT": "9000",
+                "DATA_ROOT": "/app/data",
+                # v0.6.17 — read PHANTOM_SECRET_KEK from /host/.env
+                # (same pattern as PHANTOM_VERSION / DIGEST_PHANTOM_*
+                # reads). Pre-v0.6.17 this was os.environ.get(...)
+                # which assumed the customer compose's `environment:`
+                # block passed it through. But the compose block
+                # INTENTIONALLY doesn't pass it (per v0.5.51's
+                # docker-compose env-stability invariant: any env
+                # block change forces phantom-updater container
+                # recreate on stack upgrade, defeating the digest-
+                # pinning preservation). So pre-v0.6.17 phantom-
+                # updater started connector containers with an
+                # EMPTY PHANTOM_SECRET_KEK env var → the connector-
+                # runtime's SecretStoreReader.read() failed with
+                # "PHANTOM_SECRET_KEK is not set" → instance.secret_refs
+                # all resolved to empty string → connectors errored
+                # at first tool call with "no apiKey configured."
+                # Surfaced when v0.6.16 finally got past the
+                # connector-image-flow gap and the operator's
+                # caldera connector container actually tried to
+                # dispatch.
+                "PHANTOM_SECRET_KEK": _host_env_get("PHANTOM_SECRET_KEK", "") or "",
+                # v0.6.11 — TLS-aware default. Pre-v0.6.11 hard-coded
+                # http://phantom-agent:8080; the connector-container
+                # process would then fail to write audit rows when
+                # TLS was on.
+                "PHANTOM_AUDIT_URL": os.environ.get(
+                    "PHANTOM_AUDIT_URL",
+                    f"{_resolve_agent_internal_url()}/api/v1/audit",
+                ),
+                "MCP_TOKEN": MCP_TOKEN,
+                "LOG_LEVEL": os.environ.get("LOG_LEVEL", "INFO"),
+            },
+            volumes={
+                _compose_data_volume_name(): {
+                    "bind": "/app/data",
+                    "mode": "ro",
+                },
+            },
+            network=_compose_network_name(),
+            restart_policy={"Name": "unless-stopped"},
+            detach=True,
+            labels={
+                # Tag with the compose project so the agent's UI can
+                # filter "containers we manage" vs operator-side
+                # containers running on the same host.
+                "com.docker.compose.project": _compose_project_name(),
+                "phantom.connector_id": connector_id,
+                "phantom.instance_id": instance_id,
+                "phantom.instance_name": instance_name,
+                "phantom.role": "connector-runtime",
+            },
+        )
+    except DockerException as exc:
+        log.exception("container start failed for %s", container_name)
+        raise HTTPException(500, f"container start failed: {exc}") from exc
+
+    # Build the URL the agent's loader will use to reach this container.
+    # Compose-network DNS resolves <container_name> to the right IP.
+    container_url = f"http://{container_name}:9000"
+
+    # Notify agent of the routing entry. Best-effort.
+    await _agent_set_container_url(instance_id, container_url)
+
+    log.info(
+        "started connector container: %s (instance_id=%s, image=%s)",
+        container_name, instance_id, image,
+    )
+
+    return {
+        "container_id": container.id,
+        "container_name": container_name,
+        "container_url": container_url,
+        "image": image,
+        "image_pull": pull_status,  # "pulled" | "cached" — informational
+        "status": "started",
+    }
+
+
+@app.post("/api/v1/connectors/{connector_id}/instances/{instance_name}/stop")
+async def stop_connector_instance(connector_id: str, instance_name: str):
+    """Stop + remove a per-instance connector container. Also clears
+    the agent's routing entry."""
+    # v0.6.43 — normalize spaces in operator-supplied names BEFORE
+    # validation so reconcile/start/stop/restart can manage instances
+    # named like "Cortex XDR" (spaces). Container names use underscore;
+    # operator UI accepts spaces. See _normalize_instance_name docstring.
+    instance_name = _normalize_instance_name(instance_name)
+    _validate_path_segments(connector_id, instance_name)
+    if connector_id not in KNOWN_CONNECTORS:
+        raise HTTPException(
+            400,
+            f"unknown connector_id {connector_id!r}; "
+            f"allowed: {sorted(KNOWN_CONNECTORS)}",
+        )
+
+    container_name = _connector_container_name(connector_id, instance_name)
+    client = _docker_client()
+
+    # Best-effort: extract instance_id from labels BEFORE we kill the
+    # container, so we can still notify the agent even if the operator
+    # doesn't pass instance_id in the body.
+    instance_id: str | None = None
+    try:
+        existing = client.containers.get(container_name)
+        instance_id = existing.labels.get("phantom.instance_id")
+    except NotFound:
+        return {"status": "not_running", "container_name": container_name}
+
+    try:
+        existing.stop(timeout=10)
+        existing.remove(force=True)
+    except DockerException as exc:
+        log.exception("stop failed for %s", container_name)
+        raise HTTPException(500, f"stop failed: {exc}") from exc
+
+    if instance_id:
+        await _agent_set_container_url(instance_id, None)
+
+    log.info("stopped connector container: %s", container_name)
+    return {"status": "stopped", "container_name": container_name}
+
+
+@app.get("/api/v1/connectors/{connector_id}/instances/{instance_name}/status")
+async def status_connector_instance(connector_id: str, instance_name: str):
+    """Return Docker-side status for a per-instance connector
+    container. Used by the /connectors UI's per-instance status
+    badge + by phantom-updater's own readiness checks."""
+    # v0.6.43 — normalize spaces in operator-supplied names BEFORE
+    # validation so reconcile/start/stop/restart can manage instances
+    # named like "Cortex XDR" (spaces). Container names use underscore;
+    # operator UI accepts spaces. See _normalize_instance_name docstring.
+    instance_name = _normalize_instance_name(instance_name)
+    _validate_path_segments(connector_id, instance_name)
+    if connector_id not in KNOWN_CONNECTORS:
+        raise HTTPException(
+            400,
+            f"unknown connector_id {connector_id!r}; "
+            f"allowed: {sorted(KNOWN_CONNECTORS)}",
+        )
+
+    container_name = _connector_container_name(connector_id, instance_name)
+    client = _docker_client()
+
+    try:
+        container = client.containers.get(container_name)
+    except NotFound:
+        return {
+            "container_name": container_name,
+            "status": "not_running",
+            "container_url": None,
+        }
+
+    # Map docker container Status field to a small set of values the
+    # agent UI cares about. Docker reports: created, restarting,
+    # running, removing, paused, exited, dead.
+    docker_status = (container.status or "").lower()
+    health = None
+    try:
+        health = container.attrs.get("State", {}).get("Health", {}).get("Status")
+    except Exception:  # noqa: BLE001
+        pass
+
+    if docker_status == "running":
+        ui_status = "healthy" if health in ("healthy", None) else (
+            "unhealthy" if health == "unhealthy" else "starting"
+        )
+    elif docker_status in ("restarting", "created"):
+        ui_status = "starting"
+    else:
+        ui_status = "stopped"
+
+    return {
+        "container_name": container_name,
+        "container_id": container.id,
+        "status": ui_status,
+        "docker_status": docker_status,
+        "health": health,
+        "restart_count": container.attrs.get("RestartCount", 0),
+        "container_url": f"http://{container_name}:9000",
+        "image": (container.image.tags or [container.image.id])[0],
+    }
+
+
+@app.get("/api/v1/connectors/digests")
+async def list_connector_digests():
+    """Return image-pinning info for every per-instance connector
+    container managed by this updater.
+
+    v0.3.0+ — used by the agent's /api/agent/digests proxy to populate
+    the /observability/connectors panel's digest column. Each row
+    reflects the actual running container's image (via docker inspect),
+    not what the manifest says SHOULD be running. The two normally
+    agree, but a divergence (e.g. operator manually swapped an image
+    via `docker run`) is operationally interesting and worth surfacing.
+
+    Returns:
+      {connectors: [
+        {connector_id, instance_id, instance_name, digest,
+         pinning_mode: 'digest' | 'tag', image_ref},
+        ...
+      ]}
+
+    `digest` is null when the container is in tag-pinning fallback
+    mode (DIGEST_PHANTOM_CONNECTOR_<ID> not set in updater env) or
+    when the container isn't running.
+    """
+    client = _docker_client()
+    rows: list[dict] = []
+
+    # Enumerate every container whose name matches our per-instance
+    # naming convention: phantom-connector-<id>-<instance>
+    # (set by _connector_container_name() at create time).
+    for container in client.containers.list(
+        all=True, filters={"name": "phantom-connector-"}
+    ):
+        name = container.name or ""
+        # Strip the prefix and split into <id>-<instance>. The split
+        # only handles the FIRST hyphen because connector_id is single-
+        # word ("xlog", "xsiam", etc.) per KNOWN_CONNECTORS.
+        if not name.startswith("phantom-connector-"):
+            continue
+        rest = name[len("phantom-connector-"):]
+        if "-" not in rest:
+            log.warning("Skipping malformed connector container name: %s", name)
+            continue
+        connector_id, _, instance_name = rest.partition("-")
+        if connector_id not in KNOWN_CONNECTORS:
+            # Unknown connector_id — likely a legacy container from a
+            # past install. Skip rather than misreport.
+            continue
+
+        # The instance_id is set as a container env var when we start
+        # the container (see _start_connector_instance). Read it back
+        # from inspect for a faithful round-trip.
+        env_pairs = container.attrs.get("Config", {}).get("Env", []) or []
+        instance_id = ""
+        for e in env_pairs:
+            if e.startswith("INSTANCE_ID="):
+                instance_id = e[len("INSTANCE_ID="):]
+                break
+
+        # Running digest, sourced from the container's image's
+        # RepoDigests. Same logic as _current_version_for() for
+        # stack-tier services.
+        running_digest: str | None = None
+        repo_digests = container.image.attrs.get("RepoDigests") or []
+        expected_prefix = f"{REGISTRY}/{OWNER}/phantom-connector-{connector_id}@"
+        for rd in repo_digests:
+            if rd.startswith(expected_prefix):
+                running_digest = rd.split("@", 1)[1]
+                break
+        if running_digest is None and repo_digests:
+            # Fall back to the first RepoDigest for diagnostic visibility,
+            # even if the prefix doesn't match (operator might have
+            # built locally with a non-canonical tag).
+            running_digest = (
+                repo_digests[0].split("@", 1)[1]
+                if "@" in repo_digests[0] else None
+            )
+
+        # Pinning mode: digest if the env var IS set AND matches the
+        # running digest; tag otherwise. The image_pinning_for()
+        # helper consults the same env var the container was started
+        # with — so as long as the operator didn't manually swap, the
+        # two agree.
+        pinning = image_pinning_for(connector_id)
+        image_ref = (container.image.tags or [container.image.id])[0] or ""
+
+        rows.append({
+            "connector_id": connector_id,
+            "instance_id": instance_id,
+            "instance_name": instance_name,
+            "digest": running_digest,
+            "pinning_mode": pinning["pinning"],
+            "image_ref": image_ref,
+        })
+
+    return {"connectors": rows}
+
+
+async def _reconcile_connector_digest_drift() -> dict:
+    """v0.6.66 — recreate per-instance connector containers whose
+    running image digest doesn't match the pinned digest in
+    /host/connector-digests.env.
+
+    Why this exists (the v0.6.65 bug story):
+    Per-instance connector containers are spawned by phantom-updater
+    when the operator first creates an instance via /connectors. After
+    that, they stick around — docker-compose's `up -d` doesn't touch
+    them because they're not in docker-compose.yml (they're managed
+    dynamically by phantom-updater per-instance). Every dev-cycle
+    install updates /host/connector-digests.env with new pinned
+    digests, but the existing per-instance containers KEEP RUNNING the
+    image digest they were originally spawned with. The operator's
+    chat tests then exercise STALE connector code while the agent
+    itself is current — confusing-as-hell debug story.
+
+    Observed in operator session 26a7fdd3 (2026-05-20): cortex-xdr
+    connector container was 17 hours old; the agent was on v0.6.63
+    (4 minutes old). Manually `docker rm -f` + reconcile fixed it,
+    but the operator shouldn't need to know this.
+
+    v0.6.66 fix: phantom-updater detects digest drift on startup +
+    via this endpoint, and recreates the divergent containers
+    automatically. The recreate goes through start_connector_instance
+    which already handles the lifecycle (stop+remove existing, pull
+    new image, spawn new container, callback agent with the URL).
+
+    Safety:
+      - Only recreates when running digest != pinned digest. Fresh
+        installs (no prior containers) skip; matched-digest containers
+        skip.
+      - Sequential, not parallel — one connector at a time so we
+        don't thrash the docker daemon or the agent's callback path.
+      - Errors per-container are logged + included in the response
+        but don't abort the loop.
+
+    Returns: {drifted: [...], recreated: [...], unchanged: [...], failed: [...]}.
+    """
+    import httpx as _httpx  # noqa: PLC0415
+    summary: dict[str, list] = {
+        "drifted": [],
+        "recreated": [],
+        "unchanged": [],
+        "failed": [],
+    }
+
+    client = _docker_client()
+    try:
+        containers = client.containers.list(
+            all=False, filters={"name": "phantom-connector-"},
+        )
+    except DockerException as exc:
+        log.warning("digest-drift reconcile: docker list failed: %s", exc)
+        return summary
+
+    # Need to call start_connector_instance via HTTP to reuse its
+    # complete lifecycle (stop + remove + pull + start + agent callback).
+    # Self-loopback via localhost:8090 — same port the agent uses.
+    self_url = "http://127.0.0.1:8090"
+    headers = {"Authorization": f"Bearer {MCP_TOKEN}"} if MCP_TOKEN else {}
+
+    for container in containers:
+        name = container.name or ""
+        if not name.startswith("phantom-connector-"):
+            continue
+        rest = name[len("phantom-connector-"):]
+        if "-" not in rest:
+            continue
+        connector_id, _, instance_name = rest.partition("-")
+        if connector_id not in KNOWN_CONNECTORS:
+            continue
+
+        # Read pinned digest from /host/connector-digests.env.
+        pinned = _connector_digest(connector_id)
+        if not pinned:
+            # No pinning configured — operator running in tag-mode.
+            # Skip; the customer-install path doesn't use tag-mode.
+            summary["unchanged"].append({
+                "container": name,
+                "reason": "no pinned digest",
+            })
+            continue
+
+        # Read running container's image digest from its RepoDigests.
+        running_digest: str | None = None
+        repo_digests = container.image.attrs.get("RepoDigests") or []
+        expected_prefix = (
+            f"{REGISTRY}/{OWNER}/phantom-connector-{connector_id}@"
+        )
+        for rd in repo_digests:
+            if rd.startswith(expected_prefix):
+                running_digest = rd.split("@", 1)[1]
+                break
+
+        if running_digest is None:
+            # Locally-built image without a registry digest — can
+            # happen in dev environments. Can't diff; skip.
+            summary["unchanged"].append({
+                "container": name,
+                "reason": "no registry digest on running image",
+            })
+            continue
+
+        if running_digest == pinned:
+            summary["unchanged"].append({
+                "container": name,
+                "digest": running_digest[:19] + "...",
+            })
+            continue
+
+        # Drift detected. Need the instance_id to call start.
+        env_pairs = container.attrs.get("Config", {}).get("Env", []) or []
+        instance_id = ""
+        for e in env_pairs:
+            if e.startswith("INSTANCE_ID="):
+                instance_id = e[len("INSTANCE_ID="):]
+                break
+        if not instance_id:
+            log.warning(
+                "digest-drift: %s drifted but has no INSTANCE_ID label; "
+                "skipping recreate (would need agent-side instance lookup)",
+                name,
+            )
+            summary["failed"].append({
+                "container": name,
+                "reason": "no INSTANCE_ID label — can't safely recreate",
+            })
+            continue
+
+        drifted_entry = {
+            "container": name,
+            "connector_id": connector_id,
+            "instance_name": instance_name,
+            "instance_id": instance_id,
+            "running_digest": running_digest[:19] + "...",
+            "pinned_digest": pinned[:19] + "...",
+        }
+        summary["drifted"].append(drifted_entry)
+
+        log.info(
+            "digest-drift: %s running=%s pinned=%s — recreating",
+            name, running_digest[:19], pinned[:19],
+        )
+        try:
+            async with _httpx.AsyncClient(timeout=_httpx.Timeout(60.0)) as http:
+                resp = await http.post(
+                    f"{self_url}/api/v1/connectors/{connector_id}/"
+                    f"instances/{instance_name}/start",
+                    headers=headers,
+                    json={"instance_id": instance_id},
+                )
+            if resp.status_code < 300:
+                summary["recreated"].append({**drifted_entry,
+                                              "response": resp.json()})
+            else:
+                summary["failed"].append({
+                    **drifted_entry,
+                    "status_code": resp.status_code,
+                    "body": resp.text[:200],
+                })
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "digest-drift: recreate of %s failed: %s", name, exc,
+            )
+            summary["failed"].append({**drifted_entry, "error": str(exc)})
+
+    return summary
+
+
+@app.post("/api/v1/connectors/reconcile/digests")
+async def reconcile_connector_digest_drift_endpoint():
+    """v0.6.66 — operator-callable digest-drift reconcile.
+
+    Same logic as the startup-time auto-reconcile, exposed as an
+    endpoint for manual trigger when the operator notices a
+    connector container is running stale code (e.g. behavior doesn't
+    match a recent release's CHANGELOG entry).
+    """
+    return await _reconcile_connector_digest_drift()
+
+
+@app.post("/api/v1/connectors/reconcile")
+async def reconcile_connector_containers():
+    """Ensure every container-style instance has a running container.
+
+    v0.1.31 (Phase 2) entry point for the upgrade path: a customer
+    on v0.1.30 has an existing in-process web instance; after
+    upgrading to v0.1.31, web's connector.yaml flips to style:
+    container, but no container exists for the instance yet. The
+    connector_loader's container branch would error with
+    "container_url not set" on every tool call until something
+    starts a container.
+
+    This endpoint:
+      1. Queries the agent's /api/v1/instances for the full list
+         of instances.
+      2. For each instance whose connector has style: container in
+         its connector.yaml AND no container_url set, calls the
+         start endpoint.
+      3. Returns a summary of {reconciled: [...], skipped: [...],
+         failed: [...]}.
+
+    Idempotent — safe to call repeatedly. Operators (or boot-time
+    agent reconciliation) can call this without checking state
+    first.
+
+    Auth: same MCP_TOKEN bearer as the rest of /api/v1.
+
+    Body: optional {}; no input parameters today. Future versions
+    might accept a connector_id filter.
+    """
+    # v0.6.11 — TLS-aware default. Pre-v0.6.11 defaulted to http;
+    # v0.4.0+ the agent runs behind a TLS proxy on port 8080.
+    agent_url = _resolve_agent_internal_url()
+    headers = {"Authorization": f"Bearer {MCP_TOKEN}"} if MCP_TOKEN else {}
+
+    # v0.6.14 — use the centralized helper. Default compose-internal
+    # URL has a self-signed cert; verify=False is the architecturally
+    # correct setting.
+    verify_tls = _agent_tls_verify()
+
+    # Query agent for all instances + each connector's runtime style.
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0), verify=verify_tls) as client:
+            instances_resp = await client.get(
+                f"{agent_url}/api/v1/instances", headers=headers,
+            )
+        if instances_resp.status_code >= 300:
+            raise HTTPException(
+                502,
+                f"agent /api/v1/instances returned {instances_resp.status_code}: "
+                f"{instances_resp.text[:200]}",
+            )
+        instances = instances_resp.json().get("instances") or []
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            502, f"could not list instances from agent: {exc}",
+        ) from exc
+
+    # Cache connector.yaml lookups since multiple instances may share
+    # the same connector_id. We CAN'T read connector.yaml directly
+    # from this container (the bundle isn't mounted here), so we ask
+    # the agent for the runtime style. Fastest path: /api/v1/marketplace
+    # endpoint OR a small /api/v1/connectors/<id>/style endpoint.
+    # Phase 1 simplification: try a HEAD request to the agent's
+    # set_container_url endpoint — if the connector is container-style,
+    # the agent's loader will accept the call. Otherwise just trust
+    # the per-instance container_url field — if it's NULL and the
+    # connector_id is one we have a phantom-connector-<id> image for,
+    # we attempt the start.
+
+    reconciled: list[dict] = []
+    skipped: list[dict] = []
+    failed: list[dict] = []
+
+    for inst in instances:
+        cid = inst.get("connector_id")
+        name = inst.get("name")
+        iid = inst.get("id")
+        existing_url = inst.get("container_url")
+
+        if cid not in KNOWN_CONNECTORS:
+            # Not a connector we have an image for — skip silently.
+            # xlog/caldera/xsiam in v0.1.31 are still style: module;
+            # only web is style: container.
+            skipped.append({
+                "connector_id": cid, "instance_name": name,
+                "reason": "connector_id not in KNOWN_CONNECTORS",
+            })
+            continue
+
+        if existing_url:
+            # Already has a container_url — try to verify the container
+            # is actually running. If it is, skip; if not, try start.
+            container_name = _connector_container_name(cid, name)
+            try:
+                client = _docker_client()
+                ctn = client.containers.get(container_name)
+                if (ctn.status or "").lower() == "running":
+                    skipped.append({
+                        "connector_id": cid, "instance_name": name,
+                        "reason": "already running with container_url",
+                    })
+                    continue
+            except NotFound:
+                # container_url set but no container — fall through to start.
+                log.info(
+                    "instance %s/%s has stale container_url (no container); "
+                    "reconciling by starting fresh",
+                    cid, name,
+                )
+
+        # Call our own start endpoint. Reuses all the validation +
+        # image-pull-with-retry + lifecycle logic.
+        class _StubReq:
+            async def json(self):
+                return {"instance_id": iid}
+
+        try:
+            result = await start_connector_instance(cid, name, _StubReq())
+            reconciled.append({
+                "connector_id": cid,
+                "instance_name": name,
+                "instance_id": iid,
+                "container_url": result.get("container_url"),
+                "image_pull": result.get("image_pull"),
+            })
+        except HTTPException as exc:
+            failed.append({
+                "connector_id": cid,
+                "instance_name": name,
+                "instance_id": iid,
+                "error": f"HTTP {exc.status_code}: {exc.detail}",
+            })
+        except Exception as exc:  # noqa: BLE001
+            failed.append({
+                "connector_id": cid,
+                "instance_name": name,
+                "instance_id": iid,
+                "error": str(exc),
+            })
+
+    log.info(
+        "reconcile complete: reconciled=%d skipped=%d failed=%d",
+        len(reconciled), len(skipped), len(failed),
+    )
+    return {
+        "reconciled": reconciled,
+        "skipped": skipped,
+        "failed": failed,
+        "total_instances": len(instances),
+    }
+
+
+@app.post("/api/v1/connectors/{connector_id}/instances/{instance_name}/restart")
+async def restart_connector_instance(
+    connector_id: str, instance_name: str, request: Request,
+):
+    """Restart a per-instance connector container. Internally:
+    stop → start. The image version is preserved (re-read from the
+    existing container's labels) unless overridden in the body —
+    this is the typical "kick the container after wedge" path."""
+    # v0.6.43 — normalize spaces in operator-supplied names BEFORE
+    # validation so reconcile/start/stop/restart can manage instances
+    # named like "Cortex XDR" (spaces). Container names use underscore;
+    # operator UI accepts spaces. See _normalize_instance_name docstring.
+    instance_name = _normalize_instance_name(instance_name)
+    _validate_path_segments(connector_id, instance_name)
+    if connector_id not in KNOWN_CONNECTORS:
+        raise HTTPException(
+            400,
+            f"unknown connector_id {connector_id!r}; "
+            f"allowed: {sorted(KNOWN_CONNECTORS)}",
+        )
+
+    container_name = _connector_container_name(connector_id, instance_name)
+    client = _docker_client()
+
+    # Pull instance_id from labels of the existing container if the
+    # caller didn't supply it. Restart should "just work" without
+    # needing to know the instance UUID.
+    instance_id: str | None = None
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if isinstance(body, dict) and isinstance(body.get("instance_id"), str):
+        instance_id = body["instance_id"]
+    else:
+        try:
+            existing = client.containers.get(container_name)
+            instance_id = existing.labels.get("phantom.instance_id")
+        except NotFound:
+            pass
+
+    if not instance_id:
+        raise HTTPException(
+            400,
+            "could not resolve instance_id (no running container; "
+            "pass it in the body)",
+        )
+
+    # Reuse the start handler's logic by constructing a minimal Request-
+    # like body. Could refactor into a shared helper later; for Phase 1
+    # the duplication is small enough to live with.
+    class _StubRequest:
+        async def json(self):
+            return {"instance_id": instance_id}
+
+    return await start_connector_instance(
+        connector_id, instance_name, _StubRequest(),
+    )

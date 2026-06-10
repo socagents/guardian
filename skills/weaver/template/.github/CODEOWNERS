@@ -1,0 +1,10 @@
+# Global fallback ownership placeholder.
+* @{{GITHUB_ORG}}/platform-maintainers
+
+# Contracts are shared across service leads because every service consumes gRPC APIs.
+/contracts/ @{{GITHUB_ORG}}/integration-leads @{{GITHUB_ORG}}/cognitive-leads @{{GITHUB_ORG}}/runtime-leads @{{GITHUB_ORG}}/presentation-leads
+
+# Layer-specific service ownership placeholders.
+/services/api-gateway/ @{{GITHUB_ORG}}/integration-team
+/services/agent-runtime/ @{{GITHUB_ORG}}/cognitive-team
+/services/ui/ @{{GITHUB_ORG}}/presentation-team

@@ -1,0 +1,97 @@
+- id: 9d7b5a3c-4e1f-4b62-a9c1-8f3e7d2b5a6e
+  name: "Phantom: Master Killchain (curated v0.5.88+)"
+  description: >
+    Phantom's flagship adversary — the single most comprehensive validated
+    attack chain in the battery. Combines v0.5.57's proven 20-step phishing →
+    ransomware kill chain with two NEW pre/in-chain steps based on findings
+    from XDR cases 1794 + 1795 (autonomous battery run 2026-05-17):
+
+      1. Phantom decoy-files pre-condition (T1607) at chain start — so the
+         Ransack-style staging half of the chain works on a clean lab without
+         operator manual setup (this is what v0.5.83-v0.5.85 introduced for
+         the curated Ransack/Super Spy/Thief variants).
+
+      2. PowerKatz (stockpile T1003 Run PowerKatz, ability baac2c6d) added
+         mid-chain — Cortex's "PowerShell runs with known Mimikatz arguments"
+         signature fires reliably on this; together with v0.5.57's existing
+         LSASS minidump (T1003.001 comsvcs.dll rundll32) we get 2 distinct
+         Cortex credential-access detection signals per run.
+
+    Validation evidence: this chain (as variants in our test session) generated
+    incidents 1794 + 1795 in Cortex XDR — both severity=high, 61 total alerts
+    across 7 of 12 MITRE enterprise tactics:
+
+      TA0002 Execution           (~15 alerts: Script Engine Activity, PSh Activity)
+      TA0003 Persistence         (T1574.002 DLL Side-Loading, T1197 BITS Jobs)
+      TA0004 Privilege Escalation (Akagi64 Fodhelper UAC bypass WildFire)
+      TA0005 Defense Evasion     (T1140 Decode, T1132 Data Encoding)
+      TA0006 Credential Access   (T1003, T1003.001, T1003.004, T1555 — Mimikatz
+                                  args + Credential Gathering Protection x2)
+      TA0008 Lateral Movement    (T1550 — real SMB+WMI+WinRM cross-host)
+      TA0011 Command and Control (Sandcat HTTP beacon + T1197 BITS)
+
+    Per-host distribution: incident 1794 on xdragent2 (31 alerts), incident 1795
+    on xdragent (30 alerts). Both incidents triggered by the same chain pattern,
+    proving the adversary is reproducible across our 2-host lab.
+
+    Cortex-detected Caldera abilities in this chain (ranked by alert volume):
+      - PSh-encoded ability execution: 39 alerts (Script Engine + PSh Activity)
+      - Sandcat venus.exe beacon: 20 alerts (WildFire + Local Analysis + BITS)
+      - Akagi64 Fodhelper UAC bypass: 2 WildFire Malware alerts on Akagi64.exe
+      - PowerKatz Mimikatz args: 2 Credential Gathering Protection alerts
+
+    Use this adversary when you want ONE operation that exercises a broad,
+    Cortex-detected attack chain across multiple tactics. For focused testing
+    (just ransomware-staging, just lateral movement, etc.), use the other
+    curated adversaries in this directory.
+
+    Phantom-bundled — ships in the caldera image starting v0.5.88.
+    Requires the two bootstrap abilities (00-bootstrap/) to be run once first
+    (bootstrap-xdragent2-victim on group=victim host, bootstrap-xdragent-attacker
+    on group=red host) before this adversary executes — same as v0.5.57's
+    phishing chain.
+
+  atomic_ordering:
+    # NEW v0.5.88 — Phantom decoy pre-condition for the staging half
+    - 7e88a8b1-1c4f-4dcb-9c92-aef82a7c5d11  # Phantom: Setup Ransack decoy files (T1607)
+
+    # === v0.5.57 phishing kill chain — proven Cortex-detected 20 steps ===
+    - 85d04954-9c44-4fd9-8952-e5f971df6c88  # T1566.001 Spearphishing Attachment (email client spawn)
+    - 9003977ffd2779fd5877d65f970af885      # T1059.003 Windows Command Shell
+    - 9fe14e06-cc17-4b7f-9672-994c4fb380b5  # T1087.001 Account/System Discovery
+    - 7d9ec45b-5ea8-5c8f-940a-961d64d6a88e  # T1082 + T1018 System Info burst (NEW v0.5.57)
+    - 038d7c43-5e08-58e4-89af-8c9676a11bcb  # T1135 Network Share Discovery (NEW v0.5.57)
+    - bb0df721f4a4defa743efe9e61837c44      # T1003.005 Cached Credentials
+    - 5a2232b1-b44e-5fbc-aa28-8867cffdc9a6  # T1003.001 LSASS Memory minidump (comsvcs.dll rundll32)
+
+    # NEW v0.5.88 — PowerKatz added for additional Mimikatz signature density
+    - baac2c6d-4652-4b7e-ab0a-f1bf246edd12  # T1003.001 Run PowerKatz (stockpile) — Cortex Credential Gathering Protection + Mimikatz-args alerts
+
+    - 20d68348c822d2947e5a795ac15a22b0      # T1548.002 Fodhelper UAC Bypass (Akagi64) — WildFire Malware on Akagi64.exe
+    - ed317669-71d7-533d-b899-96fa70b52826  # T1562.001 Disable Defender Real-time
+    - 4a1a71ef-928d-5e4e-8380-a5da501aefc8  # T1140 Certutil Decode (LOLBin)
+    - f39aace719f4cdcf8569001f7a25aabf      # T1136.001 Create Local Account
+    - 00cd0d4e-f996-51b3-b494-8d014e6c0647  # T1547.001 Registry Run Key
+    - 9f83d684-8072-5681-92c0-45ba474fdab6  # T1053.005 Scheduled Task onlogon
+    - 55aee52f-e755-46b5-b7e7-37c4bf13a2c3  # T1021.002 Phantom Lateral SMB+WMI+WinRM (real cross-host RCE, no requirements)
+    - 086da3db-620f-40fe-9479-cb3c8d9bd0fa  # T1119 Automated Collection
+    - 8cd2639cb742872b58a2356909628376      # T1560 Archive Collected Data
+    - 99f171c7-637b-4ba3-9ab7-d53f34b613e0  # T1071.004 DNS C2
+    - 1f5120ba-1fa5-472f-adb7-2d22decf0cad  # T1041 Exfil over C2
+    - 47d08617-5ce1-424a-8cc5-c9c978ce6bf9  # T1491 Defacement
+    - 72ef20bd-73d0-5a11-9211-1c2d0a4d8a14  # T1070.001 Clear Security Event Log
+  objective: 495a9828-cc81-44fe-a4b5-d3b41882a6b5
+  has_repeatable_abilities: false
+  tags:
+    - phantom-curated
+    - master-killchain
+    - flagship
+    - cortex-validated
+    - mitre-7-tactics
+    # v0.6.4 — first customer release that actually ships Phantom content.
+    # v0.5.57 through v0.6.3 all shipped vanilla aymanam-style Caldera
+    # because release.yml lacked the overlay step that build-caldera.yml has.
+    # v0.6.3 fix: pull :dev (overlay-correct) instead of vanilla rebuild from source.
+    # v0.6.4 tag intentionally touches this YAML to break the v0.6.0-v0.6.3
+    # vanilla-retag chain — the detection now correctly fires CHANGED=1.
+    - v0.6.4-broke-vanilla-retag-chain

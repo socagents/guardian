@@ -1,0 +1,437 @@
+# Agent Planning Workflow
+#
+# Runs the planning agent (Claude Code headless) to decompose specs
+# into actionable GitHub Issues, assign agents, and track progress.
+#
+# Triggers:
+#   - Push to main that adds or modifies specs (auto-decompose on commit)
+#   - Manual dispatch with optional spec file override
+
+name: Agent – Planning
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "specs/**"
+  workflow_dispatch:
+    inputs:
+      spec_files:
+        description: "Override: comma-separated spec file paths (e.g. specs/foo.md,specs/bar.md). Leave empty for full scan."
+        required: false
+        type: string
+      dry_run:
+        description: "Dry run - plan but do not create issues"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+  actions: write
+
+concurrency:
+  group: kite-planning
+  cancel-in-progress: false
+
+env:
+  # Budget: max planning runs per day (resets at 00:00 UTC)
+  DAILY_RUN_LIMIT: "{{LIMIT_PLANNING}}"
+  TOKEN_LOG_DIR: /home/{{RUNNER_USER}}/kite-token-logs
+
+jobs:
+  plan:
+    name: Run Planning Agent
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    environment: dev
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clean: false
+
+      - name: Load current project state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/planning-context
+
+          gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --json number,title,labels,milestone,assignees \
+            --limit 200 \
+            > /tmp/planning-context/open-issues.json
+
+          gh api "repos/${GITHUB_REPOSITORY}/milestones?state=open&per_page=100" \
+            > /tmp/planning-context/milestones.json
+
+          gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state merged \
+            --json number,title,labels,mergedAt \
+            --limit 50 \
+            > /tmp/planning-context/recent-merges.json
+
+          # Feed closed issues so the planning agent can dedup against
+          # already-completed work (prevents creating issues for done work)
+          gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state closed \
+            --json number,title,labels \
+            --limit 100 \
+            > /tmp/planning-context/closed-issues.json
+
+          echo "::group::Project State Summary"
+          echo "Open issues: $(jq length /tmp/planning-context/open-issues.json)"
+          echo "Closed issues: $(jq length /tmp/planning-context/closed-issues.json)"
+          echo "Active milestones: $(jq length /tmp/planning-context/milestones.json)"
+          echo "Recent merges: $(jq length /tmp/planning-context/recent-merges.json)"
+          echo "::endgroup::"
+
+      - name: Check daily run limit
+        id: budget
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+          LOG_FILE="${TOKEN_LOG_DIR}/planning-agent/${TODAY}.jsonl"
+
+          if [ -f "$LOG_FILE" ]; then
+            USED=$(wc -l < "$LOG_FILE")
+          else
+            USED=0
+          fi
+
+          REMAINING=$((DAILY_RUN_LIMIT - USED))
+          echo "used=$USED" >> "$GITHUB_OUTPUT"
+          echo "remaining=$REMAINING" >> "$GITHUB_OUTPUT"
+
+          if [ "$REMAINING" -le 0 ]; then
+            echo "::warning::Planning agent daily run limit reached ($USED / $DAILY_RUN_LIMIT)"
+            echo "budget_ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "budget_ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Detect changed specs
+        id: specs
+        env:
+          INPUT_SPECS: ${{ inputs.spec_files }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${INPUT_SPECS:-}" ]; then
+            # Manual dispatch with explicit spec list
+            CHANGED=$(echo "$INPUT_SPECS" | tr ',' '\n' | sed 's/^ *//;s/ *$//')
+            echo "Using manual override specs"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            # Push event — diff against parent commit
+            CHANGED=$(git diff --name-only --diff-filter=AM "${{ github.event.before }}" "${{ github.sha }}" \
+              | grep '^specs/.*\.md$' || true)
+            echo "Detected changed specs from push"
+          else
+            # Manual dispatch with no spec_files — full scan
+            CHANGED=$(find specs/ -name '*.md' -not -name 'spec-template.md' -not -name 'README.md' | sort)
+            echo "Full scan — no specific specs provided"
+          fi
+
+          if [ -z "$CHANGED" ]; then
+            echo "::warning::No spec files detected — skipping planning"
+            echo "has_specs=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "has_specs=true" >> "$GITHUB_OUTPUT"
+          echo "Specs to decompose:"
+          echo "$CHANGED"
+
+          # Store as multiline output
+          {
+            echo "spec_list<<SPECS_EOF"
+            echo "$CHANGED"
+            echo "SPECS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run planning agent
+        if: steps.budget.outputs.budget_ok == 'true' && steps.specs.outputs.has_specs == 'true'
+        env:
+          CHANGED_SPECS: ${{ steps.specs.outputs.spec_list }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+
+          # Load prompt and substitute runtime variables
+          PLANNING_PROMPT=$(cat delivery-manager/prompts/planning-agent.md \
+            | sed "s|\${DRY_RUN}|${DRY_RUN}|g")
+
+          # Inject CHANGED_SPECS (multiline safe via awk)
+          PLANNING_PROMPT=$(echo "$PLANNING_PROMPT" \
+            | awk -v specs="$CHANGED_SPECS" '{gsub(/\$\{CHANGED_SPECS\}/, specs); print}')
+
+          claude \
+            -p "$PLANNING_PROMPT" \
+            --model claude-opus-4-6 \
+            --dangerously-skip-permissions \
+            --verbose \
+            --output-format stream-json \
+            2>&1 | tee /tmp/planning-output.jsonl
+
+      - name: Normalize dependency formats
+        if: steps.budget.outputs.budget_ok == 'true' && steps.specs.outputs.has_specs == 'true' && inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+
+          # Extract issue numbers created during this planning run
+          # gh issue create outputs URLs like "https://github.com/.../issues/42"
+          CREATED_ISSUES=$(grep -oP 'issues/\K[0-9]+' /tmp/planning-output.jsonl 2>/dev/null \
+            | sort -un || true)
+
+          if [ -z "$CREATED_ISSUES" ]; then
+            echo "No issues created in this run — skipping normalization"
+            exit 0
+          fi
+
+          ISSUE_COUNT=$(echo "$CREATED_ISSUES" | wc -l)
+          echo "Found ${ISSUE_COUNT} issue(s) to normalize"
+
+          # shellcheck disable=SC2086
+          bash delivery-manager/scripts/normalize-dependencies.sh $CREATED_ISSUES
+
+      - name: Validate dependency graph
+        if: steps.budget.outputs.budget_ok == 'true' && steps.specs.outputs.has_specs == 'true' && inputs.dry_run != 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+
+          # Extract created issue numbers
+          CREATED_ISSUES=$(grep -oP 'issues/\K[0-9]+' /tmp/planning-output.jsonl 2>/dev/null \
+            | sort -un || true)
+
+          if [ -z "$CREATED_ISSUES" ]; then
+            echo "No issues to validate"
+            exit 0
+          fi
+
+          # Check if any created issues have dependencies
+          HAS_DEPS=false
+          for NUM in $CREATED_ISSUES; do
+            BODY=$(gh issue view "$NUM" --repo "$GITHUB_REPOSITORY" --json body -q '.body' 2>/dev/null || true)
+            if echo "$BODY" | grep -qiP 'Depends on: #\d+'; then
+              HAS_DEPS=true
+              break
+            fi
+          done
+
+          if [ "$HAS_DEPS" = "false" ]; then
+            echo "No dependencies declared — skipping validation"
+            exit 0
+          fi
+
+          # Build issue graph for the validation prompt
+          ISSUE_GRAPH=""
+          for NUM in $CREATED_ISSUES; do
+            ISSUE_JSON=$(gh issue view "$NUM" --repo "$GITHUB_REPOSITORY" \
+              --json number,title,body,labels)
+            TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
+            DEPS=$(echo "$ISSUE_JSON" | jq -r '.body' | grep -ioP 'Depends on: #\d+' || echo "none")
+            LABELS=$(echo "$ISSUE_JSON" | jq -r '[.labels[].name] | join(", ")')
+            ISSUE_GRAPH="${ISSUE_GRAPH}
+          ### Issue #${NUM}: ${TITLE}
+          Labels: ${LABELS}
+          Dependencies: ${DEPS}
+          "
+          done
+
+          # Load validation prompt and inject issue graph
+          VALIDATION_PROMPT=$(cat delivery-manager/prompts/dependency-validation.md)
+          VALIDATION_PROMPT=$(echo "$VALIDATION_PROMPT" \
+            | awk -v graph="$ISSUE_GRAPH" '{gsub(/\$\{ISSUE_GRAPH\}/, graph); print}')
+
+          # Run Claude for validation
+          VALIDATION_OUTPUT=$(claude \
+            -p "$VALIDATION_PROMPT" \
+            --model claude-opus-4-6 \
+            --dangerously-skip-permissions \
+            --output-format text \
+            2>/dev/null || echo "[]")
+
+          # Extract JSON array from output — handles three formats:
+          # 1. Single-line raw JSON: [...]
+          # 2. Multi-line raw JSON: [\n  {...},\n  {...}\n]
+          # 3. Markdown-wrapped: ```json\n[...]\n```
+
+          # Strategy: strip markdown fences if present, then extract everything
+          # between the first [ and last ] to handle multi-line arrays
+          CLEAN_OUTPUT=$(echo "$VALIDATION_OUTPUT" | sed '/^```/d')
+          VALIDATION_JSON=$(echo "$CLEAN_OUTPUT" | sed -n '/\[/,/\]/p' | tr '\n' ' ' || true)
+
+          # Validate it's parseable JSON
+          if [ -z "$VALIDATION_JSON" ] || ! echo "$VALIDATION_JSON" | jq empty 2>/dev/null; then
+            echo "::warning::Could not parse validation output as JSON — skipping"
+            echo "Raw output (first 20 lines):"
+            echo "$VALIDATION_OUTPUT" | head -20
+            VALIDATION_JSON="[]"
+          fi
+
+          # Check for suspicious dependencies
+          SUSPICIOUS_COUNT=$(echo "$VALIDATION_JSON" | jq '[.[] | select(.verdict == "suspicious")] | length' 2>/dev/null || echo "0")
+
+          if [ "$SUSPICIOUS_COUNT" = "0" ]; then
+            echo "✅ All dependencies validated — no issues found"
+            exit 0
+          fi
+
+          echo "⚠️  Found ${SUSPICIOUS_COUNT} suspicious dependency(ies):"
+          echo "$VALIDATION_JSON" | jq -r '.[] | select(.verdict == "suspicious") |
+            "  #\(.issue) → #\(.depends_on): \(.reason)"'
+
+          # Comment on affected issues
+          echo "$VALIDATION_JSON" | jq -c '.[] | select(.verdict == "suspicious")' | while read -r ITEM; do
+            ISSUE_NUM=$(echo "$ITEM" | jq -r '.issue')
+            DEP_NUM=$(echo "$ITEM" | jq -r '.depends_on')
+            REASON=$(echo "$ITEM" | jq -r '.reason')
+
+            gh issue comment "$ISSUE_NUM" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body "<!-- AGENT_MSG agent=planning action=dep-validation -->
+          ⚠️ **Dependency Review Needed** — The dependency on #${DEP_NUM} was flagged as potentially unnecessary.
+
+          **Reason:** ${REASON}
+
+          Please review. If this dependency is correct, no action needed. If not, edit the issue body to remove the \`Depends on: #${DEP_NUM}\` line." \
+              || echo "::warning::Failed to comment on #${ISSUE_NUM}"
+          done
+
+      - name: Post-run dedup check
+        if: steps.budget.outputs.budget_ok == 'true' && steps.specs.outputs.has_specs == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          set -euo pipefail
+
+          echo "Checking for duplicate issues..."
+
+          # ── Check 1: open-vs-open exact title duplicates ────────────
+          DUPES=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --json number,title \
+            --limit 300 \
+            | jq '[
+                group_by(.title)[]
+                | select(length > 1)
+                | {
+                    title: .[0].title,
+                    count: length,
+                    issues: [.[].number] | sort,
+                    keep: ([.[].number] | sort | first),
+                    close: ([.[].number] | sort | .[1:]),
+                    reason: "duplicate of open issue"
+                  }
+              ]')
+
+          # ── Check 2: open issues whose work is already done ─────────
+          # Find open issues that have an exact-title match in closed issues
+          OPEN_ISSUES=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --json number,title --limit 300)
+          CLOSED_TITLES=$(gh issue list --repo "$GITHUB_REPOSITORY" --state closed \
+            --json title --limit 200 | jq '[.[].title]')
+
+          STALE_OPEN=$(echo "$OPEN_ISSUES" | jq --argjson closed "$CLOSED_TITLES" '[
+            .[] | select(.title as $t | $closed | any(. == $t)) |
+            { title: .title, count: 1, issues: [.number], keep: null,
+              close: [.number], reason: "work already completed (closed issue exists)" }
+          ]')
+
+          # Merge both lists
+          ALL_DUPES=$(jq -s 'add' <<< "${DUPES}${STALE_OPEN}")
+          DUPE_COUNT=$(echo "$ALL_DUPES" | jq 'length')
+
+          if [ "$DUPE_COUNT" = "0" ]; then
+            echo "✅ No duplicate issues found"
+            exit 0
+          fi
+
+          echo "::warning::Found $DUPE_COUNT group(s) of duplicate/stale issues"
+          echo "$ALL_DUPES" | jq -r '.[] | "  ⚠️ \(.title) — closing \(.close | map("#\(.)") | join(", ")) (\(.reason))"'
+
+          # Auto-close duplicates
+          echo "$ALL_DUPES" | jq -r '.[] | .close[] | tostring' | sort -u | while read -r NUM; do
+            echo "Closing duplicate #${NUM}..."
+            gh issue close "$NUM" \
+              --repo "$GITHUB_REPOSITORY" \
+              --comment "Auto-closed: duplicate/stale issue detected by planning workflow dedup guard." \
+              || echo "::warning::Failed to close #${NUM}"
+          done
+
+          TOTAL_CLOSED=$(echo "$ALL_DUPES" | jq '[.[].close | length] | add')
+          echo "✅ Dedup complete — closed ${TOTAL_CLOSED} issue(s)"
+
+      - name: Log invocation and token usage
+        if: always() && steps.budget.outputs.budget_ok == 'true' && steps.specs.outputs.has_specs == 'true'
+        env:
+          SPECS: ${{ steps.specs.outputs.spec_list }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -u  # No -e or pipefail — logging must not crash the workflow
+          TODAY=$(date -u +%Y-%m-%d)
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LOG_DIR="${TOKEN_LOG_DIR}/planning-agent"
+          mkdir -p "$LOG_DIR"
+
+          TOKENS=0
+          COST_USD=0
+          if [ -f /tmp/planning-output.jsonl ]; then
+            TOKENS=$(jq -s '[.[] | select(.type == "result") | .usage |
+              ((.input_tokens // 0) + (.cache_creation_input_tokens // 0) +
+               (.cache_read_input_tokens // 0) + (.output_tokens // 0))] | add // 0' \
+              /tmp/planning-output.jsonl 2>/dev/null || echo 0)
+            COST_USD=$(jq -s '[.[] | select(.type == "result") | .total_cost_usd // 0] | add // 0' \
+              /tmp/planning-output.jsonl 2>/dev/null || echo 0)
+          fi
+
+          SPEC_COUNT=$(echo "$SPECS" | grep -c '.' || echo 0)
+
+          jq -cn \
+            --arg ts "$TIMESTAMP" \
+            --arg agent "planning-agent" \
+            --argjson tokens "${TOKENS:-0}" \
+            --argjson cost_usd "${COST_USD:-0}" \
+            --argjson spec_count "$SPEC_COUNT" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg status "$JOB_STATUS" \
+            '{timestamp: $ts, agent: $agent, tokens_used: $tokens, cost_usd: $cost_usd, specs_processed: $spec_count, run_id: $run_id, status: $status}' \
+            >> "${LOG_DIR}/${TODAY}.jsonl"
+
+      # ── Kick off dispatch chain ──────────────────────────────────────
+      # Trigger the self-chaining dispatch to start working on newly
+      # created issues. No issue_number — dispatch picks the highest
+      # priority eligible issue and chains from there.
+      - name: Kick off dispatch chain
+        if: steps.budget.outputs.budget_ok == 'true' && steps.specs.outputs.has_specs == 'true' && inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          echo "Triggering dispatch chain for newly created issues..."
+          gh workflow run "Agent – Dispatch" --repo "$GITHUB_REPOSITORY" || true
+
+      - name: Upload planning artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planning-output-${{ github.run_id }}
+          path: |
+            /tmp/planning-output.jsonl
+            /tmp/planning-context/
+          retention-days: 30

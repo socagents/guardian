@@ -1,0 +1,139 @@
+schema_version: 1
+id: GenetecSecurityCenter
+pack_name: GenetecSecurityCenter
+rule_name: GenetecSecurityCenter
+dataset_name: genetec_security_center_raw
+vendor: Genetec
+product: GenetecSecurityCenter
+description: Genetec Security Center event collector integration.
+categories:
+- Analytics & SIEM
+version: 1.0.7
+origin: bundle
+author: phantom-bundle
+uploaded_by: null
+created_at: '2026-05-23T09:26:17Z'
+updated_at: '2026-05-23T09:26:17Z'
+logo:
+  mime_type: image/svg+xml
+  data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgNjAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIG1lZXQiPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgZm9udC1mYW1pbHk9IkludGVyLCAtYXBwbGUtc3lzdGVtLCBCbGlua01hY1N5c3RlbUZvbnQsIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzIiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMxQTIzN0UiPkdlbmV0ZWM8L3RleHQ+PC9zdmc+
+  source: phantom-bundle (v0.13.0 migration)
+  license: MIT
+  fidelity: branded
+formats:
+- SYSLOG
+- CEF
+- JSON
+is_rawlog_only: false
+fields:
+- name: AuditTrailModificationType
+  type: integer
+  description: Vendor-emitted field 'AuditTrailModificationType'. Signed decimal integer;
+    bare digits, optional leading minus.
+  example: '42'
+- name: Description
+  type: string_long
+  description: Free-form human-readable description from Genetec. Free-form text;
+    may span multiple lines or contain large payloads.
+  example: Event recorded by Genetec.
+- name: Guid
+  type: string_short
+  description: Unique identifier — assigned by Genetec per event. Short opaque token,
+    typically without whitespace; max ~64 chars.
+  example: 50d5dcfd-3ebf-5a0d-8f54-b1e551c72dbe
+- name: Id
+  type: string_short
+  description: Opaque identifier emitted by Genetec. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: gen-9cfaf0aa
+- name: Machine
+  type: host
+  description: Vendor-emitted field 'Machine'. Hostname or fully-qualified domain
+    name (RFC 1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: ModifiedBy
+  type: string
+  description: Vendor-emitted field 'ModifiedBy'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_modifiedby
+- name: ModifiedByAsString
+  type: user
+  description: Vendor-emitted field 'ModifiedByAsString'. Account name as the vendor
+    reports it — login name, UPN, or sAMAccountName depending on the source; no domain
+    prefix unless the vendor emits one.
+  example: jsmith
+- name: Name
+  type: string
+  description: Human-readable name as displayed by Genetec. Free-form text; may contain
+    whitespace and punctuation.
+  example: sample_name
+- name: NewValue
+  type: string
+  description: Vendor-emitted field 'NewValue'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_newvalue
+- name: OldValue
+  type: string
+  description: Destination resource before value. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_oldvalue
+- name: SourceApplicationAsString
+  type: string
+  description: Vendor-emitted field 'SourceApplicationAsString'. Free-form text; may
+    contain whitespace and punctuation.
+  example: sample_sourceapplicatio
+- name: SourceApplicationGuid
+  type: string
+  description: Vendor-emitted field 'SourceApplicationGuid'. Free-form text; may contain
+    whitespace and punctuation.
+  example: sample_sourceapplicatio
+- name: SourceApplicationType
+  type: integer
+  description: Vendor-emitted field 'SourceApplicationType'. Signed decimal integer;
+    bare digits, optional leading minus.
+  example: '42'
+- name: Type
+  type: string_short
+  description: Type/category classifier emitted by Genetec. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: authentication
+- name: Value
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: AuditData
+    (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: Value.AuditData.Ex.AuditDataMem.groupName
+  type: string
+  description: Vendor-emitted field 'Value › AuditData › Ex › AuditDataMem › groupName'.
+    Leaf of the 'Value' composite. Free-form text; may contain whitespace and punctuation.
+  example: admins
+- name: Value.AuditData.Ex.AuditDataMem.roleName
+  type: string
+  description: Vendor-emitted field 'Value › AuditData › Ex › AuditDataMem › roleName'.
+    Leaf of the 'Value' composite. Free-form text; may contain whitespace and punctuation.
+  example: Admin
+use_cases:
+- PhysSec
+how_to_use: |
+  ## Genetec GenetecSecurityCenter → Cortex XSIAM (dataset `genetec_security_center_raw`)
+  
+    **Routing** — the broker lowercases the CEF/syslog header `vendor`/`product`, replaces
+    non-alphanumerics with `_`, and appends `_raw` to choose the dataset (target: `genetec_security_center_raw`).
+  
+    **Required CEF header for XSIAM** — the header must normalize to `genetec_security_center`. The marketplace pack's display name `Genetec` / `GenetecSecurityCenter` normalizes to `genetec_genetecsecuritycenter_raw`, a **different dataset** (vendor rename / legacy CEF identity), so use the vendor's actual CEF `deviceVendor`/`deviceProduct` that yields `genetec_security_center` and confirm which dataset the events land in.
+  
+    **Ingestion shape**: **JSON-native.** The modeling rule reads nested JSON (e.g. `Value -> AuditData.Ex.AuditDataMem.groupName`). CEF/syslog routes + lands and the broker extracts top-level columns; the nested reads need the composite present, so Phantom's worker JSON-stringifies `type: json` composites onto the wire (keep the dotted-leaf fields).
+  
+    - **Modeling-rule gate**: none — the rule maps every routed row unconditionally.
+  
+    **XDM mapping**: ~19 fields mapped to the unified data model (`xdm.*`), including: `xdm.event.description`, `xdm.event.id`, `xdm.event.original_event_type`, `xdm.event.type`, `xdm.observer.name`, `xdm.observer.type`.
+  
+    **Operator setup**: This data source has typed-column data that doesn't look like CEF (columns are camelCase API fields, JSON sub-objects, etc.). Most likely arrives via the XSIAM HTTP Collector with a source tag mapped to vendor=`Genetec`, product=`GenetecSecurityCenter`, or via a vendor-specific XDR connector pull. Phantom can POST JSON to the HTTP collector; the operator must configure the collector's source tag to land events in this dataset.
+  
+    **Status**: Reverse-engineered 2026-06-04 from the parsing/modeling rules — routing, gate, and field
+    inventory documented. **NOT yet XDM-validated on a live tenant** (no `validated` pill); validate by
+    streaming a CEF batch and confirming a rich `xdm.*` count over a wide window.
+  
+    **Verify** (once the dataset is XDM-bound, wide ≥7d window):
+  
+        config timeframe = 30d | datamodel dataset = genetec_security_center_raw | sort desc _time | fields xdm.* | limit 20

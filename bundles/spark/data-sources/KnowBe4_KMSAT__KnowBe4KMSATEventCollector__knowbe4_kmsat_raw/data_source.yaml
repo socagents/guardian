@@ -1,0 +1,113 @@
+schema_version: 1
+id: KnowBe4_KMSAT
+pack_name: KnowBe4_KMSAT
+rule_name: KnowBe4KMSATEventCollector
+dataset_name: knowbe4_kmsat_raw
+vendor: KnowBe4
+product: KnowBe4_KMSAT
+description: KnowBe4 KMSAT Integration
+categories:
+- Network Security
+version: 1.0.42
+origin: bundle
+author: phantom-bundle
+uploaded_by: null
+created_at: '2026-05-23T09:26:17Z'
+updated_at: '2026-05-23T09:26:17Z'
+logo:
+  mime_type: image/svg+xml
+  data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgNjAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIG1lZXQiPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgZm9udC1mYW1pbHk9IkludGVyLCAtYXBwbGUtc3lzdGVtLCBCbGlua01hY1N5c3RlbUZvbnQsIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzIiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiNCNTRCMjUiPktub3dCZTQ8L3RleHQ+PC9zdmc+
+  source: phantom-bundle (v0.13.0 migration)
+  license: MIT
+  fidelity: branded
+formats:
+- SYSLOG
+- CEF
+- JSON
+is_rawlog_only: false
+fields:
+- name: account_id
+  type: string
+  description: Destination resource parent ID. Free-form text; may contain whitespace
+    and punctuation.
+  example: kno-5e2d8af0
+- name: description
+  type: string_long
+  description: Free-form human-readable description from KnowBe4. Free-form text;
+    may span multiple lines or contain large payloads.
+  example: Event recorded by KnowBe4.
+- name: event_type
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: description,
+    name (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: external_id
+  type: string_short
+  description: Opaque identifier emitted by KnowBe4. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: kno-8154c7f3
+- name: id
+  type: string_short
+  description: Opaque identifier emitted by KnowBe4. Short opaque token, typically
+    without whitespace; max ~64 chars.
+  example: kno-7f151bf2
+- name: occurred_date
+  type: datetime
+  description: Date in `YYYY-MM-DD` form. ISO-8601 timestamp with timezone (e.g.,
+    2026-05-26T14:23:01Z).
+  example: '2026-05-26T14:23:01Z'
+- name: risk
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: level
+    (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: source
+  type: string
+  description: Vendor-emitted field 'Source'. Free-form text; may contain whitespace
+    and punctuation.
+  example: 192.0.2.45
+- name: user
+  type: string
+  description: User account associated with the event. Free-form text; may contain
+    whitespace and punctuation.
+  example: jdoe
+- name: event_type.description
+  type: string_long
+  description: Free-form human-readable description from KnowBe4. Free-form text;
+    may span multiple lines or contain large payloads.
+  example: Event recorded by KnowBe4.
+- name: event_type.name
+  type: string
+  description: Human-readable name as displayed by KnowBe4. Free-form text; may contain
+    whitespace and punctuation.
+  example: sample_name
+- name: risk.level
+  type: string_short
+  description: Severity level (string label, e.g., info/warn/error). Short opaque
+    token, typically without whitespace; max ~64 chars.
+  example: info
+use_cases:
+- Email
+how_to_use: |
+  ## KnowBe4 KnowBe4 KMSAT → Cortex XSIAM (dataset `knowbe4_kmsat_raw`)
+  
+    **Routing** — the broker lowercases the CEF/syslog header `vendor`/`product`, replaces
+    non-alphanumerics with `_`, and appends `_raw` to choose the dataset (target: `knowbe4_kmsat_raw`).
+  
+    **Required CEF header for XSIAM** — the header must normalize to `knowbe4_kmsat`. The marketplace pack's display name `KnowBe4` / `KnowBe4_KMSAT` normalizes to `knowbe4_knowbe4_kmsat_raw`, a **different dataset** (vendor rename / legacy CEF identity), so use the vendor's actual CEF `deviceVendor`/`deviceProduct` that yields `knowbe4_kmsat` and confirm which dataset the events land in.
+  
+    **Ingestion shape**: **JSON-native.** The modeling rule reads nested JSON (e.g. `$.level`). CEF/syslog routes + lands and the broker extracts top-level columns; the nested reads need the composite present, so Phantom's worker JSON-stringifies `type: json` composites onto the wire (keep the dotted-leaf fields).
+  
+    - **Modeling-rule gate**: none — the rule maps every routed row unconditionally.
+  
+    **XDM mapping**: ~10 fields mapped to the unified data model (`xdm.*`), including: `xdm.alert.description`, `xdm.alert.name`, `xdm.alert.original_alert_id`, `xdm.alert.severity`, `xdm.event.description`, `xdm.source.cloud.project`.
+  
+    **Operator setup**: This data source has typed-column data that doesn't look like CEF (columns are camelCase API fields, JSON sub-objects, etc.). Most likely arrives via the XSIAM HTTP Collector with a source tag mapped to vendor=`KnowBe4`, product=`KnowBe4_KMSAT`, or via a vendor-specific XDR connector pull. Phantom can POST JSON to the HTTP collector; the operator must configure the collector's source tag to land events in this dataset.
+  
+    **Status**: Reverse-engineered 2026-06-04 from the parsing/modeling rules — routing, gate, and field
+    inventory documented. **NOT yet XDM-validated on a live tenant** (no `validated` pill); validate by
+    streaming a CEF batch and confirming a rich `xdm.*` count over a wide window.
+  
+    **Verify** (once the dataset is XDM-bound, wide ≥7d window):
+  
+        config timeframe = 30d | datamodel dataset = knowbe4_kmsat_raw | sort desc _time | fields xdm.* | limit 20

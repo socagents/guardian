@@ -1,0 +1,37 @@
+---
+id: XQL-589-f71e24c9
+title: Automated Collection Command PowerShell
+category: investigation
+dataset: xdr_data
+tags:
+  - filter
+  - alter
+  - fields
+  - xdr_data
+  - source:dataset
+  - operator-authored
+  - PowerShell
+---
+
+# Automated Collection Command PowerShell
+
+**Dataset**: `xdr_data`
+
+```sql
+dataset = xdr_data
+| filter (event_type = 31 and event_sub_type = 10) or (event_type = 15 and action_evtlog_event_id IN (4104)) | alter script_data = if (event_type = 15, action_evtlog_message , to_string(dynamic_event_string_map))
+| filter (((script_data contains ".doc" OR  script_data contains ".docx" OR  script_data contains ".xls" OR  script_data contains ".xlsx" OR  script_data contains ".ppt" OR  script_data contains ".pptx" OR  script_data contains ".rtf" OR  script_data contains ".pdf" OR  script_data contains ".txt")) AND ((script_data contains "Get-ChildItem" AND  script_data contains " -Recurse " AND  script_data contains " -Include ")))
+| fields agent_hostname, event_type, event_sub_type, actor_process_image_path, actor_process_os_pid, actor_process_image_md5, actor_process_signature_vendor, actor_process_signature_status, actor_effective_username, script_data
+```
+
+## When to use
+
+Detect Automated Collection Command via PowerShell.
+
+## Variations
+
+_(Auto-imported — variations not yet authored. The operator's curation pass adds these.)_
+
+## Source
+
+Operator-authored, exported from XSIAM tenant by amahmoud@paloaltonetworks.com. Imported as part of the v0.6.51 operator-dataset bulk import (see CHANGELOG). The `When to use` description above was carried over from the operator's XSIAM-saved-query `description` field. Original creation: 2025-04-06.

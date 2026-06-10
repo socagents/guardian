@@ -1,0 +1,282 @@
+name: Build connectors
+
+# v0.5.0+ — per-connector image build workflow.
+#
+# CI/CD step 1 of 3 for the 6 per-connector images
+# (xlog/xsiam/caldera/web/cortex-docs/cortex-content + the runtime
+# base). Each connector has its own path-filter; only the ones
+# whose paths matched the push actually rebuild. See docs/CICD.md
+# § Per-service path-filter contract for the broader invariant.
+# Per-connector containers preserve their instance state across
+# pushes that don't touch their source, just like the 5 stack
+# services.
+#
+# Mirrors the build-xlog.yml / build-agent.yml / build-caldera.yml
+# pattern: per-image jobs gated by path filters so only changed
+# connector images rebuild. Each job uses the shared composite
+# action `.github/actions/build-and-push-dev-image/` so the build +
+# push + digest-capture mechanics stay in one place (docs/CICD.md's
+# "only image tag differs" rule).
+#
+# Each connector job:
+#   * Builds its image FROM phantom-connector-runtime:dev
+#   * Pushes to GHCR as ghcr.io/<owner>/phantom-connector-<id>:dev
+#   * Surfaces the digest as a job output (for the downstream
+#     deploy-dev-installer workflow to pin in the manifest)
+#
+# The phantom-connector-runtime base image rebuilds on its own path
+# filter (phantom-connector-runtime/**). When the base rebuilds,
+# every per-connector image needs a fresh build to inherit the new
+# layer — handled by listing phantom-connector-runtime/** in each
+# connector job's path filter, so any change there triggers all of
+# them. Same dependency model release.yml uses for its v*.*.* path.
+#
+# Why this workflow exists in v0.5.0:
+#   Pre-v0.5.0 only 1 of 6 connectors ran in container mode (web),
+#   so per-connector images were a release-only concern. v0.5.0
+#   flips all 6 to container — every dev iteration needs :dev tags
+#   for every connector image, or instance-creation against the
+#   newly-flipped connectors breaks on the dev installer.
+#
+# Security note: this workflow only consumes built-in GitHub
+# contexts that are NOT operator-controllable (repository_owner,
+# github.actor, secrets.GITHUB_TOKEN). Same shape as build-xlog.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # v0.5.12 — paths intentionally narrow: ONLY connector source
+      # + the runtime base. Self-path + composite-action triggers
+      # removed for the same reason as the other build-<svc>.yml
+      # workflows: workflow-file edits running `docker build --pull`
+      # produced new digests despite no connector source change.
+      # See docs/CICD.md § Per-service path-filter contract.
+      #
+      # Trade-off: workflow-file or composite-action edits WON'T
+      # auto-rebuild connector images — they piggyback on the next
+      # connectors/** or runtime/** source change. Use
+      # `gh workflow run build-connectors.yml` to force-exercise a
+      # workflow change ahead of source movement.
+      - 'bundles/spark/connectors/**'
+      - 'phantom-connector-runtime/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bundles/spark/connectors/**'
+      - 'phantom-connector-runtime/**'
+  workflow_dispatch:
+
+concurrency:
+  group: build-connectors-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # v0.5.60 (issue #38) — per-connector jobs use `pull-policy: never`
+  # to skip the --pull flag when pulling their FROM
+  # phantom-connector-runtime:dev base. Pre-fix all per-connector
+  # builds chronically failed with 401 from GHCR because --pull races
+  # against per-version prerelease association (the just-pushed
+  # runtime :dev tag is private until build-dev-installer.yml's
+  # cascade associates it with the dev-latest prerelease — which
+  # happens AFTER all per-connector jobs already tried to build).
+  #
+  # build-runtime KEEPS --pull (default 'always') because its base
+  # is python:3.12-slim from Docker Hub — a first-party publicly-
+  # readable image that benefits from CVE-fresh pulls.
+  build-runtime:
+    name: Build phantom-connector-runtime base
+    runs-on: [self-hosted, Linux, X64, phantom]
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - id: image
+        uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-connector-runtime
+          build-context: phantom-connector-runtime
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
+
+  build-xlog-connector:
+    name: Build phantom-connector-xlog
+    runs-on: [self-hosted, Linux, X64, phantom]
+    needs: build-runtime
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-connector-xlog
+          build-context: '.'
+          dockerfile-path: bundles/spark/connectors/xlog/Dockerfile
+          build-args: |
+            PHANTOM_RUNTIME_VERSION=dev
+          pull-policy: never
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
+
+  build-xsiam-connector:
+    name: Build phantom-connector-xsiam
+    runs-on: [self-hosted, Linux, X64, phantom]
+    needs: build-runtime
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-connector-xsiam
+          build-context: '.'
+          dockerfile-path: bundles/spark/connectors/xsiam/Dockerfile
+          build-args: |
+            PHANTOM_RUNTIME_VERSION=dev
+          pull-policy: never
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
+
+  build-caldera-connector:
+    name: Build phantom-connector-caldera
+    runs-on: [self-hosted, Linux, X64, phantom]
+    needs: build-runtime
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-connector-caldera
+          build-context: '.'
+          dockerfile-path: bundles/spark/connectors/caldera/Dockerfile
+          build-args: |
+            PHANTOM_RUNTIME_VERSION=dev
+          pull-policy: never
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
+
+  build-web-connector:
+    name: Build phantom-connector-web
+    runs-on: [self-hosted, Linux, X64, phantom]
+    needs: build-runtime
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-connector-web
+          build-context: '.'
+          dockerfile-path: bundles/spark/connectors/web/Dockerfile
+          build-args: |
+            PHANTOM_RUNTIME_VERSION=dev
+          pull-policy: never
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
+
+  build-cortex-docs-connector:
+    name: Build phantom-connector-cortex-docs
+    runs-on: [self-hosted, Linux, X64, phantom]
+    needs: build-runtime
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-connector-cortex-docs
+          build-context: '.'
+          dockerfile-path: bundles/spark/connectors/cortex-docs/Dockerfile
+          build-args: |
+            PHANTOM_RUNTIME_VERSION=dev
+          pull-policy: never
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
+
+  build-cortex-content-connector:
+    name: Build phantom-connector-cortex-content
+    runs-on: [self-hosted, Linux, X64, phantom]
+    needs: build-runtime
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-connector-cortex-content
+          build-context: '.'
+          dockerfile-path: bundles/spark/connectors/cortex-content/Dockerfile
+          build-args: |
+            PHANTOM_RUNTIME_VERSION=dev
+          pull-policy: never
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
+
+  # v0.5.61 (issue #36) — Cortex XDR connector. Same pull-policy:never
+  # pattern as the other per-connector builds — see the build-runtime
+  # comment above for the #38 rationale.
+  build-cortex-xdr-connector:
+    name: Build phantom-connector-cortex-xdr
+    runs-on: [self-hosted, Linux, X64, phantom]
+    needs: build-runtime
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-connector-cortex-xdr
+          build-context: '.'
+          dockerfile-path: bundles/spark/connectors/cortex-xdr/Dockerfile
+          build-args: |
+            PHANTOM_RUNTIME_VERSION=dev
+          pull-policy: never
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}

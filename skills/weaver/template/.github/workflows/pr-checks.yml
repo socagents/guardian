@@ -1,0 +1,222 @@
+# =============================================================================
+# PR Checks Workflow
+# =============================================================================
+# Runs automated CI checks on pull requests: lint, build, unit tests, and
+# optionally Playwright tests for UI changes. Reports results as GitHub
+# status checks that branch protection rules can require.
+#
+# This workflow runs BEFORE the Review Agent. If checks fail, the review
+# agent still runs but receives the failure information.
+#
+# Status checks created:
+#   pr-checks / lint-and-build
+#   pr-checks / tests
+#   pr-checks / playwright (conditional — only for UI changes)
+#
+# References:
+#   - cicd-agent-integration.md §6 Integration with Existing CI Pipeline
+#   - testing-strategy-spec.md
+# =============================================================================
+
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # ── Lint and Build ──────────────────────────────────────────────────────
+  lint-and-build:
+    name: Lint & Build
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    if: github.event.pull_request.draft == false
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect project type
+        id: detect
+        run: |
+          set -euo pipefail
+          if [ -f "go.mod" ]; then
+            echo "type=go" >> "$GITHUB_OUTPUT"
+          elif [ -f "package.json" ]; then
+            echo "type=node" >> "$GITHUB_OUTPUT"
+          elif [ -f "pyproject.toml" ] || [ -f "requirements.txt" ]; then
+            echo "type=python" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=unknown" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies (Node)
+        if: steps.detect.outputs.type == 'node'
+        run: npm ci
+
+      - name: Install dependencies (Go)
+        if: steps.detect.outputs.type == 'go'
+        run: go mod download
+
+      - name: Install dependencies (Python)
+        if: steps.detect.outputs.type == 'python'
+        run: |
+          python3 -m pip install --upgrade pip
+          if [ -f "pyproject.toml" ]; then
+            pip install -e ".[dev]" 2>/dev/null || pip install -e .
+          elif [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Lint (Node)
+        if: steps.detect.outputs.type == 'node'
+        run: npm run lint --if-present
+
+      - name: Lint (Go)
+        if: steps.detect.outputs.type == 'go'
+        run: |
+          if command -v golangci-lint &>/dev/null; then
+            golangci-lint run ./...
+          else
+            go vet ./...
+          fi
+
+      - name: Lint (Python)
+        if: steps.detect.outputs.type == 'python'
+        run: |
+          if command -v ruff &>/dev/null; then
+            ruff check .
+          elif command -v flake8 &>/dev/null; then
+            flake8 .
+          fi
+
+      - name: Build (Node)
+        if: steps.detect.outputs.type == 'node'
+        run: npm run build --if-present
+
+      - name: Build (Go)
+        if: steps.detect.outputs.type == 'go'
+        run: go build ./...
+
+      - name: Type check (Node)
+        if: steps.detect.outputs.type == 'node'
+        run: npx tsc --noEmit
+
+  # ── Unit Tests ──────────────────────────────────────────────────────────
+  tests:
+    name: Tests
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    if: github.event.pull_request.draft == false
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect project type
+        id: detect
+        run: |
+          set -euo pipefail
+          if [ -f "go.mod" ]; then
+            echo "type=go" >> "$GITHUB_OUTPUT"
+          elif [ -f "package.json" ]; then
+            echo "type=node" >> "$GITHUB_OUTPUT"
+          elif [ -f "pyproject.toml" ] || [ -f "requirements.txt" ]; then
+            echo "type=python" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=unknown" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies (Node)
+        if: steps.detect.outputs.type == 'node'
+        run: npm ci
+
+      - name: Install dependencies (Go)
+        if: steps.detect.outputs.type == 'go'
+        run: go mod download
+
+      - name: Install dependencies (Python)
+        if: steps.detect.outputs.type == 'python'
+        run: |
+          python3 -m pip install --upgrade pip
+          if [ -f "pyproject.toml" ]; then
+            pip install -e ".[dev]" 2>/dev/null || pip install -e .
+          elif [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Run tests (Node)
+        if: steps.detect.outputs.type == 'node'
+        run: npm test --if-present
+
+      - name: Run tests (Go)
+        if: steps.detect.outputs.type == 'go'
+        run: go test ./... -v -count=1
+
+      - name: Run tests (Python)
+        if: steps.detect.outputs.type == 'python'
+        run: |
+          if command -v pytest &>/dev/null; then
+            pytest -v
+          elif [ -f "setup.py" ] || [ -f "pyproject.toml" ]; then
+            python -m pytest -v 2>/dev/null || python -m unittest discover -v
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            **/test-results/
+            **/coverage/
+            **/*.xml
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ── Playwright Tests (UI changes only) ──────────────────────────────────
+  playwright:
+    name: Playwright
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    if: >-
+      github.event.pull_request.draft == false &&
+      contains(github.event.pull_request.labels.*.name, 'needs-playwright')
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=html
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots-${{ github.run_id }}
+          path: test-results/**/*.png
+          retention-days: 14
+          if-no-files-found: ignore

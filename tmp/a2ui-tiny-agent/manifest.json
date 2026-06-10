@@ -1,0 +1,37 @@
+{
+  "agent": {
+    "id": "demo.tiny-support-agent",
+    "name": "Tiny Support Agent",
+    "version": "0.1.0",
+    "description": "A minimal A2UI-style agent UI demo rendered from JSON."
+  },
+  "ui": {
+    "protocol": "a2ui",
+    "version": "v0.9",
+    "catalogs": [
+      {
+        "id": "base-agent-ui.v0.1",
+        "path": "./catalogs/base-agent-ui.v0.1.json"
+      }
+    ],
+    "surfaces": [
+      {
+        "id": "home",
+        "title": "Agent Home",
+        "path": "./surfaces/home.jsonl",
+        "root": "shell"
+      }
+    ],
+    "dataModel": "./schemas/data-model.schema.json",
+    "events": {
+      "schema": "./schemas/events.schema.json",
+      "endpoint": "/agent/a2ui/events"
+    }
+  },
+  "runtime": {
+    "standalone": {
+      "renderer": "./renderer/index.html",
+      "server": "./server.mjs"
+    }
+  }
+}

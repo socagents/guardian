@@ -1,0 +1,809 @@
+name: Build dev installer
+
+# Builds phantom-installer-dev (the dev flavor of the customer
+# installer) with the current `:dev` image digests pinned, stages
+# it on phantom-vm, and publishes the `dev-latest` prerelease that
+# grants the operator's customer-style PAT pull access to the
+# `:dev` image versions on GHCR. NO auto-deploy — the operator
+# runs the staged installer manually.
+#
+# Triggered when any per-service build workflow completes
+# (build-xlog / build-agent / build-caldera / build-connectors), OR
+# when installer source itself changes (so installer-only changes
+# get a fresh binary without needing a no-op image rebuild).
+#
+# Reads the CURRENT `:dev` digest for each service from GHCR (the
+# tag is overwritten on every successful per-service build, so this
+# is always the latest dev bytes). Falls back to the latest stable
+# release's manifest for services we don't rebuild on dev (updater,
+# browser).
+#
+# v0.5.9 — the dev-latest prerelease is LOAD-BEARING: GHCR's per-
+# version access rules grant pull permission based on the GitHub
+# Release a package version is associated with. Customer releases
+# get this via release.yml's `gh release create`; without an
+# equivalent for dev images, an operator PAT (with `read:packages`)
+# could pull customer tags but not `:dev`. Creating a prerelease
+# tagged `dev-latest` in this workflow closes the access gap.
+# release.yml deletes the prerelease when a real customer release
+# publishes (see release.yml's "Clean up dev-latest prerelease"
+# step).
+#
+# Operator's upgrade flow on phantom-vm (after this workflow
+# finishes):
+#
+#   sudo /home/ayman/phantom-installer-dev
+#
+# (The workflow drops a fresh copy at that stable path at the end
+# of the build step, so the operator doesn't have to remember the
+# runner workspace path.)
+#
+# Promotion to release: when the dev build smokes clean and the
+# operator is ready to ship, tag the commit with v*.*.* — that
+# fires release.yml, which builds the customer images + customer
+# installer + GitHub Release + cleans up the dev-latest
+# prerelease. See docs/CICD.md § Build & release workflow.
+#
+# Security note: this workflow only consumes built-in GitHub
+# contexts that are NOT operator-controllable. See build-xlog.yml
+# header.
+
+on:
+  workflow_run:
+    # v0.6.12 — Build updater added so phantom-updater source changes
+    # also cascade through to dev installer rebuild. Pre-v0.6.12 the
+    # updater was customer-release-only.
+    workflows: [Build xlog, Build agent, Build caldera, Build connectors, Build updater]
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'installer/**'
+      - '.github/workflows/build-dev-installer.yml'
+  workflow_dispatch:
+
+concurrency:
+  # One build at a time per ref so concurrent triggers don't race
+  # each other writing to the runner workspace's dist/ directory or
+  # to the staged binary at /home/ayman/phantom-installer-dev.
+  group: build-dev-installer-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  # v0.5.9 — contents: write needed to create + delete the dev-latest
+  # prerelease. The prerelease is what grants the operator's customer-
+  # style PAT pull access to :dev image versions on GHCR (GHCR's per-
+  # version access semantics — versions inherit visibility from
+  # the GitHub Release they're associated with). Without the
+  # prerelease, only the workflow's GITHUB_TOKEN can pull :dev images,
+  # which fails the moment the operator runs phantom-installer-dev on
+  # phantom-vm with a PAT in /opt/phantom/.env.
+  contents: write
+  packages: read
+  actions: read
+
+jobs:
+  build:
+    name: Build phantom-installer-dev
+    runs-on: [self-hosted, Linux, X64, phantom]
+    # workflow_run can fire on conclusion=failure too; only proceed
+    # on success. For push + workflow_dispatch the conclusion is null
+    # and we always proceed.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    env:
+      REGISTRY: ghcr.io
+      OWNER: ${{ github.repository_owner }}
+      GHCR_USER: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COMMIT_SHA: ${{ github.sha }}
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        # See build-agent.yml header for full rationale.
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - uses: actions/checkout@v4
+
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - name: Login to GHCR
+        run: |
+          echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$GHCR_USER" --password-stdin
+
+      - name: Resolve dev digests from GHCR
+        id: digests
+        run: |
+          # For each of the three services we build on the dev track,
+          # pull `:dev` and capture the digest. Pull is what populates
+          # the local docker daemon's RepoDigests for the inspect step.
+          set -e
+          mkdir -p dist/installer-dev
+          MANIFEST="dist/installer-dev/release-manifest-dev.env"
+          SHORT_SHA="${COMMIT_SHA::7}"
+          echo "PHANTOM_VERSION=dev-$SHORT_SHA" > "$MANIFEST"
+
+          # v0.6.12 — phantom-updater moved into the dev cycle. Its
+          # :dev tag is now resolved here alongside agent/xlog/caldera
+          # rather than fetched from the latest customer release.
+          # This lets updater source changes propagate to phantom-vm
+          # via the dev installer auto-deploy, so operator-mirror
+          # testing covers updater changes the same way it covers
+          # everything else.
+          for SVC in phantom-xlog phantom-agent phantom-caldera phantom-updater; do
+            IMG="$REGISTRY/$OWNER/$SVC"
+            echo "::group::resolve $SVC:dev"
+            docker pull "$IMG:dev"
+            DIGEST=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$IMG:dev" \
+              | grep "^${IMG}@" | head -1 | cut -d@ -f2)
+            if [[ -z "$DIGEST" || "$DIGEST" != sha256:* ]]; then
+              echo "ERROR: could not resolve :dev digest for $SVC" >&2
+              exit 1
+            fi
+            # Manifest uses DIGEST_PHANTOM_<SVC>= (uppercase, underscores).
+            # Match release.yml's convention so build-phantom-installer.sh's
+            # placeholder substitution accepts the manifest unchanged.
+            KEY=$(echo "DIGEST_${SVC}" | tr 'a-z-' 'A-Z_')
+            echo "$KEY=$DIGEST" >> "$MANIFEST"
+            echo "  $KEY=$DIGEST"
+            echo "::endgroup::"
+          done
+
+          # Stack services NOT built on dev: browser only (post-v0.6.12).
+          # phantom-updater moved into the dev cycle in v0.6.12; see the
+          # :dev resolution loop above. Pull browser digest + the 7
+          # per-connector digests from the latest stable release's
+          # manifest via the GitHub REST API + curl. We DON'T use
+          # `gh release download` — the gh CLI isn't installed on the
+          # self-hosted runner, and curl + python3 are always available.
+          echo "::group::fetch latest stable manifest for updater/browser"
+          LATEST_JSON="$(mktemp)"
+          # v0.17.84 — retry flags added after three back-to-back
+          # v0.17.83 builds hit intermittent 404s on /releases/latest.
+          # Same endpoint returned 200 from the same shell ~1s later.
+          # This is upstream GitHub API eventual-consistency flakiness.
+          # See docs/CICD.md failure mode #14.
+          curl -fsSL \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" \
+            > "$LATEST_JSON"
+          LATEST=$(python3 -c 'import sys, json; print(json.load(open(sys.argv[1])).get("tag_name", ""))' "$LATEST_JSON")
+          if [[ -z "$LATEST" ]]; then
+            echo "ERROR: no stable release found — cannot resolve updater/browser digests" >&2
+            cat "$LATEST_JSON" >&2
+            exit 1
+          fi
+          echo "Using stable release $LATEST as the source for non-dev services"
+
+          # Find the release-manifest-*.env asset URL among the release's assets.
+          # Single-line python3 -c so YAML's block-scalar parser stays happy
+          # (multi-line python inside a `run: |` confused yaml because the
+          # python source indented at column 1 broke the block-mapping rules).
+          MANIFEST_URL=$(python3 -c 'import sys, json; d = json.load(open(sys.argv[1])); print(next((a["url"] for a in d.get("assets", []) if a.get("name", "").startswith("release-manifest-") and a.get("name", "").endswith(".env")), ""))' "$LATEST_JSON")
+          if [[ -z "$MANIFEST_URL" ]]; then
+            echo "ERROR: no release-manifest-*.env asset in release $LATEST" >&2
+            exit 1
+          fi
+
+          # Download the asset bytes. Note the Accept: application/octet-stream
+          # header — without it the API returns asset metadata JSON, not the
+          # file contents.
+          STABLE_MANIFEST="$(mktemp)"
+          # v0.17.84 — retry flags for the same reason as the
+          # /releases/latest curl above; the asset-download endpoint
+          # sits behind the same eventual-consistency layer.
+          curl -fsSL \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/octet-stream" \
+            "$MANIFEST_URL" > "$STABLE_MANIFEST"
+
+          # v0.6.12 — DIGEST_PHANTOM_UPDATER no longer fetched from
+          # stable; it's resolved from :dev above. Only browser
+          # remains in the stable-fetch path.
+          for KEY in DIGEST_PHANTOM_BROWSER; do
+            LINE=$(grep "^${KEY}=" "$STABLE_MANIFEST" || true)
+            if [[ -z "$LINE" ]]; then
+              echo "ERROR: $KEY missing from stable manifest" >&2
+              exit 1
+            fi
+            echo "$LINE" >> "$MANIFEST"
+            echo "  $LINE"
+          done
+
+          # v0.6.16 — per-connector image pins now resolved from :dev
+          # tags so dev cycle connector changes propagate to operator
+          # auto-deploy. Pre-v0.6.16 the dev manifest carried forward
+          # the LAST CUSTOMER RELEASE's connector digests; this meant
+          # build-connectors.yml could push fresh :dev tags but
+          # phantom-updater on phantom-vm would still pull the stable
+          # digest. Surfaced when v0.6.15 added calderaUrl fallback to
+          # the Caldera connector source — the :dev image had the fix,
+          # but the operator-side container kept pulling the v0.6.4
+          # digest (no fallback) and dispatching failed with "no
+          # baseUrl configured" indefinitely.
+          #
+          # Resolution: docker-pull :dev for each connector; if the
+          # pull fails (e.g., :dev tag doesn't exist on a fresh repo),
+          # fall back to the stable manifest's value. Stable fallback
+          # is the safety net for the bootstrap case + connectors
+          # whose source has never been pushed.
+          declare -A STABLE_DIGESTS
+          while IFS='=' read -r KEY VALUE; do
+            if [[ "$KEY" =~ ^DIGEST_PHANTOM_CONNECTOR_ ]]; then
+              STABLE_DIGESTS["$KEY"]="$VALUE"
+            fi
+          done < "$STABLE_MANIFEST"
+
+          # Pair env-var name → ghcr image name. Ordered same as the
+          # release manifest so the manifest reads predictably.
+          # v0.6.20 — added cortex-xdr to the resolution loop. Pre-v0.6.20
+          # phantom-connector-cortex-xdr was MISSING from this map even
+          # though build-connectors.yml had been pushing the :dev tag
+          # since v0.5.61. Surfaced when an operator restart of the
+          # cortex-xdr instance fell to phantom-updater's tag-pinning
+          # fallback (because /host/connector-digests.env didn't have
+          # DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR), which then tried to
+          # pull `phantom-connector-cortex-xdr:dev-<current-sha>` — a
+          # tag that only exists when build-connectors fired for that
+          # commit. Same fix shape as cortex-content.
+          declare -A CONN_IMGS=(
+            ["DIGEST_PHANTOM_CONNECTOR_RUNTIME"]="phantom-connector-runtime"
+            ["DIGEST_PHANTOM_CONNECTOR_XLOG"]="phantom-connector-xlog"
+            ["DIGEST_PHANTOM_CONNECTOR_XSIAM"]="phantom-connector-xsiam"
+            ["DIGEST_PHANTOM_CONNECTOR_CALDERA"]="phantom-connector-caldera"
+            ["DIGEST_PHANTOM_CONNECTOR_WEB"]="phantom-connector-web"
+            ["DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS"]="phantom-connector-cortex-docs"
+            ["DIGEST_PHANTOM_CONNECTOR_CORTEX_CONTENT"]="phantom-connector-cortex-content"
+            ["DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR"]="phantom-connector-cortex-xdr"
+          )
+          for KEY in \
+            DIGEST_PHANTOM_CONNECTOR_RUNTIME \
+            DIGEST_PHANTOM_CONNECTOR_XLOG \
+            DIGEST_PHANTOM_CONNECTOR_XSIAM \
+            DIGEST_PHANTOM_CONNECTOR_CALDERA \
+            DIGEST_PHANTOM_CONNECTOR_WEB \
+            DIGEST_PHANTOM_CONNECTOR_CORTEX_DOCS \
+            DIGEST_PHANTOM_CONNECTOR_CORTEX_CONTENT \
+            DIGEST_PHANTOM_CONNECTOR_CORTEX_XDR; do
+            SVC="${CONN_IMGS[$KEY]}"
+            IMG="$REGISTRY/$OWNER/$SVC"
+            DIGEST=""
+            echo "::group::resolve $SVC:dev"
+            if docker pull "$IMG:dev" 2>&1 | tail -5; then
+              DIGEST=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$IMG:dev" 2>/dev/null \
+                | grep "^${IMG}@" | head -1 | cut -d@ -f2)
+            fi
+            if [[ -n "$DIGEST" && "$DIGEST" == sha256:* ]]; then
+              echo "$KEY=$DIGEST" >> "$MANIFEST"
+              echo "  $KEY=$DIGEST  (from :dev)"
+            elif [[ -n "${STABLE_DIGESTS[$KEY]}" ]]; then
+              echo "$KEY=${STABLE_DIGESTS[$KEY]}" >> "$MANIFEST"
+              echo "  $KEY=${STABLE_DIGESTS[$KEY]}  (fallback to stable $LATEST — :dev tag not present)"
+            else
+              echo "::warning::$KEY missing from both :dev and stable manifest $LATEST — dev installer leaves it unset (phantom-updater falls back to tag-pinning, instance create may fail)"
+            fi
+            echo "::endgroup::"
+          done
+          rm -f "$LATEST_JSON" "$STABLE_MANIFEST"
+          echo "::endgroup::"
+
+          echo "Final dev manifest:"
+          cat "$MANIFEST"
+          echo "manifest=$PWD/$MANIFEST" >> "$GITHUB_OUTPUT"
+          echo "version=dev-$SHORT_SHA"  >> "$GITHUB_OUTPUT"
+
+      - name: Build phantom-installer-dev
+        env:
+          VERSION: ${{ steps.digests.outputs.version }}
+          MANIFEST_PATH: ${{ steps.digests.outputs.manifest }}
+        run: |
+          OUTPUT_NAME=phantom-installer-dev \
+          OUTPUT_DIR="$PWD/dist/installer-dev" \
+            ./installer/build-phantom-installer.sh
+          ls -lh "$PWD/dist/installer-dev/"
+
+      - name: Stage dev installer at /home/ayman/phantom-installer-dev
+        # Convenience step: the operator's day-to-day phantom-vm
+        # upgrade flow is
+        #
+        #   sudo /home/ayman/phantom-installer-dev
+        #
+        # rather than having to remember the runner workspace path
+        # (/home/ayman/actions-runner/_work/phantom/phantom/dist/...).
+        # We copy (not symlink) so a runner-workspace cleanup doesn't
+        # nullify the operator's installer. Atomic via cp + mv so
+        # the operator can never observe a partial binary if they
+        # happen to run the script while the workflow is in flight.
+        run: |
+          cp "$PWD/dist/installer-dev/phantom-installer-dev" \
+             "/home/ayman/.phantom-installer-dev.new"
+          chmod +x "/home/ayman/.phantom-installer-dev.new"
+          mv "/home/ayman/.phantom-installer-dev.new" \
+             "/home/ayman/phantom-installer-dev"
+          ls -lh /home/ayman/phantom-installer-dev
+          echo ""
+          echo "::notice::Dev installer ready at /home/ayman/phantom-installer-dev"
+          echo "::notice::Run 'sudo /home/ayman/phantom-installer-dev' on phantom-vm to upgrade the stack."
+
+      - name: Auto-deploy on phantom-vm (dev cycle)
+        # v0.6.8 — operator-mirror dev cycle. After staging the binary,
+        # immediately run the installer to upgrade the running stack to
+        # the freshly-built version. Operator requested this to avoid
+        # the per-push manual install step — the build → deploy → smoke
+        # cycle is now tightly coupled.
+        #
+        # Why this is safe:
+        #   * Self-hosted runner IS phantom-vm, runs as ayman with
+        #     NOPASSWD sudo (per docs/CICD.md § Install location). No
+        #     SSH, no external credentials, no inter-host transfer.
+        #   * The installer is idempotent + non-interactive on upgrade
+        #     (preserves secrets/KEK; only image digests + compose
+        #     refresh; preserves volumes including operator data).
+        #   * Failure here turns the workflow red — clean signal.
+        #     The operator can re-run manually after fixing.
+        #
+        # Trade-off vs the pre-v0.6.8 manual-install model:
+        #   * pros: faster iteration; auto-fresh deploy; agent smoke
+        #     runs against verified-current code before operator tests
+        #   * cons: interrupts in-flight operator UI sessions (~10s
+        #     recreate window); no operator gate at deploy time
+        #     (mitigated: customer release tags still need explicit
+        #     chat approval, that boundary is unchanged)
+        #
+        # Customer-mirror property preserved: the installer's
+        # operator-facing path is identical (`sudo phantom-installer-dev`).
+        # Only the TRIGGER changes (CI vs manual).
+        #
+        # Per CLAUDE.md § Agent-side headless smoke (v0.6.8 update):
+        # the agent's smoke discipline runs AGAINST THIS DEPLOY after
+        # the workflow completes — so the smoke tests verify the
+        # actually-installed code, not whatever was running before.
+        #
+        # NOTE: this step is the ONE place in the dev cycle where CI
+        # writes to phantom-vm's runtime state. Customer releases still
+        # don't auto-install — those wait for the operator's explicit
+        # `phantom-installer` run.
+        run: |
+          set -euo pipefail
+          echo "::group::Running sudo /home/ayman/phantom-installer-dev"
+          # Pipe through tee so the full output lands in the workflow
+          # log AND a local file for diagnostics if something goes
+          # sideways.
+          sudo /home/ayman/phantom-installer-dev 2>&1 | tee /tmp/phantom-install.log
+          echo "::endgroup::"
+          echo "::notice::Auto-deploy complete on phantom-vm — phantom-agent recreated with new digest. Agent-side smoke runs next (see CLAUDE.md § Agent-side headless smoke)."
+
+      - name: Upload dev installer artifact
+        # Operator can also pull from GitHub Actions UI or via
+        # `gh run download` on any host that has gh CLI. Useful when
+        # upgrading FROM a host that isn't phantom-vm (e.g. a
+        # workstation, or a CI runner).
+        #
+        # continue-on-error: the binary is already staged at
+        # /home/ayman/phantom-installer-dev on phantom-vm (the
+        # primary distribution path for the dev flow); this upload
+        # is just a fallback for off-host operators. When the
+        # org-shared Actions storage quota is exhausted, uploads
+        # fail with 4xx and the run is marked failed even though
+        # everything that matters succeeded. Tolerating the upload
+        # failure prevents the whole workflow from misreporting.
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: phantom-installer-dev-${{ steps.digests.outputs.version }}
+          path: |
+            dist/installer-dev/phantom-installer-dev
+            dist/installer-dev/phantom-installer-dev.sha256
+            dist/installer-dev/release-manifest-dev.env
+          # 3 days instead of 14: this binary is regenerated on
+          # every push to main anyway, so a longer retention only
+          # accumulates dead weight.
+          retention-days: 3
+
+      - name: Publish dev-latest prerelease
+        # v0.5.9 — the LOAD-BEARING step for dev-image access. Creates
+        # a GitHub Release marked --prerelease for the current dev
+        # build; the :dev image versions on GHCR inherit access
+        # semantics from this release, granting operator PATs the
+        # same pull permission they already have for customer
+        # vX.Y.Z releases.
+        #
+        # Pre-v0.5.9 the operator's PAT (with `read:packages` scope)
+        # could pull customer release tags but NOT :dev tags from
+        # GHCR. The actual access rule turned out to be per-VERSION,
+        # not per-package: a package version published in the same
+        # commit context as a GitHub Release inherits that release's
+        # visibility. Customer releases got this via release.yml's
+        # `gh release create`. Dev images had no equivalent — until
+        # v0.5.9.
+        #
+        # Why "dev-latest" (stable tag), not "dev-<sha>":
+        #   - Operators only ever run THE most recent dev build.
+        #     Per-SHA prereleases would pile up on the Releases page
+        #     (one per push to main) for no observable benefit.
+        #   - The release notes embed the SHA + image digests, so
+        #     the forensic trail of "which build is current" stays
+        #     intact even with a stable tag.
+        #   - release.yml deletes dev-latest when a real customer
+        #     vX.Y.Z release publishes, so the prerelease never
+        #     lingers alongside a customer release.
+        #
+        # Failure mode: if the delete-then-recreate succeeds-delete
+        # but fails-create, dev-latest is briefly absent — meaning
+        # the operator's :dev pull will 404 until the next run
+        # republishes. Acceptable trade-off: the alternative (use
+        # `gh release edit` to mutate in-place) leaves edge cases
+        # around tag retargeting that delete-then-recreate avoids.
+        # The window is sub-second in practice; the operator is
+        # always in a "wait for build to finish, then install"
+        # cadence, not racing CI.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.digests.outputs.version }}
+          MANIFEST_PATH: ${{ steps.digests.outputs.manifest }}
+        run: |
+          set -euo pipefail
+
+          # NOTE: the self-hosted runner does NOT have `gh` installed
+          # — the same constraint that drives the curl + python3
+          # manifest-fetch step earlier in this workflow. The block
+          # below uses the GitHub REST API directly: curl for
+          # transport, python3 for JSON encode/decode (both always
+          # present on the runner). The mechanics are identical to
+          # `gh release delete`/`gh release create`; only the
+          # transport differs.
+          API="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          UPLOAD_API="https://uploads.github.com/repos/${GITHUB_REPOSITORY}"
+          AUTH_HDR="Authorization: Bearer $GH_TOKEN"
+          ACCEPT_HDR="Accept: application/vnd.github+json"
+          API_VERSION_HDR="X-GitHub-Api-Version: 2022-11-28"
+
+          # Tiny helper: parse a single field out of stdin JSON.
+          # python3 over jq because the runner ships python3 by
+          # default; jq is not guaranteed.
+          jq_get() {
+            python3 -c 'import sys, json; print(json.load(sys.stdin).get(sys.argv[1], ""))' "$1"
+          }
+
+          # ── 1. Look up any existing dev-latest release by tag ──
+          # 200 = exists (capture release ID + grab old manifest
+          # asset for the rebuild-decision diagnostic), 404 = cold
+          # start (every service will report FIRST-BUILD), anything
+          # else = unexpected, fail loud.
+          LOOKUP_BODY="$(mktemp)"
+          HTTP=$(curl -sS -o "$LOOKUP_BODY" -w "%{http_code}" \
+            -H "$AUTH_HDR" -H "$ACCEPT_HDR" -H "$API_VERSION_HDR" \
+            "${API}/releases/tags/dev-latest")
+          # OLD_MANIFEST holds the previous dev-latest's
+          # release-manifest-dev.env content for digest comparison.
+          # Empty path = no prior release / no manifest asset / asset
+          # download failed → diagnostic treats every service as
+          # FIRST-BUILD (cold-start case).
+          OLD_MANIFEST=""
+          case "$HTTP" in
+            200)
+              RELEASE_ID=$(jq_get id < "$LOOKUP_BODY")
+              # Extract the asset API URL for release-manifest-dev.env
+              # so we can download it before deleting the release.
+              # python3 -c is on one line so YAML's block-scalar
+              # parser doesn't trip on the script's own indentation.
+              OLD_MANIFEST_URL=$(python3 -c 'import sys, json; d = json.load(open(sys.argv[1])); print(next((a["url"] for a in d.get("assets", []) if a.get("name") == "release-manifest-dev.env"), ""))' "$LOOKUP_BODY")
+              if [[ -n "$OLD_MANIFEST_URL" ]]; then
+                OLD_MANIFEST="$(mktemp)"
+                # Accept: application/octet-stream forces the asset
+                # endpoint to return raw bytes instead of metadata JSON.
+                if ! curl -fsSL \
+                  -H "$AUTH_HDR" \
+                  -H "Accept: application/octet-stream" \
+                  "$OLD_MANIFEST_URL" > "$OLD_MANIFEST" 2>/dev/null; then
+                  echo "::warning::Could not download prior release-manifest-dev.env — diagnostic will show FIRST-BUILD for all services"
+                  rm -f "$OLD_MANIFEST"
+                  OLD_MANIFEST=""
+                fi
+              else
+                echo "::warning::Prior dev-latest had no release-manifest-dev.env asset — diagnostic will show FIRST-BUILD for all services"
+              fi
+              echo "Found existing dev-latest release id=$RELEASE_ID — deleting"
+              DEL_HTTP=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+                -H "$AUTH_HDR" -H "$ACCEPT_HDR" -H "$API_VERSION_HDR" \
+                "${API}/releases/${RELEASE_ID}")
+              if [[ "$DEL_HTTP" != "204" ]]; then
+                echo "::error::Failed to delete existing dev-latest release (HTTP $DEL_HTTP)" >&2
+                exit 1
+              fi
+              ;;
+            404)
+              echo "No prior dev-latest release — cold start (diagnostic will show FIRST-BUILD for all services)"
+              ;;
+            *)
+              echo "::error::Unexpected HTTP $HTTP looking up dev-latest release" >&2
+              cat "$LOOKUP_BODY" >&2
+              exit 1
+              ;;
+          esac
+          rm -f "$LOOKUP_BODY"
+
+          # ── 2. Delete the underlying git tag ref ──
+          # gh release delete --cleanup-tag equivalent. 404 is OK
+          # (tag may not exist if a prior release was a draft never
+          # tagged, or was manually cleaned up).
+          TAG_HTTP=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+            -H "$AUTH_HDR" -H "$ACCEPT_HDR" -H "$API_VERSION_HDR" \
+            "${API}/git/refs/tags/dev-latest")
+          case "$TAG_HTTP" in
+            204) echo "Deleted dev-latest tag ref" ;;
+            404|422|401) echo "dev-latest tag ref already absent (or token can't delete protected tag) — continuing" ;;
+            *)
+              echo "::error::Unexpected HTTP $TAG_HTTP deleting dev-latest tag" >&2
+              exit 1
+              ;;
+          esac
+
+          # Eventual-consistency window: give GitHub's tag list a
+          # beat to settle before create.
+          sleep 3
+
+          # ── 2.5. Compute REBUILT / UNCHANGED rebuild-decision table ──
+          # For each of the 5 stack-level services, compare the digest
+          # we resolved in this run against the digest that was in the
+          # PRIOR dev-latest's manifest. Result is one of:
+          #   🆕 FIRST-BUILD       — no prior dev-latest (cold start)
+          #                          OR service missing from prior
+          #                          manifest (new service added since)
+          #   ✓  UNCHANGED         — digest matches prior dev-latest →
+          #                          per-service workflow did NOT fire
+          #                          this run → container won't recreate
+          #   🔨 REBUILT           — digest differs; for xlog/agent/
+          #                          caldera/connectors this means
+          #                          source under that service's
+          #                          path-filter changed and
+          #                          build-<svc>.yml fired
+          #   📦 STABLE-ADVANCED   — updater/browser only; their
+          #                          digests come from the latest
+          #                          customer stable release, so a
+          #                          change here means a vX.Y.Z release
+          #                          published since the prior dev run
+          #
+          # The diagnostic surfaces in three places:
+          #   * Workflow log (::group::), so this run's decisions are
+          #     visible in gh run view output
+          #   * $GITHUB_STEP_SUMMARY, so the Workflow run page shows
+          #     the table without having to read the log
+          #   * Embedded in the dev-latest release body, so
+          #     consumers reading the release notes see what changed
+          #
+          # This step is load-bearing for the "no unnecessary
+          # rebuilds" property — see docs/CICD.md § Per-service
+          # path-filter contract.
+          SUMMARY_MD="$(mktemp)"
+          SUMMARY_LOG="$(mktemp)"
+          {
+            echo "| Service | Status | Digest |"
+            echo "|---|---|---|"
+          } > "$SUMMARY_MD"
+          printf "  %-22s %-22s %s\n" "Service" "Status" "Digest" > "$SUMMARY_LOG"
+          printf "  %-22s %-22s %s\n" "----------------------" "----------------------" "----------------------" >> "$SUMMARY_LOG"
+
+          decide_status() {
+            # Args: $1 = NEW digest, $2 = OLD digest (may be empty),
+            #       $3 = "dev" | "stable" (services where digest comes
+            #       from latest stable release report STABLE-ADVANCED
+            #       instead of REBUILT when their digest changes,
+            #       because they aren't rebuilt by build-<svc>.yml)
+            local new="$1" old="$2" source="$3"
+            if [[ -z "$new" ]]; then
+              echo "❌ MISSING"
+            elif [[ -z "$old" ]]; then
+              echo "🆕 FIRST-BUILD"
+            elif [[ "$old" == "$new" ]]; then
+              echo "✓ UNCHANGED"
+            elif [[ "$source" == "stable" ]]; then
+              echo "📦 STABLE-ADVANCED"
+            else
+              echo "🔨 REBUILT"
+            fi
+          }
+
+          emit_row() {
+            local svc="$1" status="$2" digest="$3"
+            # Truncate digest to first 26 chars in both surfaces — full
+            # SHA-256 is 71 chars, 26 is enough to discriminate without
+            # bloating the table.
+            local short="${digest:0:26}"
+            printf "| \`%s\` | %s | \`%s…\` |\n" "$svc" "$status" "$short" >> "$SUMMARY_MD"
+            printf "  %-22s %-22s %s…\n" "$svc" "$status" "$short" >> "$SUMMARY_LOG"
+          }
+
+          # Services rebuilt by the dev cycle (xlog, agent, caldera).
+          for entry in "DIGEST_PHANTOM_XLOG:phantom-xlog" \
+                       "DIGEST_PHANTOM_AGENT:phantom-agent" \
+                       "DIGEST_PHANTOM_CALDERA:phantom-caldera"; do
+            KEY="${entry%%:*}"
+            SVC="${entry##*:}"
+            NEW=$(grep "^${KEY}=" "$MANIFEST_PATH" 2>/dev/null | cut -d= -f2- || true)
+            OLD=""
+            if [[ -n "$OLD_MANIFEST" && -f "$OLD_MANIFEST" ]]; then
+              OLD=$(grep "^${KEY}=" "$OLD_MANIFEST" 2>/dev/null | cut -d= -f2- || true)
+            fi
+            STATUS=$(decide_status "$NEW" "$OLD" "dev")
+            emit_row "$SVC" "$STATUS" "$NEW"
+          done
+
+          # Services pinned to the latest customer stable release
+          # (updater, browser — not rebuilt on the dev cycle).
+          for entry in "DIGEST_PHANTOM_UPDATER:phantom-updater" \
+                       "DIGEST_PHANTOM_BROWSER:phantom-browser"; do
+            KEY="${entry%%:*}"
+            SVC="${entry##*:}"
+            NEW=$(grep "^${KEY}=" "$MANIFEST_PATH" 2>/dev/null | cut -d= -f2- || true)
+            OLD=""
+            if [[ -n "$OLD_MANIFEST" && -f "$OLD_MANIFEST" ]]; then
+              OLD=$(grep "^${KEY}=" "$OLD_MANIFEST" 2>/dev/null | cut -d= -f2- || true)
+            fi
+            STATUS=$(decide_status "$NEW" "$OLD" "stable")
+            emit_row "$SVC" "$STATUS" "$NEW"
+          done
+
+          # Surface in workflow log
+          echo "::group::Service rebuild decisions for this dev build"
+          cat "$SUMMARY_LOG"
+          echo ""
+          echo "Legend:"
+          echo "  ✓ UNCHANGED       — digest matches prior dev-latest (per-service workflow did NOT fire this run)"
+          echo "  🔨 REBUILT         — digest changed (source under this service's path filter changed)"
+          echo "  📦 STABLE-ADVANCED — updater/browser only; latest customer release advanced since last dev run"
+          echo "  🆕 FIRST-BUILD     — no prior dev-latest (cold start) OR new service added since"
+          echo "::endgroup::"
+
+          # Surface in the workflow-run summary panel (renders as
+          # markdown on the run page; one click from the run list).
+          {
+            echo "## Service rebuild decisions for dev-latest"
+            echo ""
+            cat "$SUMMARY_MD"
+            echo ""
+            echo "**Legend:** ✓ UNCHANGED · 🔨 REBUILT · 📦 STABLE-ADVANCED (updater/browser only) · 🆕 FIRST-BUILD (cold start)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Clean up the old manifest now that we've consumed it.
+          [[ -n "$OLD_MANIFEST" ]] && rm -f "$OLD_MANIFEST"
+
+          # ── 3. Compose release notes ──
+          # Inline so the SHA + digests pinned in dev-latest match
+          # exactly the bytes built by THIS run.
+          SHORT_SHA="${GITHUB_SHA::7}"
+          NOTES="$(mktemp)"
+          {
+            echo "**Internal dev build — operator use only.**"
+            echo ""
+            echo "This prerelease pins the bytes of the current dev"
+            echo "stack on phantom-vm. Customers should NOT install"
+            echo "from dev-latest — customer installs target the"
+            echo "latest \`vX.Y.Z\` release."
+            echo ""
+            echo "## Why this prerelease exists"
+            echo ""
+            echo "Associating dev image versions with a GitHub Release"
+            echo "grants them the same access semantics as customer-"
+            echo "facing versions. Without this association, the"
+            echo "operator's customer-style PAT cannot pull \`:dev\`"
+            echo "images from GHCR. See docs/CICD.md \"Build & release"
+            echo "workflow\" → \"GHCR per-version access\"."
+            echo ""
+            echo "## Service rebuild decisions"
+            echo ""
+            cat "$SUMMARY_MD"
+            echo ""
+            echo "**Legend:** ✓ UNCHANGED · 🔨 REBUILT · 📦 STABLE-ADVANCED (updater/browser only) · 🆕 FIRST-BUILD (cold start)"
+            echo ""
+            echo "See docs/CICD.md § Per-service path-filter contract for the invariant. UNCHANGED services keep their existing containers running across \`docker compose up -d\` — that's the digest-pinning property, not a no-op pull."
+            echo ""
+            echo "## Image digests (built from commit \`${GITHUB_SHA}\`)"
+            echo ""
+            grep '^DIGEST_PHANTOM_' "$MANIFEST_PATH" | sed 's/^/- `/; s/$/`/'
+            echo ""
+            echo "## How operators consume this"
+            echo ""
+            echo "On phantom-vm:"
+            echo ""
+            echo '```bash'
+            echo "sudo /home/ayman/phantom-installer-dev"
+            echo '```'
+            echo ""
+            echo "build-dev-installer.yml staged a fresh copy at that"
+            echo "path when this prerelease was published. The"
+            echo "installer reads digests pinned at build time — no"
+            echo "need to fetch these assets manually."
+          } > "$NOTES"
+
+          # ── 4. Create the new prerelease ──
+          # Build the JSON body via python3 — the notes file is
+          # multi-line + has unicode (em-dashes, smart quotes) so
+          # shell-escaping it directly is brittle. python3 json.dumps
+          # handles this cleanly.
+          #
+          # Inputs passed via env vars (not argv) so the heredoc body
+          # can stay at column 0 — python is whitespace-sensitive at
+          # the module level, and YAML's `run: |` block indents every
+          # line at column 10 which Python would reject as an
+          # IndentationError on `import`. The heredoc terminator at
+          # column 10 doesn't affect the body's indentation; bash
+          # strips it via <<- if we use that variant, but we just
+          # write each line at column 0 here for clarity.
+          #
+          # make_latest=false is defense-in-depth: prerelease=true
+          # already excludes from the "latest" slot, but the explicit
+          # field makes the intent obvious and survives any future
+          # GitHub semantic change.
+          CREATE_BODY="$(mktemp)"
+          NOTES="$NOTES" GITHUB_SHA="$GITHUB_SHA" VERSION="$VERSION" \
+            python3 > "$CREATE_BODY" <<'PY'
+          import json, os
+          with open(os.environ["NOTES"]) as f:
+              notes = f.read()
+          data = {
+              "tag_name": "dev-latest",
+              "target_commitish": os.environ["GITHUB_SHA"],
+              "name": f"Dev build {os.environ['VERSION']}",
+              "body": notes,
+              "prerelease": True,
+              "draft": False,
+              "make_latest": "false",
+          }
+          print(json.dumps(data))
+          PY
+
+          CREATE_RESPONSE="$(mktemp)"
+          HTTP=$(curl -sS -o "$CREATE_RESPONSE" -w "%{http_code}" -X POST \
+            -H "$AUTH_HDR" -H "$ACCEPT_HDR" -H "$API_VERSION_HDR" \
+            -H "Content-Type: application/json" \
+            --data-binary "@$CREATE_BODY" \
+            "${API}/releases")
+          if [[ "$HTTP" != "201" ]]; then
+            echo "::error::Failed to create dev-latest release (HTTP $HTTP):" >&2
+            cat "$CREATE_RESPONSE" >&2
+            exit 1
+          fi
+          RELEASE_ID=$(jq_get id        < "$CREATE_RESPONSE")
+          RELEASE_URL=$(jq_get html_url < "$CREATE_RESPONSE")
+          if [[ -z "$RELEASE_ID" ]]; then
+            echo "::error::Release create returned 201 but no id in response:" >&2
+            cat "$CREATE_RESPONSE" >&2
+            exit 1
+          fi
+          rm -f "$NOTES" "$CREATE_BODY" "$CREATE_RESPONSE" "$SUMMARY_MD" "$SUMMARY_LOG"
+
+          # ── 5. Upload assets ──
+          # Upload host is uploads.github.com (NOT api.github.com,
+          # which returns 415 for asset POSTs). Each asset uploads
+          # as application/octet-stream with the filename in the
+          # ?name= query string.
+          for asset in \
+              dist/installer-dev/phantom-installer-dev \
+              dist/installer-dev/phantom-installer-dev.sha256 \
+              dist/installer-dev/release-manifest-dev.env; do
+            name="$(basename "$asset")"
+            UPLOAD_RESPONSE="$(mktemp)"
+            HTTP=$(curl -sS -o "$UPLOAD_RESPONSE" -w "%{http_code}" -X POST \
+              -H "$AUTH_HDR" -H "$ACCEPT_HDR" -H "$API_VERSION_HDR" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@$asset" \
+              "${UPLOAD_API}/releases/${RELEASE_ID}/assets?name=${name}")
+            if [[ "$HTTP" != "201" ]]; then
+              echo "::error::Failed to upload asset $name to dev-latest (HTTP $HTTP):" >&2
+              cat "$UPLOAD_RESPONSE" >&2
+              exit 1
+            fi
+            echo "Uploaded asset: $name"
+            rm -f "$UPLOAD_RESPONSE"
+          done
+
+          echo "::notice::dev-latest prerelease published for ${VERSION} (${SHORT_SHA})"
+          echo "::notice::URL: ${RELEASE_URL}"
+          echo "::notice:::dev images on GHCR now inherit prerelease access — operator PAT can pull."

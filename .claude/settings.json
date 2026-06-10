@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc --noEmit:*)",
+      "Bash(npx tsc:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(pytest:*)",
+      "Bash(npx pyright:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run pyright:*)",
+      "Bash(uv sync:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push origin v*:*)",
+      "Bash(git tag:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(gh release:*)",
+      "Bash(gh api:*)",
+      "Bash(gh label:*)",
+      "Bash(gcloud compute start-iap-tunnel:*)",
+      "Bash(gcloud compute ssh:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git config:*)",
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.vm)",
+      "Read(./.gcp/*)",
+      "Read(./**/*.pem)",
+      "Read(./**/credentials.json)",
+      "Read(./**/service-account.json)"
+    ]
+  },
+  "env": {
+    "PHANTOM_ENV": "development"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_start_context.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/propose_claude_md.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,81 @@
+schema_version: 1
+id: DelineaALM
+pack_name: DelineaALM
+rule_name: DelineaALM
+dataset_name: thycotic_alm_raw
+vendor: Delinea
+product: DelineaALM
+description: Formerly known as "Thycotic Account Lifecycle Manager", Delinea Account
+  Lifecycle Manager automates and streamlines service account governance to control
+  service account sprawl.
+categories:
+- Analytics & SIEM
+version: 1.0.4
+origin: bundle
+author: phantom-bundle
+uploaded_by: null
+created_at: '2026-05-23T09:26:17Z'
+updated_at: '2026-05-23T09:26:17Z'
+logo:
+  mime_type: image/svg+xml
+  data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgNjAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIG1lZXQiPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgZm9udC1mYW1pbHk9IkludGVyLCAtYXBwbGUtc3lzdGVtLCBCbGlua01hY1N5c3RlbUZvbnQsIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzIiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiNENDFBMzMiPkRlbGluZWE8L3RleHQ+PC9zdmc+
+  source: phantom-bundle (v0.13.0 migration)
+  license: MIT
+  fidelity: branded
+formats:
+- SYSLOG
+- CEF
+- JSON
+is_rawlog_only: false
+fields:
+- name: cefName
+  type: string_short
+  description: CEF event name — short human-readable label for the event class. Short
+    opaque token, typically without whitespace; max ~64 chars.
+  example: token_value
+- name: Operation
+  type: string
+  description: Event operation. Free-form text; may contain whitespace and punctuation.
+  example: create
+- name: Updated
+  type: datetime
+  description: Event operation. ISO-8601 timestamp with timezone (e.g., 2026-05-26T14:23:01Z).
+  example: '2026-05-26T14:23:01Z'
+- name: User
+  type: string
+  description: Event operation. Free-form text; may contain whitespace and punctuation.
+  example: jdoe
+- name: targetResource
+  type: string
+  description: Event operation. Free-form text; may contain whitespace and punctuation.
+  example: sample_targetresource
+- name: targetType
+  type: string
+  description: Destination resource type. Free-form text; may contain whitespace and
+    punctuation.
+  example: sample_targettype
+use_cases:
+- PAM
+how_to_use: |
+  ## Delinea DelineaALM → Cortex XSIAM (dataset `thycotic_alm_raw`)
+  
+    **Routing** — the broker lowercases the CEF/syslog header `vendor`/`product`, replaces
+    non-alphanumerics with `_`, and appends `_raw` to choose the dataset (target: `thycotic_alm_raw`).
+  
+    **Required CEF header for XSIAM** — the header must normalize to `thycotic_alm`. The marketplace pack's display name `Delinea` / `DelineaALM` normalizes to `delinea_delineaalm_raw`, a **different dataset** (vendor rename / legacy CEF identity), so use the vendor's actual CEF `deviceVendor`/`deviceProduct` that yields `thycotic_alm` and confirm which dataset the events land in.
+  
+    **Ingestion shape**: **Flat / CEF-compatible.** The modeling rule reads flat top-level columns (no nested-JSON access). A CEF event routes in and the broker auto-extracts those columns, so this source maps from Phantom's existing CEF path once the dataset is XDM-bound.
+  
+    - **Modeling-rule gate**: `eventType not in ("Integration", "ExternalOrganizationalUnit", "ProvisionState", "ProvisionApproval") and eventType != null` — seed that field with an accepted value or the rule drops the row (XDM stays 0).
+  
+    **XDM mapping**: ~5 fields mapped to the unified data model (`xdm.*`), including: `xdm.event.operation`, `xdm.event.type`, `xdm.target.resource.id`, `xdm.target.resource.name`, `xdm.target.resource.type`.
+  
+    **Operator setup**: This data source has typed-column data that doesn't look like CEF (columns are camelCase API fields, JSON sub-objects, etc.). Most likely arrives via the XSIAM HTTP Collector with a source tag mapped to vendor=`Delinea`, product=`DelineaALM`, or via a vendor-specific XDR connector pull. Phantom can POST JSON to the HTTP collector; the operator must configure the collector's source tag to land events in this dataset.
+  
+    **Status**: Reverse-engineered 2026-06-04 from the parsing/modeling rules — routing, gate, and field
+    inventory documented. **NOT yet XDM-validated on a live tenant** (no `validated` pill); validate by
+    streaming a CEF batch and confirming a rich `xdm.*` count over a wide window.
+  
+    **Verify** (once the dataset is XDM-bound, wide ≥7d window):
+  
+        config timeframe = 30d | datamodel dataset = thycotic_alm_raw | sort desc _time | fields xdm.* | limit 20

@@ -1,0 +1,134 @@
+{
+  "okta_okta_raw": {
+    "raw": 1,
+    "xdm": 49,
+    "rows": 20,
+    "most_recent": "06-04 04:56"
+  },
+  "okta_sso_raw": {
+    "raw": 1,
+    "xdm": 49,
+    "rows": 20,
+    "most_recent": "06-01 03:54"
+  },
+  "alibaba_action_trail_raw": {
+    "raw": 1,
+    "xdm": 26,
+    "rows": 20,
+    "most_recent": "06-04 04:58"
+  },
+  "amazon_aws_raw": {
+    "raw": 1,
+    "xdm": 37,
+    "rows": 6,
+    "most_recent": "06-01 15:44"
+  },
+  "aws_security_hub_raw": {
+    "raw": 1,
+    "xdm": 11,
+    "rows": 20,
+    "most_recent": "06-04 04:58"
+  },
+  "aws_waf_raw": {
+    "raw": 1,
+    "xdm": 15,
+    "rows": 20,
+    "most_recent": "06-04 04:59"
+  },
+  "atlassian_jira_raw": {
+    "raw": 1,
+    "xdm": 21,
+    "rows": 3,
+    "most_recent": "05-28 03:54"
+  },
+  "servicenow_servicenow_raw": {
+    "raw": 1,
+    "xdm": 17,
+    "rows": 20,
+    "most_recent": "06-01 15:45"
+  },
+  "cyberark_isp_raw": {
+    "raw": 1,
+    "xdm": 40,
+    "rows": 20,
+    "most_recent": "06-04 05:00"
+  },
+  "msft_azure_ad_audit_raw": {
+    "raw": 1,
+    "xdm": 29,
+    "rows": 20,
+    "most_recent": "06-01 15:48"
+  },
+  "msft_azure_ad_raw": {
+    "raw": 1,
+    "xdm": 44,
+    "rows": 20,
+    "most_recent": "06-04 05:01"
+  },
+  "msft_o365_general_raw": {
+    "raw": 1,
+    "xdm": 53,
+    "rows": 20,
+    "most_recent": "06-01 15:48"
+  },
+  "msft_o365_exchange_online_raw": {
+    "raw": 1,
+    "xdm": 53,
+    "rows": 20,
+    "most_recent": "06-04 05:02"
+  },
+  "msft_o365_sharepoint_online_raw": {
+    "raw": 1,
+    "xdm": 38,
+    "rows": 20,
+    "most_recent": "06-04 05:03"
+  },
+  "msft_o365_emails_raw": {
+    "raw": 1,
+    "xdm": 18,
+    "rows": 20,
+    "most_recent": "06-04 05:03"
+  },
+  "msft_o365_dlp_raw": {
+    "raw": 1,
+    "xdm": 37,
+    "rows": 20,
+    "most_recent": "06-01 15:50"
+  },
+  "qualys_qualys_raw": {
+    "raw": 1,
+    "xdm": 14,
+    "rows": 20,
+    "most_recent": "06-04 05:04"
+  },
+  "proofpoint_email_security_raw": {
+    "raw": 1,
+    "xdm": 16,
+    "rows": 20,
+    "most_recent": "06-04 05:04"
+  },
+  "proofpoint_tap_raw": {
+    "raw": 1,
+    "xdm": 12,
+    "rows": 20,
+    "most_recent": "06-04 05:03"
+  },
+  "msft_azure_flowlogs_raw": {
+    "raw": 1,
+    "xdm": 50,
+    "rows": 20,
+    "most_recent": "06-01 15:52"
+  },
+  "msft_azure_waf_raw": {
+    "raw": 1,
+    "xdm": 40,
+    "rows": 6,
+    "most_recent": "06-04 04:54"
+  },
+  "msft_azure_aks_raw": {
+    "raw": 1,
+    "xdm": 16,
+    "rows": 20,
+    "most_recent": "06-04 04:54"
+  }
+}

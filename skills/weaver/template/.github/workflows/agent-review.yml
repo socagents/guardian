@@ -1,0 +1,1279 @@
+# =============================================================================
+# Agent Review Workflow
+# =============================================================================
+# Automatically reviews ALL PRs targeting main. Uses Claude Code in headless
+# mode to review diffs against {{PROJECT_NAME}} specs, approve or request changes, and
+# auto-merge approved PRs. Can also auto-fix deterministic issues (gitignore,
+# missing tests, missing dirs) via FIX_AND_APPROVE verdict.
+#
+# Review-to-fix loop (agent PRs):
+#   When the review requests changes on an agent PR, the workflow runs the
+#   coding agent to fix the issues directly on the PR branch, then re-triggers
+#   itself for re-review. This closes the gap where dispatch skips issues
+#   with open PRs. The cycle limit (3) still applies for escalation.
+#
+# For agent-created PRs (branch prefix agent/):
+#   - Extracts agent ID and source issue from branch name
+#   - Escalates to human after 3 review cycles
+#   - Auto-fixes requested changes and re-reviews (up to cycle limit)
+#   - Updates issue status labels
+#
+# For human PRs (any other branch):
+#   - Reviews the diff the same way
+#   - Skips escalation/cycle-counting logic
+#   - Auto-merges on approval (same as agent PRs)
+#
+# Triggers:
+#   - pull_request (opened, synchronize, reopened, ready_for_review) targeting main
+#   - workflow_dispatch with pr_number (called by dispatch workflow)
+#
+# Note: PRs created with GITHUB_TOKEN don't trigger pull_request events,
+# so the dispatch workflow explicitly triggers this via workflow_dispatch.
+#
+# Status checks created:
+#   review-agent/claude-review  — pass/fail based on review verdict
+#
+# References:
+#   - workforce-orchestration.md §2 Review Agent
+#   - agent-interaction-protocol.md §3.3 Review-to-Coder Feedback Loop
+#   - cicd-agent-integration.md §4 Review Agent Workflow
+#   - review-agent/prompts/review-prompt.md
+#   - review-agent/prompts/fix-prompt.md
+#   - review-agent/prompts/fix-changes-prompt.md
+#   - review-agent/prompts/verify-prompt.md
+# =============================================================================
+
+name: Agent – Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to review (used when triggered by dispatch workflow)"
+        required: true
+        type: string
+
+permissions:
+  contents: write                        # Needed for auto-merge
+  pull-requests: write
+  issues: write
+  actions: write                         # Needed to trigger dispatch chain
+
+env:
+  # Budget: max reviews per day (resets at 00:00 UTC).
+  # Each log entry = 1 invocation. Budget check counts lines in today's log.
+  DAILY_REVIEW_LIMIT: {{LIMIT_REVIEW}}
+  MAX_REVIEW_CYCLES: 3
+  TOKEN_LOG_DIR: /home/{{RUNNER_USER}}/kite-token-logs
+
+jobs:
+  review:
+    name: Review PR
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    environment: dev
+    if: github.event.pull_request.draft != true
+    timeout-minutes: 30                  # Extra time for fix+verify passes
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clean: false
+
+      # ── 2. Extract PR metadata safely ──────────────────────────────────
+      - name: Extract PR metadata
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          # Determine PR number from either pull_request event or workflow_dispatch input
+          if [ -n "${EVENT_PR_NUMBER:-}" ] && [ "$EVENT_PR_NUMBER" != "" ]; then
+            PR_NUMBER="$EVENT_PR_NUMBER"
+          elif [ -n "${INPUT_PR_NUMBER:-}" ] && [ "$INPUT_PR_NUMBER" != "" ]; then
+            PR_NUMBER="$INPUT_PR_NUMBER"
+          else
+            echo "::error::No PR number found from event or input"
+            exit 1
+          fi
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+          # For workflow_dispatch, fetch the head ref from the API
+          if [ -z "${HEAD_REF:-}" ] || [ "$HEAD_REF" = "" ]; then
+            HEAD_REF=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefName --jq '.headRefName')
+          fi
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+
+          # Detect whether this is an agent PR or a human PR
+          if [[ "$HEAD_REF" == agent/* ]]; then
+            IS_AGENT_PR="true"
+            AGENT_ID=$(echo "$HEAD_REF" | cut -d'/' -f2)
+            ISSUE_PART=$(echo "$HEAD_REF" | cut -d'/' -f3)
+            ISSUE_NUMBER=$(echo "$ISSUE_PART" | grep -oP '^\d+' || echo "0")
+          else
+            IS_AGENT_PR="false"
+            AGENT_ID="human"
+            ISSUE_NUMBER="0"
+          fi
+
+          echo "is_agent_pr=$IS_AGENT_PR" >> "$GITHUB_OUTPUT"
+          echo "agent_id=$AGENT_ID" >> "$GITHUB_OUTPUT"
+          echo "issue_number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+
+          echo "Reviewing PR #${PR_NUMBER} | agent=${AGENT_ID} | issue=#${ISSUE_NUMBER} | agent_pr=${IS_AGENT_PR}"
+
+      # ── 2.5. Checkout PR branch (needed for fix-and-approve) ───────────
+      - name: Checkout PR branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ steps.meta.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          git checkout "$HEAD_REF"
+          echo "Checked out PR branch: $HEAD_REF"
+
+      # ── 3. Count review cycles (agent PRs only) ──────────────────────
+      - name: Count review cycles
+        id: cycles
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ steps.meta.outputs.is_agent_pr }}" = "true" ]; then
+            # Count comments containing AGENT_MSG from review-agent
+            for attempt in 1 2 3; do
+              CYCLE_COUNT=$(gh api \
+                "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+                --paginate \
+                --jq '[.[] | select(.body | contains("AGENT_MSG agent=review-agent"))] | length') && break
+              echo "::warning::Attempt $attempt failed (count cycles), retrying in 10s..."
+              sleep 10
+            done
+          else
+            # Human PRs don't have review cycle limits
+            CYCLE_COUNT=0
+          fi
+
+          echo "count=$CYCLE_COUNT" >> "$GITHUB_OUTPUT"
+          echo "Review cycle: $CYCLE_COUNT / $MAX_REVIEW_CYCLES"
+
+      # ── 4. Escalate if review limit reached (agent PRs only) ──────────
+      - name: Escalate if review limit reached
+        if: >-
+          steps.meta.outputs.is_agent_pr == 'true' &&
+          fromJSON(steps.cycles.outputs.count) >= env.MAX_REVIEW_CYCLES
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+        run: |
+          set -euo pipefail
+
+          # Add escalation labels to the source issue
+          if [ "$ISSUE_NUMBER" != "0" ]; then
+            gh issue edit "$ISSUE_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --add-label "needs-human,reason:review-limit"
+
+            # Trigger Slack escalation notification
+            gh workflow run agent-slack-notify.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              -f escalation_issue="$ISSUE_NUMBER" || true
+          fi
+
+          # Comment on the PR
+          gh pr comment "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            -F - <<'EOF'
+          <!-- AGENT_MSG agent=review-agent action=escalate -->
+          **Review Limit Reached** — This PR has gone through the maximum review cycles
+          without resolution. Escalating to human reviewer.
+          EOF
+
+          echo "::warning::Review limit reached for PR #${PR_NUMBER}, escalating to human"
+
+      # ── 5. Check review agent budget ───────────────────────────────────
+      - name: Check review agent daily limit
+        id: budget
+        if: >-
+          steps.meta.outputs.is_agent_pr == 'false' ||
+          fromJSON(steps.cycles.outputs.count) < env.MAX_REVIEW_CYCLES
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+          LOG_FILE="${TOKEN_LOG_DIR}/review-agent/${TODAY}.jsonl"
+
+          if [ -f "$LOG_FILE" ]; then
+            USED=$(wc -l < "$LOG_FILE")
+          else
+            USED=0
+          fi
+
+          REMAINING=$((DAILY_REVIEW_LIMIT - USED))
+          echo "remaining=$REMAINING" >> "$GITHUB_OUTPUT"
+
+          if [ "$REMAINING" -le 0 ]; then
+            echo "::warning::Review agent daily review limit reached ($USED / $DAILY_REVIEW_LIMIT)"
+            echo "budget_ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "budget_ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── 5.1. Check for prior approval (budget-exempt merge path) ──────
+      # When budget is exhausted, we still want to merge PRs that already
+      # have an APPROVE comment from a previous review run. This prevents
+      # approved PRs from getting stuck when re-triggered after budget reset.
+      - name: Check for prior approval
+        id: prior_approval
+        if: steps.budget.outputs.budget_ok == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          # Look for an existing APPROVE comment from the review agent
+          APPROVE_COUNT=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '[.[] | select(.body | contains("AGENT_MSG agent=review-agent action=approve"))] | length' \
+            2>/dev/null) || APPROVE_COUNT=0
+
+          if [ "$APPROVE_COUNT" -gt 0 ]; then
+            echo "has_prior_approval=true" >> "$GITHUB_OUTPUT"
+            echo "Prior APPROVE comment found — will proceed to auto-merge despite budget exhaustion"
+          else
+            echo "has_prior_approval=false" >> "$GITHUB_OUTPUT"
+            echo "No prior approval found — skipping review (budget exhausted)"
+          fi
+
+      # ── 5.5. Log activity start ────────────────────────────────────────
+      # ── 6. Get PR diff ─────────────────────────────────────────────────
+      - name: Get PR diff
+        if: steps.budget.outputs.budget_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            gh pr diff "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              > /tmp/pr-diff.patch && break
+            echo "::warning::Attempt $attempt failed (get diff), retrying in 10s..."
+            sleep 10
+          done
+
+          echo "Diff size: $(wc -l < /tmp/pr-diff.patch) lines"
+
+      # ── 7. Collect review context ──────────────────────────────────────
+      - name: Collect review context
+        if: steps.budget.outputs.budget_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Get PR body (with retry for transient API failures)
+          for attempt in 1 2 3; do
+            gh pr view "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json body --jq '.body // ""' > /tmp/pr-body.txt && break
+            echo "::warning::Attempt $attempt failed (get PR body), retrying in 10s..."
+            sleep 10
+          done
+
+          # Get linked issue body (agent PRs only)
+          if [ "$ISSUE_NUMBER" != "0" ]; then
+            for attempt in 1 2 3; do
+              gh issue view "$ISSUE_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                --json body --jq '.body // ""' > /tmp/issue-body.txt && break
+              echo "::warning::Attempt $attempt failed (get issue body), retrying in 10s..."
+              sleep 10
+            done
+          else
+            echo "No linked issue." > /tmp/issue-body.txt
+          fi
+
+          # Extract spec path from issue body and read spec content
+          SPEC_PATH=$(grep -oP 'specs/[a-zA-Z0-9_-]+\.md' /tmp/issue-body.txt | head -1 || true)
+          if [ -n "$SPEC_PATH" ] && [ -f "$SPEC_PATH" ]; then
+            head -200 "$SPEC_PATH" > /tmp/spec-content.txt
+          else
+            echo "No spec file found or referenced." > /tmp/spec-content.txt
+          fi
+
+          echo "Context collected: PR body=$(wc -c < /tmp/pr-body.txt)b, issue=$(wc -c < /tmp/issue-body.txt)b, spec=$(wc -c < /tmp/spec-content.txt)b"
+
+      # ── 8. Run Claude Code review agent ────────────────────────────────
+      - name: Run review agent
+        if: steps.budget.outputs.budget_ok == 'true'
+        # Claude Code uses device-code auth (tokens stored on runner at ~/.config/claude/)
+        env:
+          AGENT_ID: ${{ steps.meta.outputs.agent_id }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Truncate diff to avoid ARG_MAX limits. Large PRs can produce
+          # diffs that exceed the ~2MB shell argument limit, causing
+          # "Argument list too long" errors. 150KB is safe (well under 2MB
+          # even with prompt + issue + spec added).
+          DIFF_SIZE=$(wc -c < /tmp/pr-diff.patch)
+          MAX_DIFF=150000
+          if [ "$DIFF_SIZE" -gt "$MAX_DIFF" ]; then
+            echo "::warning::PR diff is ${DIFF_SIZE} bytes, truncating to ${MAX_DIFF} bytes"
+            {
+              echo "⚠️ NOTICE: This diff was truncated to 150KB (original: ${DIFF_SIZE} bytes)."
+              echo "Focus on main files and structural decisions. Some changes may not be visible."
+              echo "---"
+              head -c "$MAX_DIFF" /tmp/pr-diff.patch
+              echo ""
+              echo "... [DIFF TRUNCATED — original was ${DIFF_SIZE} bytes, showing first ${MAX_DIFF}] ..."
+            } > /tmp/pr-diff-truncated.patch
+            mv /tmp/pr-diff-truncated.patch /tmp/pr-diff.patch
+          fi
+
+          # Build the full prompt as a file, then pass via -p "$(cat ...)"
+          # Read prompt from main (PR branch may not have latest prompts)
+          git show origin/main:review-agent/prompts/review-prompt.md > /tmp/review-prompt.md
+          {
+            cat /tmp/review-prompt.md
+            echo ""
+            echo "PR DESCRIPTION:"
+            cat /tmp/pr-body.txt
+            echo ""
+            echo "LINKED ISSUE:"
+            cat /tmp/issue-body.txt
+            echo ""
+            echo "SPEC CONTENT:"
+            cat /tmp/spec-content.txt
+            echo ""
+            echo "PR DIFF:"
+            cat /tmp/pr-diff.patch
+          } > /tmp/review-prompt-full.txt
+
+          PROMPT_SIZE=$(wc -c < /tmp/review-prompt-full.txt)
+          echo "Review prompt size: ${PROMPT_SIZE} bytes (diff: ${DIFF_SIZE} bytes)"
+
+          # Pipe prompt via stdin to avoid ARG_MAX limits.
+          # $(cat file) expands inline as a shell argument — fails when
+          # prompt + environment exceeds ~2MB. Stdin piping bypasses this.
+          cat /tmp/review-prompt-full.txt | claude \
+            -p - \
+            --model claude-opus-4-6 \
+            --dangerously-skip-permissions \
+            --verbose \
+            --output-format stream-json \
+            2>&1 | tee /tmp/review-output.jsonl
+
+      # ── 9. Parse review decision ────────────────────────────────────────
+      - name: Parse review decision
+        id: decision
+        if: steps.budget.outputs.budget_ok == 'true'
+        run: |
+          set -euo pipefail
+
+          # Extract the review text from Claude's stream-json output.
+          REVIEW_TEXT=$(jq -rs '
+            [.[] | select(.type == "result") | .result // ""] | join("")
+          ' /tmp/review-output.jsonl)
+          echo "$REVIEW_TEXT" > /tmp/review-result.txt
+
+          # Determine verdict. Order matters: FIX_AND_APPROVE must be checked
+          # before APPROVE since both contain the word "APPROVE".
+          if echo "$REVIEW_TEXT" | grep -q "REVIEW_DECISION: FIX_AND_APPROVE"; then
+            echo "verdict=fix-and-approve" >> "$GITHUB_OUTPUT"
+            echo "needs_fix=true" >> "$GITHUB_OUTPUT"
+            echo "approved=false" >> "$GITHUB_OUTPUT"
+          elif echo "$REVIEW_TEXT" | grep -q "REVIEW_DECISION: APPROVE"; then
+            echo "verdict=approve" >> "$GITHUB_OUTPUT"
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+            echo "approved=true" >> "$GITHUB_OUTPUT"
+          elif echo "$REVIEW_TEXT" | grep -q "REVIEW_DECISION: MANUAL_ATTENTION"; then
+            echo "verdict=manual" >> "$GITHUB_OUTPUT"
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+            echo "approved=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "verdict=request-changes" >> "$GITHUB_OUTPUT"
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+            echo "approved=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Review verdict: $(grep 'verdict=' "$GITHUB_OUTPUT" | tail -1)"
+
+      # ── 9.5. Apply automated fixes (FIX_AND_APPROVE only) ─────────────
+      - name: Apply automated fixes
+        id: fix
+        if: >-
+          steps.budget.outputs.budget_ok == 'true' &&
+          steps.decision.outputs.needs_fix == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          HEAD_REF: ${{ steps.meta.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+
+          echo "FIX_AND_APPROVE detected — applying automated fixes..."
+
+          # Extract the fix plan from review output
+          FIX_PLAN=$(sed -n '/REVIEW_ACTION: FIX/,/REVIEW_DECISION:/p' /tmp/review-result.txt)
+
+          # Build fix prompt as a file directly to avoid shell variable size limits
+          # Read prompt from main (PR branch may not have latest prompts)
+          git show origin/main:review-agent/prompts/fix-prompt.md > /tmp/fix-prompt.md
+          {
+            cat /tmp/fix-prompt.md
+            echo ""
+            echo "FIX PLAN:"
+            echo "$FIX_PLAN"
+            echo ""
+            echo "PR DIFF:"
+            cat /tmp/pr-diff.patch
+            echo ""
+            echo "LINKED ISSUE:"
+            cat /tmp/issue-body.txt
+            echo ""
+            echo "SPEC CONTENT:"
+            cat /tmp/spec-content.txt
+          } > /tmp/fix-prompt-full.txt
+          cat /tmp/fix-prompt-full.txt | claude \
+            -p - \
+            --model claude-opus-4-6 \
+            --dangerously-skip-permissions \
+            --verbose \
+            --output-format stream-json \
+            2>&1 | tee /tmp/fix-output.jsonl
+
+          # Check if there are changes to commit
+          if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git \
+              -c user.name="kite-review-agent[bot]" \
+              -c user.email="kite-review-agent[bot]@users.noreply.github.com" \
+              commit -m "review-agent: auto-fix deterministic issues
+
+          Applied automated fixes for issues identified during review.
+          See PR comments for details of what was fixed and why.
+
+          Co-Authored-By: kite-review-agent[bot] <kite-review-agent[bot]@users.noreply.github.com>"
+
+            git push origin HEAD:"$HEAD_REF"
+            echo "fix_applied=true" >> "$GITHUB_OUTPUT"
+            echo "Fixes committed and pushed to $HEAD_REF"
+          else
+            echo "fix_applied=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::FIX_AND_APPROVE verdict but no changes produced by fix agent"
+          fi
+
+      # ── 9.6. Verify fixes ─────────────────────────────────────────────
+      - name: Verify fixes
+        id: verify
+        if: >-
+          steps.budget.outputs.budget_ok == 'true' &&
+          steps.decision.outputs.needs_fix == 'true' &&
+          steps.fix.outputs.fix_applied == 'true'
+        env:
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          echo "Verifying applied fixes..."
+
+          # Extract fix summary from fix output
+          FIX_SUMMARY=$(jq -rs '
+            [.[] | select(.type == "result") | .result // ""] | join("")
+          ' /tmp/fix-output.jsonl)
+
+          # Get updated diff
+          git diff HEAD~1 > /tmp/fix-diff.patch
+
+          # Build verify prompt as a file directly
+          # Read prompt from main (PR branch may not have latest prompts)
+          git show origin/main:review-agent/prompts/verify-prompt.md > /tmp/verify-prompt.md
+          {
+            cat /tmp/verify-prompt.md
+            echo ""
+            echo "FIX SUMMARY:"
+            echo "$FIX_SUMMARY"
+            echo ""
+            echo "UPDATED DIFF (fix commit):"
+            cat /tmp/fix-diff.patch
+            echo ""
+            echo "LINKED ISSUE:"
+            cat /tmp/issue-body.txt
+            echo ""
+            echo "SPEC CONTENT:"
+            cat /tmp/spec-content.txt
+          } > /tmp/verify-prompt-full.txt
+          cat /tmp/verify-prompt-full.txt | claude \
+            -p - \
+            --model claude-opus-4-6 \
+            --dangerously-skip-permissions \
+            --verbose \
+            --output-format stream-json \
+            2>&1 | tee /tmp/verify-output.jsonl
+
+          # Parse verify verdict
+          VERIFY_TEXT=$(jq -rs '
+            [.[] | select(.type == "result") | .result // ""] | join("")
+          ' /tmp/verify-output.jsonl)
+
+          if echo "$VERIFY_TEXT" | grep -q "REVIEW_DECISION: APPROVE"; then
+            echo "verified=true" >> "$GITHUB_OUTPUT"
+            echo "Fixes verified successfully"
+          else
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Fix verification failed — fixes may have introduced issues"
+          fi
+
+      # ── 10. Post review comment ───────────────────────────────────────
+      - name: Post review comment
+        id: post_comment
+        if: steps.budget.outputs.budget_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          VERDICT: ${{ steps.decision.outputs.verdict }}
+          NEEDS_FIX: ${{ steps.decision.outputs.needs_fix }}
+          FIX_APPLIED: ${{ steps.fix.outputs.fix_applied }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+          IS_AGENT_PR: ${{ steps.meta.outputs.is_agent_pr }}
+        run: |
+          set -euo pipefail
+
+          REVIEW_TEXT=$(cat /tmp/review-result.txt)
+
+          # Determine final action based on verdict and fix results
+          if [ "$VERDICT" = "fix-and-approve" ]; then
+            if [ "$FIX_APPLIED" = "true" ] && [ "$VERIFIED" = "true" ]; then
+              # Fixes applied and verified — treat as approved
+              gh pr comment "$PR_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                -F - <<EOF
+          <!-- AGENT_MSG agent=review-agent action=fix-and-approve issue=#${ISSUE_NUMBER} -->
+          **Fixed & Approved** — Deterministic issues were auto-fixed. Code now meets spec requirements.
+
+          ${REVIEW_TEXT}
+          EOF
+              echo "final_approved=true" >> "$GITHUB_OUTPUT"
+
+              if [ "$ISSUE_NUMBER" != "0" ]; then
+                gh issue edit "$ISSUE_NUMBER" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --remove-label "status:pr-open" \
+                  --add-label "status:in-review" || true
+              fi
+            else
+              # Fix failed or verification failed — request changes instead
+              gh pr comment "$PR_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                -F - <<EOF
+          <!-- AGENT_MSG agent=review-agent action=request-changes issue=#${ISSUE_NUMBER} -->
+          **Changes Requested** — Attempted auto-fix but verification failed. See feedback below.
+
+          ${REVIEW_TEXT}
+          EOF
+              echo "final_approved=false" >> "$GITHUB_OUTPUT"
+
+              if [ "$ISSUE_NUMBER" != "0" ]; then
+                gh issue edit "$ISSUE_NUMBER" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --remove-label "status:pr-open,status:in-progress" \
+                  --add-label "status:ready" || true
+              fi
+            fi
+
+          elif [ "$VERDICT" = "approve" ]; then
+            gh pr comment "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              -F - <<EOF
+          <!-- AGENT_MSG agent=review-agent action=approve issue=#${ISSUE_NUMBER} -->
+          **Approved** — Code meets spec requirements.
+
+          ${REVIEW_TEXT}
+          EOF
+            echo "final_approved=true" >> "$GITHUB_OUTPUT"
+
+            if [ "$ISSUE_NUMBER" != "0" ]; then
+              gh issue edit "$ISSUE_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                --remove-label "status:pr-open" \
+                --add-label "status:in-review" || true
+            fi
+
+          elif [ "$VERDICT" = "manual" ]; then
+            gh pr comment "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              -F - <<EOF
+          <!-- AGENT_MSG agent=review-agent action=manual-attention issue=#${ISSUE_NUMBER} -->
+          **Manual Attention Required** — This PR needs human review.
+
+          ${REVIEW_TEXT}
+          EOF
+            echo "final_approved=false" >> "$GITHUB_OUTPUT"
+
+            if [ "$ISSUE_NUMBER" != "0" ]; then
+              gh issue edit "$ISSUE_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                --add-label "needs-human,reason:review-limit" || true
+
+              # Trigger Slack escalation notification
+              gh workflow run agent-slack-notify.yml \
+                --repo "$GITHUB_REPOSITORY" \
+                -f escalation_issue="$ISSUE_NUMBER" || true
+            fi
+
+          else
+            # request-changes
+            gh pr comment "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              -F - <<EOF
+          <!-- AGENT_MSG agent=review-agent action=request-changes issue=#${ISSUE_NUMBER} -->
+          **Changes Requested** — See feedback below.
+
+          ${REVIEW_TEXT}
+          EOF
+            echo "final_approved=false" >> "$GITHUB_OUTPUT"
+
+            if [ "$ISSUE_NUMBER" != "0" ] && [ "$IS_AGENT_PR" != "true" ]; then
+              # Human PRs: reset issue label directly (no auto-fix pipeline)
+              gh issue edit "$ISSUE_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                --remove-label "status:pr-open,status:in-progress" \
+                --add-label "status:ready" || true
+            fi
+            # Agent PRs: the fix-changes step (10.1) handles fixing + re-review.
+            # If fix fails, the fallback step (10.3) resets the label.
+          fi
+
+          echo "Final verdict: $VERDICT (approved=${{ steps.decision.outputs.approved || 'false' }})"
+
+      # ── 10.1. Fix requested changes (agent PRs only) ────────────────
+      # When the review requests changes on an agent PR, run the coding
+      # agent to fix issues on the PR branch instead of waiting for
+      # dispatch (which skips issues with open PRs).
+      - name: Fix requested changes
+        id: fix_changes
+        if: >-
+          steps.budget.outputs.budget_ok == 'true' &&
+          steps.decision.outputs.verdict == 'request-changes' &&
+          steps.meta.outputs.is_agent_pr == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          HEAD_REF: ${{ steps.meta.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+
+          echo "Fixing requested changes on PR #${PR_NUMBER} (branch: ${HEAD_REF})..."
+
+          # Build fix prompt with all available context
+          # Read prompt from main (PR branch may not have it yet)
+          git show origin/main:review-agent/prompts/fix-changes-prompt.md > /tmp/fix-changes-prompt.md
+          {
+            cat /tmp/fix-changes-prompt.md
+            echo ""
+            echo "## Review Feedback"
+            cat /tmp/review-result.txt
+            echo ""
+            echo "## Current PR Diff"
+            cat /tmp/pr-diff.patch
+            echo ""
+            echo "## Original Issue"
+            cat /tmp/issue-body.txt
+            echo ""
+            echo "## Spec Content"
+            cat /tmp/spec-content.txt
+          } > /tmp/fix-changes-prompt-full.txt
+
+          cat /tmp/fix-changes-prompt-full.txt | claude \
+            -p - \
+            --model claude-opus-4-6 \
+            --dangerously-skip-permissions \
+            --verbose \
+            --output-format stream-json \
+            2>&1 | tee /tmp/fix-changes-output.jsonl
+
+          # Check if there are changes to commit
+          if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git status --porcelain)" ]; then
+            # Stage everything except workflow files
+            git add -A -- ':!.github/workflows/'
+            git reset HEAD -- .github/workflows/ 2>/dev/null || true
+
+            # Large file guard (>50MB)
+            LARGE_FILES=$(git diff --cached --name-only | while read f; do
+              if [ -f "$f" ]; then
+                SIZE=$(wc -c < "$f")
+                if [ "$SIZE" -gt 52428800 ]; then echo "$f"; fi
+              fi
+            done || true)
+            if [ -n "$LARGE_FILES" ]; then
+              echo "::warning::Removing large files from commit: $LARGE_FILES"
+              echo "$LARGE_FILES" | xargs git reset HEAD -- 2>/dev/null || true
+            fi
+
+            git \
+              -c user.name="kite-coding-agent[bot]" \
+              -c user.email="kite-coding-agent[bot]@users.noreply.github.com" \
+              commit -m "fix: address review feedback on #${ISSUE_NUMBER}
+
+          Applied fixes for review-requested changes.
+          See PR comments for the original review feedback.
+
+          Co-Authored-By: kite-coding-agent[bot] <kite-coding-agent[bot]@users.noreply.github.com>"
+
+            git push origin HEAD:"$HEAD_REF"
+            echo "fix_pushed=true" >> "$GITHUB_OUTPUT"
+            echo "Fixes committed and pushed to $HEAD_REF"
+          else
+            echo "fix_pushed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No changes produced by fix agent"
+          fi
+
+      # ── 10.2. Re-trigger review after fix ────────────────────────────
+      - name: Re-trigger review after fix
+        if: >-
+          steps.fix_changes.outputs.fix_pushed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+        run: |
+          echo "Re-triggering review for PR #${PR_NUMBER} after fix..."
+          gh workflow run agent-review.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            -f pr_number="$PR_NUMBER" || true
+
+      # ── 10.3. Reset issue if fix didn't produce changes ──────────────
+      # Fallback: if the fix step ran but produced no changes (or was
+      # skipped), reset the issue label so it can be re-dispatched later
+      # or picked up by a human.
+      - name: Reset issue if fix failed
+        if: >-
+          steps.decision.outputs.verdict == 'request-changes' &&
+          steps.meta.outputs.is_agent_pr == 'true' &&
+          steps.meta.outputs.issue_number != '0' &&
+          steps.fix_changes.outputs.fix_pushed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+        run: |
+          echo "::warning::Fix step did not produce changes — resetting #${ISSUE_NUMBER} to status:ready"
+          gh issue edit "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --remove-label "status:pr-open,status:in-progress" \
+            --add-label "status:ready" || true
+
+      # ── 10.5. Sync project board → In review ──────────────────────────
+      - name: Sync project board → In review
+        if: steps.budget.outputs.budget_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          PROJECT_OWNER: {{GITHUB_ORG}}
+          PROJECT_NUMBER: "1"
+        run: |
+          if [ "$ISSUE_NUMBER" != "0" ] && [ -f ".github/scripts/sync-project-status.sh" ]; then
+            bash .github/scripts/sync-project-status.sh "$ISSUE_NUMBER" "In review"
+          fi
+
+      # ── 11. Auto-merge approved PRs ───────────────────────────────────
+      # Merges when EITHER:
+      #   (a) current review run approved the PR, OR
+      #   (b) a prior run already approved but auto-merge failed (e.g., empty
+      #       PROJECT_PAT at the time) — this is the budget-exempt path
+      - name: Auto-merge approved PR
+        id: auto_merge
+        if: >-
+          (steps.budget.outputs.budget_ok == 'true' &&
+           steps.post_comment.outputs.final_approved == 'true') ||
+          steps.prior_approval.outputs.has_prior_approval == 'true'
+        env:
+          # Use PROJECT_PAT (not GITHUB_TOKEN) so the merge and close events
+          # trigger downstream workflows (slack-notify). GITHUB_TOKEN events are
+          # suppressed by GitHub's anti-recursion rule.
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+        run: |
+          set -uo pipefail
+
+          # ── Check for merge conflicts before attempting merge ──
+          MERGEABLE=$(gh pr view "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json mergeable --jq '.mergeable' 2>/dev/null || echo "UNKNOWN")
+
+          if [ "$MERGEABLE" = "CONFLICTING" ]; then
+            echo "::warning::PR #${PR_NUMBER} has merge conflicts — closing stale PR and re-queuing"
+
+            # Close the conflicting PR
+            gh pr close "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --delete-branch \
+              --comment "<!-- AGENT_MSG agent=review-agent action=conflict-close -->
+          🔀 **Merge Conflict** — This PR was approved but has conflicts with \`main\` (likely from a recently merged PR touching the same files).
+          Closing this PR and re-queuing the issue for a fresh implementation against the current \`main\` branch." || true
+
+            # Reset issue to status:ready so dispatch picks it up
+            if [ "$ISSUE_NUMBER" != "0" ]; then
+              gh issue edit "$ISSUE_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                --remove-label "status:in-review,status:pr-open,status:in-progress" \
+                --add-label "status:ready" || true
+
+              gh issue comment "$ISSUE_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                --body "<!-- AGENT_MSG agent=review-agent action=conflict-requeue -->
+          🔀 **Merge Conflict — Re-queued** — PR #${PR_NUMBER} was approved but had merge conflicts.
+          The PR has been closed and this issue is reset to \`status:ready\` for re-dispatch.
+          The coding agent will create a fresh PR against the current \`main\` branch." || true
+            fi
+
+            echo "merge_result=conflict" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Auto-merging PR #${PR_NUMBER}..."
+          if ! gh pr merge "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --squash \
+            --delete-branch 2>/tmp/merge-error.txt; then
+
+            MERGE_ERR=$(cat /tmp/merge-error.txt 2>/dev/null || echo "unknown error")
+            echo "::error::Merge failed: $MERGE_ERR"
+
+            # If merge failed for any reason, close stale PR and re-queue
+            if echo "$MERGE_ERR" | grep -qi "not mergeable\|conflict\|merge conflict"; then
+              echo "::warning::Merge failed due to conflicts — closing PR and re-queuing"
+              gh pr close "$PR_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                --delete-branch \
+                --comment "<!-- AGENT_MSG agent=review-agent action=conflict-close -->
+          🔀 **Merge Failed (conflict)** — Closing stale PR and re-queuing for fresh implementation." || true
+
+              if [ "$ISSUE_NUMBER" != "0" ]; then
+                gh issue edit "$ISSUE_NUMBER" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --remove-label "status:in-review,status:pr-open,status:in-progress" \
+                  --add-label "status:ready" || true
+              fi
+              echo "merge_result=conflict" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            # Rate limit — don't fail the job, the merge will be retried
+            if echo "$MERGE_ERR" | grep -qi "rate limit\|abuse\|secondary rate"; then
+              echo "::warning::Merge failed due to rate limiting — will retry on next review cycle"
+              echo "merge_result=rate_limited" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            # Non-conflict, non-rate-limit merge failure — let the job fail so step 14 handles it
+            echo "merge_result=failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          # Mark issue as done (agent PRs only)
+          if [ "$ISSUE_NUMBER" != "0" ]; then
+            gh issue edit "$ISSUE_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --remove-label "status:in-review,status:pr-open,status:in-progress" \
+              --add-label "status:done" || true
+            gh issue close "$ISSUE_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" || true
+          fi
+
+          echo "merge_result=merged" >> "$GITHUB_OUTPUT"
+          echo "PR #${PR_NUMBER} merged and branch deleted"
+
+      # ── 11.1. Trigger dispatch after conflict-close ──────────────────
+      # When a PR is closed due to conflicts, trigger a fresh dispatch so
+      # the issue gets picked up immediately instead of waiting for sweep.
+      - name: Trigger dispatch after conflict-close
+        if: steps.auto_merge.outputs.merge_result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          echo "Triggering fresh dispatch after conflict-close..."
+          gh workflow run agent-dispatch.yml \
+            --repo "$GITHUB_REPOSITORY" || true
+
+      # ── 11.1.1. Auto-close parent issue when all sub-issues are done ──
+      - name: Close parent issue if fully complete
+        if: steps.auto_merge.outputs.merge_result == 'merged'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          if [ "$ISSUE_NUMBER" = "0" ]; then
+            echo "No linked issue — skipping parent check"
+            exit 0
+          fi
+
+          # Check if this issue has a parent
+          PARENT_DATA=$(gh api graphql -f query='
+            query($owner: String!, $repo: String!, $number: Int!) {
+              repository(owner: $owner, name: $repo) {
+                issue(number: $number) {
+                  parent {
+                    ... on Issue {
+                      number
+                      title
+                      state
+                    }
+                  }
+                }
+              }
+            }' \
+            -f owner="${GITHUB_REPOSITORY%/*}" \
+            -f repo="${GITHUB_REPOSITORY#*/}" \
+            -F number="$ISSUE_NUMBER" \
+            --jq '.data.repository.issue.parent // empty')
+
+          if [ -z "$PARENT_DATA" ]; then
+            echo "Issue #${ISSUE_NUMBER} has no parent — skipping"
+            exit 0
+          fi
+
+          PARENT_NUMBER=$(echo "$PARENT_DATA" | jq -r '.number')
+          PARENT_STATE=$(echo "$PARENT_DATA" | jq -r '.state')
+          PARENT_TITLE=$(echo "$PARENT_DATA" | jq -r '.title')
+
+          echo "Parent issue: #${PARENT_NUMBER} — ${PARENT_TITLE} (${PARENT_STATE})"
+
+          if [ "$PARENT_STATE" != "OPEN" ]; then
+            echo "Parent #${PARENT_NUMBER} is already ${PARENT_STATE} — skipping"
+            exit 0
+          fi
+
+          # Check if all sibling sub-issues are now complete
+          SUMMARY=$(gh api graphql -f query='
+            query($owner: String!, $repo: String!, $number: Int!) {
+              repository(owner: $owner, name: $repo) {
+                issue(number: $number) {
+                  subIssuesSummary {
+                    total
+                    completed
+                    percentCompleted
+                  }
+                }
+              }
+            }' \
+            -f owner="${GITHUB_REPOSITORY%/*}" \
+            -f repo="${GITHUB_REPOSITORY#*/}" \
+            -F number="$PARENT_NUMBER" \
+            --jq '.data.repository.issue.subIssuesSummary')
+
+          TOTAL=$(echo "$SUMMARY" | jq '.total')
+          COMPLETED=$(echo "$SUMMARY" | jq '.completed')
+          PCT=$(echo "$SUMMARY" | jq '.percentCompleted')
+
+          echo "Sub-issues: ${COMPLETED}/${TOTAL} complete (${PCT}%)"
+
+          if [ "$COMPLETED" -lt "$TOTAL" ]; then
+            echo "Parent #${PARENT_NUMBER} still has incomplete sub-issues — not closing"
+            exit 0
+          fi
+
+          echo "All ${TOTAL} sub-issues complete — closing parent #${PARENT_NUMBER}"
+
+          gh issue edit "$PARENT_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --remove-label "status:planning,status:in-progress" \
+            --add-label "status:done" || true
+
+          gh issue close "$PARENT_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --comment "Auto-closed: all ${TOTAL} sub-issues are complete. Closed by review agent after merging PR for #${ISSUE_NUMBER}." \
+            || true
+
+          echo "✅ Parent issue #${PARENT_NUMBER} auto-closed"
+
+      # ── 11.2. Create follow-up issue for incomplete acceptance criteria ─
+      # If the PR evidence contains Follow-up Items or Known Limitations that
+      # indicate unmet acceptance criteria, create a follow-up issue so the
+      # remaining work isn't lost when the original issue closes.
+      - name: Check for incomplete acceptance criteria
+        if: steps.auto_merge.outputs.merge_result == 'merged'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          if [ "$ISSUE_NUMBER" = "0" ]; then
+            echo "No linked issue — skipping follow-up check"
+            exit 0
+          fi
+
+          # Get PR body to check for follow-up items
+          PR_BODY=$(gh pr view "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json body --jq '.body // ""')
+
+          # Check for non-empty Follow-up Items or Known Limitations sections
+          HAS_FOLLOWUP=$(echo "$PR_BODY" | grep -ciE '(follow.?up items|known limitations)' || true)
+          if [ "${HAS_FOLLOWUP:-0}" -eq 0 ]; then
+            echo "No follow-up items found in PR body"
+            exit 0
+          fi
+
+          # Extract the sections (best-effort — grab text after the header)
+          FOLLOWUP_TEXT=$(echo "$PR_BODY" | sed -n '/## Follow-up Items/,/^## /p' | head -20)
+          LIMITATIONS_TEXT=$(echo "$PR_BODY" | sed -n '/## Known Limitations/,/^## /p' | head -20)
+
+          # Skip if both sections just say "None" or are empty
+          COMBINED="${FOLLOWUP_TEXT}${LIMITATIONS_TEXT}"
+          if echo "$COMBINED" | grep -qiE '^(none|n/a|—|-|)$' || [ -z "$(echo "$COMBINED" | grep -viE '^(##|none|n/a|—|-|$)' | head -1)" ]; then
+            echo "Follow-up/Limitations sections are empty or 'None' — no follow-up needed"
+            exit 0
+          fi
+
+          # Get original issue labels to inherit agent affinity
+          AGENT_LABEL=$(gh issue view "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json labels --jq '[.labels[].name | select(startswith("agent:"))] | first // "agent:claude-code"')
+          LAYER_LABEL=$(gh issue view "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json labels --jq '[.labels[].name | select(startswith("layer:"))] | first // empty')
+
+          ORIGINAL_TITLE=$(gh issue view "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json title --jq '.title')
+
+          # Create follow-up issue
+          LABELS="status:ready,${AGENT_LABEL}"
+          if [ -n "$LAYER_LABEL" ]; then
+            LABELS="${LABELS},${LAYER_LABEL}"
+          fi
+
+          FOLLOWUP_BODY=$(cat <<EOF
+          ## Follow-up from #${ISSUE_NUMBER}
+
+          PR #${PR_NUMBER} was merged but the coding agent reported incomplete work.
+
+          ### Outstanding Items
+
+          ${FOLLOWUP_TEXT}
+
+          ${LIMITATIONS_TEXT}
+
+          ### Context
+          - Original issue: #${ISSUE_NUMBER}
+          - Merged PR: #${PR_NUMBER}
+          - This issue was auto-created by the review workflow to track remaining work.
+
+          ### Acceptance Criteria
+          - [ ] Address all follow-up items listed above
+          - [ ] Verify no regressions from the original PR
+          EOF
+          )
+
+          FOLLOWUP_NUMBER=$(gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "follow-up: ${ORIGINAL_TITLE}" \
+            --label "$LABELS" \
+            --body "$FOLLOWUP_BODY" \
+            --json number --jq '.number')
+
+          echo "::notice::Created follow-up issue #${FOLLOWUP_NUMBER} for incomplete work from #${ISSUE_NUMBER}"
+
+          # Comment on original issue about the follow-up
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "<!-- AGENT_MSG agent=review-agent action=follow-up -->
+          📋 **Follow-up created** — #${FOLLOWUP_NUMBER} tracks remaining work from this issue." || true
+
+      # ── 11.5. Sync project board → Done ────────────────────────────────
+      - name: Sync project board → Done
+        if: steps.auto_merge.outputs.merge_result == 'merged'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          PROJECT_OWNER: {{GITHUB_ORG}}
+          PROJECT_NUMBER: "1"
+        run: |
+          if [ "$ISSUE_NUMBER" != "0" ] && [ -f ".github/scripts/sync-project-status.sh" ]; then
+            bash .github/scripts/sync-project-status.sh "$ISSUE_NUMBER" "Done"
+          fi
+
+      # ── 12. Log token usage ────────────────────────────────────────────
+      # IMPORTANT: This step is non-fatal. Token logging must NEVER cause the
+      # workflow to fail — the review verdict and PR comment are the real outputs.
+      - name: Log token usage
+        if: always()
+        env:
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          VERDICT: ${{ steps.decision.outputs.verdict || 'unknown' }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -u  # No -e or pipefail — logging must not crash the workflow
+          TODAY=$(date -u +%Y-%m-%d)
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LOG_DIR="${TOKEN_LOG_DIR}/review-agent"
+          mkdir -p "$LOG_DIR" || true
+
+          # Aggregate tokens from all phases: review + fix + verify
+          # Claude Code stream-json puts usage in type:"result" messages
+          TOKENS=0
+          COST_USD="0"
+          for OUTPUT_FILE in /tmp/review-output.jsonl /tmp/fix-output.jsonl /tmp/verify-output.jsonl; do
+            if [ -f "$OUTPUT_FILE" ]; then
+              PHASE_TOKENS=$(jq -s '[.[] | select(.type == "result" or .type == "turn.completed") | .usage |
+                ((.input_tokens // 0) + (.cache_creation_input_tokens // 0) +
+                 (.cache_read_input_tokens // 0) + (.cached_input_tokens // 0) +
+                 (.output_tokens // 0))] | add // 0' \
+                "$OUTPUT_FILE" 2>/dev/null) || PHASE_TOKENS=0
+              PHASE_COST=$(jq -s '[.[] | select(.type == "result") | .total_cost_usd // 0] | add // 0' \
+                "$OUTPUT_FILE" 2>/dev/null) || PHASE_COST=0
+              TOKENS=$(( TOKENS + ${PHASE_TOKENS:-0} )) || TOKENS=0
+              COST_USD=$(echo "${COST_USD:-0} + ${PHASE_COST:-0}" | bc 2>/dev/null) || COST_USD="0"
+            fi
+          done
+
+          # Sanitize values for jq (ensure numeric)
+          TOKENS="${TOKENS:-0}"
+          COST_USD="${COST_USD:-0}"
+          [[ "$TOKENS" =~ ^[0-9]+$ ]] || TOKENS=0
+          [[ "$COST_USD" =~ ^[0-9.]+$ ]] || COST_USD="0"
+
+          jq -cn \
+            --arg ts "$TIMESTAMP" \
+            --arg agent "review-agent" \
+            --argjson tokens "$TOKENS" \
+            --argjson cost_usd "$COST_USD" \
+            --arg pr "${PR_NUMBER:-0}" \
+            --arg run_id "${GITHUB_RUN_ID:-unknown}" \
+            --arg verdict "${VERDICT:-unknown}" \
+            --arg status "$JOB_STATUS" \
+            '{timestamp: $ts, agent: $agent, tokens_used: $tokens, cost_usd: $cost_usd, pr: $pr, run_id: $run_id, verdict: $verdict, status: $status}' \
+            >> "${LOG_DIR}/${TODAY}.jsonl" 2>/dev/null || echo "::warning::Token logging failed (non-fatal)"
+
+      # ── 13. Upload artifacts ───────────────────────────────────────────
+      - name: Upload review artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-output-${{ github.run_id }}
+          path: |
+            /tmp/review-output.jsonl
+            /tmp/fix-output.jsonl
+            /tmp/verify-output.jsonl
+            /tmp/pr-diff.patch
+            /tmp/review-result.txt
+          retention-days: 30
+
+      # ── 14. Re-queue on infrastructure failure ───────────────────────────
+      # When the review fails due to infrastructure issues (not a verdict),
+      # reset the source issue to status:ready so the dispatch sweep picks
+      # it up for retry. This prevents PRs from getting permanently stuck
+      # after transient failures (E2BIG, OOM, empty secrets, etc.).
+      - name: Re-queue for retry on failure
+        if: >-
+          failure() &&
+          steps.meta.outputs.is_agent_pr == 'true' &&
+          steps.meta.outputs.issue_number != '0' &&
+          steps.budget.outputs.budget_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+        run: |
+          set -uo pipefail
+
+          echo "Review failed — re-queuing issue #${ISSUE_NUMBER} for retry..."
+
+          # Only re-queue if the issue isn't already escalated
+          LABELS=$(gh issue view "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json labels --jq '[.labels[].name] | join(",")' 2>/dev/null || echo "")
+
+          if echo "$LABELS" | grep -q "needs-human"; then
+            echo "Issue already escalated to human — skipping re-queue"
+            exit 0
+          fi
+
+          # Close the stale PR so dispatch doesn't skip this issue
+          # (dispatch skips issues with open PRs)
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "0" ]; then
+            PR_STATE=$(gh pr view "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json state --jq '.state' 2>/dev/null || echo "UNKNOWN")
+
+            if [ "$PR_STATE" = "OPEN" ]; then
+              echo "Closing stale PR #${PR_NUMBER} so dispatch can re-pick this issue..."
+              gh pr close "$PR_NUMBER" \
+                --repo "$GITHUB_REPOSITORY" \
+                --delete-branch \
+                --comment "<!-- AGENT_MSG agent=review-agent action=failure-close -->
+          ⚠️ **Review Infrastructure Failure** — Closing PR so the issue can be re-dispatched.
+          See [run #${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) for details." || true
+            fi
+          fi
+
+          # Reset to ready so the hourly sweep picks it up
+          gh issue edit "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --remove-label "status:in-review,status:pr-open,status:in-progress" \
+            --add-label "status:ready" || true
+
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            -F - <<EOF
+          <!-- AGENT_MSG agent=review-agent action=retry-queue -->
+          ♻️ **Review Failed — Re-queued** — Review run [#${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) failed due to infrastructure issues.
+          PR #${PR_NUMBER} was closed and issue reset to \`status:ready\` for automatic retry on next dispatch sweep.
+          EOF
+
+          echo "✅ Issue #${ISSUE_NUMBER} re-queued for retry"
+
+      # ── 15. Restart dispatch chain ──────────────────────────────────────
+      # Merging a PR closes an issue, which may unblock dependent issues.
+      # Restart the dispatch chain so the next issue is picked up immediately.
+      - name: Restart dispatch chain
+        if: steps.auto_merge.outputs.merge_result == 'merged'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          # Guard: only trigger if no dispatch is already running/queued
+          ACTIVE=$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow="Agent – Dispatch" \
+            --status=in_progress \
+            --json databaseId --jq 'length' 2>/dev/null || echo 0)
+
+          QUEUED=$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow="Agent – Dispatch" \
+            --status=queued \
+            --json databaseId --jq 'length' 2>/dev/null || echo 0)
+
+          if [ "${ACTIVE:-0}" -gt 0 ] || [ "${QUEUED:-0}" -gt 0 ]; then
+            echo "Dispatch chain already active — skipping"
+            exit 0
+          fi
+
+          gh workflow run "Agent – Dispatch" --repo "$GITHUB_REPOSITORY" || true
+          echo "Dispatch chain restarted after PR merge"

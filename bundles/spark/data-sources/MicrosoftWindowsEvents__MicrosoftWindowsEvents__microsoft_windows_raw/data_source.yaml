@@ -1,0 +1,697 @@
+schema_version: 1
+id: MicrosoftWindowsEvents
+pack_name: MicrosoftWindowsEvents
+rule_name: MicrosoftWindowsEvents
+dataset_name: microsoft_windows_raw
+vendor: Microsoft
+product: windows
+description: The Windows event log is a detailed record of system, security and application notifications
+  stored by the Windows operating system.
+categories:
+- IT Services
+- Network Security
+version: 1.1.27
+origin: bundle
+author: phantom-bundle
+uploaded_by: null
+created_at: '2026-05-23T09:26:17Z'
+updated_at: '2026-05-23T09:26:17Z'
+logo:
+  mime_type: image/svg+xml
+  data: PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iNTEycHgiIGhlaWdodD0iMTEwcHgiIHZpZXdCb3g9IjAgMCA1MTIgMTEwIiB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgcHJlc2VydmVBc3BlY3RSYXRpbz0ieE1pZFlNaWQiPgogICAgPHRpdGxlPk1pY3Jvc29mdDwvdGl0bGU+CiAgICA8Zz4KICAgICAgICA8cGF0aCBkPSJNNTEyLDQ5LjQ0ODY0MjggTDUxMiw0MC40NDQzMzc2IEw1MDAuODE4MjY3LDQwLjQ0NDMzNzYgTDUwMC44MTgyNjcsMjYuNDQ1Njg5IEw1MDAuNDQxODk5LDI2LjU2MTQ2MjIgTDQ4OS45MzkzMjgsMjkuNzc0NjMyMiBMNDg5LjczMjU0NiwyOS44Mzc3ODExIEw0ODkuNzMyNTQ2LDQwLjQ0NDMzNzYgTDQ3My4xNTU5MzIsNDAuNDQ0MzM3NiBMNDczLjE1NTkzMiwzNC41MzYxOTA5IEM0NzMuMTU1OTMyLDMxLjc4NDg3NTQgNDczLjc3MTMyNiwyOS42NzkyODk1IDQ3NC45ODM1MzksMjguMjc1MTUyOCBDNDc2LjE4NzcwMywyNi44ODc3MzIgNDc3LjkxMDA2MSwyNi4xODI1NjgxIDQ4MC4xMDYwMzcsMjYuMTgyNTY4MSBDNDgxLjY4NTM4MiwyNi4xODI1NjgxIDQ4My4zMjA0NDUsMjYuNTU0NjUyIDQ4NC45NjU0MTUsMjcuMjg4Mjk0OCBMNDg1LjM3Nzc0MSwyNy40NzIxNjk4IEw0ODUuMzc3NzQxLDE3Ljk4OTI5NDIgTDQ4NS4xODM5NjEsMTcuOTE4MDk2OSBDNDgzLjY0OTE5MiwxNy4zNjY0NzE3IDQ4MS41NjA5NDEsMTcuMDg4NDkyMyA0NzguOTczNjg5LDE3LjA4ODQ5MjMgQzQ3NS43MTIyMjgsMTcuMDg4NDkyMyA0NzIuNzQ4NTU5LDE3Ljc5Nzk4OTkgNDcwLjE2NDQwMywxOS4yMDQ2MDMgQzQ2Ny41NzgzODksMjAuNjEzMDczNSA0NjUuNTQ0MDAxLDIyLjYyMzkzNTkgNDY0LjExOTQzMywyNS4xODA4NTE2IEM0NjIuNjk5MiwyNy43MzQ2NzE3IDQ2MS45Nzg1NTgsMzAuNjg0MTAxNiA0NjEuOTc4NTU4LDMzLjk0ODAzODUgTDQ2MS45Nzg1NTgsNDAuNDQ0MzM3NiBMNDU0LjE5MjY1OCw0MC40NDQzMzc2IEw0NTQuMTkyNjU4LDQ5LjQ0ODY0MjggTDQ2MS45Nzg1NTgsNDkuNDQ4NjQyOCBMNDYxLjk3ODU1OCw4Ny4zODIwMDI2IEw0NzMuMTU1OTMyLDg3LjM4MjAwMjYgTDQ3My4xNTU5MzIsNDkuNDQ4NjQyOCBMNDg5LjczMjU0Niw0OS40NDg2NDI4IEw0ODkuNzMyNTQ2LDczLjU1NDg0NjggQzQ4OS43MzI1NDYsODMuNDgyODYxIDQ5NC40MTU0NzgsODguNTE0MzUwOSA1MDMuNjUwNzExLDg4LjUxNDM1MDkgQzUwNS4xNjg3NjQsODguNTE0MzUwOSA1MDYuNzY1NDY4LDg4LjMzNjA0NzggNTA4LjM5Njc5Miw4Ny45ODc0OTAxIEM1MTAuMDU2NjQ1LDg3LjYzMDI2NDggNTExLjE4NzEzNiw4Ny4yNzMwMzk2IDUxMS44NTI2NTIsODYuODkxNjY5MSBMNTEyLDg2LjgwNDk5NCBMNTEyLDc3LjcxNzEwOTMgTDUxMS41NDU1NzQsNzguMDE3OTk1NiBDNTEwLjkzODg0OSw3OC40MjI4OTIyIDUxMC4xODM1MzcsNzguNzUyODc2NyA1MDkuMjk3NjE5LDc4Ljk5ODA0MzUgQzUwOC40MDc5MzYsNzkuMjQ4MTYzIDUwNy42NjUwMDYsNzkuMzczODQyIDUwNy4wODk4NzksNzkuMzczODQyIEM1MDQuOTI2MDczLDc5LjM3Mzg0MiA1MDMuMzI1NzA0LDc4Ljc5MDY0MjMgNTAyLjMzMjAxLDc3LjY0MDMzOTkgQzUwMS4zMjc4MTgsNzYuNDc5NTEyNiA1MDAuODE4MzE3LDc0LjQ0ODgzODcgNTAwLjgxODMxNyw3MS42MDg5OTA4IEw1MDAuODE4MzE3LDQ5LjQ0ODY0MjggTDUxMiw0OS40NDg2NDI4IEw1MTIsNDkuNDQ4NjQyOCBaIE00MjkuMjMxODM3LDc5LjM3NDcwODcgQzQyNS4xNzQ4MjMsNzkuMzc0NzA4NyA0MjEuOTc2NTExLDc4LjAyOTM4NzIgNDE5LjcyMjM0LDc1LjM3OTYwNTQgQzQxNy40NTQ1NDcsNzIuNzE2MjAzMyA0MTYuMzA1NDgzLDY4LjkxOTIxNDYgNDE2LjMwNTQ4Myw2NC4wOTUxMjU5IEM0MTYuMzA1NDgzLDU5LjExODExNzUgNDE3LjQ1NDU0Nyw1NS4yMjI2OTA2IDQxOS43MjM1NzgsNTIuNTEyMjM2MyBDNDIxLjk3ODk4OCw0OS44MTk3MzYxIDQyNS4xNDY5NjMsNDguNDUzMzY1IDQyOS4xNDA4MjgsNDguNDUzMzY1IEM0MzMuMDE2NDQ0LDQ4LjQ1MzM2NSA0MzYuMTAxNDU4LDQ5Ljc1ODQ0NDQgNDM4LjMxMTA1NCw1Mi4zMzQ1NTIzIEM0NDAuNTMyNDE0LDU0LjkyMzY2MTUgNDQxLjY1OTE5LDU4Ljc4ODEzMyA0NDEuNjU5MTksNjMuODIzMzM3NSBDNDQxLjY1OTE5LDY4LjkyMDQ1MjkgNDQwLjU5OTI3Nyw3Mi44MzU2OTExIDQzOC41MDkxNjksNzUuNDU0NTE3NSBDNDM2LjQzMzkxOSw3OC4wNTQxNTE1IDQzMy4zMTI5OTYsNzkuMzc0NzA4NyA0MjkuMjMxODM3LDc5LjM3NDcwODcgTDQyOS4yMzE4MzcsNzkuMzc0NzA4NyBaIE00MjkuNzI5NiwzOS4zMTM0NzUxIEM0MjEuOTg5NTEzLDM5LjMxMzQ3NTEgNDE1Ljg0MTc3MSw0MS41ODEyNjczIDQxMS40NTkxMDcsNDYuMDU0MzIxOSBDNDA3LjA3ODkxOCw1MC41Mjc5OTU1IDQwNC44NTc1NTksNTYuNzE4NDU1NCA0MDQuODU3NTU5LDY0LjQ1NjA2NTggQzQwNC44NTc1NTksNzEuODA0ODc2NSA0MDcuMDI1Njc1LDc3LjcxNjExODYgNDExLjMwMTg1Myw4Mi4wMjI2MzMyIEM0MTUuNTc4MDMyLDg2LjMzMTAwNSA0MjEuMzk3NjQ1LDg4LjUxMzM2MDQgNDI4LjU5NzI1MSw4OC41MTMzNjA0IEM0MzYuMTAwMjIsODguNTEzMzYwNCA0NDIuMTI1Mzc4LDg2LjIxMzk5MzYgNDQ2LjUwNjgwNCw4MS42NzkwMjgzIEM0NTAuODg3NjExLDc3LjE0ODM5NjcgNDUzLjEwNzExNCw3MS4wMTY3NTIxIDQ1My4xMDcxMTQsNjMuNDU5OTIxMSBDNDUzLjEwNzExNCw1NS45OTU5NTY0IDQ1MS4wMjQ0MzUsNTAuMDQwNzU3NiA0NDYuOTE0Nzk3LDQ1Ljc2MjcyMiBDNDQyLjgwMzMwMSw0MS40ODI4MjkyIDQzNy4wMjAyMTQsMzkuMzEzNDc1MSA0MjkuNzI5NiwzOS4zMTM0NzUxIEw0MjkuNzI5NiwzOS4zMTM0NzUxIFogTTM4Ni44MzYyNTQsMzkuMzEzMjI3NSBDMzgxLjU3MTM2LDM5LjMxMzIyNzUgMzc3LjIxNjU1Niw0MC42NTk3ODcxIDM3My44ODk0Nyw0My4zMTUxNDA5IEMzNzAuNTQyNTczLDQ1Ljk4NTk3MjQgMzY4Ljg0NDk3OSw0OS40ODk1MDM5IDM2OC44NDQ5NzksNTMuNzI4NTM1NyBDMzY4Ljg0NDk3OSw1NS45MzE5NDA3IDM2OS4yMTE0OSw1Ny44ODk1NTk4IDM2OS45MzI3NTIsNTkuNTQ5Mzg4IEMzNzAuNjU4MzQ2LDYxLjIxNTQwNzQgMzcxLjc4MTQwOCw2Mi42ODE0NTQ5IDM3My4yNzI4MzksNjMuOTEyMjQxNCBDMzc0Ljc1Mzc0NCw2NS4xMzMxMjIyIDM3Ny4wMzgyNTMsNjYuNDEyMTk5MSAzODAuMDY2OTI4LDY3LjcxMjk0NDcgQzM4Mi42MTIwODIsNjguNzYwNDc1NCAzODQuNTEwODg1LDY5LjY0NzAzNzkgMzg1LjcxNjkwNyw3MC4zNDUzOTE2IEMzODYuODk1Njg5LDcxLjAyOTUwNTggMzg3LjczMjcyMyw3MS43MTc5NTM3IDM4OC4yMDUxMDIsNzIuMzg3ODI4NSBDMzg4LjY2Mzg2MSw3My4wNDM0NjM4IDM4OC44OTcyNjUsNzMuOTQwNTUxMSAzODguODk3MjY1LDc1LjA0ODc1NDIgQzM4OC44OTcyNjUsNzguMjAxODcwNyAzODYuNTM1OTg3LDc5LjczNjAyMDEgMzgxLjY3NjYwOSw3OS43MzYwMjAxIEMzNzkuODc0Mzg2LDc5LjczNjAyMDEgMzc3LjgxODMyOSw3OS4zNjAyMjE2IDM3NS41NjYwMTQsNzguNjE3OTExMiBDMzczLjMxMjQ2Miw3Ny44NzY4MzkxIDM3MS4yMDY4NzUsNzYuODExMzU0MyAzNjkuMzA4NjksNzUuNDQ0OTgzMiBMMzY4Ljg0NDk3OSw3NS4xMTI1MjIzIEwzNjguODQ0OTc5LDg1Ljg3MzIzNjcgTDM2OS4wMTUyMzQsODUuOTUyNDgyNSBDMzcwLjU5NzA1NCw4Ni42ODI0MTA2IDM3Mi41OTA1ODIsODcuMjk3ODAzOSAzNzQuOTQwNzE1LDg3Ljc4MjU2NTQgQzM3Ny4yODY1MTUsODguMjY3MzI2OCAzNzkuNDE3NDg0LDg4LjUxNDM1MDkgMzgxLjI2OTIzNiw4OC41MTQzNTA5IEMzODYuOTgyMzY0LDg4LjUxNDM1MDkgMzkxLjU4Mjk1NSw4Ny4xNjA5ODEgMzk0LjkzOTc1OCw4NC40OTAxNDk2IEMzOTguMzE4MjI5LDgxLjgwMDc0NDkgNDAwLjAzMDY4Miw3OC4yMTQ4NzIgNDAwLjAzMDY4Miw3My44Mjg0OTI2IEM0MDAuMDMwNjgyLDcwLjY2NDg1MTIgMzk5LjEwODgzLDY3Ljk1MTMwMTMgMzk3LjI5MTc0OSw2NS43NjMzNzQgQzM5NS40ODc2NjgsNjMuNTkyNzgxNyAzOTIuMzU2MjIsNjEuNjAwNDkyNiAzODcuOTg3Nzk1LDU5LjgzOTEzMDYgQzM4NC41MDc3ODksNTguNDQyNDIzMiAzODIuMjc4MzgzLDU3LjI4MjgzNDEgMzgxLjM1OTAwNyw1Ni4zOTMxNzYgQzM4MC40NzI0NDQsNTUuNTMzMjM1MSAzODAuMDIyMzUzLDU0LjMxNzMwNzMgMzgwLjAyMjM1Myw1Mi43Nzc1ODU5IEMzODAuMDIyMzUzLDUxLjQxMjQ1MyAzODAuNTc3NjkzLDUwLjMxOTEwODUgMzgxLjcxODcwOSw0OS40MzMxNjUxIEMzODIuODY4MzkyLDQ4LjU0Mjg4NzkgMzg0LjQ2ODE2Niw0OC4wOTAzMjAxIDM4Ni40NzUzMTUsNDguMDkwMzIwMSBDMzg4LjMzNzU5MSw0OC4wOTAzMjAxIDM5MC4yNDMyMDUsNDguMzg0Mzk2MyAzOTIuMTM3Njc1LDQ4Ljk2MDc4NTggQzM5NC4wMzE1MjYsNDkuNTM3MTc1MiAzOTUuNjk0NDUsNTAuMzA5MjAyNyAzOTcuMDgzMTA5LDUxLjI1Mzk2MTQgTDM5Ny41MzkzOTIsNTEuNTY1OTkxOCBMMzk3LjUzOTM5Miw0MS4zNTgxNDA4IEwzOTcuMzY0MTg1LDQxLjI4MjYwOTYgQzM5Ni4wODMyNSw0MC43MzM0NjEgMzk0LjM5NDMyNCw0MC4yNjM1NTgxIDM5Mi4zNDMyMTksMzkuODgyMTg3NiBDMzkwLjMwMDE2MywzOS41MDQ1MzE4IDM4OC40NDcxNzMsMzkuMzEzMjI3NSAzODYuODM2MjU0LDM5LjMxMzIyNzUgTDM4Ni44MzYyNTQsMzkuMzEzMjI3NSBaIE0zMzkuNzA2MDQ3LDc5LjM3NDcwODcgQzMzNS42NTAyNzEsNzkuMzc0NzA4NyAzMzIuNDUwNzIxLDc4LjAyOTM4NzIgMzMwLjE5NzE2OSw3NS4zNzk2MDU0IEMzMjcuOTI4NzU3LDcyLjcxNjIwMzMgMzI2Ljc4MTU1LDY4LjkyMDQ1MjkgMzI2Ljc4MTU1LDY0LjA5NTEyNTkgQzMyNi43ODE1NSw1OS4xMTgxMTc1IDMyNy45Mjk5OTYsNTUuMjIyNjkwNiAzMzAuMTk5NjQ1LDUyLjUxMjIzNjMgQzMzMi40NTMxOTgsNDkuODE5NzM2MSAzMzUuNjIwNTU0LDQ4LjQ1MzM2NSAzMzkuNjE2Mjc2LDQ4LjQ1MzM2NSBDMzQzLjQ5MDY1NCw0OC40NTMzNjUgMzQ2LjU3NTY2OCw0OS43NTg0NDQ0IDM0OC43ODU4ODMsNTIuMzM0NTUyMyBDMzUxLjAwNzI0Myw1NC45MjM2NjE1IDM1Mi4xMzQwMTksNTguNzg4MTMzIDM1Mi4xMzQwMTksNjMuODIzMzM3NSBDMzUyLjEzNDAxOSw2OC45MjA0NTI5IDM1MS4wNzM0ODcsNzIuODM1NjkxMSAzNDguOTgzMzc5LDc1LjQ1NDUxNzUgQzM0Ni45MDgxMjksNzguMDU0MTUxNSAzNDMuNzg4NDQ0LDc5LjM3NDcwODcgMzM5LjcwNjA0Nyw3OS4zNzQ3MDg3IEwzMzkuNzA2MDQ3LDc5LjM3NDcwODcgWiBNMzQwLjIwNTA0OCwzOS4zMTM0NzUxIEMzMzIuNDYzMTAzLDM5LjMxMzQ3NTEgMzI2LjMxNTM2Miw0MS41ODEyNjczIDMyMS45MzQ1NTUsNDYuMDU0MzIxOSBDMzE3LjU1NDM2Niw1MC41Mjc5OTU1IDMxNS4zMzE3NjksNTYuNzE4NDU1NCAzMTUuMzMxNzY5LDY0LjQ1NjA2NTggQzMxNS4zMzE3NjksNzEuODA3OTcyMSAzMTcuNTAxMTIzLDc3LjcxNjExODYgMzIxLjc3NzMwMSw4Mi4wMjI2MzMyIEMzMjYuMDUzNDgsODYuMzMxMDA1IDMzMS44NzI0NzUsODguNTEzMzYwNCAzMzkuMDcyNjk5LDg4LjUxMzM2MDQgQzM0Ni41NzM4MTEsODguNTEzMzYwNCAzNTIuNjAwODI2LDg2LjIxMzk5MzYgMzU2Ljk4MjI1Miw4MS42NzkwMjgzIEMzNjEuMzYxODIyLDc3LjE0ODM5NjcgMzYzLjU4MjU2Miw3MS4wMTY3NTIxIDM2My41ODI1NjIsNjMuNDU5OTIxMSBDMzYzLjU4MjU2Miw1NS45OTU5NTY0IDM2MS40OTkyNjQsNTAuMDQwNzU3NiAzNTcuMzg5MDA2LDQ1Ljc2MjcyMiBDMzUzLjI3NjI3Myw0MS40ODI4MjkyIDM0Ny40OTQ0MjQsMzkuMzEzNDc1MSAzNDAuMjA1MDQ4LDM5LjMxMzQ3NTEgTDM0MC4yMDUwNDgsMzkuMzEzNDc1MSBaIE0yOTguMzY0ODcsNDguNTcyNjA1MSBMMjk4LjM2NDg3LDQwLjQ0NDMzNzYgTDI4Ny4zMjM2OTksNDAuNDQ0MzM3NiBMMjg3LjMyMzY5OSw4Ny4zODA3NjQ0IEwyOTguMzY0ODcsODcuMzgwNzY0NCBMMjk4LjM2NDg3LDYzLjM3MTE0MTEgQzI5OC4zNjQ4Nyw1OS4yODgxMjQ1IDI5OS4yOTA0MzYsNTUuOTM0NDE3MSAzMDEuMTE2ODA0LDUzLjQwMTAyNzUgQzMwMi45MjAyNjUsNTAuODk3OTc0NCAzMDUuMzIzNjQzLDQ5LjYyOTQyMjMgMzA4LjI1NzU5NSw0OS42Mjk0MjIzIEMzMDkuMjUxODgxLDQ5LjYyOTQyMjMgMzEwLjM2ODEzMyw0OS43OTM0ODU5IDMxMS41NzcyNTEsNTAuMTE3ODk4NSBDMzEyLjc3Mzk4Niw1MC40NDA0NTM3IDMxMy42NDA3MzgsNTAuNzkwMjQ5NSAzMTQuMTUyMTIxLDUxLjE1ODYxODggTDMxNC42MTU4MzMsNTEuNDk0Nzk0NCBMMzE0LjYxNTgzMyw0MC4zNjM4NTM2IEwzMTQuNDM2OTExLDQwLjI4NzA4NDIgQzMxMy40MDg1NzMsMzkuODQ5OTk0IDMxMS45NTQyODgsMzkuNjI5NTkxNiAzMTAuMTEzNjgsMzkuNjI5NTkxNiBDMzA3LjMzOTQ1OCwzOS42Mjk1OTE2IDMwNC44NTYyMTYsNDAuNTIxMTA3IDMwMi43Mjk1OCw0Mi4yNzYyNzc4IEMzMDAuODYyOTcsNDMuODE5MDk0NyAyOTkuNTEzMzE0LDQ1LjkzNDU4NjQgMjk4LjQ4MTg4MSw0OC41NzI2MDUxIEwyOTguMzY0ODcsNDguNTcyNjA1MSBMMjk4LjM2NDg3LDQ4LjU3MjYwNTEgWiBNMjY3LjU1MTU2MywzOS4zMTMyMjc1IEMyNjIuNDg2NjQxLDM5LjMxMzIyNzUgMjU3Ljk2ODM5MSw0MC4zOTk3NjE4IDI1NC4xMjQ5Nyw0Mi41NDA2MzY5IEMyNTAuMjc0MTE4LDQ0LjY4NjQ2NDkgMjQ3LjI5NjIwOSw0Ny43NTA0Mjk5IDI0NS4yNjk4NjksNTEuNjQ2NDc1OCBDMjQzLjI1MjgxNiw1NS41MzMyMzUxIDI0Mi4yMjg4MTEsNjAuMDczMTUzNCAyNDIuMjI4ODExLDY1LjEzNTU5ODYgQzI0Mi4yMjg4MTEsNjkuNTcwMjY4NSAyNDMuMjIxODYsNzMuNjQwMjgzNyAyNDUuMTg0NDMyLDc3LjIyNjc3NTggQzI0Ny4xNDgyNDMsODAuODE5NDU4OSAyNDkuOTI4MDM3LDgzLjYzMDIwODggMjUzLjQ0NjQyNyw4NS41Nzk3Nzk1IEMyNTYuOTU5ODY1LDg3LjUyNjg3MzkgMjYxLjAyMDU5Myw4OC41MTQzNTA5IDI2NS41MTY1NTUsODguNTE0MzUwOSBDMjcwLjc2MzQ5NCw4OC41MTQzNTA5IDI3NS4yNDMzNTksODcuNDY0OTYzIDI3OC44MzU0MjMsODUuMzk2NTIzNSBMMjc4Ljk4MDI5NSw4NS4zMTI5NDM5IEwyNzguOTgwMjk1LDc1LjE5Nzk1OTIgTDI3OC41MTY1ODMsNzUuNTM2NjExMiBDMjc2Ljg4OTU2Nyw3Ni43MjE1ODM3IDI3NS4wNzEyNDgsNzcuNjY3NTgwNiAyNzMuMTE0ODY2LDc4LjM0OTIxODQgQzI3MS4xNjM0MzgsNzkuMDMwMjM3MSAyNjkuMzg0MTIyLDc5LjM3NDQ2MTEgMjY3LjgyNDU4OSw3OS4zNzQ0NjExIEMyNjMuNDkyMDczLDc5LjM3NDQ2MTEgMjYwLjAxNDU0Myw3OC4wMTg2MTQ4IDI1Ny40ODk4MjEsNzUuMzQ2NTQ1MSBDMjU0Ljk1OTUyNyw3Mi42NzAxNDE3IDI1My42NzY3MzYsNjguOTEyNzc1OSAyNTMuNjc2NzM2LDY0LjE4NDAyOTggQzI1My42NzY3MzYsNTkuNDI1NTY2NSAyNTUuMDE0NjI4LDU1LjU3MTYxOTkgMjU3LjY1MTQwOCw1Mi43Mjc0MzgxIEMyNjAuMjc5NTIxLDQ5Ljg5MTkyNCAyNjMuNzYzODYsNDguNDUzNzM2NCAyNjguMDA2NjA3LDQ4LjQ1MzczNjQgQzI3MS42MzU4MTcsNDguNDUzNzM2NCAyNzUuMTcyMTYxLDQ5LjY4MjY2NTUgMjc4LjUxNzgyMSw1Mi4xMDk1Njg1IEwyNzguOTgwMjk1LDUyLjQ0NTc0NDEgTDI3OC45ODAyOTUsNDEuNzg3ODAxNyBMMjc4LjgzMTA4OSw0MS43MDM2MDMgQzI3Ny41NzE4MjQsNDAuOTk5MDU4MiAyNzUuODU1MDM3LDQwLjQxNzA5NjggMjczLjcyMjgzLDM5Ljk3NTY3MjkgQzI3MS42MDA1MjgsMzkuNTM1NDg3MiAyNjkuNTI0NjU5LDM5LjMxMzIyNzUgMjY3LjU1MTU2MywzOS4zMTMyMjc1IEwyNjcuNTUxNTYzLDM5LjMxMzIyNzUgWiBNMjM0LjYyNDU1Nyw0MC40NDQ0NjE0IEwyMjMuNTgzMzg3LDQwLjQ0NDQ2MTQgTDIyMy41ODMzODcsODcuMzgwODg4MSBMMjM0LjYyNDU1Nyw4Ny4zODA4ODgxIEwyMzQuNjI0NTU3LDQwLjQ0NDQ2MTQgTDIzNC42MjQ1NTcsNDAuNDQ0NDYxNCBaIE0yMjkuMjE2NjQ5LDIwLjQ0OTEzMzggQzIyNy4zOTk1NjgsMjAuNDQ5MTMzOCAyMjUuODE0NjUyLDIxLjA2NzYyMjUgMjI0LjUxMjY2NywyMi4yOTM0NTYyIEMyMjMuMjA1MTEyLDIzLjUyMzAwNDQgMjIyLjU0MTQyOCwyNS4wNzA3NzQyIDIyMi41NDE0MjgsMjYuODk3MTQyNCBDMjIyLjU0MTQyOCwyOC42OTUwMzE4IDIyMy4xOTcwNjQsMzAuMjE0MzIyNiAyMjQuNDkxNjE4LDMxLjQxMTA1ODEgQzIyNS43NzgxMjQsMzIuNjA0MDc5MSAyMjcuMzY3OTkzLDMzLjIwODk0NzQgMjI5LjIxNjY0OSwzMy4yMDg5NDc0IEMyMzEuMDY0Njg2LDMzLjIwODk0NzQgMjMyLjY2MDc0NywzMi42MDQwNzkxIDIzMy45NjI3MywzMS40MTI5MTU1IEMyMzUuMjczMzgyLDMwLjIxNDMyMjYgMjM1LjkzNzY4NSwyOC42OTUwMzE4IDIzNS45Mzc2ODUsMjYuODk3MTQyNCBDMjM1LjkzNzY4NSwyNS4xMzQ1NDIzIDIzNS4yOTEzMzYsMjMuNjAyMjUwMiAyMzQuMDE2NTkzLDIyLjM0Mjk4NDggQzIzMi43NDM3MDcsMjEuMDg2MTk1OCAyMzEuMTI4NDU1LDIwLjQ0OTEzMzggMjI5LjIxNjY0OSwyMC40NDkxMzM4IEwyMjkuMjE2NjQ5LDIwLjQ0OTEzMzggWiBNMjAxLjY2ODg4NCwzNi45ODE1NDMzIEwyMDEuNjY4ODg0LDg3LjM4MDY0MDYgTDIxMi45MzY2NDcsODcuMzgwNjQwNiBMMjEyLjkzNjY0NywyMS44ODY0NTQ2IEwxOTcuMzQxOTM5LDIxLjg4NjQ1NDYgTDE3Ny41MTkzNDIsNzAuNTMzNDc2NiBMMTU4LjI4MzA0MSwyMS44ODY0NTQ2IEwxNDIuMDUzMTI4LDIxLjg4NjQ1NDYgTDE0Mi4wNTMxMjgsODcuMzgwNjQwNiBMMTUyLjY0MTczLDg3LjM4MDY0MDYgTDE1Mi42NDE3MywzNi45NzY1OTA1IEwxNTMuMDA1NzY1LDM2Ljk3NjU5MDUgTDE3My4zMTg2OTUsODcuMzgwNjQwNiBMMTgxLjMwOTUyMSw4Ny4zODA2NDA2IEwyMDEuMzA1NDY3LDM2Ljk4MTU0MzMgTDIwMS42Njg4ODQsMzYuOTgxNTQzMyBMMjAxLjY2ODg4NCwzNi45ODE1NDMzIFoiIGZpbGw9IiM3MDZENkUiPjwvcGF0aD4KICAgICAgICA8Zz4KICAgICAgICAgICAgPHBvbHlnb24gZmlsbD0iI0YxNTExQiIgcG9pbnRzPSI1MS45Mzk0Mzc3IDUxLjkzOTQzNzcgMCA1MS45Mzk0Mzc3IDAgMCA1MS45Mzk0Mzc3IDAiPjwvcG9seWdvbj4KICAgICAgICAgICAgPHBvbHlnb24gZmlsbD0iIzgwQ0MyOCIgcG9pbnRzPSIxMDkuMjg2NzgzIDUxLjkzOTQzNzcgNTcuMzQ3OTY0MiA1MS45Mzk0Mzc3IDU3LjM0Nzk2NDIgMCAxMDkuMjg2NzgzIDAiPjwvcG9seWdvbj4KICAgICAgICAgICAgPHBvbHlnb24gZmlsbD0iIzAwQURFRiIgcG9pbnRzPSI1MS45MzgxOTk1IDEwOS4zMDcyMTMgMCAxMDkuMzA3MjEzIDAgNTcuMzY3Nzc1NyA1MS45MzgxOTk1IDU3LjM2Nzc3NTciPjwvcG9seWdvbj4KICAgICAgICAgICAgPHBvbHlnb24gZmlsbD0iI0ZCQkMwOSIgcG9pbnRzPSIxMDkuMjg2NzgzIDEwOS4zMDcyMTMgNTcuMzQ3OTY0MiAxMDkuMzA3MjEzIDU3LjM0Nzk2NDIgNTcuMzY3Nzc1NyAxMDkuMjg2NzgzIDU3LjM2Nzc3NTciPjwvcG9seWdvbj4KICAgICAgICA8L2c+CiAgICA8L2c+Cjwvc3ZnPgo=
+  source: phantom-bundle (v0.13.0 migration)
+  license: MIT
+  fidelity: branded
+formats:
+- SYSLOG
+- CEF
+- JSON
+is_rawlog_only: false
+fields:
+- name: activity_id
+  type: string_short
+  description: Opaque identifier emitted by Microsoft. Short opaque token, typically without whitespace;
+    max ~64 chars.
+  example: mic-b2ad2479
+- name: channel
+  type: string
+  description: Vendor-emitted field 'Channel'. Free-form text; may contain whitespace and punctuation.
+  example: System
+- name: computer_name
+  type: string
+  description: Human-readable name as displayed by Microsoft. Free-form text; may contain whitespace and
+    punctuation.
+  example: sample_name
+- name: detection_source
+  type: string
+  description: Vendor-emitted field 'Detection source'. Free-form text; may contain whitespace and punctuation.
+  example: 192.0.2.45
+- name: event_action
+  type: string_short
+  description: Action taken by Microsoft's enforcement engine (allow/block/quarantine/etc.). Short opaque
+    token, typically without whitespace; max ~64 chars.
+  example: allow
+- name: event_data
+  type: json
+  description: — see leaf entries for nested paths. (and 8 more). JSON object with 47 keys; full key list
+    defined as dotted-path leaves below.
+  example: '{}'
+- name: event_fwlink
+  type: string
+  description: Vendor-emitted field 'Event fwlink'. Free-form text; may contain whitespace and punctuation.
+  example: sample_fwlink
+- name: event_id
+  type: integer
+  description: Unique identifier for this event as assigned by the vendor. Signed decimal integer; bare
+    digits, optional leading minus.
+  example: '42'
+- name: event_result
+  type: string_short
+  description: Result string emitted by Microsoft. Short opaque token, typically without whitespace; max
+    ~64 chars.
+  example: success
+- name: host_name
+  type: string
+  description: Human-readable name as displayed by Microsoft. Free-form text; may contain whitespace and
+    punctuation.
+  example: sample_name
+- name: log_level
+  type: string_short
+  description: Severity level (string label, e.g., info/warn/error). Short opaque token, typically without
+    whitespace; max ~64 chars.
+  example: info
+- name: message
+  type: string
+  description: Human-readable event message. Free-form text; may contain whitespace and punctuation.
+  example: Operation completed successfully.
+- name: opcode
+  type: string
+  description: Vendor-emitted field 'Opcode'. Free-form text; may contain whitespace and punctuation.
+  example: sample_opcode
+- name: os_subtype
+  type: string
+  description: Vendor-emitted field 'Os subtype'. Free-form text; may contain whitespace and punctuation.
+  example: login
+- name: process_cmd
+  type: string
+  description: Vendor-emitted field 'Process cmd'. Free-form text; may contain whitespace and punctuation.
+  example: /usr/bin/curl https://example.com/
+- name: process_md5
+  type: hash_md5
+  description: MD5 digest of the artifact. 32-character lowercase hex MD5 digest.
+  example: 5d41402abc4b2a76b9719d911017c592
+- name: process_name
+  type: string
+  description: File or process name reported by the vendor. Free-form text; may contain whitespace and
+    punctuation.
+  example: sample_name
+- name: process_path
+  type: string
+  description: Filesystem path reported by the vendor. Free-form text; may contain whitespace and punctuation.
+  example: /var/log/app.log
+- name: process_pid
+  type: string
+  description: Vendor-emitted field 'Process pid'. Free-form text; may contain whitespace and punctuation.
+  example: '4242'
+- name: process_sha256
+  type: hash_sha256
+  description: SHA-256 digest of the artifact. 64-character lowercase hex SHA-256 digest.
+  example: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- name: process_thread_id
+  type: string_short
+  description: Opaque identifier emitted by Microsoft. Short opaque token, typically without whitespace;
+    max ~64 chars.
+  example: mic-aa30542e
+- name: provider_guid
+  type: string_short
+  description: Unique identifier — assigned by Microsoft per event. Short opaque token, typically without
+    whitespace; max ~64 chars.
+  example: 1a596c8d-9b84-56be-afaa-e48edeb3ad54
+- name: provider_name
+  type: string
+  description: Human-readable name as displayed by Microsoft. Free-form text; may contain whitespace and
+    punctuation.
+  example: sample_name
+- name: record_id
+  type: string_short
+  description: Opaque identifier emitted by Microsoft. Short opaque token, typically without whitespace;
+    max ~64 chars.
+  example: mic-f4bd81e5
+- name: task
+  type: integer
+  description: Vendor-emitted field 'Task'. Signed decimal integer; bare digits, optional leading minus.
+  example: '42'
+- name: threat_category
+  type: string_short
+  description: Microsoft's category classifier for the event. Short opaque token, typically without whitespace;
+    max ~64 chars.
+  example: access_control
+- name: user
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: SubjectUserSid, domain, identifier,
+    name, type (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: user_data
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: SubjectDomainName, SubjectUserName
+    (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: event_data.Attributes
+  type: string
+  description: Vendor-emitted field 'Event data › Attributes'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_attributes
+- name: event_data.AuthenticationPackageName
+  type: string
+  description: Vendor-emitted field 'Event data › AuthenticationPackageName'. Leaf of the 'event_data'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_authenticationpa
+- name: event_data.CommandLine
+  type: string_long
+  description: Process command-line as launched (executable + arguments). Free-form text; may span multiple
+    lines or contain large payloads.
+  example: Detailed event payload emitted by Microsoft for this record.
+- name: event_data.DCName
+  type: string
+  description: Vendor-emitted field 'Event data › DCName'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_dcname
+- name: event_data.DestAddress
+  type: string
+  description: Destination IPv4/IPv6 address of the target. Free-form text; may contain whitespace and
+    punctuation.
+  example: 192.0.2.45
+- name: event_data.DestPort
+  type: integer_port
+  description: TCP/UDP destination port. Unsigned integer 0-65535 representing a TCP/UDP port; bare digits,
+    no quotes.
+  example: '443'
+- name: event_data.Disposition
+  type: string
+  description: Vendor-emitted field 'Event data › Disposition'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: clean
+- name: event_data.Domain
+  type: domain
+  description: DNS domain reported by Microsoft — bare domain, no scheme/path/port. Bare DNS domain name;
+    no scheme, no path, no port.
+  example: example.com
+- name: event_data.ElevatedToken
+  type: string
+  description: Vendor-emitted field 'Event data › ElevatedToken'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_elevatedtoken
+- name: event_data.ErrorMessage
+  type: string
+  description: Vendor-emitted field 'Event data › ErrorMessage'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_errormessage
+- name: event_data.FQDN
+  type: host
+  description: Fully-qualified domain name (dotted labels per RFC 1035). Hostname or fully-qualified domain
+    name (RFC 1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: event_data.HostName
+  type: host
+  description: Hostname or FQDN as reported by Microsoft. Hostname or fully-qualified domain name (RFC
+    1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: event_data.IpAddress
+  type: string
+  description: Vendor-emitted field 'Event data › IpAddress'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: 192.0.2.45
+- name: event_data.IpPort
+  type: integer_port
+  description: Vendor-emitted field 'Event data › IpPort'. Leaf of the 'event_data' composite. Unsigned
+    integer 0-65535 representing a TCP/UDP port; bare digits, no quotes.
+  example: '443'
+- name: event_data.LogonProcessName
+  type: string
+  description: File or process name reported by the vendor. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_logonprocessname
+- name: event_data.LogonType
+  type: string
+  description: Vendor-emitted field 'Event data › LogonType'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_logontype
+- name: event_data.Module
+  type: string
+  description: Vendor-emitted field 'Event data › Module'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: audit
+- name: event_data.NewProcessID
+  type: string
+  description: Vendor-emitted field 'Event data › NewProcessID'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_newprocessid
+- name: event_data.NewProcessName
+  type: string
+  description: File or process name reported by the vendor. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_newprocessname
+- name: event_data.ParentProcessName
+  type: string
+  description: File or process name reported by the vendor. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_parentprocessnam
+- name: event_data.Path
+  type: file_path
+  description: Filesystem path. Absolute filesystem path; vendor-native separator.
+  example: /var/log/app.log
+- name: event_data.ProcessID
+  type: integer
+  description: Operating-system process identifier. Signed decimal integer; bare digits, optional leading
+    minus.
+  example: '42'
+- name: event_data.ProcessName
+  type: string
+  description: File or process name reported by the vendor. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: explorer.exe
+- name: event_data.RestrictedAdminMode
+  type: string
+  description: Vendor-emitted field 'Event data › RestrictedAdminMode'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_restrictedadminm
+- name: event_data.SID
+  type: string
+  description: Vendor-emitted field 'Event data › SID'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_sid
+- name: event_data.SourceAddress
+  type: string
+  description: Source IPv4/IPv6 address of the initiator. Free-form text; may contain whitespace and punctuation.
+  example: 192.0.2.45
+- name: event_data.SourcePort
+  type: integer_port
+  description: TCP/UDP source port. Unsigned integer 0-65535 representing a TCP/UDP port; bare digits,
+    no quotes.
+  example: '443'
+- name: event_data.Status
+  type: string_short
+  description: Status code returned by Microsoft. Short opaque token, typically without whitespace; max
+    ~64 chars.
+  example: success
+- name: event_data.SubStatus
+  type: string
+  description: Vendor-emitted field 'Event data › SubStatus'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_substatus
+- name: event_data.Subject
+  type: user
+  description: Subject line — typically email subject or event summary. Account name as the vendor reports
+    it — login name, UPN, or sAMAccountName; no domain prefix unless vendor emits one.
+  example: jsmith
+- name: event_data.SubjectDomainName
+  type: string
+  description: Vendor-emitted field 'Event data › SubjectDomainName'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_subjectdomainnam
+- name: event_data.SubjectKeyIdentifier
+  type: string
+  description: Vendor-emitted field 'Event data › SubjectKeyIdentifier'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_subjectkeyidenti
+- name: event_data.SubjectUserName
+  type: string
+  description: Vendor-emitted field 'Event data › SubjectUserName'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_subjectusername
+- name: event_data.SubjectUserSid
+  type: string
+  description: Vendor-emitted field 'Event data › SubjectUserSid'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_subjectusersid
+- name: event_data.TargetDomainName
+  type: string
+  description: Vendor-emitted field 'Event data › TargetDomainName'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_targetdomainname
+- name: event_data.TargetUserName
+  type: user
+  description: Vendor-emitted field 'Event data › TargetUserName'. Leaf of the 'event_data' composite.
+    Account name as the vendor reports it — login name, UPN, or sAMAccountName depending on the source;
+    no domain prefix unless the vendor emits one.
+  example: jsmith
+- name: event_data.TargetUserSid
+  type: string
+  description: Vendor-emitted field 'Event data › TargetUserSid'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_targetusersid
+- name: event_data.TicketEncryptionType
+  type: string
+  description: Vendor-emitted field 'Event data › TicketEncryptionType'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_ticketencryption
+- name: event_data.User
+  type: user
+  description: User account associated with the event. Account name as the vendor reports it — login name,
+    UPN, or sAMAccountName; no domain prefix unless vendor emits one.
+  example: jdoe
+- name: event_data.UserSid
+  type: string
+  description: Vendor-emitted field 'Event data › UserSid'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_usersid
+- name: event_data.VirtualAccount
+  type: string
+  description: Vendor-emitted field 'Event data › VirtualAccount'. Leaf of the 'event_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_virtualaccount
+- name: event_data.WorkstationName
+  type: host
+  description: Vendor-emitted field 'Event data › WorkstationName'. Leaf of the 'event_data' composite.
+    Hostname or fully-qualified domain name (RFC 1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: event_data.error
+  type: string
+  description: Vendor-emitted field 'Event data › error'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_error
+- name: event_data.param1
+  type: host
+  description: Vendor-emitted field 'Event data › param1'. Leaf of the 'event_data' composite. Hostname
+    or fully-qualified domain name (RFC 1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: event_data.param2
+  type: string
+  description: Vendor-emitted field 'Event data › param2'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_param2
+- name: event_data.param3
+  type: string
+  description: Vendor-emitted field 'Event data › param3'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_param3
+- name: event_data.updateTitle
+  type: string
+  description: Vendor-emitted field 'Event data › updateTitle'. Leaf of the 'event_data' composite. Free-form
+    text; may contain whitespace and punctuation.
+  example: sample_updatetitle
+- name: user.SubjectUserSid
+  type: string
+  description: Vendor-emitted field 'User › SubjectUserSid'. Leaf of the 'user' composite. Free-form text;
+    may contain whitespace and punctuation.
+  example: sample_subjectusersid
+- name: user.domain
+  type: domain
+  description: DNS domain reported by Microsoft — bare domain, no scheme/path/port. Bare DNS domain name;
+    no scheme, no path, no port.
+  example: example.com
+- name: user.identifier
+  type: string
+  description: Vendor-emitted field 'User › identifier'. Leaf of the 'user' composite. Free-form text;
+    may contain whitespace and punctuation.
+  example: ext-7256d777-e87
+- name: user.name
+  type: string
+  description: Human-readable name as displayed by Microsoft. Free-form text; may contain whitespace and
+    punctuation.
+  example: sample_name
+- name: user.type
+  type: string_short
+  description: Type/category classifier emitted by Microsoft. Short opaque token, typically without whitespace;
+    max ~64 chars.
+  example: authentication
+- name: user_data.SubjectDomainName
+  type: string
+  description: Vendor-emitted field 'User data › SubjectDomainName'. Leaf of the 'user_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_subjectdomainnam
+- name: user_data.SubjectUserName
+  type: string
+  description: Vendor-emitted field 'User data › SubjectUserName'. Leaf of the 'user_data' composite.
+    Free-form text; may contain whitespace and punctuation.
+  example: sample_subjectusername
+- name: AccessList
+  type: string
+  description: Access list. Free-form text; may contain whitespace and punctuation.
+  example: sample_accesslist
+- name: AccessMask
+  type: string_short
+  description: Access mask. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: ActivityID
+  type: string_short
+  description: Activity correlation id. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: AuthenticationPackageName
+  type: string_short
+  description: Auth package (NTLM/Kerberos). Short opaque token, typically without whitespace; max ~64
+    chars.
+  example: token
+- name: Channel
+  type: string_short
+  description: Event log channel (Security/System/Application). Short opaque token, typically without
+    whitespace; max ~64 chars.
+  example: token
+- name: ComputerName
+  type: host
+  description: Computer reporting the event. Hostname or fully-qualified domain name (RFC 1035 dotted
+    labels); no protocol prefix.
+  example: host01.example.com
+- name: EventID
+  type: integer
+  description: Windows event id. Signed decimal integer; bare digits, optional leading minus.
+  example: '42'
+- name: EventTime
+  type: datetime
+  description: When the event occurred. ISO-8601 timestamp with timezone (e.g., 2026-05-26T14:23:01Z).
+  example: '2026-05-26T14:23:01Z'
+- name: FailureReason
+  type: string
+  description: Logon failure reason (4625). Free-form text; may contain whitespace and punctuation.
+  example: sample_failurereason
+- name: IpAddress
+  type: ipv4
+  description: Source IP of the logon. Dotted-quad IPv4 literal (e.g., 192.0.2.45); no port suffix, no
+    surrounding brackets or quotes.
+  example: 192.0.2.45
+- name: IpPort
+  type: integer_port
+  description: Source port. Unsigned integer 0-65535 representing a TCP/UDP port; bare digits, no quotes.
+  example: '443'
+- name: Keywords
+  type: string
+  description: Event keywords. Free-form text; may contain whitespace and punctuation.
+  example: sample_keywords
+- name: Level
+  type: enum
+  description: 'Event level. One of: Critical, Error, Warning, Information, Verbose (case-sensitive).'
+  enum_values:
+  - Critical
+  - Error
+  - Warning
+  - Information
+  - Verbose
+  example: Critical
+- name: LogonProcessName
+  type: string_short
+  description: Logon process. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: LogonType
+  type: integer
+  description: Logon type (2=Interactive, 3=Network, 10=RemoteInteractive, ...). Signed decimal integer;
+    bare digits, optional leading minus.
+  example: '42'
+- name: Message
+  type: string_long
+  description: Human-readable event message. Free-form text; may span multiple lines or contain large
+    payloads.
+  example: Free-form vendor-emitted message describing the event.
+- name: ObjectName
+  type: string
+  description: Object name (file access events). Free-form text; may contain whitespace and punctuation.
+  example: sample_objectname
+- name: ObjectType
+  type: string_short
+  description: Object type. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: Opcode
+  type: string_short
+  description: Operation code. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: ProcessID
+  type: integer
+  description: PID of the reporting process. Signed decimal integer; bare digits, optional leading minus.
+  example: '42'
+- name: ProcessName
+  type: file_path
+  description: Process name for the event. Absolute filesystem path; vendor-native separator.
+  example: /var/log/app.log
+- name: Provider
+  type: string
+  description: Event provider name. Free-form text; may contain whitespace and punctuation.
+  example: aws
+- name: ShareLocalPath
+  type: file_path
+  description: Local path of the share. Absolute filesystem path; vendor-native separator.
+  example: /var/log/app.log
+- name: ShareName
+  type: string
+  description: Network share name. Free-form text; may contain whitespace and punctuation.
+  example: sample_sharename
+- name: Status
+  type: string_short
+  description: Status code. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: SubStatus
+  type: string_short
+  description: Sub-status code. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: SubjectDomainName
+  type: string_short
+  description: Subject domain. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: SubjectLogonId
+  type: string_short
+  description: Subject logon id. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: SubjectUserName
+  type: user
+  description: Subject user name. Account name as the vendor reports it — login name, UPN, or sAMAccountName;
+    no domain prefix unless vendor emits one.
+  example: jdoe
+- name: SubjectUserSid
+  type: string_short
+  description: Subject user SID. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: TargetDomainName
+  type: string_short
+  description: Target domain. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: TargetLogonId
+  type: string_short
+  description: Target logon id. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: TargetUserName
+  type: user
+  description: Target user name (account being logged in). Account name as the vendor reports it — login
+    name, UPN, or sAMAccountName; no domain prefix unless vendor emits one.
+  example: jdoe
+- name: TargetUserSid
+  type: string_short
+  description: Target user SID. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: Task
+  type: string_short
+  description: Task category. Short opaque token, typically without whitespace; max ~64 chars.
+  example: token
+- name: ThreadID
+  type: integer
+  description: Thread id. Signed decimal integer; bare digits, optional leading minus.
+  example: '42'
+- name: UserID
+  type: string_short
+  description: User SID associated with the event. Short opaque token, typically without whitespace; max
+    ~64 chars.
+  example: token
+- name: WorkstationName
+  type: host
+  description: Source workstation name. Hostname or fully-qualified domain name (RFC 1035 dotted labels);
+    no protocol prefix.
+  example: host01.example.com
+- name: time_created
+  type: datetime
+  example: '2026-05-26T14:23:01Z'
+  description: Event creation time (ISO-8601). The ingest/parsing rule filters on this field — it must
+    contain HH:MM:SS or the event is dropped at ingest.
+use_cases:
+- Cloud
+- SaaS
+- Identity
+how_to_use: '## Sending these logs to Cortex XSIAM
+
+
+  Phantom emits Windows Event Log records as CEF over UDP — point a data worker at
+
+  your XSIAM broker''s syslog destination and these records flow straight in. The
+
+  CEF header''s **vendor** + **product** drive XSIAM''s parsing-rule routing: the
+
+  broker normalizes them to `<lowercased-vendor>_<lowercased-product>_raw`.
+
+
+  **Required CEF header for XSIAM**:
+
+
+  - **vendor**: `microsoft`
+
+  - **product**: `windows`
+
+
+  Broker derives → `microsoft_windows_raw`.
+
+
+  **MR pattern**: Flat + nested. The modeling rule reads `channel`,
+
+  `provider_name`, `event_id`, `message`, `user` (nested), and `event_data`
+
+  (nested object with per-event-id keys). Pack `event_data`/`user` as JSON-string
+
+  CEF extensions.
+
+
+  **PR filter quirks**: the ingest rule **requires** a `time_created` field
+
+  matching `HH:MM:SS` (e.g. `2026-05-26T14:23:01Z`) — without it the event is
+
+  dropped at ingest. It also **excludes** `provider_name` in (`Microsoft-Windows-
+
+  Sysmon`, `AD FS Auditing`, `Microsoft-Antimalware-Scan-Interface`,
+
+  `Microsoft-Windows-DNSServer`, `Microsoft-Windows-DNS-Server-Service`) — those
+
+  route to dedicated datasets.
+
+
+  **Verify**:
+
+
+  ```xql
+
+  datamodel dataset = microsoft_windows_raw
+
+  | filter xdm.event.type = "System"
+
+  | fields xdm.*
+
+  | limit 1
+
+  ```
+
+
+  ### Make it map to XDM
+
+
+  The `microsoft_windows_raw` modeling rule only runs when `channel` is one of
+
+  `"System"`, `"Application"`, `"Directory Service"` **or** `provider_name` is a
+
+  recognized provider (`Microsoft-Windows-PowerShell`, `-TaskScheduler`,
+
+  `-Windows Firewall With Advanced Security`, `-Windows Defender`,
+
+  `-ActiveDirectory_DomainService`) **or** `provider_name` contains
+
+  `Microsoft-Windows-Security-`. Note **`"Security"` is NOT a valid `channel`** —
+
+  Security-audit events clear the gate through `provider_name` only. When
+
+  simulating, pass `observables_dict={"channel": "System"}` to
+
+  `phantom_create_data_worker` so the gate matches. The rule then populates core
+
+  XDM: `xdm.event.id` <- `event_id`, `xdm.event.type` <- `channel`,
+
+  `xdm.source.user.username`/`xdm.source.user.domain` from the `user` object,
+
+  `xdm.observer.type` <- `provider_name`, `xdm.event.description` <- `message`,
+
+  plus alert/auth fields for Defender/Security channels.
+
+  '
+
+validated: true

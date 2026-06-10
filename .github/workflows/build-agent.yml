@@ -1,0 +1,168 @@
+name: Build agent
+
+# v0.4.x+ — per-service build workflow.
+#
+# CI/CD step 1 of 3 for agent (path-filter scope: mcp/agent/** OR
+# bundles/spark/**). See docs/CICD.md § Per-service path-filter
+# contract for the full invariant ("no source change = no rebuild
+# = no container recreate"). The 5 stack services + 6 per-connector
+# images each have their own build-<svc>.yml; only the ones whose
+# paths matched on this push actually run.
+#
+# Fires when phantom-agent source changes — either the Next.js
+# surface (mcp/agent/) or the bundle Python + skills + connectors
+# baked into the image (bundles/spark/). Also runs pytest + lint
+# inside the freshly-built image so test failures surface on the
+# same push that introduced them, not on a later deploy.
+#
+# DO NOT add unconditional triggers or remove the paths: filter —
+# every push to main would rebuild phantom-agent, defeating the
+# digest-pinning invariant that lets unchanged services survive.
+#
+# Security note: this workflow only consumes built-in GitHub contexts
+# that are NOT operator-controllable. See build-xlog.yml header.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # v0.5.12 — paths intentionally narrow: ONLY agent source.
+      # Self-path + composite-action triggers removed (would cause
+      # workflow header edits + composite action changes to rebuild
+      # the agent image, fetching fresh base layers via --pull and
+      # producing new digests despite no agent source change).
+      # See docs/CICD.md § Per-service path-filter contract.
+      #
+      # Trade-off: workflow-file or composite-action edits WON'T
+      # auto-rebuild the agent — they piggyback on the next
+      # mcp/agent/** or bundles/spark/** source change. Use
+      # `gh workflow run build-agent.yml` to force-exercise a
+      # workflow change ahead of source movement.
+      - 'mcp/agent/**'
+      - 'bundles/spark/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mcp/agent/**'
+      - 'bundles/spark/**'
+  workflow_dispatch:
+
+concurrency:
+  group: build-agent-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    name: Build phantom-agent image (with embedded MCP)
+    runs-on: [self-hosted, Linux, X64, phantom]
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        # actions/checkout@v4's clean step fails on root-owned files
+        # left in the workspace by previous containerized jobs (e.g.
+        # __pycache__ dirs from a pytest run that ran as root inside
+        # a -v $PWD-mounted container). Chown back to the runner
+        # user BEFORE checkout so the clean step can proceed.
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - uses: actions/checkout@v4
+
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - id: image
+        uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-agent
+          # The agent Dockerfile lives at mcp/agent/Dockerfile but
+          # needs the REPO ROOT as build context so it can COPY
+          # both mcp/agent/ and bundles/spark/.
+          build-context: '.'
+          dockerfile-path: mcp/agent/Dockerfile
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
+
+  test-mcp-server:
+    name: pytest (inside freshly-built agent image)
+    runs-on: [self-hosted, Linux, X64, phantom]
+    needs: build
+    env:
+      REGISTRY: ghcr.io
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - uses: actions/checkout@v4
+
+      - name: Run pytest inside the just-built image
+        run: |
+          # We pull by tag (not digest) because the digest output from
+          # `needs.build` is per-job; pytest is a separate job and
+          # would otherwise need the digest threaded through. Tag is
+          # safe here — `:dev` was just pushed by the build job seconds
+          # ago and is unique to this workflow's concurrency group.
+          #
+          # pytest itself isn't shipped in the production runtime
+          # image (only runtime deps), so we install it here before
+          # invoking. --user installs into the container's $HOME,
+          # which is /root since we don't pass -u. /root/.local/bin
+          # is already on PATH inside the image (per the Dockerfile's
+          # mcp-deps stage that pip-installs Python deps).
+          docker run --rm \
+            -v "$PWD:/work" -w /work/bundles/spark/mcp \
+            "$REGISTRY/$OWNER/phantom-agent:dev" \
+            sh -c 'pip install --quiet --user pytest pytest-asyncio && \
+                   PYTHONPATH=/work/bundles/spark/mcp/src \
+                     /root/.local/bin/pytest tests/ -q'
+
+  lint-agent:
+    name: lint mcp/agent
+    runs-on: [self-hosted, Linux, X64, phantom]
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - uses: actions/checkout@v4
+
+      - name: npm ci + lint + tsc (in node:20 container)
+        run: |
+          # Run in a fresh temp dir so any host-side
+          # mcp/agent/node_modules from a previous failed run can't
+          # contaminate. actions/checkout@v4's clean step doesn't
+          # always reach the gitignored node_modules tree; copying
+          # source into a clean dir sidesteps the question entirely.
+          #
+          # HOME=/tmp inside the container: we run as the runner user
+          # (UID 1002) which has no /etc/passwd entry inside node:20,
+          # so $HOME defaults to '/'. npm then tries `mkdir /.npm` for
+          # its cache and gets EACCES (filesystem root isn't writable
+          # for non-root). Setting HOME=/tmp lets npm write its cache
+          # to /tmp/.npm. Without this, the TAR_ENTRY_ERROR cascade
+          # and exit 243 happen — that whole class of error is just
+          # npm reporting a cache write failure indirectly.
+          #
+          # cp -a preserves modes + symlinks; the trailing /. copies
+          # contents (not the dir itself) so $TMPDIR is the new root.
+          # Then we explicitly drop node_modules (in case the source
+          # tree had one).
+          TMPDIR=$(mktemp -d)
+          cp -a mcp/agent/. "$TMPDIR/"
+          rm -rf "$TMPDIR/node_modules"
+          docker run --rm \
+            -v "$TMPDIR:/work" -w /work \
+            -u "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            node:20 \
+            sh -c 'npm ci --no-audit --no-fund && npm run lint && npx tsc --noEmit'
+          rm -rf "$TMPDIR"

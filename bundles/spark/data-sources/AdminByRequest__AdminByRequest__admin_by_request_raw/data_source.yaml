@@ -1,0 +1,206 @@
+schema_version: 1
+id: AdminByRequest
+pack_name: AdminByRequest
+rule_name: AdminByRequest
+dataset_name: admin_by_request_raw
+vendor: Admin By Request
+product: AdminByRequest
+description: AdminByRequest is a Privileged Access Management (PAM) solution that
+  enables secure, temporary elevation to local admin rights.
+categories:
+- Analytics & SIEM
+version: 1.0.8
+origin: bundle
+author: phantom-bundle
+uploaded_by: null
+created_at: '2026-05-23T09:26:17Z'
+updated_at: '2026-05-23T09:26:17Z'
+logo:
+  mime_type: image/svg+xml
+  data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyODggNjAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIG1lZXQiPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgZm9udC1mYW1pbHk9IkludGVyLCAtYXBwbGUtc3lzdGVtLCBCbGlua01hY1N5c3RlbUZvbnQsIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzIiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMwMDczQUEiPkFkbWluIEJ5IFJlcXVlc3Q8L3RleHQ+PC9zdmc+
+  source: phantom-bundle (v0.13.0 migration)
+  license: MIT
+  fidelity: branded
+formats:
+- SYSLOG
+- CEF
+- JSON
+is_rawlog_only: false
+fields:
+- name: additionalData
+  type: string
+  description: Vendor-emitted field 'AdditionalData'. Free-form text; may contain
+    whitespace and punctuation.
+  example: sample_additionaldata
+- name: application
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: file,
+    name, path, scanResult, threat, vendor, virustotalLink (each key defined as a
+    dotted-path leaf below).'
+  example: '{}'
+- name: approvedBy
+  type: string
+  description: Admin who approved the request. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_approvedby
+- name: approvedByEmail
+  type: string
+  description: Vendor-emitted field 'ApprovedByEmail'. Free-form text; may contain
+    whitespace and punctuation.
+  example: user@example.com
+- name: auditLogURL
+  type: string
+  description: Vendor-emitted field 'AuditLogURL'. Free-form text; may contain whitespace
+    and punctuation.
+  example: https://example.com/path?q=1
+- name: auditlogLink
+  type: string
+  description: Vendor-emitted field 'AuditlogLink'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_auditloglink
+- name: computer
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: name,
+    platform (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: computerName
+  type: host
+  description: Vendor-emitted field 'ComputerName'. Hostname or fully-qualified domain
+    name (RFC 1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: deniedBy
+  type: string
+  description: Vendor-emitted field 'DeniedBy'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_deniedby
+- name: deniedByEmail
+  type: string
+  description: Vendor-emitted field 'DeniedByEmail'. Free-form text; may contain whitespace
+    and punctuation.
+  example: user@example.com
+- name: deniedReason
+  type: string
+  description: Vendor-emitted field 'DeniedReason'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_deniedreason
+- name: eventLevel
+  type: string
+  description: Vendor-emitted field 'EventLevel'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_eventlevel
+- name: eventText
+  type: string
+  description: Vendor-emitted field 'EventText'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_eventtext
+- name: reason
+  type: string
+  description: Reason/explanation accompanying the action or outcome. Free-form text;
+    may contain whitespace and punctuation.
+  example: normal_operation
+- name: source_log_type
+  type: string
+  description: Event type or category as the vendor classifies it. Free-form text;
+    may contain whitespace and punctuation.
+  example: authentication
+- name: type
+  type: string_short
+  description: Type/category classifier emitted by Admin By Request. Short opaque
+    token, typically without whitespace; max ~64 chars.
+  example: authentication
+- name: user
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: account,
+    email (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: userAccount
+  type: string
+  description: Vendor-emitted field 'UserAccount'. Free-form text; may contain whitespace
+    and punctuation.
+  example: sample_useraccount
+- name: userName
+  type: string
+  description: User account associated with the event. Free-form text; may contain
+    whitespace and punctuation.
+  example: jdoe
+- name: application.file
+  type: file_path
+  description: Vendor-emitted field 'Application › file'. Leaf of the 'application'
+    composite. Absolute filesystem path; vendor-native separator (forward slash on
+    POSIX, backslash on Windows).
+  example: /var/log/example.log
+- name: application.name
+  type: string
+  description: Human-readable name as displayed by Admin By Request. Free-form text;
+    may contain whitespace and punctuation.
+  example: sample_name
+- name: application.path
+  type: file_path
+  description: Filesystem path. Absolute filesystem path; vendor-native separator.
+  example: /var/log/example.log
+- name: application.scanResult
+  type: string
+  description: Vendor-emitted field 'Application › scanResult'. Leaf of the 'application'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_scanresult
+- name: application.threat
+  type: string
+  description: Vendor-emitted field 'Application › threat'. Leaf of the 'application'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_threat
+- name: application.vendor
+  type: string
+  description: Vendor-emitted field 'Application › vendor'. Leaf of the 'application'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_vendor
+- name: application.virustotalLink
+  type: string
+  description: Vendor-emitted field 'Application › virustotalLink'. Leaf of the 'application'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: sample_virustotallink
+- name: computer.name
+  type: host
+  description: Human-readable name as displayed by Admin By Request. Hostname or fully-qualified
+    domain name (RFC 1035 dotted labels); no protocol prefix.
+  example: host.example.com
+- name: computer.platform
+  type: string
+  description: Vendor-emitted field 'Computer › platform'. Leaf of the 'computer'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: linux
+- name: user.account
+  type: user
+  description: Vendor-emitted field 'User › account'. Leaf of the 'user' composite.
+    Account name as the vendor reports it — login name, UPN, or sAMAccountName depending
+    on the source; no domain prefix unless the vendor emits one.
+  example: jsmith
+- name: user.email
+  type: email
+  description: Email address — RFC 5322 `local@domain`. RFC 5322 `local@domain`; one
+    address only.
+  example: user@example.com
+use_cases:
+- PAM
+how_to_use: |
+  ## Admin By Request AdminByRequest → Cortex XSIAM (dataset `admin_by_request_raw`)
+  
+    **Routing** — the broker lowercases the CEF/syslog header `vendor`/`product`, replaces
+    non-alphanumerics with `_`, and appends `_raw` to choose the dataset (target: `admin_by_request_raw`).
+  
+    **Required CEF header for XSIAM** — the header must normalize to `admin_by_request`. The marketplace pack's display name `Admin By Request` / `AdminByRequest` normalizes to `admin_by_request_adminbyrequest_raw`, a **different dataset** (vendor rename / legacy CEF identity), so use the vendor's actual CEF `deviceVendor`/`deviceProduct` that yields `admin_by_request` and confirm which dataset the events land in.
+  
+    **Ingestion shape**: **JSON-native.** The modeling rule reads nested JSON (e.g. `application -> name`). CEF/syslog routes + lands and the broker extracts top-level columns; the nested reads need the composite present, so Phantom's worker JSON-stringifies `type: json` composites onto the wire (keep the dotted-leaf fields).
+  
+    - **Modeling-rule gate**: `source_log_type = "auditlog"` — seed that field with an accepted value or the rule drops the row (XDM stays 0).
+  
+    **XDM mapping**: ~12 fields mapped to the unified data model (`xdm.*`), including: `xdm.event.description`, `xdm.event.log_level`, `xdm.event.operation`, `xdm.event.outcome_reason`, `xdm.event.type`, `xdm.source.user.upn`.
+  
+    **Operator setup**: This data source has typed-column data that doesn't look like CEF (columns are camelCase API fields, JSON sub-objects, etc.). Most likely arrives via the XSIAM HTTP Collector with a source tag mapped to vendor=`Admin By Request`, product=`AdminByRequest`, or via a vendor-specific XDR connector pull. Phantom can POST JSON to the HTTP collector; the operator must configure the collector's source tag to land events in this dataset.
+  
+    **Status**: Reverse-engineered 2026-06-04 from the parsing/modeling rules — routing, gate, and field
+    inventory documented. **NOT yet XDM-validated on a live tenant** (no `validated` pill); validate by
+    streaming a CEF batch and confirming a rich `xdm.*` count over a wide window.
+  
+    **Verify** (once the dataset is XDM-bound, wide ≥7d window):
+  
+        config timeframe = 30d | datamodel dataset = admin_by_request_raw | sort desc _time | fields xdm.* | limit 20

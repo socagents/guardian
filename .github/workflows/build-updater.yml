@@ -1,0 +1,73 @@
+name: Build updater
+
+# v0.6.12 — per-service build workflow for phantom-updater. Brings
+# the updater into the dev cycle so its source changes can be
+# tested on phantom-vm BEFORE any customer-release tag.
+#
+# Pre-v0.6.12: phantom-updater was customer-release-only — its
+# image was built solely by release.yml on tag push, and
+# build-dev-installer.yml fetched its digest from the latest
+# customer release manifest. That made updater changes impossible
+# to verify in dev. Customer releases became a debugging loop,
+# violating CLAUDE.md's "release only what's verified working"
+# principle.
+#
+# Now updater/** changes trigger this workflow, which builds +
+# pushes phantom-updater:dev to GHCR. build-dev-installer.yml's
+# workflow_run cascade picks the run up and resolves the dev
+# digest. Operator-mirror dev cycle covers updater the same way
+# it covers agent/xlog/caldera.
+#
+# Risk envelope: same as agent/xlog/caldera dev builds — a bug in
+# updater could break the dev install on phantom-vm. Mitigation:
+# customer installs are unaffected because release.yml builds
+# updater independently on tag push.
+#
+# Security note: only built-in GitHub contexts that are NOT
+# operator-controllable. Same shape as build-agent.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'updater/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'updater/**'
+  workflow_dispatch:
+
+concurrency:
+  group: build-updater-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    name: Build phantom-updater image
+    runs-on: [self-hosted, Linux, X64, phantom]
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - uses: actions/checkout@v4
+
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - id: image
+        uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: phantom-updater
+          build-context: 'updater'
+          dockerfile-path: updater/Dockerfile
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}

@@ -1,0 +1,552 @@
+# =============================================================================
+# Agent Design Validation Workflow
+# =============================================================================
+# After a PR is merged, compares the build against the original spec to check
+# for significant design deviations. This is the Delivery Manager's "Phase 2"
+# — a loose validation that the right thing was built, not a code review.
+#
+# Only runs for agent-created PRs (those with "Closes #N" linking to an issue
+# that has a spec reference). Human PRs and PRs without spec linkage are skipped.
+#
+# Verdict:
+#   ALIGNED   → no action, the build matches the spec's intent
+#   DEVIATION → opens a correction issue for the coding agent
+#
+# Triggers:
+#   - PR merged to main (automatic)
+#   - Manual dispatch with pr_number input
+#
+# Security: All GitHub event data is accessed via env vars, never directly
+# in run: blocks. See https://github.blog/security/vulnerability-research/
+# how-to-catch-github-actions-workflow-injections-before-attackers-do/
+# =============================================================================
+
+name: Agent – Design Validation
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to validate"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  # Validations can run in parallel — they're mostly read-only.
+  # Only the deviation-issue creation step writes, and that's rare.
+  group: kite-design-validation-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
+
+env:
+  # Budget: max validation runs per day (resets at 00:00 UTC)
+  DAILY_VALIDATION_LIMIT: "{{LIMIT_VALIDATION}}"
+  TOKEN_LOG_DIR: /home/{{RUNNER_USER}}/kite-token-logs
+
+jobs:
+  validate:
+    name: Validate Build Against Spec
+    runs-on: [self-hosted, {{RUNNER_LABEL}}]
+    environment: dev
+    timeout-minutes: 15
+
+    # Only run for merged PRs (skip closed-without-merge)
+    if: >
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.pull_request.merged == true)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Determine PR number
+        id: pr
+        env:
+          INPUT_PR: ${{ inputs.pr_number }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "number=$INPUT_PR" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=$EVENT_PR" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract linked issue and check eligibility
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+
+          # Get PR details via API (safe — no event data in run: block)
+          PR_DATA=$(gh pr view "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json body,labels,title,author)
+
+          PR_BODY=$(echo "$PR_DATA" | jq -r '.body // ""')
+          PR_TITLE=$(echo "$PR_DATA" | jq -r '.title')
+
+          # Check if this is an agent PR (has agent: prefix in title or AGENT_MSG in body)
+          IS_AGENT=$(echo "$PR_DATA" | jq -r '
+            (.title | test("^(claude-code|codex-cli):")) or
+            (.body | test("AGENT_MSG"))
+          ')
+
+          if [ "$IS_AGENT" != "true" ]; then
+            echo "::notice::Skipping — not an agent PR"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Extract issue number from "Closes #N" pattern
+          ISSUE_NUMBER=$(echo "$PR_BODY" | grep -oP 'Closes #\K[0-9]+' | head -1 || echo "0")
+
+          if [ "$ISSUE_NUMBER" = "0" ]; then
+            echo "::notice::Skipping — no linked issue found in PR body"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Get issue details via API
+          ISSUE_DATA=$(gh issue view "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json body,labels,title)
+
+          ISSUE_BODY=$(echo "$ISSUE_DATA" | jq -r '.body // ""')
+          ISSUE_TITLE=$(echo "$ISSUE_DATA" | jq -r '.title')
+
+          # Extract spec path from issue body (look for "specs/" reference)
+          SPEC_PATH=$(echo "$ISSUE_BODY" | grep -oP 'specs/[a-zA-Z0-9_-]+\.md' | head -1 || echo "")
+
+          if [ -z "$SPEC_PATH" ]; then
+            echo "::notice::Skipping — no spec reference found in issue #${ISSUE_NUMBER}"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Check if spec file exists
+          if [ ! -f "$SPEC_PATH" ]; then
+            echo "::warning::Spec file not found: ${SPEC_PATH}"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+          echo "issue_number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "issue_title=$ISSUE_TITLE" >> "$GITHUB_OUTPUT"
+          echo "spec_path=$SPEC_PATH" >> "$GITHUB_OUTPUT"
+
+          # Save for later steps (file-based, not env injection)
+          echo "$PR_BODY" > /tmp/pr-body.txt
+          echo "$ISSUE_BODY" > /tmp/issue-body.txt
+
+          echo "PR #${PR_NUMBER} → Issue #${ISSUE_NUMBER} → Spec: ${SPEC_PATH}"
+
+      - name: Check daily validation limit
+        if: steps.meta.outputs.eligible == 'true'
+        id: budget
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+          LOG_FILE="${TOKEN_LOG_DIR}/validation-agent/${TODAY}.jsonl"
+
+          if [ -f "$LOG_FILE" ]; then
+            USED=$(wc -l < "$LOG_FILE")
+          else
+            USED=0
+          fi
+
+          REMAINING=$((DAILY_VALIDATION_LIMIT - USED))
+
+          if [ "$REMAINING" -le 0 ]; then
+            echo "::warning::Validation agent daily limit reached ($USED / $DAILY_VALIDATION_LIMIT)"
+            echo "budget_ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "budget_ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect validation context
+        if: steps.meta.outputs.eligible == 'true' && steps.budget.outputs.budget_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          SPEC_PATH: ${{ steps.meta.outputs.spec_path }}
+        run: |
+          set -euo pipefail
+
+          # Get PR diff (with retry)
+          for attempt in 1 2 3; do
+            gh pr diff "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              > /tmp/pr-diff.patch && break
+            echo "::warning::Attempt $attempt failed (get diff), retrying in 10s..."
+            sleep 10
+          done
+
+          # Get spec content (first 300 lines for token efficiency)
+          TOTAL_LINES=$(wc -l < "$SPEC_PATH")
+          head -300 "$SPEC_PATH" > /tmp/spec-content.txt
+          if [ "$TOTAL_LINES" -gt 300 ]; then
+            echo "" >> /tmp/spec-content.txt
+            echo "⚠️ NOTICE: Spec truncated to 300/${TOTAL_LINES} lines. Read full spec at: ${SPEC_PATH}" >> /tmp/spec-content.txt
+          fi
+
+          # Get spec commit SHA
+          SPEC_COMMIT=$(git log -1 --format=%H -- "$SPEC_PATH")
+          echo "SPEC_COMMIT=$SPEC_COMMIT" >> "$GITHUB_ENV"
+
+          echo "Collected: diff $(wc -l < /tmp/pr-diff.patch) lines, spec $(wc -l < /tmp/spec-content.txt) lines"
+
+      - name: Run design validation
+        if: steps.meta.outputs.eligible == 'true' && steps.budget.outputs.budget_ok == 'true'
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          SPEC_PATH: ${{ steps.meta.outputs.spec_path }}
+        run: |
+          set -euo pipefail
+
+          # Build prompt using Python for safe multi-line variable substitution
+          python3 -c "
+          prompt = open('delivery-manager/prompts/validation-prompt.md').read()
+          import os
+          prompt = prompt.replace('\${PR_NUMBER}', os.environ['PR_NUMBER'])
+          prompt = prompt.replace('\${ISSUE_NUMBER}', os.environ['ISSUE_NUMBER'])
+          prompt = prompt.replace('\${SPEC_PATH}', os.environ['SPEC_PATH'])
+          prompt = prompt.replace('\${ISSUE_BODY}', open('/tmp/issue-body.txt').read())
+          prompt = prompt.replace('\${SPEC_CONTENT}', open('/tmp/spec-content.txt').read())
+          prompt = prompt.replace('\${PR_BODY}', open('/tmp/pr-body.txt').read())
+          prompt = prompt.replace('\${PR_DIFF}', open('/tmp/pr-diff.patch').read())
+          open('/tmp/validation-prompt.txt', 'w').write(prompt)
+          "
+
+          claude \
+            -p "$(cat /tmp/validation-prompt.txt)" \
+            --model claude-sonnet-4-6 \
+            --dangerously-skip-permissions \
+            --verbose \
+            --output-format stream-json \
+            2>&1 | tee /tmp/validation-output.jsonl
+
+      - name: Parse verdict
+        if: steps.meta.outputs.eligible == 'true' && steps.budget.outputs.budget_ok == 'true'
+        id: verdict
+        run: |
+          set -euo pipefail
+
+          # Extract the text output from Claude's JSONL
+          RESPONSE=$(jq -rs '[.[] | select(.type == "text") | .text // ""] | join("")' \
+            /tmp/validation-output.jsonl 2>/dev/null || echo "")
+
+          if [ -z "$RESPONSE" ]; then
+            # Fallback: try assistant message type
+            RESPONSE=$(jq -rs '[.[] | select(.type == "assistant") | .message.content[].text // ""] | join("")' \
+              /tmp/validation-output.jsonl 2>/dev/null || echo "")
+          fi
+
+          echo "$RESPONSE" > /tmp/validation-response.txt
+
+          # Parse verdict from first few lines
+          if echo "$RESPONSE" | head -5 | grep -q "VERDICT: ALIGNED"; then
+            echo "verdict=ALIGNED" >> "$GITHUB_OUTPUT"
+            echo "✅ Build is aligned with spec"
+
+            # Extract access metadata for README update (if present)
+            ACCESS_SERVICE=$(echo "$RESPONSE" | grep -oP 'ACCESS_SERVICE:\s*\K\S+' || echo "none")
+            echo "$ACCESS_SERVICE" > /tmp/access-service.txt
+
+            if [ "$ACCESS_SERVICE" != "none" ]; then
+              ACCESS_PORT=$(echo "$RESPONSE" | grep -oP 'ACCESS_PORT:\s*\K\S+' || echo "")
+              ACCESS_HEALTH=$(echo "$RESPONSE" | grep -oP 'ACCESS_HEALTH:\s*\K\S+' || echo "")
+              ACCESS_STAGE=$(echo "$RESPONSE" | grep -oP 'ACCESS_STAGE:\s*\K\S+' || echo "")
+              echo "$ACCESS_PORT" > /tmp/access-port.txt
+              echo "$ACCESS_HEALTH" > /tmp/access-health.txt
+              echo "$ACCESS_STAGE" > /tmp/access-stage.txt
+              echo "📡 Access info: ${ACCESS_SERVICE} :${ACCESS_PORT} ${ACCESS_HEALTH} (stage ${ACCESS_STAGE})"
+            fi
+          elif echo "$RESPONSE" | head -5 | grep -q "VERDICT: DEVIATION"; then
+            echo "verdict=DEVIATION" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Build deviates from spec"
+
+            # Extract deviation fields from response
+            DEVIATION_SUMMARY=$(echo "$RESPONSE" | grep -oP 'DEVIATION_SUMMARY:\s*\K.*' || echo "Design deviation detected")
+            SPEC_EXPECTED=$(echo "$RESPONSE" | grep -oP 'SPEC_EXPECTED:\s*\K.*' || echo "See spec for details")
+            BUILD_DELIVERED=$(echo "$RESPONSE" | grep -oP 'BUILD_DELIVERED:\s*\K.*' || echo "See merged PR for details")
+            IMPACT=$(echo "$RESPONSE" | grep -oP 'IMPACT:\s*\K.*' || echo "May affect future spec work")
+            SUGGESTED_FIX=$(echo "$RESPONSE" | grep -oP 'SUGGESTED_FIX:\s*\K.*' || echo "Review and correct the deviation")
+
+            # Save to files for safe use in later steps (avoids shell injection)
+            echo "$DEVIATION_SUMMARY" > /tmp/deviation-summary.txt
+            echo "$SPEC_EXPECTED" > /tmp/spec-expected.txt
+            echo "$BUILD_DELIVERED" > /tmp/build-delivered.txt
+            echo "$IMPACT" > /tmp/impact.txt
+            echo "$SUGGESTED_FIX" > /tmp/suggested-fix.txt
+          else
+            echo "verdict=ALIGNED" >> "$GITHUB_OUTPUT"
+            echo "::notice::Could not parse verdict — defaulting to ALIGNED (lenient)"
+          fi
+
+      - name: Open correction issue (deviation only)
+        if: >
+          steps.meta.outputs.eligible == 'true' &&
+          steps.budget.outputs.budget_ok == 'true' &&
+          steps.verdict.outputs.verdict == 'DEVIATION'
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          ISSUE_TITLE: ${{ steps.meta.outputs.issue_title }}
+          SPEC_PATH: ${{ steps.meta.outputs.spec_path }}
+        run: |
+          set -euo pipefail
+
+          # Read deviation details from files (safe — not from env/event data)
+          DEVIATION_SUMMARY=$(cat /tmp/deviation-summary.txt)
+          SPEC_EXPECTED=$(cat /tmp/spec-expected.txt)
+          BUILD_DELIVERED=$(cat /tmp/build-delivered.txt)
+          IMPACT=$(cat /tmp/impact.txt)
+          SUGGESTED_FIX=$(cat /tmp/suggested-fix.txt)
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          # Build issue body from template using Python for safe substitution
+          python3 -c "
+          import os
+          template = open('delivery-manager/templates/deviation-issue-body.md').read()
+          replacements = {
+              '{{ORIGINAL_ISSUE}}': os.environ['ISSUE_NUMBER'],
+              '{{MERGED_PR}}': os.environ['PR_NUMBER'],
+              '{{SPEC_PATH}}': os.environ['SPEC_PATH'],
+              '{{SPEC_COMMIT}}': os.environ.get('SPEC_COMMIT', 'unknown'),
+              '{{RUN_ID}}': os.environ['GITHUB_RUN_ID'],
+              '{{RUN_URL}}': os.environ['GITHUB_SERVER_URL'] + '/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'],
+              '{{DEVIATION_SUMMARY}}': open('/tmp/deviation-summary.txt').read().strip(),
+              '{{SPEC_EXPECTED}}': open('/tmp/spec-expected.txt').read().strip(),
+              '{{BUILD_DELIVERED}}': open('/tmp/build-delivered.txt').read().strip(),
+              '{{IMPACT}}': open('/tmp/impact.txt').read().strip(),
+              '{{SUGGESTED_FIX}}': open('/tmp/suggested-fix.txt').read().strip(),
+          }
+          for k, v in replacements.items():
+              template = template.replace(k, v)
+          open('/tmp/deviation-issue-body.md', 'w').write(template)
+          "
+
+          # Determine layer label from original issue
+          LAYER_LABEL=$(gh issue view "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json labels \
+            --jq '[.labels[].name | select(startswith("layer:"))] | first // "layer:cross-cutting"')
+
+          # Create correction issue
+          NEW_ISSUE=$(gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "correction: ${ISSUE_TITLE}" \
+            --body-file /tmp/deviation-issue-body.md \
+            --label "status:ready,${LAYER_LABEL},complexity:S,agent:claude-code,design-deviation")
+
+          echo "Created correction issue: ${NEW_ISSUE}"
+
+          # Extract just the number for the comment
+          NEW_NUMBER=$(echo "$NEW_ISSUE" | grep -oP '[0-9]+$' || echo "$NEW_ISSUE")
+
+          # Add traceability comment on original issue
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            -F - <<EOF
+          <!-- AGENT_MSG agent=validation action=deviation-detected -->
+          ⚠️ **Design validation** detected a deviation in PR #${PR_NUMBER}.
+          Correction issue: ${NEW_ISSUE}
+          Details: [Validation run](${RUN_URL})
+          EOF
+
+      - name: Post aligned comment (aligned only)
+        if: >
+          steps.meta.outputs.eligible == 'true' &&
+          steps.budget.outputs.budget_ok == 'true' &&
+          steps.verdict.outputs.verdict == 'ALIGNED'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+        run: |
+          gh pr comment "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            -F - <<EOF
+          <!-- AGENT_MSG agent=validation action=aligned issue=#${ISSUE_NUMBER} -->
+          ✅ **Design validation passed** — build aligns with spec intent.
+          EOF
+
+      - name: Update README access table
+        if: >
+          steps.meta.outputs.eligible == 'true' &&
+          steps.budget.outputs.budget_ok == 'true' &&
+          steps.verdict.outputs.verdict == 'ALIGNED'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+
+          ACCESS_SERVICE=$(cat /tmp/access-service.txt 2>/dev/null || echo "none")
+          if [ "$ACCESS_SERVICE" = "none" ] || [ -z "$ACCESS_SERVICE" ]; then
+            echo "No network service in this build — skipping README update"
+            exit 0
+          fi
+
+          ACCESS_PORT=$(cat /tmp/access-port.txt 2>/dev/null || echo "")
+          ACCESS_HEALTH=$(cat /tmp/access-health.txt 2>/dev/null || echo "")
+          ACCESS_STAGE=$(cat /tmp/access-stage.txt 2>/dev/null || echo "")
+
+          if [ -z "$ACCESS_PORT" ]; then
+            echo "::warning::ACCESS_PORT is empty — skipping README update"
+            exit 0
+          fi
+
+          # Update README between ACCESS markers using Python
+          python3 -c "
+          import re, os, sys
+
+          service = '$ACCESS_SERVICE'
+          port = '$ACCESS_PORT'
+          health = '$ACCESS_HEALTH'
+          stage = '$ACCESS_STAGE'
+
+          url = f'http://localhost:{port}'
+          health_cmd = f'\`curl {url}{health}\`' if health else '_none detected_'
+          new_row = f'| {service} | \`{url}\` | {health_cmd} | {stage} |'
+
+          with open('README.md', 'r') as f:
+              content = f.read()
+
+          pattern = r'(<!-- ACCESS_START -->\n\| Service \| URL \| Health Check \| Stage \|\n\|[-|]+\|\n)(.*?)(<!-- ACCESS_END -->)'
+          match = re.search(pattern, content, re.DOTALL)
+
+          if not match:
+              print('::warning::ACCESS markers not found in README.md')
+              sys.exit(0)
+
+          header = match.group(1)
+          existing_rows = match.group(2)
+          footer = match.group(3)
+
+          lines = [l for l in existing_rows.strip().split('\n') if l.strip()]
+          updated = False
+          new_lines = []
+          for line in lines:
+              if f'| {service} |' in line:
+                  new_lines.append(new_row)
+                  updated = True
+              else:
+                  new_lines.append(line)
+
+          if not updated:
+              new_lines.append(new_row)
+
+          rows_block = '\n'.join(new_lines) + '\n' if new_lines else ''
+          new_content = content[:match.start()] + header + rows_block + footer + content[match.end():]
+
+          with open('README.md', 'w') as f:
+              f.write(new_content)
+
+          action = 'Updated' if updated else 'Added'
+          print(f'{action} access entry for {service}')
+          "
+
+          # Commit and push if changed
+          if git diff --quiet README.md; then
+            echo "No changes to README.md"
+          else
+            git config user.name "kite-validation[bot]"
+            git config user.email "kite-validation[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "docs: update README access table for ${ACCESS_SERVICE}"
+            git push origin main
+          fi
+
+      - name: Log invocation and token usage
+        if: always() && steps.meta.outputs.eligible == 'true' && steps.budget.outputs.budget_ok == 'true'
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          VERDICT: ${{ steps.verdict.outputs.verdict }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -u  # No -e or pipefail — logging must not crash the workflow
+          TODAY=$(date -u +%Y-%m-%d)
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LOG_DIR="${TOKEN_LOG_DIR}/validation-agent"
+          mkdir -p "$LOG_DIR"
+
+          TOKENS=0
+          COST_USD=0
+          if [ -f /tmp/validation-output.jsonl ]; then
+            TOKENS=$(jq -s '[.[] | select(.type == "result") | .usage |
+              ((.input_tokens // 0) + (.cache_creation_input_tokens // 0) +
+               (.cache_read_input_tokens // 0) + (.output_tokens // 0))] | add // 0' \
+              /tmp/validation-output.jsonl 2>/dev/null || echo 0)
+            COST_USD=$(jq -s '[.[] | select(.type == "result") | .total_cost_usd // 0] | add // 0' \
+              /tmp/validation-output.jsonl 2>/dev/null || echo 0)
+          fi
+
+          jq -cn \
+            --arg ts "$TIMESTAMP" \
+            --arg agent "validation-agent" \
+            --argjson tokens "${TOKENS:-0}" \
+            --argjson cost_usd "${COST_USD:-0}" \
+            --arg pr "${PR_NUMBER:-0}" \
+            --arg issue "${ISSUE_NUMBER:-0}" \
+            --arg verdict "${VERDICT:-unknown}" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg status "$JOB_STATUS" \
+            '{timestamp: $ts, agent: $agent, tokens_used: $tokens, cost_usd: $cost_usd, pr: $pr, issue: $issue, verdict: $verdict, run_id: $run_id, status: $status}' \
+            >> "${LOG_DIR}/${TODAY}.jsonl"
+
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-output-${{ github.run_id }}
+          path: |
+            /tmp/validation-output.jsonl
+            /tmp/validation-response.txt
+            /tmp/pr-diff.patch
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # ── Re-queue for retry on infrastructure failure ──────────────────
+      # If the validation run fails (OOM, network, etc.), reset the issue
+      # so the next PR merge re-triggers validation. Without this, failed
+      # validations are silently lost.
+      - name: Re-queue for retry on failure
+        if: >-
+          failure() &&
+          steps.meta.outputs.eligible == 'true' &&
+          steps.meta.outputs.issue_number != '0' &&
+          steps.budget.outputs.budget_ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.meta.outputs.issue_number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          echo "Validation failed — posting retry notice on issue #${ISSUE_NUMBER}..."
+
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            -F - <<EOF || true
+          <!-- AGENT_MSG agent=validation-agent action=retry-notice -->
+          ♻️ **Validation Failed** — Validation run [#${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) for PR #${PR_NUMBER} failed due to infrastructure issues.
+          Validation will re-run automatically on the next relevant PR merge.
+          EOF
+
+          echo "✅ Posted retry notice on issue #${ISSUE_NUMBER}"

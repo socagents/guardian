@@ -1,0 +1,110 @@
+name: Implementation Task
+description: A coding task for an AI agent, linked to a parent feature and spec
+title: ""
+labels: ["status:planning"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is used by the Delivery Manager to create implementation sub-issues.
+        Each task is scoped for a single coding-agent session and traces to a spec.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Short description of the task
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this task exists and how it fits into the larger feature
+    validations:
+      required: true
+
+  - type: input
+    id: spec-path
+    attributes:
+      label: Spec File Path
+      description: Repository-relative path to the spec file
+      placeholder: specs/my-feature.md
+    validations:
+      required: true
+
+  - type: input
+    id: spec-commit
+    attributes:
+      label: Spec Commit SHA
+      description: The commit SHA of the spec version used
+      placeholder: abc1234def5678
+    validations:
+      required: true
+
+  - type: input
+    id: spec-section
+    attributes:
+      label: Spec Section
+      description: Relevant section(s) in the spec file
+      placeholder: "Functional Requirements, section 3.2"
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What must be implemented in this task
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of Scope
+      description: What is explicitly excluded from this task
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Testable criteria for this task to be considered complete
+      placeholder: |
+        - [ ] Endpoint responds with correct schema
+        - [ ] Unit tests cover new code
+        - [ ] Lint and type checks pass
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Blocking issues (use "depends on #N" format)
+      placeholder: |
+        depends on #20
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverable Expectations
+      description: What the coding agent should produce
+      placeholder: |
+        - Code changes in relevant service directory
+        - Unit tests for new behavior
+        - Updated documentation if applicable
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: Approximate token budget for this task
+      options:
+        - "S (~100K tokens)"
+        - "M (~250K tokens)"
+        - "L (~400K tokens)"
+        - "XL (~500K tokens)"
+    validations:
+      required: true

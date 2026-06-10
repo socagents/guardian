@@ -1,0 +1,849 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1980" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <style>
+      .fb     { font: 700 14px system-ui, -apple-system, sans-serif; }
+      .fn     { font: 600 12px system-ui, -apple-system, sans-serif; }
+      .fns    { font: 600 10px system-ui, -apple-system, sans-serif; }
+      .fl     { font: 500 11px system-ui, -apple-system, sans-serif; fill: #64748B; }
+      .fc     { font: italic 500 10px system-ui, -apple-system, sans-serif; fill: #64748B; }
+      .fxs    { font: 600 9px system-ui, -apple-system, sans-serif; }
+      .fpill  { font: 700 8px system-ui, -apple-system, sans-serif; letter-spacing: 0.5px; }
+      .fcard  { font: 700 13px system-ui, -apple-system, sans-serif; }
+      .ftitle { font: 700 15px system-ui, -apple-system, sans-serif; fill: #0F172A; }
+      .fmono  { font: 500 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .fmonob { font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .ssection { fill: #475569; }
+
+      .stream-r { stroke-dasharray: 6 12; animation: s-right 1.4s linear infinite; }
+      .stream-d { stroke-dasharray: 6 12; animation: s-down  1.4s linear infinite; }
+      .pulse    { animation: pulse 3s ease-in-out infinite; }
+      @keyframes s-right { from { stroke-dashoffset: 18; } to { stroke-dashoffset: 0; } }
+      @keyframes s-down  { from { stroke-dashoffset: 18; } to { stroke-dashoffset: 0; } }
+      @keyframes pulse   { 0%,100% { opacity: 0.75; } 50% { opacity: 1; } }
+    </style>
+
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="0.8" fill="#CBD5E1" opacity="0.45"/>
+    </pattern>
+
+    <!-- Arrow markers — one per color -->
+    <marker id="arr-blue"   viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L8,5 L0,9" fill="none" stroke="#2563EB" stroke-width="2"/>
+    </marker>
+    <marker id="arr-indigo" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L8,5 L0,9" fill="none" stroke="#6366F1" stroke-width="2"/>
+    </marker>
+    <marker id="arr-green"  viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L8,5 L0,9" fill="none" stroke="#22C55E" stroke-width="2"/>
+    </marker>
+    <marker id="arr-amber"  viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L8,5 L0,9" fill="none" stroke="#D97706" stroke-width="2"/>
+    </marker>
+    <marker id="arr-red"    viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L8,5 L0,9" fill="none" stroke="#DC2626" stroke-width="2"/>
+    </marker>
+    <marker id="arr-slate"  viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,1 L8,5 L0,9" fill="none" stroke="#475569" stroke-width="2"/>
+    </marker>
+
+    <!-- Icons -->
+    <symbol id="i-edit" viewBox="0 0 24 24">
+      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-check"   viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2.5"/></symbol>
+    <symbol id="i-x"       viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2.5"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2.5"/></symbol>
+    <symbol id="i-cog"     viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M19 12a7 7 0 00-.1-1.2l2.2-1.7-2-3.5-2.6 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.4a7 7 0 00-2 1.2l-2.6-1-2 3.5L5.1 11A7 7 0 005 12c0 .4 0 .8.1 1.2l-2.2 1.7 2 3.5 2.6-1a7 7 0 002 1.2L10 21h4l.5-2.4a7 7 0 002-1.2l2.6 1 2-3.5-2.2-1.7c.1-.4.1-.8.1-1.2z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="i-package" viewBox="0 0 24 24">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-tag"     viewBox="0 0 24 24">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" fill="none" stroke="currentColor" stroke-width="2"/>
+      <circle cx="7" cy="7" r="1" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-server"  viewBox="0 0 24 24">
+      <rect x="2" y="2"  width="20" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+      <rect x="2" y="14" width="20" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+      <circle cx="6" cy="6"  r="1" fill="currentColor"/>
+      <circle cx="6" cy="18" r="1" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-user"    viewBox="0 0 24 24">
+      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" fill="none" stroke="currentColor" stroke-width="2"/>
+      <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-key"     viewBox="0 0 24 24">
+      <circle cx="8" cy="15" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M10.85 12.15L19 4l3 3-3 3-3-3M14 8l2 2" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-shield"  viewBox="0 0 24 24">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-rotate"  viewBox="0 0 24 24">
+      <polyline points="23 4 23 10 17 10" fill="none" stroke="currentColor" stroke-width="2"/>
+      <polyline points="1 20 1 14 7 14" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-trash"   viewBox="0 0 24 24">
+      <polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-cloud"   viewBox="0 0 24 24">
+      <path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-alert"   viewBox="0 0 24 24">
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" fill="none" stroke="currentColor" stroke-width="2"/>
+      <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2"/>
+      <line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-database" viewBox="0 0 24 24">
+      <ellipse cx="12" cy="5" rx="9" ry="3" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+    <symbol id="i-branch"  viewBox="0 0 24 24">
+      <line x1="6" y1="3" x2="6" y2="15" stroke="currentColor" stroke-width="2"/>
+      <circle cx="18" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+      <circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M18 9a9 9 0 01-9 9" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+  </defs>
+
+  <!-- White background + dot grid -->
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <rect width="100%" height="100%" fill="url(#grid)"/>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 0 (y=16, h=224) — Spec-driven workflow lifecycle       -->
+  <!-- v0.5.17+: every non-trivial change starts as a GitHub Issue.   -->
+  <!-- 7-stage lifecycle, color-matched to label colors. Below the    -->
+  <!-- stages, annotations indicate which existing section (Dev or    -->
+  <!-- Release cycle) each stage anchors to.                          -->
+  <!-- ============================================================== -->
+  <g transform="translate(20, 16)">
+    <rect width="1160" height="224" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
+
+    <text x="16" y="24" class="ftitle">Spec-driven workflow lifecycle</text>
+    <text x="306" y="24" class="fc">every non-trivial change is a GitHub Issue · 7-stage label-tracked lifecycle · closes on release</text>
+
+    <!-- ── 7 LIFECYCLE STAGES (horizontal flow) ──────────────── -->
+    <!-- Stage widths: 144 each; 7×144 = 1008. With 6 gaps × 18 = 108. -->
+    <!-- Total span: 1116 (fits within 1160 with 22 each side margin). -->
+
+    <!-- Stage 1: spec (gray) -->
+    <g transform="translate(22, 46)">
+      <rect width="144" height="80" rx="8" fill="#F1F5F9" stroke="#C5CAD3" stroke-width="2"/>
+      <rect width="144" height="22" rx="8" fill="#C5CAD3"/>
+      <rect y="12" width="144" height="10" fill="#C5CAD3"/>
+      <text x="10" y="16" class="fpill" fill="#0F172A">1 · STATUS:SPEC</text>
+      <text x="10" y="40" class="fns" fill="#0F172A">Issue opened</text>
+      <text x="10" y="55" class="fc">template pre-applies</text>
+      <text x="10" y="67" class="fc">component:* + scenario:*</text>
+      <text x="10" y="78" class="fpill" fill="#475569">AGENT</text>
+    </g>
+
+    <!-- Stage 2: spec-approved (blue) -->
+    <g transform="translate(184, 46)">
+      <rect width="144" height="80" rx="8" fill="#EFF6FF" stroke="#5B9BD5" stroke-width="2"/>
+      <rect width="144" height="22" rx="8" fill="#5B9BD5"/>
+      <rect y="12" width="144" height="10" fill="#5B9BD5"/>
+      <text x="10" y="16" class="fpill" fill="#FFFFFF">2 · SPEC-APPROVED</text>
+      <text x="10" y="40" class="fns" fill="#1D4ED8">Scope locked</text>
+      <text x="10" y="55" class="fc" fill="#1D4ED8">operator agrees the</text>
+      <text x="10" y="67" class="fc" fill="#1D4ED8">spec is sound</text>
+      <text x="10" y="78" class="fpill" fill="#5B9BD5">OPERATOR</text>
+    </g>
+
+    <!-- Stage 3: in-progress (yellow) -->
+    <g transform="translate(346, 46)">
+      <rect width="144" height="80" rx="8" fill="#FEF9C3" stroke="#FBCA04" stroke-width="2"/>
+      <rect width="144" height="22" rx="8" fill="#FBCA04"/>
+      <rect y="12" width="144" height="10" fill="#FBCA04"/>
+      <text x="10" y="16" class="fpill" fill="#78350F">3 · IN-PROGRESS</text>
+      <text x="10" y="40" class="fns" fill="#78350F">First commit lands</text>
+      <text x="10" y="55" class="fc" fill="#78350F">commit msg: Refs #N</text>
+      <text x="10" y="67" class="fc" fill="#78350F">or Closes #N</text>
+      <text x="10" y="78" class="fpill" fill="#92400E">AGENT</text>
+    </g>
+
+    <!-- Stage 4: dev-built (cyan/dark blue) -->
+    <g transform="translate(508, 46)">
+      <rect width="144" height="80" rx="8" fill="#DBEAFE" stroke="#1D76DB" stroke-width="2"/>
+      <rect width="144" height="22" rx="8" fill="#1D76DB"/>
+      <rect y="12" width="144" height="10" fill="#1D76DB"/>
+      <text x="10" y="16" class="fpill" fill="#FFFFFF">4 · DEV-BUILT</text>
+      <text x="10" y="40" class="fns" fill="#1E40AF">CI pushed :dev</text>
+      <text x="10" y="55" class="fc" fill="#1E40AF">build-dev-installer ok</text>
+      <text x="10" y="67" class="fc" fill="#1E40AF">smoke matrix posted</text>
+      <text x="10" y="78" class="fpill" fill="#1D76DB">AGENT</text>
+    </g>
+
+    <!-- Stage 5: testing-complete (green) -->
+    <g transform="translate(670, 46)">
+      <rect width="144" height="80" rx="8" fill="#DCFCE7" stroke="#0E8A16" stroke-width="2"/>
+      <rect width="144" height="22" rx="8" fill="#0E8A16"/>
+      <rect y="12" width="144" height="10" fill="#0E8A16"/>
+      <text x="10" y="16" class="fpill" fill="#FFFFFF">5 · TESTING-DONE</text>
+      <text x="10" y="40" class="fns" fill="#166534">Operator verified</text>
+      <text x="10" y="55" class="fc" fill="#166534">phantom-vm install</text>
+      <text x="10" y="67" class="fc" fill="#166534">+ smoke matrix passed</text>
+      <text x="10" y="78" class="fpill" fill="#0E8A16">OPERATOR</text>
+    </g>
+
+    <!-- Stage 6: release-approved (orange) -->
+    <g transform="translate(832, 46)">
+      <rect width="144" height="80" rx="8" fill="#FEF3C7" stroke="#F4B400" stroke-width="2"/>
+      <rect width="144" height="22" rx="8" fill="#F4B400"/>
+      <rect y="12" width="144" height="10" fill="#F4B400"/>
+      <text x="10" y="16" class="fpill" fill="#78350F">6 · RELEASE-OK</text>
+      <text x="10" y="40" class="fns" fill="#78350F">Approve to ship</text>
+      <text x="10" y="55" class="fc" fill="#78350F">chat OR label —</text>
+      <text x="10" y="67" class="fc" fill="#78350F">chat still required</text>
+      <text x="10" y="78" class="fpill" fill="#92400E">OPERATOR</text>
+    </g>
+
+    <!-- Stage 7: released (purple) -->
+    <g transform="translate(994, 46)">
+      <rect width="144" height="80" rx="8" fill="#E9D5FF" stroke="#5319E7" stroke-width="2"/>
+      <rect width="144" height="22" rx="8" fill="#5319E7"/>
+      <rect y="12" width="144" height="10" fill="#5319E7"/>
+      <text x="10" y="16" class="fpill" fill="#FFFFFF">7 · RELEASED</text>
+      <text x="10" y="40" class="fns" fill="#5319E7">Shipped + closed</text>
+      <text x="10" y="55" class="fc" fill="#5319E7">release.yml success</text>
+      <text x="10" y="67" class="fc" fill="#5319E7">→ #N closes</text>
+      <text x="10" y="78" class="fpill" fill="#5319E7">AGENT</text>
+    </g>
+
+    <!-- Arrows between stages -->
+    <line x1="166" y1="86" x2="184" y2="86" stroke="#475569" stroke-width="2" marker-end="url(#arr-slate)"/>
+    <line x1="328" y1="86" x2="346" y2="86" stroke="#475569" stroke-width="2" marker-end="url(#arr-slate)"/>
+    <line x1="490" y1="86" x2="508" y2="86" stroke="#475569" stroke-width="2" marker-end="url(#arr-slate)"/>
+    <line x1="652" y1="86" x2="670" y2="86" stroke="#475569" stroke-width="2" marker-end="url(#arr-slate)"/>
+    <line x1="814" y1="86" x2="832" y2="86" stroke="#475569" stroke-width="2" marker-end="url(#arr-slate)"/>
+    <line x1="976" y1="86" x2="994" y2="86" stroke="#475569" stroke-width="2" marker-end="url(#arr-slate)"/>
+
+    <!-- ── ANCHOR HINTS (below stages) ──────────────────────── -->
+    <!-- Connector lines showing where each lifecycle stage anchors in -->
+    <!-- the existing Dev cycle / Release cycle sections below.        -->
+
+    <g transform="translate(22, 142)">
+      <rect width="1116" height="62" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <text x="10" y="16" class="fpill" fill="#475569">WHERE EACH STAGE ANCHORS IN THE PIPELINE BELOW</text>
+
+      <!-- 4 anchor descriptions, evenly spaced -->
+      <g transform="translate(8, 24)">
+        <use href="#i-branch" x="0" y="10" width="14" height="14" color="#FBCA04"/>
+        <text x="18" y="20" class="fns" fill="#0F172A">3 · in-progress</text>
+        <text x="18" y="32" class="fc">↓ Dev cycle § git push</text>
+      </g>
+      <g transform="translate(284, 24)">
+        <use href="#i-server" x="0" y="10" width="14" height="14" color="#1D76DB"/>
+        <text x="18" y="20" class="fns" fill="#0F172A">4 · dev-built</text>
+        <text x="18" y="32" class="fc">↓ Dev cycle § staged binary + dev-latest</text>
+      </g>
+      <g transform="translate(580, 24)">
+        <use href="#i-tag" x="0" y="10" width="14" height="14" color="#F4B400"/>
+        <text x="18" y="20" class="fns" fill="#0F172A">6 · release-approved</text>
+        <text x="18" y="32" class="fc">↓ Release cycle § git tag vX.Y.Z</text>
+      </g>
+      <g transform="translate(860, 24)">
+        <use href="#i-cloud" x="0" y="10" width="14" height="14" color="#5319E7"/>
+        <text x="18" y="20" class="fns" fill="#0F172A">7 · released</text>
+        <text x="18" y="32" class="fc">↓ Release cycle § GitHub Release publish · closes #N</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 1 (y=256, h=300) — Dev cycle pipeline                   -->
+  <!-- ============================================================== -->
+  <g transform="translate(20, 256)">
+    <rect width="1160" height="300" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
+
+    <!-- Section label -->
+    <text x="16" y="24" class="ftitle">Dev cycle</text>
+    <text x="116" y="24" class="fc">push → build → operator install → smoke test → ASK approval</text>
+
+    <!-- ── OPERATOR LANE (top) ───────────────────────────────── -->
+    <g transform="translate(20, 50)">
+      <text x="0" y="0" class="fpill" fill="#475569" letter-spacing="2">OPERATOR</text>
+
+      <!-- Step 1: local edit -->
+      <g transform="translate(0, 12)">
+        <rect width="155" height="62" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
+        <use href="#i-edit" x="10" y="10" width="18" height="18" color="#2563EB"/>
+        <text x="34" y="24" class="fcard" fill="#1D4ED8">Local edit</text>
+        <text x="10" y="44" class="fns" fill="#1E40AF">+ pre-deploy gate</text>
+        <text x="10" y="56" class="fmono" fill="#64748B">tsc · lint · build</text>
+      </g>
+
+      <!-- Step 2: git push -->
+      <g transform="translate(190, 12)">
+        <rect width="155" height="62" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
+        <use href="#i-branch" x="10" y="10" width="18" height="18" color="#2563EB"/>
+        <text x="34" y="24" class="fcard" fill="#1D4ED8">git push</text>
+        <text x="10" y="44" class="fns" fill="#1E40AF">origin main</text>
+        <text x="10" y="56" class="fc">no approval needed</text>
+      </g>
+
+      <!-- Spacer arrow → CI/CD lane -->
+
+      <!-- Step 3: operator runs installer -->
+      <g transform="translate(615, 12)">
+        <rect width="175" height="62" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
+        <use href="#i-download" x="10" y="10" width="18" height="18" color="#2563EB"/>
+        <text x="34" y="24" class="fcard" fill="#1D4ED8">Install dev binary</text>
+        <text x="10" y="44" class="fmono" fill="#1E40AF">sudo /home/ayman/</text>
+        <text x="10" y="56" class="fmono" fill="#1E40AF">phantom-installer-dev</text>
+      </g>
+
+      <!-- Step 4: smoke test -->
+      <g transform="translate(810, 12)">
+        <rect width="155" height="62" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
+        <use href="#i-check" x="10" y="10" width="18" height="18" color="#2563EB"/>
+        <text x="34" y="24" class="fcard" fill="#1D4ED8">Smoke test</text>
+        <text x="10" y="44" class="fns" fill="#1E40AF">IAP tunnel · read-only</text>
+        <text x="10" y="56" class="fc">no approval needed</text>
+      </g>
+
+      <!-- Step 5: ASK approval -->
+      <g transform="translate(985, 12)">
+        <rect width="135" height="62" rx="8" fill="#FEF3C7" stroke="#FDBA74" stroke-width="2"/>
+        <use href="#i-alert" x="10" y="10" width="18" height="18" color="#D97706"/>
+        <text x="34" y="24" class="fcard" fill="#78350F">ASK approval</text>
+        <text x="10" y="44" class="fns" fill="#78350F">chat · explicit</text>
+        <text x="10" y="56" class="fc" fill="#78350F">MANDATORY</text>
+      </g>
+
+      <!-- Arrows: local edit → git push -->
+      <line x1="158" y1="42" x2="186" y2="42" stroke="#2563EB" stroke-width="2" marker-end="url(#arr-blue)"/>
+      <!-- git push → drops into CI lane (down arrow) -->
+      <line x1="267" y1="78" x2="267" y2="104" stroke="#2563EB" stroke-width="2" marker-end="url(#arr-blue)" class="stream-d"/>
+      <!-- install ← from CI lane (vertical arrow under "Install dev binary") -->
+      <line x1="702" y1="104" x2="702" y2="78" stroke="#22C55E" stroke-width="2" marker-end="url(#arr-green)" class="stream-d"/>
+      <!-- install → smoke -->
+      <line x1="793" y1="42" x2="806" y2="42" stroke="#2563EB" stroke-width="2" marker-end="url(#arr-blue)"/>
+      <!-- smoke → approval -->
+      <line x1="968" y1="42" x2="981" y2="42" stroke="#D97706" stroke-width="2" marker-end="url(#arr-amber)"/>
+    </g>
+
+    <!-- ── DIVIDER between lanes ─────────────────────────────── -->
+    <line x1="20" y1="160" x2="1140" y2="160" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="3 4"/>
+
+    <!-- ── CI/CD LANE (bottom) ───────────────────────────────── -->
+    <g transform="translate(20, 178)">
+      <text x="0" y="0" class="fpill" fill="#475569" letter-spacing="2">CI / CD</text>
+
+      <!-- build-<svc>.yml -->
+      <g transform="translate(0, 12)">
+        <rect width="240" height="80" rx="8" fill="#EEF2FF" stroke="#A5B4FC" stroke-width="1.5"/>
+        <use href="#i-cog" x="10" y="10" width="18" height="18" color="#6366F1"/>
+        <text x="34" y="24" class="fcard" fill="#3730A3">build-&lt;svc&gt;.yml ×4</text>
+        <text x="10" y="44" class="fns" fill="#3730A3">xlog · agent · caldera · connectors</text>
+        <text x="10" y="58" class="fc">path filter: only changed services fire</text>
+        <text x="10" y="72" class="fmono" fill="#475569">→ push :dev digest to GHCR</text>
+      </g>
+
+      <!-- build-dev-installer.yml -->
+      <g transform="translate(280, 12)">
+        <rect width="260" height="80" rx="8" fill="#EEF2FF" stroke="#A5B4FC" stroke-width="1.5"/>
+        <use href="#i-package" x="10" y="10" width="18" height="18" color="#6366F1"/>
+        <text x="34" y="24" class="fcard" fill="#3730A3">build-dev-installer.yml</text>
+        <text x="10" y="42" class="fns" fill="#3730A3">resolve :dev digests · build binary</text>
+        <text x="10" y="56" class="fns" fill="#3730A3">stage at phantom-vm path</text>
+        <text x="10" y="72" class="fc">REBUILT / UNCHANGED diagnostic</text>
+      </g>
+
+      <!-- dev-latest prerelease -->
+      <g transform="translate(560, 12)">
+        <rect width="200" height="80" rx="8" fill="#FEF3C7" stroke="#FDBA74" stroke-width="1.5"/>
+        <use href="#i-cloud" x="10" y="10" width="18" height="18" color="#D97706"/>
+        <text x="34" y="24" class="fcard" fill="#78350F">dev-latest prerelease</text>
+        <text x="10" y="44" class="fns" fill="#78350F">GitHub Release marker</text>
+        <text x="10" y="58" class="fc" fill="#78350F">grants operator-PAT pull</text>
+        <text x="10" y="72" class="fc" fill="#78350F">access to :dev versions</text>
+      </g>
+
+      <!-- staged binary at /home/ayman/ -->
+      <g transform="translate(780, 12)">
+        <rect width="200" height="80" rx="8" fill="#DCFCE7" stroke="#86EFAC" stroke-width="1.5"/>
+        <use href="#i-server" x="10" y="10" width="18" height="18" color="#22C55E"/>
+        <text x="34" y="24" class="fcard" fill="#166534">Staged on phantom-vm</text>
+        <text x="10" y="44" class="fmono" fill="#166534">/home/ayman/</text>
+        <text x="10" y="58" class="fmono" fill="#166534">phantom-installer-dev</text>
+        <text x="10" y="72" class="fc">ready for operator</text>
+      </g>
+
+      <!-- Arrows -->
+      <line x1="244" y1="52" x2="276" y2="52" stroke="#6366F1" stroke-width="2" marker-end="url(#arr-indigo)" class="stream-r"/>
+      <line x1="544" y1="52" x2="556" y2="52" stroke="#6366F1" stroke-width="2" marker-end="url(#arr-indigo)"/>
+      <line x1="764" y1="52" x2="776" y2="52" stroke="#22C55E" stroke-width="2" marker-end="url(#arr-green)"/>
+    </g>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 2 (y=572, h=250) — Release cycle                       -->
+  <!-- ============================================================== -->
+  <g transform="translate(20, 572)">
+    <rect width="1160" height="250" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
+
+    <text x="16" y="24" class="ftitle">Release cycle</text>
+    <text x="136" y="24" class="fc">tag vX.Y.Z → release.yml builds customer images → customers consume</text>
+
+    <!-- Step 1: git tag -->
+    <g transform="translate(20, 50)">
+      <rect width="140" height="62" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
+      <use href="#i-tag" x="10" y="10" width="18" height="18" color="#2563EB"/>
+      <text x="34" y="24" class="fcard" fill="#1D4ED8">git tag vX.Y.Z</text>
+      <text x="10" y="44" class="fns" fill="#1E40AF">after approval</text>
+      <text x="10" y="56" class="fc">PREV_V sequence</text>
+    </g>
+
+    <!-- Step 2: release.yml -->
+    <g transform="translate(190, 50)">
+      <rect width="260" height="100" rx="8" fill="#EEF2FF" stroke="#A5B4FC" stroke-width="1.5"/>
+      <use href="#i-cog" x="10" y="10" width="18" height="18" color="#6366F1"/>
+      <text x="34" y="24" class="fcard" fill="#3730A3">release.yml on ubuntu-latest</text>
+      <text x="10" y="44" class="fns" fill="#3730A3">• Build OR retag-from-prev per service</text>
+      <text x="10" y="58" class="fns" fill="#3730A3">• Tag :vX.Y.Z + :MAJOR.MINOR + :latest</text>
+      <text x="10" y="72" class="fns" fill="#3730A3">• Write release-manifest-vX.Y.Z.env</text>
+      <text x="10" y="86" class="fns" fill="#3730A3">• Build customer phantom-installer</text>
+    </g>
+
+    <!-- Step 3: gh release create -->
+    <g transform="translate(480, 50)">
+      <rect width="210" height="100" rx="8" fill="#FEF3C7" stroke="#FDBA74" stroke-width="1.5"/>
+      <use href="#i-cloud" x="10" y="10" width="18" height="18" color="#D97706"/>
+      <text x="34" y="24" class="fcard" fill="#78350F">GitHub Release vX.Y.Z</text>
+      <text x="10" y="42" class="fns" fill="#78350F">+ phantom-installer asset</text>
+      <text x="10" y="56" class="fns" fill="#78350F">+ release-manifest-vX.Y.Z.env</text>
+      <text x="10" y="70" class="fns" fill="#78350F">+ install-kit tarball</text>
+      <text x="10" y="86" class="fc" fill="#78350F">delete dev-latest (cleanup)</text>
+    </g>
+
+    <!-- Step 4: customer paths (revised v0.5.20 — no UI Update button; minor vs major split) -->
+    <g transform="translate(720, 50)">
+      <rect width="420" height="180" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <use href="#i-user" x="10" y="10" width="18" height="18" color="#475569"/>
+      <text x="34" y="24" class="fcard" fill="#0F172A">Customer consumes — installer is the ONLY upgrade path</text>
+
+      <!-- Path A: MINOR release (S1) — existing installer -->
+      <g transform="translate(10, 36)">
+        <rect width="195" height="68" rx="6" fill="#DCFCE7" stroke="#86EFAC" stroke-width="1.5"/>
+        <text x="10" y="16" class="fns" fill="#166534">A. Minor release · S1</text>
+        <text x="10" y="32" class="fc" fill="#166534">re-run EXISTING installer</text>
+        <text x="10" y="46" class="fc" fill="#166534">(already on /opt/phantom/)</text>
+        <text x="10" y="60" class="fc" fill="#166534">→ pulls newer images · same major</text>
+      </g>
+
+      <!-- Path B: MAJOR release (S2 / S3) — new installer -->
+      <g transform="translate(215, 36)">
+        <rect width="195" height="68" rx="6" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
+        <text x="10" y="16" class="fns" fill="#1D4ED8">B. Major release · S2 / S3</text>
+        <text x="10" y="32" class="fc" fill="#1D4ED8">download NEW installer</text>
+        <text x="10" y="46" class="fc" fill="#1D4ED8">sudo ./phantom-installer-v(X+1)</text>
+        <text x="10" y="60" class="fc" fill="#1D4ED8">→ installer flag: keep/wipe volumes</text>
+      </g>
+
+      <!-- Customer PAT -->
+      <g transform="translate(10, 116)">
+        <rect width="400" height="50" rx="6" fill="#F1F5F9" stroke="#E2E8F0" stroke-width="1"/>
+        <use href="#i-key" x="8" y="6" width="16" height="16" color="#475569"/>
+        <text x="28" y="18" class="fns" fill="#475569">Customer PAT (read:packages only)</text>
+        <text x="8" y="36" class="fc">pulls vX.Y.Z images — access granted by gh release create</text>
+      </g>
+    </g>
+
+    <!-- Arrows in release cycle -->
+    <line x1="163" y1="80" x2="186" y2="100" stroke="#2563EB" stroke-width="2" marker-end="url(#arr-blue)"/>
+    <line x1="453" y1="100" x2="476" y2="100" stroke="#6366F1" stroke-width="2" marker-end="url(#arr-indigo)" class="stream-r"/>
+    <line x1="693" y1="100" x2="716" y2="100" stroke="#D97706" stroke-width="2" marker-end="url(#arr-amber)" class="stream-r"/>
+
+    <!-- Note bar at bottom -->
+    <g transform="translate(20, 200)">
+      <rect width="680" height="36" rx="6" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <use href="#i-shield" x="10" y="10" width="16" height="16" color="#475569"/>
+      <text x="32" y="16" class="fns" fill="#475569">Monorepo release invariant</text>
+      <text x="32" y="30" class="fc">all 5 stack images + 6 connector images ship in lockstep at the same vX.Y.Z — mixed-version manifests NOT supported</text>
+    </g>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 3 (y=838, h=380) — Three change scenarios               -->
+  <!-- ============================================================== -->
+  <g transform="translate(20, 838)">
+    <rect width="1160" height="380" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
+
+    <text x="16" y="24" class="ftitle">Change scenarios — decision tree</text>
+    <text x="316" y="24" class="fc">classify the change before planning a release · same for dev prereleases and customer releases</text>
+
+    <!-- Decision diamond -->
+    <g transform="translate(490, 44)">
+      <path d="M90,0 L180,40 L90,80 L0,40 Z" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.5"/>
+      <text x="90" y="36" text-anchor="middle" class="fns" fill="#0F172A">What did the</text>
+      <text x="90" y="50" text-anchor="middle" class="fns" fill="#0F172A">change touch?</text>
+    </g>
+
+    <!-- Three scenario cards -->
+
+    <!-- SCENARIO 1 (left) — code-only · MINOR bump · EXISTING installer -->
+    <g transform="translate(20, 156)">
+      <rect width="360" height="210" rx="10" fill="#DCFCE7" stroke="#86EFAC" stroke-width="2"/>
+      <rect width="360" height="36" rx="10" fill="#22C55E"/>
+      <rect y="20" width="360" height="16" fill="#22C55E"/>
+      <text x="14" y="24" class="fcard" fill="#FFFFFF">Scenario 1 — Code-only</text>
+      <text x="280" y="24" class="fpill" fill="#DCFCE7">MINOR</text>
+
+      <text x="14" y="58" class="fns" fill="#166534">Trigger</text>
+      <text x="14" y="74" class="fc" fill="#166534">source under mcp/agent · xlog · caldera ·</text>
+      <text x="14" y="86" class="fc" fill="#166534">connectors · bundles/spark — NOT installer</text>
+
+      <text x="14" y="108" class="fns" fill="#166534">Versioning</text>
+      <text x="14" y="124" class="fmono" fill="#166534">v5.29 → v5.30  (minor bump, same major)</text>
+
+      <text x="14" y="146" class="fns" fill="#166534">Customer</text>
+      <text x="14" y="162" class="fc" fill="#166534">• Re-run EXISTING installer on disk</text>
+      <text x="14" y="174" class="fc" fill="#166534">• Pulls newer images · same major version</text>
+
+      <g transform="translate(14, 184)">
+        <rect width="140" height="20" rx="4" fill="#16A34A"/>
+        <use href="#i-check" x="2" y="2" width="16" height="16" color="#DCFCE7"/>
+        <text x="22" y="14" class="fpill" fill="#FFFFFF">VOLUMES PRESERVED</text>
+      </g>
+    </g>
+
+    <!-- SCENARIO 2 (center) — installer change · MAJOR bump · new installer · flag=preserve -->
+    <g transform="translate(400, 156)">
+      <rect width="360" height="210" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="2"/>
+      <rect width="360" height="36" rx="10" fill="#2563EB"/>
+      <rect y="20" width="360" height="16" fill="#2563EB"/>
+      <text x="14" y="24" class="fcard" fill="#FFFFFF">Scenario 2 — Installer change</text>
+      <text x="280" y="24" class="fpill" fill="#EFF6FF">MAJOR</text>
+
+      <text x="14" y="58" class="fns" fill="#1D4ED8">Trigger</text>
+      <text x="14" y="74" class="fc" fill="#1D4ED8">installer/** change — new step, env var,</text>
+      <text x="14" y="86" class="fc" fill="#1D4ED8">validation · backwards-compatible storage</text>
+
+      <text x="14" y="108" class="fns" fill="#1D4ED8">Versioning</text>
+      <text x="14" y="124" class="fmono" fill="#1D4ED8">v5.29 → v6.0  (MAJOR bump)</text>
+
+      <text x="14" y="146" class="fns" fill="#1D4ED8">Customer</text>
+      <text x="14" y="162" class="fc" fill="#1D4ED8">• Download NEW installer from release</text>
+      <text x="14" y="174" class="fc" fill="#1D4ED8">• Installer flag: WIPE_VOLUMES=false (default)</text>
+
+      <g transform="translate(14, 184)">
+        <rect width="160" height="20" rx="4" fill="#1D4ED8"/>
+        <use href="#i-check" x="2" y="2" width="16" height="16" color="#DBEAFE"/>
+        <text x="22" y="14" class="fpill" fill="#FFFFFF">VOLUMES PRESERVED (flag)</text>
+      </g>
+    </g>
+
+    <!-- SCENARIO 3 (right) — breaking schema · MAJOR bump · new installer · flag=wipe -->
+    <g transform="translate(780, 156)">
+      <rect width="360" height="210" rx="10" fill="#FEE2E2" stroke="#FCA5A5" stroke-width="2"/>
+      <rect width="360" height="36" rx="10" fill="#DC2626"/>
+      <rect y="20" width="360" height="16" fill="#DC2626"/>
+      <text x="14" y="24" class="fcard" fill="#FFFFFF">Scenario 3 — Breaking schema</text>
+      <text x="280" y="24" class="fpill" fill="#FEE2E2">MAJOR</text>
+
+      <text x="14" y="58" class="fns" fill="#991B1B">Trigger</text>
+      <text x="14" y="74" class="fc" fill="#991B1B">storage schema not backwards-compatible:</text>
+      <text x="14" y="86" class="fc" fill="#991B1B">SecretStore KDF change · db schema migration</text>
+
+      <text x="14" y="108" class="fns" fill="#991B1B">Versioning</text>
+      <text x="14" y="124" class="fmono" fill="#991B1B">v5.29 → v6.0  (MAJOR bump)</text>
+
+      <text x="14" y="146" class="fns" fill="#991B1B">Customer</text>
+      <text x="14" y="162" class="fc" fill="#991B1B">• Download NEW installer from release</text>
+      <text x="14" y="174" class="fc" fill="#991B1B">• Installer flag: WIPE_VOLUMES=true</text>
+
+      <g transform="translate(14, 184)">
+        <rect width="180" height="20" rx="4" fill="#991B1B"/>
+        <use href="#i-trash" x="2" y="2" width="16" height="16" color="#FEE2E2"/>
+        <text x="22" y="14" class="fpill" fill="#FFFFFF">VOLUMES WIPED → DEFAULTS</text>
+      </g>
+    </g>
+
+    <!-- Diamond → scenario arrows -->
+    <line x1="490" y1="84" x2="200" y2="156" stroke="#22C55E" stroke-width="2" marker-end="url(#arr-green)"/>
+    <line x1="580" y1="124" x2="580" y2="156" stroke="#2563EB" stroke-width="2" marker-end="url(#arr-blue)"/>
+    <line x1="670" y1="84" x2="960" y2="156" stroke="#DC2626" stroke-width="2" marker-end="url(#arr-red)"/>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 4 (y=1234, h=190) — GHCR per-version access matrix      -->
+  <!-- ============================================================== -->
+  <g transform="translate(20, 1234)">
+    <rect width="1160" height="190" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
+
+    <text x="16" y="24" class="ftitle">GHCR per-version access</text>
+    <text x="246" y="24" class="fc">access is per IMAGE VERSION, not per package — versions inherit from their associated GitHub Release</text>
+
+    <!-- Matrix headers -->
+    <g transform="translate(20, 46)">
+      <!-- Column header: customer release tag -->
+      <rect x="400" y="0" width="240" height="30" rx="4" fill="#FEF3C7" stroke="#FDBA74"/>
+      <use href="#i-tag" x="408" y="6" width="16" height="16" color="#78350F"/>
+      <text x="430" y="12" class="fns" fill="#78350F">phantom-agent:vX.Y.Z</text>
+      <text x="408" y="26" class="fc" fill="#78350F">customer release tag</text>
+
+      <!-- Column header: dev tag -->
+      <rect x="650" y="0" width="240" height="30" rx="4" fill="#EEF2FF" stroke="#A5B4FC"/>
+      <use href="#i-package" x="658" y="6" width="16" height="16" color="#3730A3"/>
+      <text x="680" y="12" class="fns" fill="#3730A3">phantom-agent:dev</text>
+      <text x="658" y="26" class="fc" fill="#3730A3">dev tag (associated with dev-latest prerelease)</text>
+
+      <!-- Row 1: customer PAT -->
+      <rect x="0" y="42" width="390" height="30" rx="4" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <use href="#i-key" x="8" y="49" width="16" height="16" color="#475569"/>
+      <text x="28" y="56" class="fns" fill="#0F172A">Customer PAT</text>
+      <text x="28" y="68" class="fc">read:packages only · classic OR fine-grained</text>
+
+      <rect x="400" y="42" width="240" height="30" rx="4" fill="#DCFCE7" stroke="#86EFAC"/>
+      <use href="#i-check" x="408" y="49" width="16" height="16" color="#16A34A"/>
+      <text x="430" y="56" class="fns" fill="#166534">200 — pullable</text>
+      <text x="430" y="68" class="fc" fill="#166534">via release association</text>
+
+      <rect x="650" y="42" width="240" height="30" rx="4" fill="#DCFCE7" stroke="#86EFAC"/>
+      <use href="#i-check" x="658" y="49" width="16" height="16" color="#16A34A"/>
+      <text x="680" y="56" class="fns" fill="#166534">200 — pullable</text>
+      <text x="680" y="68" class="fc" fill="#166534">via prerelease association (v0.5.9+)</text>
+
+      <!-- Row 2: operator PAT -->
+      <rect x="0" y="76" width="390" height="30" rx="4" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <use href="#i-key" x="8" y="83" width="16" height="16" color="#475569"/>
+      <text x="28" y="90" class="fns" fill="#0F172A">Operator PAT</text>
+      <text x="28" y="102" class="fc">read:packages + repo · classic recommended</text>
+
+      <rect x="400" y="76" width="240" height="30" rx="4" fill="#DCFCE7" stroke="#86EFAC"/>
+      <use href="#i-check" x="408" y="83" width="16" height="16" color="#16A34A"/>
+      <text x="430" y="90" class="fns" fill="#166534">200 — pullable</text>
+
+      <rect x="650" y="76" width="240" height="30" rx="4" fill="#DCFCE7" stroke="#86EFAC"/>
+      <use href="#i-check" x="658" y="83" width="16" height="16" color="#16A34A"/>
+      <text x="680" y="90" class="fns" fill="#166534">200 — pullable</text>
+
+      <!-- Row 3: no association -->
+      <rect x="0" y="110" width="390" height="30" rx="4" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <use href="#i-alert" x="8" y="117" width="16" height="16" color="#DC2626"/>
+      <text x="28" y="124" class="fns" fill="#991B1B">Same PAT, but version NOT</text>
+      <text x="28" y="136" class="fc" fill="#991B1B">associated with any release</text>
+
+      <rect x="400" y="110" width="240" height="30" rx="4" fill="#FEE2E2" stroke="#FCA5A5"/>
+      <use href="#i-x" x="408" y="117" width="16" height="16" color="#DC2626"/>
+      <text x="430" y="124" class="fns" fill="#991B1B">N/A</text>
+      <text x="430" y="136" class="fc" fill="#991B1B">release tags always associated</text>
+
+      <rect x="650" y="110" width="240" height="30" rx="4" fill="#FEE2E2" stroke="#FCA5A5"/>
+      <use href="#i-x" x="658" y="117" width="16" height="16" color="#DC2626"/>
+      <text x="680" y="124" class="fns" fill="#991B1B">403 / 404</text>
+      <text x="680" y="136" class="fc" fill="#991B1B">pre-v0.5.9 dev cycle was broken</text>
+    </g>
+
+    <!-- Right side: load-bearing callout -->
+    <g transform="translate(910, 46)">
+      <rect width="230" height="124" rx="8" fill="#FFFFFF" stroke="#FDBA74" stroke-width="2"/>
+      <rect width="230" height="24" rx="8" fill="#D97706"/>
+      <rect y="12" width="230" height="12" fill="#D97706"/>
+      <text x="12" y="16" class="fns" fill="#FFFFFF">LOAD-BEARING MECHANIC</text>
+      <text x="12" y="42" class="fc" fill="#78350F">build-dev-installer.yml's</text>
+      <text x="12" y="56" class="fc" fill="#78350F">"Publish dev-latest prerelease"</text>
+      <text x="12" y="70" class="fc" fill="#78350F">step (v0.5.9+) is what gives</text>
+      <text x="12" y="84" class="fc" fill="#78350F">operator PATs pull access to</text>
+      <text x="12" y="98" class="fc" fill="#78350F">:dev tags. Without it, the</text>
+      <text x="12" y="112" class="fc" fill="#78350F">dev cycle 403/404s.</text>
+    </g>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 5 (y=1440, h=240) — Rollback paths + factory reset     -->
+  <!-- ============================================================== -->
+  <g transform="translate(20, 1440)">
+    <rect width="1160" height="240" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
+
+    <text x="16" y="24" class="ftitle">Rollback &amp; recovery</text>
+    <text x="180" y="24" class="fc">three rollback flavors + cross-cutting factory reset · operator yank for bad releases</text>
+
+    <!-- Path 1: Customer rollback Scenario 1+2 -->
+    <g transform="translate(20, 50)">
+      <rect width="270" height="170" rx="8" fill="#DCFCE7" stroke="#86EFAC" stroke-width="1.5"/>
+      <rect width="270" height="24" rx="8" fill="#22C55E"/>
+      <rect y="12" width="270" height="12" fill="#22C55E"/>
+      <text x="10" y="16" class="fns" fill="#FFFFFF">Rollback · Scenario 1 + 2</text>
+
+      <use href="#i-rotate" x="10" y="34" width="16" height="16" color="#166534"/>
+      <text x="32" y="46" class="fns" fill="#166534">Re-run OLDER installer</text>
+
+      <text x="10" y="68" class="fc" fill="#166534">1. gh release download vX.Y.Z-prior</text>
+      <text x="10" y="82" class="fc" fill="#166534">2. chmod +x phantom-installer</text>
+      <text x="10" y="96" class="fc" fill="#166534">3. sudo ./phantom-installer</text>
+      <text x="10" y="110" class="fc" fill="#166534">  → "Downgrading vX.Y.Z+1 → vX.Y.Z"</text>
+      <text x="10" y="124" class="fc" fill="#166534">  → pulls older digests · recreates</text>
+      <text x="10" y="138" class="fc" fill="#166534">     only services with changed digest</text>
+
+      <g transform="translate(10, 146)">
+        <rect width="140" height="18" rx="4" fill="#16A34A"/>
+        <use href="#i-check" x="2" y="1" width="16" height="16" color="#DCFCE7"/>
+        <text x="22" y="12" class="fpill" fill="#FFFFFF">VOLUMES PRESERVED</text>
+      </g>
+    </g>
+
+    <!-- Path 2: Customer rollback Scenario 3 — FULLY MANUAL, no automated restore -->
+    <g transform="translate(310, 50)">
+      <rect width="270" height="170" rx="8" fill="#FEE2E2" stroke="#FCA5A5" stroke-width="1.5"/>
+      <rect width="270" height="24" rx="8" fill="#DC2626"/>
+      <rect y="12" width="270" height="12" fill="#DC2626"/>
+      <text x="10" y="16" class="fns" fill="#FFFFFF">Rollback · Scenario 3</text>
+
+      <use href="#i-database" x="10" y="34" width="16" height="16" color="#991B1B"/>
+      <text x="32" y="46" class="fns" fill="#991B1B">Fully manual · NO automation</text>
+
+      <text x="10" y="68" class="fc" fill="#991B1B">No automated content/data restore.</text>
+      <text x="10" y="84" class="fc" fill="#991B1B">Operator owns the entire flow:</text>
+
+      <text x="10" y="104" class="fc" fill="#991B1B">• Customer-side backup decisions</text>
+      <text x="10" y="118" class="fc" fill="#991B1B">  (before running the major upgrade)</text>
+      <text x="10" y="132" class="fc" fill="#991B1B">• Manual data restoration if needed</text>
+      <text x="10" y="146" class="fc" fill="#991B1B">  (no installer-side restore steps)</text>
+
+      <g transform="translate(10, 154)">
+        <rect width="240" height="14" rx="4" fill="#991B1B"/>
+        <use href="#i-alert" x="2" y="-1" width="14" height="14" color="#FEE2E2"/>
+        <text x="22" y="11" class="fpill" fill="#FFFFFF">NO AUTOMATED RESTORE BY DESIGN</text>
+      </g>
+    </g>
+
+    <!-- Path 3: Operator yank -->
+    <g transform="translate(600, 50)">
+      <rect width="270" height="170" rx="8" fill="#FEF3C7" stroke="#FDBA74" stroke-width="1.5"/>
+      <rect width="270" height="24" rx="8" fill="#D97706"/>
+      <rect y="12" width="270" height="12" fill="#D97706"/>
+      <text x="10" y="16" class="fns" fill="#FFFFFF">Operator yank — bad release</text>
+
+      <use href="#i-shield" x="10" y="34" width="16" height="16" color="#78350F"/>
+      <text x="32" y="46" class="fns" fill="#78350F">Mark as draft (NOT delete)</text>
+
+      <text x="10" y="68" class="fc" fill="#78350F">Before customers adopt:</text>
+      <text x="10" y="82" class="fmono" fill="#78350F">  gh release edit vX.Y.Z --draft</text>
+      <text x="10" y="96" class="fc" fill="#78350F">  → hides from release listing</text>
+      <text x="10" y="110" class="fc" fill="#78350F">     fresh installer downloads skip it</text>
+      <text x="10" y="124" class="fc" fill="#78350F">After broad adoption:</text>
+      <text x="10" y="138" class="fc" fill="#78350F">  → ship fix as vX.Y.Z+1 instead</text>
+
+      <g transform="translate(10, 146)">
+        <rect width="170" height="18" rx="4" fill="#92400E"/>
+        <use href="#i-x" x="2" y="1" width="16" height="16" color="#FEF3C7"/>
+        <text x="22" y="12" class="fpill" fill="#FFFFFF">NEVER `gh release delete`</text>
+      </g>
+    </g>
+
+    <!-- Path 4: Factory reset (cross-cutting) -->
+    <g transform="translate(890, 50)">
+      <rect width="250" height="170" rx="8" fill="#EEF2FF" stroke="#A5B4FC" stroke-width="1.5"/>
+      <rect width="250" height="24" rx="8" fill="#6366F1"/>
+      <rect y="12" width="250" height="12" fill="#6366F1"/>
+      <text x="10" y="16" class="fns" fill="#FFFFFF">Factory reset — cross-cutting</text>
+
+      <use href="#i-trash" x="10" y="34" width="16" height="16" color="#3730A3"/>
+      <text x="32" y="46" class="fns" fill="#3730A3">Manual operator choice</text>
+
+      <text x="10" y="68" class="fmono" fill="#3730A3">sudo /opt/phantom/</text>
+      <text x="10" y="82" class="fmono" fill="#3730A3">  phantom-factory-reset</text>
+
+      <text x="10" y="104" class="fc" fill="#3730A3">• Type FACTORY RESET to confirm</text>
+      <text x="10" y="118" class="fc" fill="#3730A3">• Wipes phantom_* volumes</text>
+      <text x="10" y="132" class="fc" fill="#3730A3">• Preserves .env (KEK + creds)</text>
+
+      <g transform="translate(10, 146)">
+        <rect width="140" height="18" rx="4" fill="#4F46E5"/>
+        <text x="10" y="12" class="fpill" fill="#FFFFFF">SAME-VERSION RESET</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 6 (y=1696, h=240) — Path-filter + diagnostic + ops     -->
+  <!-- ============================================================== -->
+  <g transform="translate(20, 1696)">
+    <rect width="1160" height="240" rx="12" fill="#F8FAFC" stroke="#E2E8F0"/>
+
+    <text x="16" y="24" class="ftitle">Path-filter contract &amp; REBUILT / UNCHANGED diagnostic</text>
+    <text x="500" y="24" class="fc">no source change → NO new image · NO new release tag · same digest retagged from prev release</text>
+
+    <!-- Path filter table (left) -->
+    <g transform="translate(20, 50)">
+      <text x="0" y="0" class="fpill" fill="#475569" letter-spacing="2">PATH FILTERS — UNTOUCHED SERVICES NEVER REBUILD OR RETAG</text>
+
+      <rect y="10" width="540" height="170" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+
+      <!-- Header row -->
+      <text x="10" y="28" class="fpill" fill="#475569">WORKFLOW</text>
+      <text x="240" y="28" class="fpill" fill="#475569">FIRES ON CHANGES UNDER</text>
+
+      <!-- Rows -->
+      <line x1="10" y1="36" x2="530" y2="36" stroke="#E2E8F0"/>
+      <text x="10" y="54" class="fmono" fill="#0F172A">build-xlog.yml</text>
+      <text x="240" y="54" class="fmono" fill="#475569">xlog/**</text>
+
+      <text x="10" y="74" class="fmono" fill="#0F172A">build-agent.yml</text>
+      <text x="240" y="74" class="fmono" fill="#475569">mcp/agent/**  ·  bundles/spark/**</text>
+
+      <text x="10" y="94" class="fmono" fill="#0F172A">build-caldera.yml</text>
+      <text x="240" y="94" class="fmono" fill="#475569">third_party/caldera/**</text>
+
+      <text x="10" y="114" class="fmono" fill="#0F172A">build-connectors.yml</text>
+      <text x="240" y="114" class="fmono" fill="#475569">bundles/spark/connectors/**</text>
+      <text x="240" y="128" class="fmono" fill="#475569">phantom-connector-runtime/**</text>
+
+      <text x="10" y="148" class="fmono" fill="#0F172A">build-dev-installer.yml</text>
+      <text x="240" y="148" class="fmono" fill="#475569">installer/**  +  workflow_run fan-in</text>
+
+      <text x="10" y="168" class="fmono" fill="#0F172A">release.yml</text>
+      <text x="240" y="168" class="fmono" fill="#475569">v*.*.* tag push (manual, after approval)</text>
+    </g>
+
+    <!-- Diagnostic legend (right) -->
+    <g transform="translate(580, 50)">
+      <text x="0" y="0" class="fpill" fill="#475569" letter-spacing="2">REBUILT / UNCHANGED DIAGNOSTIC</text>
+      <text x="0" y="14" class="fc">emitted by build-dev-installer.yml on every run</text>
+
+      <rect y="24" width="560" height="156" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+
+      <!-- Status legend -->
+      <g transform="translate(10, 36)">
+        <rect width="540" height="30" rx="4" fill="#FFFFFF" stroke="#E2E8F0"/>
+        <text x="10" y="14" class="fns">🆕 FIRST-BUILD</text>
+        <text x="10" y="26" class="fc">no prior dev-latest (cold start)</text>
+      </g>
+      <g transform="translate(10, 72)">
+        <rect width="540" height="30" rx="4" fill="#DCFCE7" stroke="#86EFAC"/>
+        <text x="10" y="14" class="fns" fill="#166534">✓ UNCHANGED</text>
+        <text x="10" y="26" class="fc" fill="#166534">digest matches prior dev-latest — workflow did NOT fire this run · container won't recreate</text>
+      </g>
+      <g transform="translate(10, 108)">
+        <rect width="540" height="30" rx="4" fill="#FEF3C7" stroke="#FDBA74"/>
+        <text x="10" y="14" class="fns" fill="#78350F">🔨 REBUILT</text>
+        <text x="10" y="26" class="fc" fill="#78350F">digest changed — source under this service's path filter changed · container recreated</text>
+      </g>
+      <g transform="translate(10, 144)">
+        <rect width="540" height="30" rx="4" fill="#EEF2FF" stroke="#A5B4FC"/>
+        <text x="10" y="14" class="fns" fill="#3730A3">📦 STABLE-ADVANCED</text>
+        <text x="10" y="26" class="fc" fill="#3730A3">updater/browser only — latest customer release advanced since last dev run</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ============================================================== -->
+  <!-- SUMMARY BAR (y=1952)                                            -->
+  <!-- ============================================================== -->
+  <g transform="translate(20, 1952)">
+    <rect width="1160" height="24" rx="6" fill="#F1F5F9" stroke="#E2E8F0"/>
+    <text x="580" y="16" text-anchor="middle" class="fc" fill="#475569">
+      Local-mirrors-customer · CI builds, operator installs, approval gates customer releases · base-image digest pinning + path-filter narrowing eliminate unnecessary rebuilds
+    </text>
+  </g>
+</svg>

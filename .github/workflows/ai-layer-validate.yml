@@ -1,0 +1,74 @@
+name: AI Layer validate
+
+# Runs tooling/validate/validate_all.py on every push or PR touching the AI
+# Layer (per the article's Pattern 2: actively maintain the harness as it
+# evolves). Asserts all 15 article-component checks stay green — including
+# the read-only guarantee for the explorer subagent, the plugin/repo SHA
+# sync, and the real MCP-server handshake.
+#
+# Security note: this workflow uses NO untrusted inputs from github.event.*
+# — only checkout + setup-python + the validator script. No risk of command
+# injection from PR titles, issue bodies, commit messages, etc.
+#
+# Path filter is intentionally NARROW to the AI Layer paths so this workflow
+# never fires on unrelated source pushes. The build-agent + build-dev-installer
+# workflows already cover source changes; this one is the harness-only loop.
+
+on:
+  # Manual re-validation: the push/PR filters below are narrow to AI-Layer
+  # paths, so a change under bundles/spark/data-sources/** (e.g. a schema fix)
+  # won't auto-trigger this. workflow_dispatch lets us re-run the validator
+  # against current main on demand without a no-op commit.
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'CLAUDE.md'
+      - '**/CLAUDE.md'
+      - 'AI-LAYER.md'
+      - 'CODEBASE_MAP.md'
+      - '.claudeignore'
+      - '.mcp.json'
+      - '.claude/**'
+      - 'tooling/**'
+      - 'pyproject.toml'
+      - '.github/workflows/ai-layer-validate.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'CLAUDE.md'
+      - '**/CLAUDE.md'
+      - 'AI-LAYER.md'
+      - 'CODEBASE_MAP.md'
+      - '.claudeignore'
+      - '.mcp.json'
+      - '.claude/**'
+      - 'tooling/**'
+      - 'pyproject.toml'
+      - '.github/workflows/ai-layer-validate.yml'
+
+jobs:
+  validate:
+    name: tooling/validate/validate_all.py
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install validator dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # The validator + check_mcp need `mcp[cli]` for the stdio handshake.
+          # v0.10.0+: pyyaml for check_pack_theme_variants_complete() (reads
+          # vendor_map.yaml).
+          python -m pip install 'mcp[cli]' 'pyyaml' 'jsonschema'
+
+      - name: Run AI Layer validator
+        run: python3 tooling/validate/validate_all.py

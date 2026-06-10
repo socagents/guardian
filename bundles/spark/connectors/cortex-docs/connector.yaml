@@ -1,0 +1,217 @@
+# Cortex Docs tool connector for the Phantom SOC simulation agent.
+#
+# Per Spark agent bundle spec v1.2 §7.4. Tool names auto-namespace as
+# `cortex-docs/<bare_name>` in the agent's tool catalog. The bundle
+# manifest's tools.allow includes `cortex-docs/*`.
+#
+# Wraps four upstream scripts (preserved verbatim under
+# `src/{search,fetch_topic,xql_lookup,research_planner}.py`) sourced
+# from the operator's cortex-deep-search_sharable skill kit. The
+# upstream scripts are designed for CLI use; the connector adds a
+# wrapper layer in `src/connector.py` that catches SystemExit raised
+# by the scripts' `sys.exit(1)` HTTP-error paths so a transient
+# docs-API outage produces a structured error return instead of
+# taking down phantom-agent.
+#
+# Why this connector exists: query authoring against Cortex (XDR /
+# XSIAM / XSOAR / Cortex Cloud / AgentiX / XQL) needs authoritative
+# doc lookups at multiple steps — find the canonical syntax for an
+# XQL stage, check a function signature, browse a topic family.
+# Pre-cortex-docs the agent had to either (a) use the open-web web
+# connector and parse free-form HTML, or (b) ask the operator to
+# paste docs text into the chat. Both are noisy, slow, and lose the
+# structured map_id/topic_id round-tripping that lets the agent
+# chain search → fetch_topic without re-searching.
+
+id: "cortex-docs"
+version: "0.3.2"
+description: "Palo Alto Networks Cortex public documentation search + lookup. Tools: cortex_search, cortex_suggest, cortex_xql_lookup, cortex_fetch_topic, cortex_fetch_toc, cortex_deep_research."
+displayName: "Cortex docs (knowledge)"
+tags: ["cortex", "docs", "xql", "knowledge-base", "lookup", "search"]
+logo: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMwZjBhMmUiLz48cGF0aCBkPSJNMTAgMThjMC0yIDItNCA0LTRoMTZ2MzZIMTRjLTIgMC00LTItNC00WiIgc3Ryb2tlPSIjYTc4YmZhIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9IiMxYzEyNDgiLz48cGF0aCBkPSJNNTQgMThjMC0yLTItNC00LTRIMzR2MzZoMTZjMiAwIDQtMiA0LTRaIiBzdHJva2U9IiNhNzhiZmEiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0iIzFjMTI0OCIvPjxwYXRoIGQ9Ik0xNCAyMmgxNE0xNCAyOGgxNE0xNCAzNGgxME0zNiAyMmgxNE0zNiAyOGgxNE0zNiAzNGgxMCIgc3Ryb2tlPSIjYzRiNWZkIiBzdHJva2Utd2lkdGg9IjEuNSIvPjwvc3ZnPg=="
+
+source:
+  language: "python"
+  entrypoint: "src.connector"
+
+# Tool dispatch — module-style with `cortex_` prefix matching the
+# function names in src/connector.py. The agent sees
+# `cortex-docs/search`, `cortex-docs/xql_lookup`, etc.; the loader
+# maps each to `cortex_search`, `cortex_xql_lookup` callable.
+#
+# style: "module" — chosen because the upstream scripts are pure
+# stdlib (urllib only) and the in-process Python footprint is tiny.
+# No daemon, no per-instance container needed for v0.3.x. The
+# Dockerfile in this directory exists for future v0.2 container
+# mode (per docs/spec-per-instance-connector-containers.md and
+# /help/architecture#image-pinning) but is not exercised by the
+# customer compose today; cortex-docs is not in the list of
+# per-instance connector containers managed by phantom-updater.
+runtimeMapping:
+  # v0.5.0: flipped to container — universal connector container model.
+  # cortex-docs uses only stdlib (urllib + httpx already in the base
+  # runtime), so the container image stays small and dependency-clean.
+  # See architecture page #marketplace-logic + the universal-container
+  # migration note in v0.5.0 CHANGELOG.
+  style: "container"
+  functionPrefix: "cortex_"
+
+executionMode: "persistent"
+
+# No required configuration — the connector talks to the public
+# Cortex docs API (docs-cortex.paloaltonetworks.com) which is
+# unauthenticated. Optional `model` config flows through to the
+# heavyweight cortex_deep_research planner; if unset, the planner
+# falls back to its built-in heuristic plan.
+configSchema:
+  type: "object"
+  properties:
+    baseUrl:
+      type: "string"
+      description: "Cortex docs base URL. Defaults to the public Fluid Topics endpoint. Override only for testing against a staging mirror."
+      default: "https://docs-cortex.paloaltonetworks.com"
+    plannerModel:
+      type: "string"
+      description: "LLM model id used by cortex_deep_research's planner phase (e.g. claude-3-5-sonnet-20241022). When unset, the planner falls back to a heuristic plan and works without an LLM key entirely."
+      default: ""
+    requestTimeoutSeconds:
+      type: "integer"
+      description: "Per-request HTTP timeout when calling the docs API. The upstream scripts default to 30s; lower this if the operator's network is reliably fast and they want faster failure."
+      default: 30
+
+# No secrets — the docs API is public. cortex_deep_research can use
+# ANTHROPIC_API_KEY if set in the agent's environment, but it
+# degrades gracefully without one.
+secretSlots: []
+
+spec:
+  tools:
+    # ─── Search ─────────────────────────────────────────────────
+    - name: "search"
+      method: "POST /api/khub/clustered-search"
+      description: |
+        Full-text search across Palo Alto Networks Cortex public docs
+        (XDR, XSIAM, XSOAR, Cortex Cloud, AgentiX, Xpanse). Auto-
+        detects product mentions in the query when `product` is
+        omitted. Returns hits with title, topic_id, map_id,
+        map_title, reader_url, and excerpt — enough to chain into
+        cortex_fetch_topic without a second search.
+
+        Use Cortex product vocabulary in the query string ("Cortex
+        Query Language", "incident response", "DSPM") for best
+        recall. The docs API is keyword-based; phrasing in operator
+        idiom often misses canonical topics.
+      args:
+        - { name: "query",    type: "string",  description: "Free-text search string.",                                                              required: true  }
+        - { name: "product",  type: "string",  description: "Optional product scope: agentix, xdr, xsiam, xsoar, xql, cloud, dspm, cspm, ciem, xpanse. When omitted, auto-detected from query.", required: false }
+        - { name: "per_page", type: "integer", description: "Results per page, 1-100 (default 20).",                                                  required: false }
+        - { name: "page",     type: "integer", description: "1-based page number (default 1).",                                                       required: false }
+      returns: { type: "object", description: "{ ok, query, total_hits, scope, facets, hits: [{title, topic_id, map_id, map_title, reader_url, excerpt}] }." }
+
+    - name: "suggest"
+      method: "POST /api/khub/suggest"
+      description: |
+        Autocomplete suggestions for a partial Cortex docs query.
+        Useful for disambiguating a noisy term before issuing a
+        full search ("filter st" → "filter stage syntax", etc.).
+      args:
+        - { name: "input_text", type: "string", description: "Partial search text.",                                                            required: true  }
+        - { name: "product",    type: "string", description: "Optional product scope (same vocabulary as cortex_search).",                       required: false }
+      returns: { type: "object", description: "{ ok, suggestions: [string] }." }
+
+    # ─── XQL focused lookup ─────────────────────────────────────
+    - name: "xql_lookup"
+      method: "search + rank + fetch_topic_with_fallback"
+      description: |
+        Focused lookup for an XQL stage or function. Searches Cortex
+        docs with stage/function-aware query expansion, ranks the
+        result set against authority heuristics (exact-title match,
+        publication type, dedup overview pages from release notes),
+        fetches the top topic with auto-children fallback for stub
+        DITA containers, and returns a compact answer-ready payload
+        with title, publication, URL, summary content, and source
+        citation string.
+
+        Use this for syntax questions ("how do I use the dedup
+        stage?", "what does arrayindexof do?"). For multi-topic
+        synthesis use cortex_deep_research; for pure full-text
+        search use cortex_search.
+
+        The default product scope is `xql` — searches all XQL-
+        capable Cortex products (XDR, XSIAM, AgentiX, Cloud).
+        Narrow when the user names a specific product.
+      args:
+        - { name: "term",      type: "string",  description: "Stage or function name (e.g. dedup, arrayindexof). Strips leading 'stage'/'function'/'xql'/'cortex query language' noise prefixes.", required: true  }
+        - { name: "kind",      type: "string",  description: "'auto' (default; inferred from name), 'stage', or 'function'.",                                                                       required: false }
+        - { name: "product",   type: "string",  description: "Product scope: xql (default — all XQL products), xdr, xsiam, agentix, cloud.",                                                       required: false }
+        - { name: "per_page",  type: "integer", description: "Search-result page size (default 8).",                                                                                                required: false }
+        - { name: "suggest",   type: "boolean", description: "Include autocomplete suggestions for the cleaned term (default false).",                                                              required: false }
+      returns: { type: "object", description: "{ ok, found, title, publication, reader_url, summary_content, source, scope_note, suggestions } when found; { ok, found:false, fetch_errors, suggestions } when not." }
+
+    # ─── Topic fetch ────────────────────────────────────────────
+    - name: "fetch_topic"
+      method: "GET /api/khub/maps/{map_id}/topics/{topic_id}"
+      description: |
+        Fetch full topic content from the Cortex docs given a
+        publication map_id + topic_id pair (typically from a prior
+        cortex_search hit). Auto-children fallback handles DITA
+        container topics that have a title but no body — the fetcher
+        descends into direct children automatically.
+
+        v0.3.2 (v0.5.69) adds multi-level descent — when a child is
+        itself a stub/container, the fetcher recurses into ITS
+        children up to max_depth levels. Surfaces content that lives
+        nested deep in TOC trees (e.g. Cortex XDR API Reference's
+        per-endpoint pages, which are 2-3 levels below the reference
+        container itself).
+
+        Use after cortex_search when the operator wants the full
+        text of a specific topic, not just the search excerpt.
+      args:
+        - { name: "map_id",            type: "string",  description: "Publication ID (from search hit map_id).",                                              required: true  }
+        - { name: "topic_id",          type: "string",  description: "Topic ID within that publication (from search hit topic_id).",                          required: true  }
+        - { name: "max_chars",         type: "integer", description: "Truncation ceiling for content (default 12000).",                                       required: false }
+        - { name: "max_children",      type: "integer", description: "Max child topics to recursively fetch when parent is a stub (default 3, set 0 to disable child descent).", required: false }
+        - { name: "min_content_chars", type: "integer", description: "Threshold below which a topic is treated as a stub (default 120).",                     required: false }
+        - { name: "max_depth",         type: "integer", description: "Max recursion depth when children are also stubs (default 2; set 1 to restore pre-v0.5.69 single-level descent).", required: false }
+      returns: { type: "object", description: "{ ok, title, content, map_title, reader_url, is_container, children_fetched, descent_depth, ... }." }
+
+    - name: "fetch_toc"
+      method: "GET /api/khub/maps/{map_id}/pages"
+      description: |
+        Fetch the full table of contents for a Cortex docs publication.
+        Useful for browsing every topic in a publication (e.g.
+        enumerating all XQL stage docs) or auditing topic-family
+        coverage.
+      args:
+        - { name: "map_id", type: "string", description: "Publication ID (from a cortex_search hit).", required: true }
+      returns: { type: "object", description: "{ ok, items: [{topic_id, title, depth, parent_id}] }." }
+
+    # ─── Deep research (heavyweight) ─────────────────────────────
+    - name: "deep_research"
+      method: "plan → search → fetch → gap-check → synthesize"
+      description: |
+        Full multi-section research planner. Plans deliverable
+        sections from a free-text request, runs per-section docs
+        searches, fetches topic content, optionally runs a
+        gap-check + retry pass for weak-coverage sections, and
+        emits a structured JSON brief with per-section evidence,
+        coverage labels (strong/adequate/weak/none), citations,
+        and stats.
+
+        HEAVYWEIGHT (typically 1-3 minutes wall-clock). Reserve for
+        actual multi-section deliverables: partner briefings,
+        whitepapers, migration guides, comparison matrices,
+        executive briefs. For single-topic answers use
+        cortex_xql_lookup or cortex_search instead.
+
+        Planning uses ANTHROPIC_API_KEY when available; falls back
+        to a built-in heuristic planner when no key is set, so the
+        tool works without an LLM dependency.
+      args:
+        - { name: "request",          type: "string",  description: "Research deliverable request, e.g. 'Create a partner briefing about Cortex XDR incident response'.", required: true  }
+        - { name: "max_sections",     type: "integer", description: "Cap on planned sections (default 8).",                                                                required: false }
+        - { name: "hits_per_section", type: "integer", description: "Max docs hits per section (default 4).",                                                              required: false }
+        - { name: "enable_gap_check", type: "boolean", description: "Run gap-check + retry pass for weak-coverage sections (default false; slower but better coverage).", required: false }
+        - { name: "model",            type: "string",  description: "LLM model id for planner phase. When unset, uses upstream's DEFAULT_MODEL or heuristic fallback.",  required: false }
+      returns: { type: "object", description: "{ ok, brief: { sections, coverage, citations, stats } }." }

@@ -1,0 +1,138 @@
+schema_version: 1
+id: IronscalesEventCollector
+pack_name: IronscalesEventCollector
+rule_name: IronscalesModelingRules
+dataset_name: ironscales_ironscales_raw
+vendor: Ironscales
+product: IronscalesEventCollector
+description: IRONSCALES is a self-learning email security platform, automatically
+  responding to malicious emails.
+categories:
+- Email
+version: 1.2.4
+origin: bundle
+author: phantom-bundle
+uploaded_by: null
+created_at: '2026-05-23T09:26:17Z'
+updated_at: '2026-05-23T09:26:17Z'
+logo:
+  mime_type: image/svg+xml
+  data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgNjAiIHByZXNlcnZlQXNwZWN0UmF0aW89InhNaWRZTWlkIG1lZXQiPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgZm9udC1mYW1pbHk9IkludGVyLCAtYXBwbGUtc3lzdGVtLCBCbGlua01hY1N5c3RlbUZvbnQsIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzIiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiNENDI0M0IiPklyb25zY2FsZXM8L3RleHQ+PC9zdmc+
+  source: phantom-bundle (v0.13.0 migration)
+  license: MIT
+  fidelity: branded
+formats:
+- SYSLOG
+- CEF
+- JSON
+is_rawlog_only: false
+fields:
+- name: attachments
+  type: json
+  is_array: true
+  description: — see leaf entries for per-element fields. JSON object or array; structured
+    payload — see dotted-path leaves below for full shape.
+  example: '{}'
+- name: classification
+  type: string
+  description: Vendor-emitted field 'Classification'. Free-form text; may contain
+    whitespace and punctuation.
+  example: sample_classification
+- name: email
+  type: email
+  description: Email address — RFC 5322 `local@domain`. RFC 5322 `local@domain`; one
+    address only.
+  example: user@example.com
+- name: first_reported_date
+  type: datetime
+  description: Date in `YYYY-MM-DD` form. ISO-8601 timestamp with timezone (e.g.,
+    2026-05-26T14:23:01Z).
+  example: '2026-05-26T14:23:01Z'
+- name: headers
+  type: string
+  description: Vendor-emitted field 'Headers'. Free-form text; may contain whitespace
+    and punctuation.
+  example: 'Content-Type: application/json'
+- name: incident_id
+  type: string_short
+  description: Unique identifier — assigned by Ironscales per event. Short opaque
+    token, typically without whitespace; max ~64 chars.
+  example: iro-917ab85f
+- name: links
+  type: json
+  is_array: true
+  description: — see leaf entries for per-element fields. JSON object or array; structured
+    payload — see dotted-path leaves below for full shape.
+  example: '{}'
+- name: mail_server
+  type: json
+  description: '— see leaf entries for nested paths. JSON object with keys: host,
+    ip (each key defined as a dotted-path leaf below).'
+  example: '{}'
+- name: name
+  type: user
+  description: Human-readable name as displayed by Ironscales. Account name as the
+    vendor reports it — login name, UPN, or sAMAccountName; no domain prefix unless
+    vendor emits one.
+  example: jsmith
+- name: original_email_body
+  type: string
+  description: Vendor-emitted field 'Original email body'. Free-form text; may contain
+    whitespace and punctuation.
+  example: user@example.com
+- name: reports
+  type: string
+  description: Vendor-emitted field 'Reports'. Free-form text; may contain whitespace
+    and punctuation.
+  example: '443'
+- name: sender_email
+  type: email
+  description: Email address — RFC 5322 `local@domain`. RFC 5322 `local@domain`; one
+    address only.
+  example: user@example.com
+- name: subject
+  type: string
+  description: Subject line — typically email subject or event summary. Free-form
+    text; may contain whitespace and punctuation.
+  example: Sample subject line
+- name: themis_verdict
+  type: string
+  description: Vendor-emitted field 'Themis verdict'. Free-form text; may contain
+    whitespace and punctuation.
+  example: allow
+- name: mail_server.host
+  type: host
+  description: Vendor-emitted field 'Mail server › host'. Leaf of the 'mail_server'
+    composite. Hostname or fully-qualified domain name (RFC 1035 dotted labels); no
+    protocol prefix.
+  example: host.example.com
+- name: mail_server.ip
+  type: string
+  description: Vendor-emitted field 'Mail server › ip'. Leaf of the 'mail_server'
+    composite. Free-form text; may contain whitespace and punctuation.
+  example: 192.0.2.45
+use_cases:
+- Email
+how_to_use: |
+  ## Ironscales IronscalesEventCollector → Cortex XSIAM (dataset `ironscales_ironscales_raw`)
+  
+    **Routing** — the broker lowercases the CEF/syslog header `vendor`/`product`, replaces
+    non-alphanumerics with `_`, and appends `_raw` to choose the dataset (target: `ironscales_ironscales_raw`).
+  
+    **Required CEF header for XSIAM** — the header must normalize to `ironscales_ironscales`. The marketplace pack's display name `Ironscales` / `IronscalesEventCollector` normalizes to `ironscales_ironscaleseventcollector_raw`, a **different dataset** (vendor rename / legacy CEF identity), so use the vendor's actual CEF `deviceVendor`/`deviceProduct` that yields `ironscales_ironscales` and confirm which dataset the events land in.
+  
+    **Ingestion shape**: **JSON-native.** The modeling rule reads nested JSON (e.g. `$.ip`). CEF/syslog routes + lands and the broker extracts top-level columns; the nested reads need the composite present, so Phantom's worker JSON-stringifies `type: json` composites onto the wire (keep the dotted-leaf fields).
+  
+    - **Modeling-rule gate**: none — the rule maps every routed row unconditionally.
+  
+    **XDM mapping**: ~18 fields mapped to the unified data model (`xdm.*`), including: `xdm.alert.subcategory`, `xdm.email.attachment.filename`, `xdm.email.attachment.md5`, `xdm.email.attachment.size`, `xdm.email.data`, `xdm.email.recipients`.
+  
+    **Operator setup**: This data source has typed-column data that doesn't look like CEF (columns are camelCase API fields, JSON sub-objects, etc.). Most likely arrives via the XSIAM HTTP Collector with a source tag mapped to vendor=`Ironscales`, product=`IronscalesEventCollector`, or via a vendor-specific XDR connector pull. Phantom can POST JSON to the HTTP collector; the operator must configure the collector's source tag to land events in this dataset.
+  
+    **Status**: Reverse-engineered 2026-06-04 from the parsing/modeling rules — routing, gate, and field
+    inventory documented. **NOT yet XDM-validated on a live tenant** (no `validated` pill); validate by
+    streaming a CEF batch and confirming a rich `xdm.*` count over a wide window.
+  
+    **Verify** (once the dataset is XDM-bound, wide ≥7d window):
+  
+        config timeframe = 30d | datamodel dataset = ironscales_ironscales_raw | sort desc _time | fields xdm.* | limit 20

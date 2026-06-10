@@ -1,0 +1,683 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" font-family="Segoe UI, system-ui, sans-serif">
+  <defs>
+    <style><![CDATA[
+      /* ============ Base ============ */
+      .bg { fill: #050810; }
+      .grid { stroke: #0e1422; stroke-width: 1; }
+
+      .title       { fill: #ffffff; font-size: 38px; font-weight: 700; letter-spacing: 0.5px; }
+      .subtitle    { fill: #7c8ba6; font-size: 16px; font-weight: 400; }
+      .case-badge  { fill: #ff3366; font-size: 13px; font-weight: 700; letter-spacing: 2px; }
+
+      .host-label  { fill: #d4dee9; font-size: 16px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+      .host-ip     { fill: #5a6a87; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+
+      .lane-line   { stroke: #1a2540; stroke-width: 2; stroke-dasharray: 4 6; opacity: 0.5; }
+      .lane-line.active { stroke: #2a3960; opacity: 1; }
+
+      .step-circle { stroke-width: 2.5; fill: #0f1626; }
+      .step-tid    { fill: #ffffff; font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+      .step-name   { fill: #c4d0e3; font-size: 11px; font-weight: 500; }
+      .step-time   { fill: #5a6a87; font-size: 10px; font-family: 'JetBrains Mono', monospace; }
+
+      .arrow       { stroke: #2a3960; stroke-width: 1.5; fill: none; }
+      .arrow-head  { fill: #2a3960; }
+
+      .time-axis-line { stroke: #1a2540; stroke-width: 1; }
+      .time-tick      { stroke: #2a3960; stroke-width: 1; }
+      .time-label     { fill: #5a6a87; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+
+      .legend-text { fill: #7c8ba6; font-size: 11px; }
+      .legend-tactic { fill: #d4dee9; font-size: 12px; font-weight: 600; }
+
+      /* Color palette per MITRE tactic */
+      .ta-initial   { stroke: #00d4ff; }   /* T1574.002 */
+      .ta-persist   { stroke: #5af7c1; }   /* T1098, T1112, T1053.005 */
+      .ta-execute   { stroke: #ffce4a; }   /* T1059.001, T1086, T1197 */
+      .ta-cred      { stroke: #ff3366; }   /* T1003.001, T1555 */
+      .ta-defense   { stroke: #ff8c42; }   /* T1140, T1548.002 */
+      .ta-verdict   { stroke: #ff4af9; }   /* WildFire */
+
+      .ta-initial-fill   { fill: #00d4ff; }
+      .ta-persist-fill   { fill: #5af7c1; }
+      .ta-execute-fill   { fill: #ffce4a; }
+      .ta-cred-fill      { fill: #ff3366; }
+      .ta-defense-fill   { fill: #ff8c42; }
+      .ta-verdict-fill   { fill: #ff4af9; }
+
+      /* ============ Animations ============ */
+      @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes slideInDown { from { opacity: 0 } to { opacity: 1 } }
+      /* NOTE: CSS transforms would override the SVG transform="translate(..)" attribute on positioned groups
+         (CSS wins over presentation attributes), so keyframes that affect position-bearing elements
+         use opacity-only and rely on filter / stroke-dashoffset for the dramatic effect. */
+      @keyframes pop {
+        0%   { opacity: 0; }
+        100% { opacity: 1; }
+      }
+      @keyframes drawLine {
+        from { stroke-dashoffset: 200; }
+        to   { stroke-dashoffset: 0; }
+      }
+      @keyframes pulseRed {
+        0%, 100% { filter: drop-shadow(0 0 8px #ff3366); }
+        50%      { filter: drop-shadow(0 0 24px #ff3366); }
+      }
+      @keyframes pulseFlame {
+        0%, 100% { filter: drop-shadow(0 0 10px #ff4af9); }
+        50%      { filter: drop-shadow(0 0 30px #ff4af9); }
+      }
+      @keyframes burstOut {
+        0%   { opacity: 0; transform: translate(0, 0); }
+        20%  { opacity: 1; }
+        100% { opacity: 0; transform: var(--end-transform); }
+      }
+      @keyframes inflectionFlash {
+        0%, 100% { opacity: 0; }
+        10%, 90% { opacity: 0.6; }
+      }
+      @keyframes verdictSlam {
+        0%   { opacity: 0; filter: drop-shadow(0 0 40px #ff4af9); }
+        60%  { opacity: 1; filter: drop-shadow(0 0 30px #ff4af9); }
+        100% { opacity: 1; filter: drop-shadow(0 0 10px #ff4af9); }
+      }
+      @keyframes playhead {
+        0%   { x1: 200; x2: 200; opacity: 0; }
+        5%   { opacity: 1; }
+        85%  { x1: 1800; x2: 1800; opacity: 1; }
+        100% { x1: 1800; x2: 1800; opacity: 0; }
+      }
+      @keyframes textFade {
+        0%, 100% { opacity: 0; }
+        20%, 80% { opacity: 1; }
+      }
+      @keyframes counterTick {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+
+      /* ============ Sequenced reveals ============ */
+      /* Loop 22s total. animation-iteration-count: infinite for looping demo. */
+      .title-grp   { opacity: 0; animation: slideInDown 1s ease-out 0.2s forwards; }
+      .subtitle-grp{ opacity: 0; animation: fadeIn 1s ease-out 1.0s forwards; }
+      .lanes-grp   { opacity: 0; animation: fadeIn 0.8s ease-out 1.8s forwards; }
+      .timeaxis    { opacity: 0; animation: fadeIn 0.6s ease-out 2.5s forwards; }
+      .legend-grp  { opacity: 0; animation: fadeIn 0.8s ease-out 2.8s forwards; }
+
+      /* Steps */
+      .step { opacity: 0; transform-origin: center; transform-box: fill-box; }
+      .step.s1a { animation: pop 0.5s ease-out 3.2s forwards; }
+      .step.s1b { animation: pop 0.5s ease-out 3.4s forwards; }
+      .step.s2a { animation: pop 0.5s ease-out 4.4s forwards; }
+      .step.s2b { animation: pop 0.5s ease-out 4.55s forwards; }
+      .step.s3a { animation: pop 0.5s ease-out 5.2s forwards; }
+      .step.s3b { animation: pop 0.5s ease-out 5.35s forwards; }
+      .step.s4a { animation: pop 0.5s ease-out 6.0s forwards; }
+      .step.s4b { animation: pop 0.5s ease-out 6.15s forwards; }
+      .step.s5a { animation: pop 0.6s ease-out 6.9s forwards, pulseRed 1.8s ease-in-out 7.5s infinite; }
+      .step.s5b { animation: pop 0.6s ease-out 7.05s forwards, pulseRed 1.8s ease-in-out 7.5s infinite; }
+      .step.s6a { animation: pop 0.5s ease-out 9.0s forwards; }
+      .step.s6b { animation: pop 0.5s ease-out 9.15s forwards; }
+      .step.s7a { animation: pop 0.5s ease-out 10.0s forwards; }
+      .step.s7b { animation: pop 0.5s ease-out 10.15s forwards; }
+      .step.s8a { animation: pop 0.5s ease-out 10.9s forwards; }
+      .step.s8b { animation: pop 0.5s ease-out 11.05s forwards; }
+      .step.s9a { animation: pop 0.5s ease-out 11.7s forwards; }
+      .step.s9b { animation: pop 0.5s ease-out 11.85s forwards; }
+      .step.s10a { animation: pop 0.5s ease-out 12.5s forwards; }
+      .step.s10b { animation: pop 0.5s ease-out 12.65s forwards; }
+      .step.s11a { animation: verdictSlam 1s cubic-bezier(0.34, 1.56, 0.64, 1) 13.5s forwards, pulseFlame 2.4s ease-in-out 14.5s infinite; }
+      .step.s11b { animation: verdictSlam 1s cubic-bezier(0.34, 1.56, 0.64, 1) 13.65s forwards, pulseFlame 2.4s ease-in-out 14.5s infinite; }
+
+      /* Connector arrows - draw in as we reveal steps */
+      .arr { opacity: 0; stroke-dasharray: 200 200; stroke-dashoffset: 200; }
+      .arr.a1  { animation: fadeIn 0.3s 4.2s forwards, drawLine 0.5s 4.2s forwards; }
+      .arr.a2  { animation: fadeIn 0.3s 5.0s forwards, drawLine 0.5s 5.0s forwards; }
+      .arr.a3  { animation: fadeIn 0.3s 5.8s forwards, drawLine 0.5s 5.8s forwards; }
+      .arr.a4  { animation: fadeIn 0.3s 6.7s forwards, drawLine 0.5s 6.7s forwards; }
+      .arr.a5  { animation: fadeIn 0.3s 8.8s forwards, drawLine 0.5s 8.8s forwards; }
+      .arr.a6  { animation: fadeIn 0.3s 9.8s forwards, drawLine 0.5s 9.8s forwards; }
+      .arr.a7  { animation: fadeIn 0.3s 10.7s forwards, drawLine 0.5s 10.7s forwards; }
+      .arr.a8  { animation: fadeIn 0.3s 11.5s forwards, drawLine 0.5s 11.5s forwards; }
+      .arr.a9  { animation: fadeIn 0.3s 12.3s forwards, drawLine 0.5s 12.3s forwards; }
+      .arr.a10 { animation: fadeIn 0.3s 13.3s forwards, drawLine 0.5s 13.3s forwards; }
+
+      /* Mimikatz burst particles - radiate from LSASS node at t=7.6s */
+      .mp { opacity: 0; transform-origin: center; transform-box: fill-box; }
+      .mp.host-a { animation: burstOut 1.6s ease-out 7.6s forwards; }
+      .mp.host-b { animation: burstOut 1.6s ease-out 7.75s forwards; }
+
+      .mimi-label-a { opacity: 0; animation: fadeIn 0.5s 7.9s forwards; }
+      .mimi-label-b { opacity: 0; animation: fadeIn 0.5s 8.05s forwards; }
+
+      /* Inflection callout */
+      .inflection-line  { opacity: 0; animation: inflectionFlash 4s ease-in-out 7.5s infinite; }
+      .inflection-label { opacity: 0; animation: fadeIn 0.6s 8.3s forwards; }
+
+      /* WildFire verdict callout */
+      .verdict-label { opacity: 0; animation: fadeIn 0.5s 14.0s forwards; }
+      .verdict-file  { opacity: 0; animation: fadeIn 0.5s 14.3s forwards; }
+
+      /* Sub-second lag callout (between host lanes) */
+      .sublag-band { opacity: 0; animation: fadeIn 0.8s 4.6s forwards; }
+      .sublag-text { opacity: 0; animation: fadeIn 0.8s 5.5s forwards; }
+
+      /* Final stats banner */
+      .stats-grp   { opacity: 0; animation: counterTick 0.8s ease-out 15.5s forwards; }
+
+      /* Playhead sweep */
+      .playhead { animation: playhead 13s linear 3s forwards; }
+
+      /* Replay hint */
+      .replay-hint { opacity: 0; animation: textFade 4s ease-in-out 17s forwards; }
+
+    ]]></style>
+
+    <!-- ============ Icon symbols ============ -->
+    <!-- Host (laptop) -->
+    <symbol id="i-host" viewBox="0 0 24 24">
+      <path d="M3 5h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z M1 19h22v1H1z" fill="currentColor" opacity="0.85"/>
+      <rect x="4" y="7" width="16" height="8" fill="#050810"/>
+      <rect x="6" y="9" width="6" height="1" fill="#5af7c1"/>
+      <rect x="6" y="11" width="9" height="1" fill="#5af7c1" opacity="0.6"/>
+    </symbol>
+
+    <!-- File drop (file with corner fold) -->
+    <symbol id="i-file" viewBox="0 0 24 24">
+      <path d="M5 3h9l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z M14 3v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <circle cx="12" cy="15" r="2" fill="currentColor"/>
+    </symbol>
+
+    <!-- BITS / cloud download -->
+    <symbol id="i-bits" viewBox="0 0 24 24">
+      <path d="M7 16h10a4 4 0 0 0 0-8 6 6 0 0 0-11.5-1A4 4 0 0 0 7 16z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M12 11v5 M9 14l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+
+    <!-- Terminal / encoded PS -->
+    <symbol id="i-terminal" viewBox="0 0 24 24">
+      <rect x="3" y="4" width="18" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M6 9l3 3-3 3 M12 15h6" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+
+    <!-- Script engine activity -->
+    <symbol id="i-script" viewBox="0 0 24 24">
+      <path d="M8 3h11v18H5l3-3V3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M10 8h6 M10 12h6 M10 16h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- LSASS / key + memory -->
+    <symbol id="i-lsass" viewBox="0 0 24 24">
+      <circle cx="8" cy="14" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M11 13l9-9 M16 7l3 3 M14 9l3 3" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="8" cy="14" r="1.2" fill="currentColor"/>
+    </symbol>
+
+    <!-- Mimikatz / skull alert -->
+    <symbol id="i-skull" viewBox="0 0 24 24">
+      <path d="M6 4h12v10l-3 3h-2v3h-2v-3H9l-3-3V4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <circle cx="9" cy="10" r="1.3" fill="currentColor"/>
+      <circle cx="15" cy="10" r="1.3" fill="currentColor"/>
+      <path d="M10 14h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- UAC shield -->
+    <symbol id="i-shield" viewBox="0 0 24 24">
+      <path d="M12 3l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M9 11l-1 4 4-4 M12 11l-2 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- Certutil / decode -->
+    <symbol id="i-decode" viewBox="0 0 24 24">
+      <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M7 10l2 2-2 2 M11 14h6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="6" cy="7.5" r="0.8" fill="currentColor"/>
+      <circle cx="9" cy="7.5" r="0.8" fill="currentColor"/>
+    </symbol>
+
+    <!-- New user -->
+    <symbol id="i-newuser" viewBox="0 0 24 24">
+      <circle cx="10" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M3 20c0-3.8 3.1-7 7-7s7 3.2 7 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M19 6v6 M16 9h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- Cog / registry -->
+    <symbol id="i-cog" viewBox="0 0 24 24">
+      <path d="M12 8.5A3.5 3.5 0 1 1 12 15.5A3.5 3.5 0 0 1 12 8.5z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- Clock / scheduled task -->
+    <symbol id="i-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+    </symbol>
+
+    <!-- WildFire flame -->
+    <symbol id="i-flame" viewBox="0 0 24 24">
+      <path d="M12 2c0 4-5 5-5 11a5 5 0 0 0 10 0c0-3-2-4-2-6 0 0 1 2-2 2 0-4-1-5-1-7z" fill="currentColor" opacity="0.95"/>
+      <path d="M10 16a2 2 0 0 0 4 0c0-1-1-1.5-1-3 0 1-1 1.5-2 1.5-1 0-1 0.8-1 1.5z" fill="#050810" opacity="0.4"/>
+    </symbol>
+
+    <!-- Arrow head marker -->
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" class="arrow-head"/>
+    </marker>
+
+    <!-- Glow filter for high-impact nodes -->
+    <filter id="neon-red" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="neon-magenta" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+  </defs>
+
+  <!-- ================= BACKGROUND ================= -->
+  <rect class="bg" width="1920" height="1080"/>
+
+  <!-- Subtle grid -->
+  <g class="grid" opacity="0.4">
+    <line x1="0" y1="200" x2="1920" y2="200"/>
+    <line x1="0" y1="320" x2="1920" y2="320"/>
+    <line x1="0" y1="500" x2="1920" y2="500"/>
+    <line x1="0" y1="620" x2="1920" y2="620"/>
+    <line x1="0" y1="800" x2="1920" y2="800"/>
+  </g>
+
+  <!-- ================= HEADER ================= -->
+  <g class="title-grp">
+    <text x="60" y="80" class="case-badge">CORTEX XDR ▸ CASE 1872 ▸ ACTIVE INVESTIGATION</text>
+    <text x="60" y="125" class="title">Multi-Stage Windows Compromise · DLL Side-Load → Credential Theft → Persistence Triplet</text>
+  </g>
+  <g class="subtitle-grp">
+    <text x="60" y="160" class="subtitle">2026-05-19  ·  07:50:59 – 08:18:58 UTC (28 min)  ·  75 alerts collapsed to 18 unique detections  ·  user: ayman  ·  2 hosts</text>
+  </g>
+
+  <!-- ================= HOST LANES ================= -->
+  <g class="lanes-grp">
+    <!-- xdragent lane (top) -->
+    <g transform="translate(60, 305)">
+      <use href="#i-host" x="0" y="0" width="36" height="36" color="#5a7eaa"/>
+      <text x="48" y="16" class="host-label">xdragent</text>
+      <text x="48" y="33" class="host-ip">10.10.0.14</text>
+    </g>
+
+    <!-- xdragent2 lane (bottom) -->
+    <g transform="translate(60, 605)">
+      <use href="#i-host" x="0" y="0" width="36" height="36" color="#5a7eaa"/>
+      <text x="48" y="16" class="host-label">xdragent2</text>
+      <text x="48" y="33" class="host-ip">10.10.0.16</text>
+    </g>
+
+    <!-- Spine lines -->
+    <line class="lane-line active" x1="180" y1="320" x2="1820" y2="320"/>
+    <line class="lane-line active" x1="180" y1="620" x2="1820" y2="620"/>
+  </g>
+
+  <!-- Sub-second lag band between lanes -->
+  <g class="sublag-band">
+    <rect x="180" y="465" width="1640" height="10" fill="url(#bandfill)" opacity="0.05"/>
+    <line x1="180" y1="470" x2="1820" y2="470" stroke="#2a3960" stroke-width="0.5" stroke-dasharray="2 4" opacity="0.5"/>
+  </g>
+  <g class="sublag-text">
+    <text x="960" y="490" text-anchor="middle" class="legend-text" style="font-style:italic;letter-spacing:1px">sub-second lag between equivalent steps · parallel cross-host execution</text>
+  </g>
+
+  <!-- ================= CONNECTOR ARROWS ================= -->
+  <!-- xdragent top lane arrows -->
+  <g>
+    <line class="arr a1 arrow" x1="280" y1="320" x2="395" y2="320"/>
+    <line class="arr a2 arrow" x1="425" y1="320" x2="535" y2="320"/>
+    <line class="arr a3 arrow" x1="565" y1="320" x2="675" y2="320"/>
+    <line class="arr a4 arrow" x1="705" y1="320" x2="765" y2="320"/>
+    <line class="arr a5 arrow" x1="855" y1="320" x2="935" y2="320"/>
+    <line class="arr a6 arrow" x1="965" y1="320" x2="1075" y2="320"/>
+    <line class="arr a7 arrow" x1="1105" y1="320" x2="1215" y2="320"/>
+    <line class="arr a8 arrow" x1="1245" y1="320" x2="1355" y2="320"/>
+    <line class="arr a9 arrow" x1="1385" y1="320" x2="1495" y2="320"/>
+    <line class="arr a10 arrow" x1="1525" y1="320" x2="1680" y2="320"/>
+  </g>
+  <!-- xdragent2 bottom lane arrows -->
+  <g>
+    <line class="arr a1 arrow" x1="280" y1="620" x2="395" y2="620"/>
+    <line class="arr a2 arrow" x1="425" y1="620" x2="535" y2="620"/>
+    <line class="arr a3 arrow" x1="565" y1="620" x2="675" y2="620"/>
+    <line class="arr a4 arrow" x1="705" y1="620" x2="765" y2="620"/>
+    <line class="arr a5 arrow" x1="855" y1="620" x2="935" y2="620"/>
+    <line class="arr a6 arrow" x1="965" y1="620" x2="1075" y2="620"/>
+    <line class="arr a7 arrow" x1="1105" y1="620" x2="1215" y2="620"/>
+    <line class="arr a8 arrow" x1="1245" y1="620" x2="1355" y2="620"/>
+    <line class="arr a9 arrow" x1="1385" y1="620" x2="1495" y2="620"/>
+    <line class="arr a10 arrow" x1="1525" y1="620" x2="1680" y2="620"/>
+  </g>
+
+  <!-- ================= STEP NODES ================= -->
+  <!-- Helper macro: each node = circle + icon + tid + name + time -->
+
+  <!-- ========== STEP 1: T1574.002 DLL Side-Loading (file drop) ========== -->
+  <g class="step s1a" transform="translate(245, 320)">
+    <circle class="step-circle ta-initial" r="34"/>
+    <use href="#i-file" x="-12" y="-13" width="24" height="26" color="#00d4ff"/>
+    <text x="0" y="-56" text-anchor="middle" class="step-tid">T1574.002</text>
+    <text x="0" y="56" text-anchor="middle" class="step-name">DLL Side-Load</text>
+    <text x="0" y="72" text-anchor="middle" class="step-time">07:50:59</text>
+  </g>
+  <g class="step s1b" transform="translate(245, 620)">
+    <circle class="step-circle ta-initial" r="34"/>
+    <use href="#i-file" x="-12" y="-13" width="24" height="26" color="#00d4ff"/>
+    <text x="0" y="56" text-anchor="middle" class="step-name">DLL Side-Load</text>
+    <text x="0" y="72" text-anchor="middle" class="step-time">07:51:20</text>
+  </g>
+
+  <!-- ========== STEP 2: T1197 BITS Jobs ========== -->
+  <g class="step s2a" transform="translate(460, 320)">
+    <circle class="step-circle ta-execute" r="34"/>
+    <use href="#i-bits" x="-12" y="-12" width="24" height="24" color="#ffce4a"/>
+    <text x="0" y="-56" text-anchor="middle" class="step-tid">T1197</text>
+    <text x="0" y="56" text-anchor="middle" class="step-name">BITS Stage</text>
+    <text x="0" y="72" text-anchor="middle" class="step-time">08:06:47</text>
+  </g>
+  <g class="step s2b" transform="translate(460, 620)">
+    <circle class="step-circle ta-execute" r="34"/>
+    <use href="#i-bits" x="-12" y="-12" width="24" height="24" color="#ffce4a"/>
+    <text x="0" y="56" text-anchor="middle" class="step-name">BITS Stage</text>
+    <text x="0" y="72" text-anchor="middle" class="step-time">08:06:53</text>
+  </g>
+
+  <!-- ========== STEP 3: T1059.001 Encoded PowerShell Recon ========== -->
+  <g class="step s3a" transform="translate(600, 320)">
+    <circle class="step-circle ta-execute" r="34"/>
+    <use href="#i-terminal" x="-12" y="-12" width="24" height="24" color="#ffce4a"/>
+    <text x="0" y="-56" text-anchor="middle" class="step-tid">T1059.001</text>
+    <text x="0" y="56" text-anchor="middle" class="step-name">b64 PS · netstat</text>
+    <text x="0" y="72" text-anchor="middle" class="step-time">08:08:13</text>
+  </g>
+  <g class="step s3b" transform="translate(600, 620)">
+    <circle class="step-circle ta-execute" r="34"/>
+    <use href="#i-terminal" x="-12" y="-12" width="24" height="24" color="#ffce4a"/>
+    <text x="0" y="56" text-anchor="middle" class="step-name">b64 PS · netstat</text>
+    <text x="0" y="72" text-anchor="middle" class="step-time">08:08:19</text>
+  </g>
+
+  <!-- ========== STEP 4: T1059 Script Engine (small bridging step) ========== -->
+  <g class="step s4a" transform="translate(735, 320)">
+    <circle class="step-circle ta-execute" r="26"/>
+    <use href="#i-script" x="-9" y="-9" width="18" height="18" color="#ffce4a"/>
+    <text x="0" y="-44" text-anchor="middle" class="step-tid">T1059</text>
+    <text x="0" y="50" text-anchor="middle" class="step-name" style="font-size:10px">Script Engine</text>
+    <text x="0" y="64" text-anchor="middle" class="step-time">08:11:03</text>
+  </g>
+  <g class="step s4b" transform="translate(735, 620)">
+    <circle class="step-circle ta-execute" r="26"/>
+    <use href="#i-script" x="-9" y="-9" width="18" height="18" color="#ffce4a"/>
+    <text x="0" y="50" text-anchor="middle" class="step-name" style="font-size:10px">Script Engine</text>
+    <text x="0" y="64" text-anchor="middle" class="step-time">08:11:17</text>
+  </g>
+
+  <!-- ========== STEP 5: T1003.001 LSASS DUMP (the inflection) ========== -->
+  <g class="step s5a" filter="url(#neon-red)" transform="translate(810, 320)">
+    <circle r="55" fill="#1a0816" stroke="#ff3366" stroke-width="3"/>
+    <circle r="48" fill="none" stroke="#ff3366" stroke-width="1" opacity="0.5"/>
+    <use href="#i-lsass" x="-18" y="-18" width="36" height="36" color="#ff3366"/>
+    <text x="0" y="-78" text-anchor="middle" class="step-tid" style="font-size:13px;fill:#ff3366">T1003.001</text>
+    <text x="0" y="80" text-anchor="middle" class="step-name" style="fill:#ff6b88;font-weight:700">LSASS Memory Dump</text>
+    <text x="0" y="96" text-anchor="middle" class="step-time" style="fill:#ff8fa3">08:11:04 · comsvcs.dll · MiniDump</text>
+  </g>
+  <g class="step s5b" filter="url(#neon-red)" transform="translate(810, 620)">
+    <circle r="55" fill="#1a0816" stroke="#ff3366" stroke-width="3"/>
+    <circle r="48" fill="none" stroke="#ff3366" stroke-width="1" opacity="0.5"/>
+    <use href="#i-lsass" x="-18" y="-18" width="36" height="36" color="#ff3366"/>
+    <text x="0" y="80" text-anchor="middle" class="step-name" style="fill:#ff6b88;font-weight:700">LSASS Memory Dump</text>
+    <text x="0" y="96" text-anchor="middle" class="step-time" style="fill:#ff8fa3">08:11:25 · comsvcs.dll · MiniDump</text>
+  </g>
+
+  <!-- INFLECTION POINT vertical guide line -->
+  <line class="inflection-line" x1="810" y1="200" x2="810" y2="800"
+        stroke="#ff3366" stroke-width="1" stroke-dasharray="6 6" opacity="0.5"/>
+  <g class="inflection-label" transform="translate(810, 195)">
+    <rect x="-86" y="-22" width="172" height="22" rx="2" fill="#ff3366" opacity="0.15" stroke="#ff3366" stroke-width="1"/>
+    <text x="0" y="-7" text-anchor="middle" fill="#ff3366" font-size="11" font-weight="700" letter-spacing="2px">★ INFLECTION POINT</text>
+  </g>
+
+  <!-- ========== MIMIKATZ PARTICLE BURST (radiates from LSASS node) ========== -->
+  <!-- Generated as a cloud of 18 particles around the LSASS node; CSS variable controls direction -->
+  <g>
+    <!-- Top lane particles - host xdragent -->
+    <circle class="mp host-a" cx="810" cy="320" r="3" fill="#ff3366" style="--end-transform: translate(80px,-60px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff3366" style="--end-transform: translate(95px,-20px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="3" fill="#ff3366" style="--end-transform: translate(70px,30px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff3366" style="--end-transform: translate(100px,55px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="3" fill="#ff8fa3" style="--end-transform: translate(40px,-90px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff8fa3" style="--end-transform: translate(-50px,-80px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="3" fill="#ff3366" style="--end-transform: translate(-85px,-40px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff3366" style="--end-transform: translate(-95px,15px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="3" fill="#ff8fa3" style="--end-transform: translate(-75px,55px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff3366" style="--end-transform: translate(-30px,90px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="3" fill="#ff3366" style="--end-transform: translate(20px,95px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff8fa3" style="--end-transform: translate(60px,80px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="3" fill="#ff3366" style="--end-transform: translate(110px,5px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff8fa3" style="--end-transform: translate(-110px,-5px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff3366" style="--end-transform: translate(15px,-110px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff8fa3" style="--end-transform: translate(-15px,110px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="3" fill="#ff3366" style="--end-transform: translate(120px,30px)"/>
+    <circle class="mp host-a" cx="810" cy="320" r="2.5" fill="#ff3366" style="--end-transform: translate(-120px,30px)"/>
+    <!-- Bottom lane particles - host xdragent2 -->
+    <circle class="mp host-b" cx="810" cy="620" r="3" fill="#ff3366" style="--end-transform: translate(85px,-55px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff3366" style="--end-transform: translate(95px,-15px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="3" fill="#ff3366" style="--end-transform: translate(70px,30px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff3366" style="--end-transform: translate(100px,55px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="3" fill="#ff8fa3" style="--end-transform: translate(40px,-90px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff8fa3" style="--end-transform: translate(-50px,-80px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="3" fill="#ff3366" style="--end-transform: translate(-85px,-40px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff3366" style="--end-transform: translate(-95px,15px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="3" fill="#ff8fa3" style="--end-transform: translate(-75px,55px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff3366" style="--end-transform: translate(-30px,90px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="3" fill="#ff3366" style="--end-transform: translate(20px,95px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff8fa3" style="--end-transform: translate(60px,80px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="3" fill="#ff3366" style="--end-transform: translate(110px,5px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff8fa3" style="--end-transform: translate(-110px,-5px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff3366" style="--end-transform: translate(15px,-110px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff8fa3" style="--end-transform: translate(-15px,110px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="3" fill="#ff3366" style="--end-transform: translate(120px,30px)"/>
+    <circle class="mp host-b" cx="810" cy="620" r="2.5" fill="#ff3366" style="--end-transform: translate(-120px,30px)"/>
+  </g>
+  <!-- Mimikatz volume label -->
+  <g class="mimi-label-a" transform="translate(890, 240)">
+    <rect x="-2" y="-18" width="78" height="22" rx="2" fill="#ff3366" opacity="0.2" stroke="#ff3366" stroke-width="0.8"/>
+    <text x="38" y="-2" text-anchor="middle" fill="#ff8fa3" font-size="13" font-weight="700">×42 Mimikatz</text>
+  </g>
+  <g class="mimi-label-b" transform="translate(890, 700)">
+    <rect x="-2" y="-2" width="78" height="22" rx="2" fill="#ff3366" opacity="0.2" stroke="#ff3366" stroke-width="0.8"/>
+    <text x="38" y="14" text-anchor="middle" fill="#ff8fa3" font-size="13" font-weight="700">×42 Mimikatz</text>
+  </g>
+
+  <!-- ========== STEP 6: T1548.002 UAC Bypass ========== -->
+  <g class="step s6a" transform="translate(965, 320)">
+    <circle class="step-circle ta-defense" r="30"/>
+    <use href="#i-shield" x="-11" y="-11" width="22" height="22" color="#ff8c42"/>
+    <text x="0" y="-50" text-anchor="middle" class="step-tid">T1548.002</text>
+    <text x="0" y="52" text-anchor="middle" class="step-name">UAC Bypass</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:11:37</text>
+  </g>
+  <g class="step s6b" transform="translate(965, 620)">
+    <circle class="step-circle ta-defense" r="30"/>
+    <use href="#i-shield" x="-11" y="-11" width="22" height="22" color="#ff8c42"/>
+    <text x="0" y="52" text-anchor="middle" class="step-name">UAC Bypass</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:12:15</text>
+  </g>
+
+  <!-- ========== STEP 7: T1140 certutil decode ========== -->
+  <g class="step s7a" transform="translate(1105, 320)">
+    <circle class="step-circle ta-defense" r="30"/>
+    <use href="#i-decode" x="-11" y="-11" width="22" height="22" color="#ff8c42"/>
+    <text x="0" y="-50" text-anchor="middle" class="step-tid">T1140</text>
+    <text x="0" y="52" text-anchor="middle" class="step-name">certutil decode</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:13:23</text>
+  </g>
+  <g class="step s7b" transform="translate(1105, 620)">
+    <circle class="step-circle ta-defense" r="30"/>
+    <use href="#i-decode" x="-11" y="-11" width="22" height="22" color="#ff8c42"/>
+    <text x="0" y="52" text-anchor="middle" class="step-name">certutil decode</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:13:36</text>
+  </g>
+
+  <!-- ========== STEP 8: T1098 New local user ========== -->
+  <g class="step s8a" transform="translate(1245, 320)">
+    <circle class="step-circle ta-persist" r="30"/>
+    <use href="#i-newuser" x="-11" y="-11" width="22" height="22" color="#5af7c1"/>
+    <text x="0" y="-50" text-anchor="middle" class="step-tid">T1098</text>
+    <text x="0" y="52" text-anchor="middle" class="step-name">New Local User</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:14:08</text>
+  </g>
+  <g class="step s8b" transform="translate(1245, 620)">
+    <circle class="step-circle ta-persist" r="30"/>
+    <use href="#i-newuser" x="-11" y="-11" width="22" height="22" color="#5af7c1"/>
+    <text x="0" y="52" text-anchor="middle" class="step-name">New Local User</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:14:25</text>
+  </g>
+
+  <!-- ========== STEP 9: T1112 Autorun registry ========== -->
+  <g class="step s9a" transform="translate(1385, 320)">
+    <circle class="step-circle ta-persist" r="30"/>
+    <use href="#i-cog" x="-11" y="-11" width="22" height="22" color="#5af7c1"/>
+    <text x="0" y="-50" text-anchor="middle" class="step-tid">T1112</text>
+    <text x="0" y="52" text-anchor="middle" class="step-name">Autorun Registry</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:14:49</text>
+  </g>
+  <g class="step s9b" transform="translate(1385, 620)">
+    <circle class="step-circle ta-persist" r="30"/>
+    <use href="#i-cog" x="-11" y="-11" width="22" height="22" color="#5af7c1"/>
+    <text x="0" y="52" text-anchor="middle" class="step-name">Autorun Registry</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:15:10</text>
+  </g>
+
+  <!-- ========== STEP 10: T1053.005 Scheduled Task ========== -->
+  <g class="step s10a" transform="translate(1525, 320)">
+    <circle class="step-circle ta-persist" r="30"/>
+    <use href="#i-clock" x="-11" y="-11" width="22" height="22" color="#5af7c1"/>
+    <text x="0" y="-50" text-anchor="middle" class="step-tid">T1053.005</text>
+    <text x="0" y="52" text-anchor="middle" class="step-name">Scheduled Task</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:15:39</text>
+  </g>
+  <g class="step s10b" transform="translate(1525, 620)">
+    <circle class="step-circle ta-persist" r="30"/>
+    <use href="#i-clock" x="-11" y="-11" width="22" height="22" color="#5af7c1"/>
+    <text x="0" y="52" text-anchor="middle" class="step-name">Scheduled Task</text>
+    <text x="0" y="67" text-anchor="middle" class="step-time">08:15:53</text>
+  </g>
+
+  <!-- ========== STEP 11: WildFire verdict ========== -->
+  <g class="step s11a" filter="url(#neon-magenta)" transform="translate(1720, 320)">
+    <circle r="50" fill="#1a0822" stroke="#ff4af9" stroke-width="3"/>
+    <circle r="42" fill="none" stroke="#ff4af9" stroke-width="1" opacity="0.5"/>
+    <use href="#i-flame" x="-16" y="-16" width="32" height="32" color="#ff4af9"/>
+    <text x="0" y="-72" text-anchor="middle" class="step-tid" style="font-size:13px;fill:#ff4af9">WILDFIRE</text>
+    <text x="0" y="74" text-anchor="middle" class="step-name" style="fill:#ff8df9;font-weight:700">MALWARE CONFIRMED</text>
+    <text x="0" y="90" text-anchor="middle" class="step-time" style="fill:#fcb6f9">08:17:56</text>
+  </g>
+  <g class="step s11b" filter="url(#neon-magenta)" transform="translate(1720, 620)">
+    <circle r="50" fill="#1a0822" stroke="#ff4af9" stroke-width="3"/>
+    <circle r="42" fill="none" stroke="#ff4af9" stroke-width="1" opacity="0.5"/>
+    <use href="#i-flame" x="-16" y="-16" width="32" height="32" color="#ff4af9"/>
+    <text x="0" y="74" text-anchor="middle" class="step-name" style="fill:#ff8df9;font-weight:700">MALWARE CONFIRMED</text>
+    <text x="0" y="90" text-anchor="middle" class="step-time" style="fill:#fcb6f9">08:18:58</text>
+  </g>
+
+  <!-- Verdict callout file path -->
+  <g class="verdict-file" transform="translate(1720, 130)">
+    <rect x="-180" y="-22" width="360" height="32" rx="2" fill="#ff4af9" opacity="0.1" stroke="#ff4af9" stroke-width="1"/>
+    <text x="0" y="-2" text-anchor="middle" fill="#ff4af9" font-size="12" font-weight="700">C:\Users\Public\resultsreport.exe</text>
+  </g>
+
+  <!-- ================= PLAYHEAD ================= -->
+  <line class="playhead" x1="200" y1="220" x2="200" y2="820" stroke="#5af7c1" stroke-width="1.5" opacity="0"/>
+
+  <!-- ================= TIME AXIS ================= -->
+  <g class="timeaxis">
+    <line class="time-axis-line" x1="180" y1="940" x2="1820" y2="940"/>
+    <!-- Tick marks at each step time -->
+    <g>
+      <line class="time-tick" x1="245" y1="940" x2="245" y2="950"/>
+      <line class="time-tick" x1="460" y1="940" x2="460" y2="950"/>
+      <line class="time-tick" x1="600" y1="940" x2="600" y2="950"/>
+      <line class="time-tick" x1="735" y1="940" x2="735" y2="950"/>
+      <line class="time-tick" x1="810" y1="940" x2="810" y2="955" stroke="#ff3366" stroke-width="2"/>
+      <line class="time-tick" x1="965" y1="940" x2="965" y2="950"/>
+      <line class="time-tick" x1="1105" y1="940" x2="1105" y2="950"/>
+      <line class="time-tick" x1="1245" y1="940" x2="1245" y2="950"/>
+      <line class="time-tick" x1="1385" y1="940" x2="1385" y2="950"/>
+      <line class="time-tick" x1="1525" y1="940" x2="1525" y2="950"/>
+      <line class="time-tick" x1="1720" y1="940" x2="1720" y2="955" stroke="#ff4af9" stroke-width="2"/>
+    </g>
+    <text x="245" y="970" text-anchor="middle" class="time-label">07:50</text>
+    <text x="460" y="970" text-anchor="middle" class="time-label">08:06</text>
+    <text x="600" y="970" text-anchor="middle" class="time-label">08:08</text>
+    <text x="810" y="970" text-anchor="middle" class="time-label" style="fill:#ff3366;font-weight:700">08:11</text>
+    <text x="1105" y="970" text-anchor="middle" class="time-label">08:13</text>
+    <text x="1385" y="970" text-anchor="middle" class="time-label">08:14</text>
+    <text x="1720" y="970" text-anchor="middle" class="time-label" style="fill:#ff4af9;font-weight:700">08:17</text>
+  </g>
+
+  <!-- ================= LEGEND (right side) ================= -->
+  <g class="legend-grp" transform="translate(60, 1010)">
+    <text x="0" y="0" class="legend-tactic">MITRE TACTICS</text>
+    <g transform="translate(0, 20)">
+      <circle cx="6" cy="0" r="6" fill="none" stroke="#00d4ff" stroke-width="2"/>
+      <text x="20" y="4" class="legend-text">Initial Access</text>
+    </g>
+    <g transform="translate(140, 20)">
+      <circle cx="6" cy="0" r="6" fill="none" stroke="#ffce4a" stroke-width="2"/>
+      <text x="20" y="4" class="legend-text">Execution</text>
+    </g>
+    <g transform="translate(270, 20)">
+      <circle cx="6" cy="0" r="6" fill="none" stroke="#ff3366" stroke-width="2"/>
+      <text x="20" y="4" class="legend-text">Credential Access</text>
+    </g>
+    <g transform="translate(420, 20)">
+      <circle cx="6" cy="0" r="6" fill="none" stroke="#ff8c42" stroke-width="2"/>
+      <text x="20" y="4" class="legend-text">Defense Evasion / Priv-Esc</text>
+    </g>
+    <g transform="translate(620, 20)">
+      <circle cx="6" cy="0" r="6" fill="none" stroke="#5af7c1" stroke-width="2"/>
+      <text x="20" y="4" class="legend-text">Persistence</text>
+    </g>
+    <g transform="translate(740, 20)">
+      <circle cx="6" cy="0" r="6" fill="none" stroke="#ff4af9" stroke-width="2"/>
+      <text x="20" y="4" class="legend-text">WildFire Verdict</text>
+    </g>
+  </g>
+
+  <!-- ================= STATS BANNER ================= -->
+  <g class="stats-grp" transform="translate(960, 1010)">
+    <g transform="translate(200, 0)">
+      <text x="0" y="0" text-anchor="middle" class="legend-tactic" style="font-size:18px;fill:#ffffff">75</text>
+      <text x="0" y="18" text-anchor="middle" class="legend-text">alerts</text>
+    </g>
+    <g transform="translate(310, 0)">
+      <text x="0" y="0" text-anchor="middle" class="legend-tactic" style="font-size:18px;fill:#ffffff">18</text>
+      <text x="0" y="18" text-anchor="middle" class="legend-text">unique detections</text>
+    </g>
+    <g transform="translate(450, 0)">
+      <text x="0" y="0" text-anchor="middle" class="legend-tactic" style="font-size:18px;fill:#ffffff">13</text>
+      <text x="0" y="18" text-anchor="middle" class="legend-text">MITRE techniques</text>
+    </g>
+    <g transform="translate(600, 0)">
+      <text x="0" y="0" text-anchor="middle" class="legend-tactic" style="font-size:18px;fill:#ffffff">7</text>
+      <text x="0" y="18" text-anchor="middle" class="legend-text">tactics</text>
+    </g>
+    <g transform="translate(720, 0)">
+      <text x="0" y="0" text-anchor="middle" class="legend-tactic" style="font-size:18px;fill:#ff3366">28m</text>
+      <text x="0" y="18" text-anchor="middle" class="legend-text">wall-clock</text>
+    </g>
+  </g>
+
+  <!-- Replay hint -->
+  <text class="replay-hint" x="1860" y="1065" text-anchor="end" fill="#5a6a87" font-size="11" font-style="italic">replay loop · 22s</text>
+
+</svg>
