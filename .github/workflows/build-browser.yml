@@ -1,0 +1,62 @@
+name: Build browser
+
+# Per-service build workflow for guardian-browser (the headless-Chromium
+# sidecar for the `web` connector). Mirrors build-updater.yml.
+#
+# guardian-browser is profile-gated in compose (only started with
+# `docker compose --profile browser up`), and historically its image was
+# built ONLY by release.yml on a tag push — so a fresh, never-released
+# repo had no guardian-browser:dev tag for build-dev-installer.yml to
+# resolve, and the dev install failed at digest resolution. This brings
+# the browser into the dev cycle the same way build-updater.yml brought
+# the updater in: guardian-browser/** changes (or a manual dispatch)
+# build + push guardian-browser:dev to GHCR.
+#
+# Security note: only built-in GitHub contexts that are NOT
+# operator-controllable. Same shape as build-updater.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'guardian-browser/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'guardian-browser/**'
+  workflow_dispatch:
+
+concurrency:
+  group: build-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    name: Build guardian-browser image
+    runs-on: [self-hosted, Linux, X64, guardian]
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - uses: actions/checkout@v4
+
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+
+      - id: image
+        uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: guardian-browser
+          build-context: 'guardian-browser'
+          dockerfile-path: guardian-browser/Dockerfile
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
