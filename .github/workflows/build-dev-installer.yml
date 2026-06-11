@@ -317,7 +317,18 @@ jobs:
           # Pipe through tee so the full output lands in the workflow
           # log AND a local file for diagnostics if something goes
           # sideways.
-          sudo /home/ayman/guardian-installer-dev 2>&1 | tee /tmp/guardian-install.log
+          #
+          # Pass the workflow's GHCR creds to the installer so a FRESH
+          # install (no /opt/guardian/.env yet) can authenticate without
+          # an interactive /dev/tty prompt (which doesn't exist in CI).
+          # $GHCR_TOKEN is the job's GITHUB_TOKEN — it has read access to
+          # this repo's packages. On upgrades the installer reuses the
+          # stored token, so this is only load-bearing for the first
+          # install on a fresh guardian-vm.
+          sudo env \
+            GUARDIAN_REGISTRY_USER="$GHCR_USER" \
+            GUARDIAN_REGISTRY_TOKEN="$GHCR_TOKEN" \
+            /home/ayman/guardian-installer-dev 2>&1 | tee /tmp/guardian-install.log
           echo "::endgroup::"
           echo "::notice::Auto-deploy complete on guardian-vm — guardian-agent recreated with new digest. Agent-side smoke runs next (see CLAUDE.md § Agent-side headless smoke)."
 
