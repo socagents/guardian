@@ -348,7 +348,7 @@ def test_get_incident_not_found_returns_error(monkeypatch):
 # ─── close_incident ──────────────────────────────────────────────────
 
 
-def test_close_incident_batchclose_shape(monkeypatch):
+def test_close_incident_per_id_shape(monkeypatch):
     rf = _RecordingFetcher(post_reply={"closed": True})
     _install_fetcher(monkeypatch, rf)
 
@@ -361,18 +361,21 @@ def test_close_incident_batchclose_shape(monkeypatch):
     assert out["closed_count"] == 2
     assert out["incident_ids"] == ["10", "11"]
 
-    method, path, body = rf.calls[0]
-    assert (method, path) == ("POST", "/incident/batchClose")
-    assert body["closeReason"] == "Resolved"
-    assert body["closeNotes"] == "benign"
-    assert body["filter"]["id"] == ["10", "11"]
+    # one POST /incident/close per id (no batchClose — not on Cortex 8)
+    assert [(m, p) for (m, p, _b) in rf.calls] == [
+        ("POST", "/incident/close"),
+        ("POST", "/incident/close"),
+    ]
+    assert rf.calls[0][2] == {"id": "10", "closeReason": "Resolved", "closeNotes": "benign"}
+    assert rf.calls[1][2]["id"] == "11"
 
 
 def test_close_incident_wraps_bare_id(monkeypatch):
     rf = _RecordingFetcher(post_reply={})
     _install_fetcher(monkeypatch, rf)
     run(connector.xsoar_close_incident(incident_ids="77", close_reason="Other"))
-    assert rf.calls[0][2]["filter"]["id"] == ["77"]
+    assert rf.calls[0][1] == "/incident/close"
+    assert rf.calls[0][2]["id"] == "77"
 
 
 def test_close_incident_requires_reason(monkeypatch):
@@ -386,20 +389,33 @@ def test_close_incident_requires_reason(monkeypatch):
 # ─── update_incident — version requirement ───────────────────────────
 
 
-def test_update_incident_sends_version_and_custom_fields(monkeypatch):
-    rf = _RecordingFetcher(post_reply={"id": "5"})
+def test_update_incident_reads_then_posts_full_object(monkeypatch):
+    # post_reply serves both calls: the read (.get("data")) and the
+    # final upsert (.get("id")/.get("version")).
+    rf = _RecordingFetcher(post_reply={
+        "data": [{"id": "5", "version": 7, "labels": [{"type": "X", "value": "y"}],
+                  "name": "case", "severity": 1}],
+        "id": "5", "version": 8,
+    })
     _install_fetcher(monkeypatch, rf)
     out = run(connector.xsoar_update_incident(
         incident_id="5", version=7, severity=4, owner="alice",
+        labels=[{"type": "New", "value": "lbl"}],
         custom_fields={"detectionsource": "Guardian"},
     ))
     assert out["ok"] is True and out["updated"] is True
-    method, path, body = rf.calls[0]
+    # first call reads the full incident, last call upserts /incident
+    assert rf.calls[0][0:2] == ("POST", "/incidents/search")
+    assert rf.calls[0][2] == {"filter": {"id": ["5"]}}
+    method, path, body = rf.calls[-1]
     assert (method, path) == ("POST", "/incident")
     assert body["id"] == "5"
     assert body["version"] == 7
     assert body["severity"] == 4
     assert body["owner"] == "alice"
+    # existing label preserved + new one appended
+    assert {"type": "X", "value": "y"} in body["labels"]
+    assert {"type": "New", "value": "lbl"} in body["labels"]
     assert body["CustomFields"] == {"detectionsource": "Guardian"}
 
 
@@ -446,13 +462,15 @@ def test_tool_maps_config_valueerror_to_envelope(monkeypatch):
 
 
 def test_health_check_reports_generation(monkeypatch):
-    rf = _RecordingFetcher(get_reply={"status": "ok"}, is_v8=True)
+    rf = _RecordingFetcher(post_reply={"total": 42, "data": []}, is_v8=True)
     _install_fetcher(monkeypatch, rf)
     out = run(connector.xsoar_health_check())
     assert out["ok"] is True
     assert out["reachable"] is True
     assert out["generation"] == "v8"
-    assert rf.calls[0] == ("GET", "/health", None)
+    assert out["total_incidents"] == 42
+    # probe is a minimal incidents/search, NOT a /health GET
+    assert rf.calls[0] == ("POST", "/incidents/search", {"filter": {"page": 0, "size": 1}})
 
 
 # ─── public surface ──────────────────────────────────────────────────

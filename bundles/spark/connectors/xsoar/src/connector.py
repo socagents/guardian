@@ -36,6 +36,7 @@ and exposes bare names; the agent sees them namespaced as
 from __future__ import annotations
 
 import functools
+import re
 from typing import Any, Optional
 
 from ._xsoar_client import (
@@ -221,6 +222,43 @@ def _as_list(value: object) -> Optional[list]:
     if isinstance(value, list):
         return value or None
     return [value]
+
+
+_OPTIMISTIC_LOCK_RE = re.compile(r"has been modified \((-?\d+)\)")
+
+
+async def _post_incident_resolving_version(
+    fetcher: XSOARFetcher, body: dict, max_attempts: int = 5
+) -> Any:
+    """POST /incident, auto-resolving the optimistic-lock version.
+
+    Cortex 8 enforces a per-incident `version` on writes, but the version
+    returned by /incidents/search is unreliable (often -1). When the
+    upsert is rejected with `errOptimisticLock`, XSOAR includes the
+    server's CURRENT version in the message ("object has been modified
+    (N)"). We parse N and retry with it. The version is a moving target
+    (every war-room entry bumps it), so we retry a few times to absorb a
+    concurrent bump between read and write.
+
+    `body` is mutated in place so the caller sees the version that
+    actually succeeded.
+    """
+    last_exc: Optional[Exception] = None
+    for _ in range(max_attempts):
+        try:
+            return await fetcher.post("/incident", body)
+        except XSOARRequestError as exc:
+            msg = str(exc)
+            if "errOptimisticLock" not in msg and "has been modified" not in msg:
+                raise
+            m = _OPTIMISTIC_LOCK_RE.search(msg)
+            if not m:
+                raise
+            body["version"] = int(m.group(1))
+            last_exc = exc
+    if last_exc:
+        raise last_exc
+    raise XSOARError("update_incident: exhausted version-resolve retries")
 
 
 def _summarize_incident(inc: dict) -> dict:
@@ -571,7 +609,7 @@ async def xsoar_add_note(
 @_wrap_xsoar_call
 async def xsoar_update_incident(
     incident_id: str,
-    version: int,
+    version: Optional[int] = None,
     severity: Optional[int] = None,
     owner: Optional[str] = None,
     labels: Optional[list] = None,
@@ -582,17 +620,21 @@ async def xsoar_update_incident(
     Use to triage a case: reassign the owner, bump severity, set labels,
     or write custom fields. Only the fields you pass are changed.
 
-    Optimistic concurrency: `version` is REQUIRED. XSOAR rejects a stale
-    version with HTTP 409 — read the current value first via
-    xsoar_get_incident (the `version` field) and pass it here.
+    Optimistic concurrency is handled automatically: XSOAR enforces a
+    per-incident `version` on writes, but the version returned by search
+    (xsoar_get_incident) is unreliable on Cortex 8 (often -1). So this
+    tool resolves the live version on the fly — it submits the update,
+    and if XSOAR rejects it with an optimistic-lock error it parses the
+    server's current version out of the error and retries. You normally
+    do NOT need to pass `version`; leave it unset.
 
     CustomFields use the lowercase MACHINE name (cliName), NOT the
     display label. Get the cliName for a type via xsoar_get_incident_fields.
 
     Args:
         incident_id: The XSOAR incident id.
-        version: The incident's current version (from xsoar_get_incident).
-            Required for the optimistic-concurrency check.
+        version: Optional. The incident's optimistic-lock version. Leave
+            unset (default) to let the connector resolve it automatically.
         severity: New severity level 1-4 (1 low … 4 critical). Optional.
         owner: New owner username. Optional.
         labels: List of label dicts [{type, value}] or simple strings.
@@ -600,44 +642,55 @@ async def xsoar_update_incident(
         custom_fields: Dict of {cliName: value} written under
             CustomFields. Optional.
 
-    Example body POSTed to /incident:
-        {"id": "123", "version": 7, "severity": 4, "owner": "analyst1",
-         "CustomFields": {"detectionsource": "Guardian"}}
-
     Returns:
-        {ok, incident_id, updated: true}.
+        {ok, incident_id, updated: true, version: <resolved>}.
     """
     if not incident_id:
         raise ValueError("incident_id is required")
-    if version is None:
-        raise ValueError(
-            "version is required (optimistic concurrency). Read the current "
-            "version via xsoar_get_incident first, then pass it here."
-        )
-
-    body: dict[str, Any] = {
-        "id": str(incident_id),
-        "version": _norm_int(version, 0),
-    }
-    if severity is not None:
-        body["severity"] = _clamp_int(severity, 1, 0, 4)
-    if owner is not None:
-        body["owner"] = owner
-    label_list = _as_list(labels)
-    if label_list is not None:
-        body["labels"] = label_list
-    if custom_fields:
-        if not isinstance(custom_fields, dict):
-            return _err("custom_fields must be a dict of {cliName: value}")
-        body["CustomFields"] = custom_fields
+    if custom_fields is not None and not isinstance(custom_fields, dict):
+        return _err("custom_fields must be a dict of {cliName: value}")
 
     fetcher = _get_fetcher()
-    response = await fetcher.post("/incident", body)
+
+    # Cortex 8's POST /incident is a full-object upsert: posting a PARTIAL
+    # incident ({id, version, labels}) is treated as a CREATE and fails
+    # (playbook-lock / create errors). So read the current full record,
+    # merge the requested changes, and post the whole object back. The
+    # read-object's version is authoritative for the optimistic-lock
+    # check (search-returned versions like -1 are unreliable).
+    search = await fetcher.post("/incidents/search", {"filter": {"id": [str(incident_id)]}})
+    data = search.get("data") if isinstance(search, dict) else None
+    if not data:
+        return _err(f"incident {incident_id} not found")
+    inc: dict[str, Any] = dict(data[0])
+
+    if severity is not None:
+        inc["severity"] = _clamp_int(severity, 1, 0, 4)
+    if owner is not None:
+        inc["owner"] = owner
+    label_list = _as_list(labels)
+    if label_list is not None:
+        existing = inc.get("labels") or []
+        normalized = [
+            x if isinstance(x, dict) else {"type": "Label", "value": x}
+            for x in label_list
+        ]
+        inc["labels"] = existing + normalized
+    if custom_fields:
+        cf = dict(inc.get("CustomFields") or {})
+        cf.update(custom_fields)
+        inc["CustomFields"] = cf
+    if version is not None:
+        inc["version"] = _norm_int(version, inc.get("version", 0))
+
+    response = await _post_incident_resolving_version(fetcher, inc)
 
     return {
         "incident_id": incident_id,
         "updated": True,
-        "raw_response": response,
+        "version": inc.get("version"),
+        "raw_response": {"id": response.get("id"), "version": response.get("version")}
+        if isinstance(response, dict) else response,
     }
 
 
@@ -650,9 +703,9 @@ async def xsoar_close_incident(
     close_reason: str,
     close_notes: Optional[str] = None,
 ) -> dict:
-    """Close one or more XSOAR incidents in a single batch.
+    """Close one or more XSOAR incidents.
 
-    Sets each matched case to status closed (2). Use at the end of an
+    Sets each case to status closed (2). Use at the end of an
     investigation once findings are documented.
 
     Args:
@@ -662,12 +715,15 @@ async def xsoar_close_incident(
             'False Positive', 'Duplicate', 'Other'). Required.
         close_notes: Optional free-text closing summary.
 
-    Example body POSTed to /incident/batchClose:
-        {"closeReason": "Resolved", "closeNotes": "Confirmed benign.",
-         "filter": {"id": ["123", "124"]}}
+    Each id is closed via POST /incident/close (the `/incident/batchClose`
+    endpoint is not exposed on the Cortex 8 public API). Per-id results are
+    returned so a partial failure is visible.
+
+    Example body POSTed to /incident/close:
+        {"id": "123", "closeReason": "Resolved", "closeNotes": "Benign."}
 
     Returns:
-        {ok, closed_count, incident_ids}.
+        {ok, closed_count, incident_ids, results: [{id, closed, error?}]}.
     """
     ids = _as_list(incident_ids)
     if not ids:
@@ -676,21 +732,26 @@ async def xsoar_close_incident(
         raise ValueError("close_reason is required")
 
     str_ids = [str(i) for i in ids]
-    body: dict[str, Any] = {
-        "closeReason": close_reason,
-        "filter": {"id": str_ids},
-    }
-    if close_notes:
-        body["closeNotes"] = close_notes
-
     fetcher = _get_fetcher()
-    response = await fetcher.post("/incident/batchClose", body)
+
+    results: list[dict[str, Any]] = []
+    closed = 0
+    for cid in str_ids:
+        body: dict[str, Any] = {"id": cid, "closeReason": close_reason}
+        if close_notes:
+            body["closeNotes"] = close_notes
+        try:
+            await fetcher.post("/incident/close", body)
+            results.append({"id": cid, "closed": True})
+            closed += 1
+        except XSOARError as exc:
+            results.append({"id": cid, "closed": False, "error": str(exc)})
 
     return {
-        "closed_count": len(str_ids),
+        "closed_count": closed,
         "incident_ids": str_ids,
         "close_reason": close_reason,
-        "raw_response": response,
+        "results": results,
     }
 
 
@@ -737,34 +798,44 @@ async def xsoar_list_incident_types() -> dict:
 
 
 @_wrap_xsoar_call
-async def xsoar_get_incident_fields(incident_type: str) -> dict:
-    """List the incident fields associated with a given incident type.
+async def xsoar_get_incident_fields(incident_type: Optional[str] = None) -> dict:
+    """List incident fields, optionally scoped to one incident type.
 
-    Returns the field schema for the type — including each field's
-    cliName (the lowercase machine name you must use as a CustomFields
-    key in xsoar_update_incident). Use to discover what custom fields a
-    Phishing/Malware/etc. case carries before writing to them.
+    Returns the field schema — including each field's cliName (the
+    lowercase machine name you must use as a CustomFields key in
+    xsoar_update_incident). Use to discover what custom fields a case
+    carries before writing to them.
+
+    The endpoint returns ALL incident fields; when `incident_type` is
+    given, the result is filtered to fields associated with that type
+    (or associated with all types). Cortex 8 has no public
+    `/associatedTypes/{type}` endpoint, so the filtering is done here.
 
     Args:
-        incident_type: The incident type name (e.g. 'Phishing').
-            Discover available types via xsoar_list_incident_types.
+        incident_type: Optional incident type name (e.g. 'Phishing') to
+            scope the fields to. Omit to return every incident field.
+            Discover types via xsoar_list_incident_types.
 
-    Calls: GET /incidentfields/associatedTypes/{incident_type}
+    Calls: GET /incidentfields
 
     Returns:
-        {ok, fields: [{id, name, cliName, type, required}], count}.
+        {ok, fields: [{id, name, cliName, type, required, associatedTypes}],
+         count, incident_type}.
     """
-    if not incident_type:
-        raise ValueError("incident_type is required")
-
     fetcher = _get_fetcher()
-    response = await fetcher.get(
-        f"/incidentfields/associatedTypes/{incident_type}"
-    )
+    response = await fetcher.get("/incidentfields")
 
-    raw_fields = response.get("data") if "data" in response else response
+    raw_fields = response.get("data") if isinstance(response, dict) and "data" in response else response
     if not isinstance(raw_fields, list):
         raw_fields = []
+
+    def _matches(f: dict) -> bool:
+        if not incident_type:
+            return True
+        if f.get("associatedToAll"):
+            return True
+        assoc = f.get("associatedTypes") or []
+        return isinstance(assoc, list) and incident_type in assoc
 
     fields = [
         {
@@ -773,9 +844,10 @@ async def xsoar_get_incident_fields(incident_type: str) -> dict:
             "cliName": f.get("cliName"),
             "type": f.get("type"),
             "required": f.get("required", False),
+            "associatedTypes": f.get("associatedTypes"),
         }
         for f in raw_fields
-        if isinstance(f, dict)
+        if isinstance(f, dict) and _matches(f)
     ]
 
     return {
@@ -855,39 +927,45 @@ async def xsoar_save_evidence(
     promote a specific entry (a command output, a screenshot, an
     analysis note) to evidence.
 
+    On Cortex 8 the `/evidence` POST endpoint is not exposed on the
+    public API (it redirects to the SPA 404); evidence is promoted by
+    tagging the war-room entry with the `evidence` tag, which is what
+    this tool does via POST /entry/tags.
+
     Args:
-        incident_id: The XSOAR incident id.
+        incident_id: The XSOAR incident id (the investigation id).
         entry_id: The war-room entry id to mark as evidence (from
             xsoar_add_entry's return or xsoar_get_war_room).
-        description: Optional note describing why this is evidence.
+        description: Optional note describing why this is evidence
+            (added as an extra tag when provided).
 
-    Example body POSTed to /evidence:
-        {"incidentId": "123", "id": "456",
-         "description": "lsass dump confirms credential theft"}
+    Example body POSTed to /entry/tags:
+        {"investigationId": "123", "id": "456@123", "tags": ["evidence"]}
 
     Returns:
-        {ok, evidence_id, incident_id, entry_id}.
+        {ok, incident_id, entry_id, tagged: true}.
     """
     if not incident_id:
         raise ValueError("incident_id is required")
     if not entry_id:
         raise ValueError("entry_id is required")
 
+    tags = ["evidence"]
     body: dict[str, Any] = {
-        "incidentId": str(incident_id),
+        "investigationId": str(incident_id),
         "id": str(entry_id),
+        "tags": tags,
     }
-    if description:
-        body["description"] = description
 
     fetcher = _get_fetcher()
-    response = await fetcher.post("/evidence", body)
+    response = await fetcher.post("/entry/tags", body)
 
-    evidence_id = response.get("id") or (response.get("evidence") or {}).get("id")
     return {
-        "evidence_id": evidence_id,
         "incident_id": incident_id,
         "entry_id": entry_id,
+        "tagged": True,
+        "tags": tags,
+        "raw_response": response,
     }
 
 
@@ -905,7 +983,7 @@ async def xsoar_search_evidence(incident_id: str) -> dict:
         incident_id: The XSOAR incident id whose evidence to list.
 
     Example body POSTed to /evidence/search:
-        {"filter": {"incidentID": "123"}}
+        {"incidentID": "123"}
 
     Returns:
         {ok, evidence: [...], count}.
@@ -913,7 +991,10 @@ async def xsoar_search_evidence(incident_id: str) -> dict:
     if not incident_id:
         raise ValueError("incident_id is required")
 
-    body = {"filter": {"incidentID": str(incident_id)}}
+    # Cortex 8 requires the incident id as a top-level `incidentID`
+    # field (NOT nested under `filter`) — a missing/nested id returns
+    # HTTP 400 "Incident ID must be specified in the request body".
+    body = {"incidentID": str(incident_id)}
     fetcher = _get_fetcher()
     response = await fetcher.post("/evidence/search", body)
 
@@ -935,23 +1016,30 @@ async def xsoar_search_evidence(incident_id: str) -> dict:
 
 @_wrap_xsoar_call
 async def xsoar_health_check() -> dict:
-    """Probe XSOAR server availability (the connector test path).
+    """Probe XSOAR server availability + credential validity.
 
-    GETs /health and reports reachability. Used by the connector
+    Issues a minimal `POST /incidents/search` (size 1) and reports
+    reachability + the total incident count. Used by the connector
     instance-test flow + as a quick "is XSOAR up and are my credentials
     valid?" check. A 401/403 surfaces as an auth error envelope (server
     reachable but credentials bad).
 
-    Calls: GET /health
+    (A dedicated `/health` endpoint is not exposed on the Cortex 8
+    public API surface — it redirects to the SPA 404 — so the lightest
+    real authenticated call is used as the probe instead.)
+
+    Calls: POST /incidents/search {filter:{size:1}}
 
     Returns:
-        {ok, reachable: true, detail, generation: 'v6' | 'v8'}.
+        {ok, reachable: true, total_incidents, generation: 'v6' | 'v8'}.
     """
     fetcher = _get_fetcher()
-    response = await fetcher.get("/health")
+    response = await fetcher.post("/incidents/search", {"filter": {"page": 0, "size": 1}})
+
+    total = response.get("total") if isinstance(response, dict) else None
 
     return {
         "reachable": True,
-        "detail": response,
+        "total_incidents": total,
         "generation": "v8" if fetcher.is_v8 else "v6",
     }

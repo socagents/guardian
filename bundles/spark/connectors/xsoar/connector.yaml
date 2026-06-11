@@ -148,14 +148,14 @@ spec:
         reassign owner, bump severity, set labels, write custom fields. Only
         the fields you pass are changed.
 
-        version is REQUIRED (optimistic concurrency) — XSOAR rejects a stale
-        version with HTTP 409, so read the current value via
-        xsoar_get_incident first. custom_fields use the lowercase MACHINE
-        name (cliName), not the display label — discover cliNames via
-        xsoar_get_incident_fields.
+        Optimistic concurrency is handled for you — leave `version` unset and
+        the connector resolves the live version automatically (the version
+        from xsoar_get_incident is unreliable on Cortex 8). custom_fields use
+        the lowercase MACHINE name (cliName), not the display label —
+        discover cliNames via xsoar_get_incident_fields.
       args:
         - { name: "incident_id",   type: "string",  description: "The XSOAR incident id.", required: true }
-        - { name: "version",       type: "integer", description: "The incident's current version (from xsoar_get_incident). Required for the optimistic-concurrency check.", required: true }
+        - { name: "version",       type: "integer", description: "Optional optimistic-lock version. Leave unset to let the connector resolve it automatically.", required: false }
         - { name: "severity",      type: "integer", description: "New severity level 1-4 (1 low … 4 critical).", required: false }
         - { name: "owner",         type: "string",  description: "New owner username.", required: false }
         - { name: "labels",        type: "array",   description: "Label dicts [{type, value}] or simple strings.", required: false }
@@ -163,7 +163,7 @@ spec:
       returns: { type: "object", description: "{ ok, incident_id, updated }" }
 
     - name: "xsoar_close_incident"
-      method: "POST /incident/batchClose"
+      method: "POST /incident/close (per id)"
       description: |
         Close one or more XSOAR incidents in a single batch (sets each to
         status closed). Use at the end of an investigation once findings are
@@ -188,16 +188,17 @@ spec:
       returns: { type: "object", description: "{ ok, incident_types: ['Phishing','Malware',...], sampled }" }
 
     - name: "xsoar_get_incident_fields"
-      method: "GET /incidentfields/associatedTypes/{incident_type}"
+      method: "GET /incidentfields"
       description: |
-        List the incident fields associated with a given incident type —
-        including each field's cliName (the lowercase machine name you must
-        use as a CustomFields key in xsoar_update_incident). Use to discover
-        what custom fields a Phishing/Malware/etc. case carries before
-        writing to them.
+        List incident fields — including each field's cliName (the lowercase
+        machine name you must use as a CustomFields key in
+        xsoar_update_incident). Use to discover what custom fields a case
+        carries before writing to them. Pass incident_type to scope the
+        result to fields associated with that type (filtered client-side,
+        since Cortex 8 has no public per-type endpoint).
       args:
-        - { name: "incident_type", type: "string", description: "The incident type name (e.g. 'Phishing'). Discover types via xsoar_list_incident_types.", required: true }
-      returns: { type: "object", description: "{ ok, fields: [{id, name, cliName, type, required}], count }" }
+        - { name: "incident_type", type: "string", description: "Optional incident type name (e.g. 'Phishing') to scope the fields to. Omit to list every incident field. Discover types via xsoar_list_incident_types.", required: false }
+      returns: { type: "object", description: "{ ok, fields: [{id, name, cliName, type, required, associatedTypes}], count }" }
 
     # ─── Enrichment ──────────────────────────────────────────────
     - name: "xsoar_search_indicators"
@@ -214,17 +215,19 @@ spec:
       returns: { type: "object", description: "{ ok, indicators: [...], total }" }
 
     - name: "xsoar_save_evidence"
-      method: "POST /evidence"
+      method: "POST /entry/tags (tag entry as evidence)"
       description: |
         Mark a war-room entry as evidence for an incident. XSOAR's evidence
         board collects the key artifacts that justify a case's conclusion.
         Use after xsoar_add_entry / xsoar_get_war_room to promote a specific
-        entry (command output, screenshot, analysis note) to evidence.
+        entry (command output, screenshot, analysis note) to evidence. On
+        Cortex 8 this tags the entry with the `evidence` tag (the `/evidence`
+        POST endpoint is not exposed on the public API).
       args:
-        - { name: "incident_id", type: "string", description: "The XSOAR incident id.", required: true }
+        - { name: "incident_id", type: "string", description: "The XSOAR incident id (investigation id).", required: true }
         - { name: "entry_id",    type: "string", description: "The war-room entry id to mark as evidence (from xsoar_add_entry or xsoar_get_war_room).", required: true }
         - { name: "description", type: "string", description: "Optional note describing why this is evidence.", required: false }
-      returns: { type: "object", description: "{ ok, evidence_id, incident_id, entry_id }" }
+      returns: { type: "object", description: "{ ok, incident_id, entry_id, tagged }" }
 
     - name: "xsoar_search_evidence"
       method: "POST /evidence/search"
@@ -238,7 +241,7 @@ spec:
 
     # ─── Server probe (connector-test path) ──────────────────────
     - name: "xsoar_health_check"
-      method: "GET /health"
+      method: "POST /incidents/search (minimal size:1 probe)"
       description: |
         Probe XSOAR server availability (the connector instance-test path).
         A quick "is XSOAR up and are my credentials valid?" check — a
