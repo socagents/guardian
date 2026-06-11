@@ -246,3 +246,15 @@ guardian-*.png
 # macOS Finder cruft
 .DS_Store
 reports/
+
+# Guardian self-learning loop (scripts/loop/, docs/loop/, .guardian-loop/)
+# state.json + state.md are TRACKED (the loop's versioned memory). Everything
+# below is loop-clone-local runtime state that MUST survive `git clean -fd`
+# (which never removes ignored files) and must NEVER be committed/pushed.
+scripts/loop/loop.env
+.guardian-loop/logs/
+.guardian-loop/.lock/
+.guardian-loop/IS_LOOP_CLONE
+.guardian-loop/deps.hash
+# Tunnel state dir created in the loop clone by scripts/guardian_tunnels.sh
+.guardian-tunnels/
