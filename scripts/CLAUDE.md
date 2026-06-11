@@ -40,5 +40,9 @@ If the answer is *"only if the operator runs it manually"* — still `scripts/`.
 | `export_spark_agent_bundle.sh` | Validate + package `bundles/spark/` into `dist/<name>.tar.zst` with checksums | Manual, bundle publishing |
 | `validate_spark_bundle.py` | Structural validation of the `bundles/spark/` tree (invoked by the exporter; runnable standalone) | Paired with export |
 | `generate_bundle_manifest.py` | Create a file manifest + optional HMAC signature for a bundle directory | Paired with export |
+| `loop/loop_state.py` | The loop's on-disk memory writer (`.guardian-loop/state.json` + `docs/loop/state.md`); `init`/`record`/`render` | Auto, every loop cycle |
+| `loop/run_gate.sh` | Runs the full Guardian gate (tsc/lint/build · mcp+updater pytest · validator) | Auto, loop VERIFY step + manual |
+| `loop/loop_bootstrap.sh` | One-time clone provisioning (npm ci + repo-root .venv + deps) | Manual, VM provisioning |
+| `loop/guardian_loop.sh` | launchd payload: guard → reset clone → best-effort tunnel → run headless `claude -p` against the playbook | Auto, nightly LaunchAgent |
 
 (CI's only script dependency outside this directory is `.github/scripts/push-with-retry.sh` — it does not live here.)

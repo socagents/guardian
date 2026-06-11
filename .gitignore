@@ -214,6 +214,7 @@ cython_debug/
 !.claude/agents/
 !.claude/hooks/
 !.claude/skills/
+!.claude/loop.md
 .claude/settings.local.json
 .claude/worktrees/
 .claude/claude-md-review.md
