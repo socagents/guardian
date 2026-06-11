@@ -147,13 +147,15 @@ Each cycle is bounded: N incidents, M improvements, a turn/$ cap (per the Agent 
 - **Phase 2 — Curriculum + memory layers**: build `xsoar_create_incident` + the KB-write surface; add seed → investigate → judge → distill-into-skills/knowledge/memory. Self-learning turns on.
 - **Phase 3 — Acting investigations**: add `xsoar_run_command` when the operator's workaround lands.
 
-## 7. Where the loop runs (to settle in the plan)
+## 7. Where the loop runs (RESOLVED — guardian-vm)
 
-The loop must reach **repo + GitHub + the VM (IAP) + the XSOAR tenant**. Two viable homes:
-1. **Local machine** — a local scheduled task; needs the machine awake at firing time; has `gcloud`/IAP, the repo, `gh`, `.env`.
-2. **On `guardian-vm`** (recommended lean) — a dedicated repo clone; always-on; local stack access without IAP; `gh` present via the runner host. Must avoid colliding with the CI runner workspace (use a separate clone + a loop-specific gh credential).
+The loop must reach **repo + GitHub + the Guardian stack + the XSOAR tenant**. **Decision (2026-06-11): it runs on `guardian-vm`.**
 
-Resolved in the implementation plan, not blocking the design. The mechanism is a **Claude Code scheduled task** (operator's choice — uses the full harness: skills, hooks, CLAUDE.md). The constraint is that it must run somewhere with **VM/IAP + repo + gh** access, so a **cloud routine is ruled out** (it can't reach the VM); the scheduled task therefore runs on the local machine (home 1) or on `guardian-vm` (home 2). Confirming which Claude Code scheduling surface satisfies "local, full-tool-access, survives session close" is an implementation step.
+- **Scheduler:** a **systemd timer** on the VM (durable, survives session close, OS-owned). A cloud routine is ruled out — it can't reach the VM; an in-session `/loop` is ruled out — it dies on session close.
+- **Payload:** the timer fires a wrapper that runs **`claude -p`** (headless Claude Code) — the *full* harness (CLAUDE.md, skills, hooks, `.claude/settings.json` permissions), just unattended. "Headless" ≠ lesser; it is the same agent with no human watching, which is exactly what "unattended" requires.
+- **Isolation:** a **dedicated clone** (`/home/ayman/guardian-loop`), separate from the CI runner workspace (`/home/ayman/actions-runner/_work/guardian/guardian`), with its own gh push credential.
+- **Stack access:** because it runs *on* the VM, it reaches the stack over `localhost` (`https://localhost:3000` agent, `:8090` updater) — **no IAP tunnel needed**.
+- **Delivery path:** the loop's `git push origin main` triggers the normal CI build + auto-deploy, so the loop's own fixes ship through the existing pipeline. At nightly cadence this is one CI cycle per loop run — no feedback storm.
 
 ## 8. Decisions captured
 
