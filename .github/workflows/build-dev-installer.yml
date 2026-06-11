@@ -133,7 +133,7 @@ jobs:
           # via the dev installer auto-deploy, so operator-mirror
           # testing covers updater changes the same way it covers
           # everything else.
-          for SVC in guardian-agent guardian-updater; do
+          for SVC in guardian-agent guardian-updater guardian-browser; do
             IMG="$REGISTRY/$OWNER/$SVC"
             echo "::group::resolve $SVC:dev"
             docker pull "$IMG:dev"
@@ -152,91 +152,48 @@ jobs:
             echo "::endgroup::"
           done
 
-          # Stack services NOT built on dev: browser only (post-v0.6.12).
-          # guardian-updater moved into the dev cycle in v0.6.12; see the
-          # :dev resolution loop above. Pull browser digest + the
-          # per-connector fallback digests from the latest stable release's
-          # manifest via the GitHub REST API + curl. We DON'T use
-          # `gh release download` — the gh CLI isn't installed on the
-          # self-hosted runner, and curl + python3 are always available.
-          echo "::group::fetch latest stable manifest for updater/browser"
+          # Browser is resolved from :dev above (build-browser.yml brought
+          # it into the dev cycle, mirroring updater — needed so a fresh,
+          # never-released repo can deploy). The latest STABLE release
+          # manifest is consulted ONLY as an optional fallback for
+          # per-connector digests whose :dev tag might be absent. On a
+          # never-released repo there is no stable release — that's fine:
+          # every service + connector now has a :dev tag, so the stable
+          # fetch is skipped gracefully (no hard failure).
+          declare -A STABLE_DIGESTS
+          echo "::group::fetch latest stable manifest (optional connector fallback)"
           LATEST_JSON="$(mktemp)"
-          # v0.17.84 — retry flags added after three back-to-back
-          # v0.17.83 builds hit intermittent 404s on /releases/latest.
-          # Same endpoint returned 200 from the same shell ~1s later.
-          # This is upstream GitHub API eventual-consistency flakiness.
-          # See docs/CICD.md failure mode #14.
-          curl -fsSL \
-            --retry 5 --retry-delay 5 --retry-all-errors \
+          # Tolerate "no releases yet" (HTTP 404) — capture the status
+          # instead of letting curl -f abort the step. Retries absorb the
+          # eventual-consistency 404 flakiness noted in docs/CICD.md #14.
+          HTTP=$(curl -sSL -o "$LATEST_JSON" -w '%{http_code}' \
+            --retry 3 --retry-delay 3 --retry-all-errors \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" \
-            > "$LATEST_JSON"
-          LATEST=$(python3 -c 'import sys, json; print(json.load(open(sys.argv[1])).get("tag_name", ""))' "$LATEST_JSON")
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" || true)
+          LATEST=""
+          if [[ "$HTTP" == "200" ]]; then
+            LATEST=$(python3 -c 'import sys, json; print(json.load(open(sys.argv[1])).get("tag_name", ""))' "$LATEST_JSON")
+          fi
           if [[ -z "$LATEST" ]]; then
-            echo "ERROR: no stable release found — cannot resolve updater/browser digests" >&2
-            cat "$LATEST_JSON" >&2
-            exit 1
-          fi
-          echo "Using stable release $LATEST as the source for non-dev services"
-
-          # Find the release-manifest-*.env asset URL among the release's assets.
-          # Single-line python3 -c so YAML's block-scalar parser stays happy
-          # (multi-line python inside a `run: |` confused yaml because the
-          # python source indented at column 1 broke the block-mapping rules).
-          MANIFEST_URL=$(python3 -c 'import sys, json; d = json.load(open(sys.argv[1])); print(next((a["url"] for a in d.get("assets", []) if a.get("name", "").startswith("release-manifest-") and a.get("name", "").endswith(".env")), ""))' "$LATEST_JSON")
-          if [[ -z "$MANIFEST_URL" ]]; then
-            echo "ERROR: no release-manifest-*.env asset in release $LATEST" >&2
-            exit 1
-          fi
-
-          # Download the asset bytes. Note the Accept: application/octet-stream
-          # header — without it the API returns asset metadata JSON, not the
-          # file contents.
-          STABLE_MANIFEST="$(mktemp)"
-          # v0.17.84 — retry flags for the same reason as the
-          # /releases/latest curl above; the asset-download endpoint
-          # sits behind the same eventual-consistency layer.
-          curl -fsSL \
-            --retry 5 --retry-delay 5 --retry-all-errors \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/octet-stream" \
-            "$MANIFEST_URL" > "$STABLE_MANIFEST"
-
-          # v0.6.12 — DIGEST_GUARDIAN_UPDATER no longer fetched from
-          # stable; it's resolved from :dev above. Only browser
-          # remains in the stable-fetch path.
-          for KEY in DIGEST_GUARDIAN_BROWSER; do
-            LINE=$(grep "^${KEY}=" "$STABLE_MANIFEST" || true)
-            if [[ -z "$LINE" ]]; then
-              echo "ERROR: $KEY missing from stable manifest" >&2
-              exit 1
+            echo "No stable release yet (HTTP $HTTP) — relying on :dev tags for all services + connectors."
+          else
+            echo "Using stable release $LATEST as the connector-digest fallback source"
+            MANIFEST_URL=$(python3 -c 'import sys, json; d = json.load(open(sys.argv[1])); print(next((a["url"] for a in d.get("assets", []) if a.get("name", "").startswith("release-manifest-") and a.get("name", "").endswith(".env")), ""))' "$LATEST_JSON")
+            if [[ -n "$MANIFEST_URL" ]]; then
+              STABLE_MANIFEST="$(mktemp)"
+              curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/octet-stream" \
+                "$MANIFEST_URL" > "$STABLE_MANIFEST" || true
+              while IFS='=' read -r KEY VALUE; do
+                if [[ "$KEY" =~ ^DIGEST_GUARDIAN_CONNECTOR_ ]]; then
+                  STABLE_DIGESTS["$KEY"]="$VALUE"
+                fi
+              done < "$STABLE_MANIFEST"
             fi
-            echo "$LINE" >> "$MANIFEST"
-            echo "  $LINE"
-          done
-
-          # v0.6.16 — per-connector image pins now resolved from :dev
-          # tags so dev cycle connector changes propagate to operator
-          # auto-deploy. Pre-v0.6.16 the dev manifest carried forward
-          # the LAST CUSTOMER RELEASE's connector digests; this meant
-          # build-connectors.yml could push fresh :dev tags but
-          # guardian-updater on guardian-vm would still pull the stable
-          # digest — a connector fix landed in the :dev image while
-          # the operator-side container kept running the prior
-          # release's code indefinitely.
-          #
-          # Resolution: docker-pull :dev for each connector; if the
-          # pull fails (e.g., :dev tag doesn't exist on a fresh repo),
-          # fall back to the stable manifest's value. Stable fallback
-          # is the safety net for the bootstrap case + connectors
-          # whose source has never been pushed.
-          declare -A STABLE_DIGESTS
-          while IFS='=' read -r KEY VALUE; do
-            if [[ "$KEY" =~ ^DIGEST_GUARDIAN_CONNECTOR_ ]]; then
-              STABLE_DIGESTS["$KEY"]="$VALUE"
-            fi
-          done < "$STABLE_MANIFEST"
+          fi
+          echo "::endgroup::"
 
           # Pair env-var name → ghcr image name. Ordered same as the
           # release manifest so the manifest reads predictably.
