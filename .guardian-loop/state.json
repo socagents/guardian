@@ -1,6 +1,17 @@
 {
   "schema_version": 1,
-  "cycles": [],
-  "next_focus": "self-heal: doc-sync audit (sidebar nav vs pages; architecture page service list vs docker compose)",
+  "cycles": [
+    {
+      "n": 1,
+      "started_at": "2026-06-11T09:43:08Z",
+      "focus": "self-heal scan: doc-sync + bug-family + spec-drift repo-only audits",
+      "outcome": "no-op",
+      "summary": "All repo-only audits clean: sidebar/pages in sync, arch service list matches installer compose, CHANGELOG=release-notes@v0.1.0, no usecase-imports in connectors, toolCount 13/10/6 matches yamls, no implementation-gap bullets (tunnel: down)",
+      "commit": "",
+      "gate": "",
+      "checker": "n/a"
+    }
+  ],
+  "next_focus": "self-heal: MCP tool docstrings vs UI forms lockstep audit (docs discipline #9, self_mod_tools.py vs system-management pages); re-run repo-only audits",
   "open_findings": []
 }
