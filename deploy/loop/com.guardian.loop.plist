@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.guardian.loop</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/ayman/guardian-loop/scripts/loop/guardian_loop.sh</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GUARDIAN_LOOP_HOME</key>
+    <string>/Users/ayman/guardian-loop</string>
+    <!-- launchd gives a minimal PATH and does NOT source ~/.zshrc, so add every
+         dir the pass needs: claude/node/npm (Homebrew), git, AND gcloud's SDK bin
+         (only added interactively by ~/.zshrc → guardian_tunnels.sh would otherwise
+         never find gcloud under launchd). Confirm the real paths in Task 9 Step 2;
+         if `which claude` is elsewhere, also set CLAUDE_BIN in loop.env. -->
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/Users/ayman/google-cloud-sdk/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <!-- Nightly at 02:30 local. launchd replays a job missed while the Mac was
+       ASLEEP at next wake (coalesced); a run missed because the Mac was powered
+       OFF is skipped (next fire is the following night). -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>2</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+
+  <!-- Schedule-only; do not run when (re)loaded. Test runs use `launchctl kickstart`. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/ayman/guardian-loop/.guardian-loop/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/ayman/guardian-loop/.guardian-loop/logs/launchd.err.log</string>
+</dict>
+</plist>
