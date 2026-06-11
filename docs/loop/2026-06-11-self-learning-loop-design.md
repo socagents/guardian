@@ -147,15 +147,18 @@ Each cycle is bounded: N incidents, M improvements, a turn/$ cap (per the Agent 
 - **Phase 2 — Curriculum + memory layers**: build `xsoar_create_incident` + the KB-write surface; add seed → investigate → judge → distill-into-skills/knowledge/memory. Self-learning turns on.
 - **Phase 3 — Acting investigations**: add `xsoar_run_command` when the operator's workaround lands.
 
-## 7. Where the loop runs (RESOLVED — guardian-vm)
+## 7. Where the loop runs (RESOLVED — local machine)
 
-The loop must reach **repo + GitHub + the Guardian stack + the XSOAR tenant**. **Decision (2026-06-11): it runs on `guardian-vm`.**
+The loop must reach **repo + GitHub + the Guardian stack + the XSOAR tenant**. **Decision (2026-06-11, revised): it runs on the operator's local machine (macOS), NOT on guardian-vm** — the operator does not want `claude` running on the VM.
 
-- **Scheduler:** a **systemd timer** on the VM (durable, survives session close, OS-owned). A cloud routine is ruled out — it can't reach the VM; an in-session `/loop` is ruled out — it dies on session close.
-- **Payload:** the timer fires a wrapper that runs **`claude -p`** (headless Claude Code) — the *full* harness (CLAUDE.md, skills, hooks, `.claude/settings.json` permissions), just unattended. "Headless" ≠ lesser; it is the same agent with no human watching, which is exactly what "unattended" requires.
-- **Isolation:** a **dedicated clone** (`/home/ayman/guardian-loop`), separate from the CI runner workspace (`/home/ayman/actions-runner/_work/guardian/guardian`), with its own gh push credential.
-- **Stack access:** because it runs *on* the VM, it reaches the stack over `localhost` (`https://localhost:3000` agent, `:8090` updater) — **no IAP tunnel needed**.
-- **Delivery path:** the loop's `git push origin main` triggers the normal CI build + auto-deploy, so the loop's own fixes ship through the existing pipeline. At nightly cadence this is one CI cycle per loop run — no feedback storm.
+- **Scheduler:** a **launchd LaunchAgent** on the Mac (durable, survives session close, OS-owned; launchd coalesces a missed run when the Mac was asleep at the fire time). A cloud routine is ruled out — it can't reach the VM/stack; an in-session `/loop` is ruled out — it dies on session close.
+- **Payload:** the LaunchAgent fires a wrapper that runs **`claude -p`** (headless Claude Code) — the *full* harness (CLAUDE.md, skills, hooks, `.claude/settings.json`), just unattended. "Headless" ≠ lesser; same agent, no human watching, which is exactly what "unattended" requires.
+- **Isolation:** a **dedicated clone at `~/guardian-loop`** — deliberately OUTSIDE `~/Documents` to avoid the macOS TCC Files-&-Folders revocation failure mode ([[documents-tcc-revocation-failure-mode]]), and separate from the operator's interactive working tree. The wrapper **hard-refuses** to run in the primary working repo, because its `git reset --hard origin/main` would destroy uncommitted work.
+- **Git push auth:** the Mac's existing git/`gh` credentials already push to `kite-production/guardian` — **no separate PAT needed** (unlike the VM option).
+- **`claude` auth:** already present locally (this is where Claude Code runs); the LaunchAgent inherits it, or `ANTHROPIC_API_KEY` in `loop.env`.
+- **Stack access:** the loop is NOT on the VM, so live-stack audits go through a **best-effort IAP tunnel** (reusing `scripts/guardian_tunnels.sh`, which reads `.env.vm`). Phase 1's work is overwhelmingly repo self-healing; if the tunnel can't open, the pass proceeds with repo-only audits.
+- **Delivery path:** `git push origin main` triggers the normal CI build + auto-deploy on the VM runner — the loop's fixes ship through the existing pipeline regardless of where the loop itself runs.
+- **Tradeoff accepted:** the Mac must be awake (or wake) around the fire time; launchd runs a missed job at next wake.
 
 ## 8. Decisions captured
 
