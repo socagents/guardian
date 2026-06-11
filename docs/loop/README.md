@@ -39,10 +39,10 @@ CI build + auto-deploy on the VM runner). No XSOAR seeding yet (Phase 2).
 - **Pause:** `launchctl bootout gui/$(id -u)/com.guardian.loop`
 - **Read what it's done:** `~/guardian-loop/docs/loop/state.md`.
 
-## Unattended auth (the two fragile, keychain-backed dependencies)
-- **`claude`** OAuth creds live in the macOS **login keychain** — readable only while the Mac is logged in AND the keychain is unlocked. A reboot/logout before the 02:30 fire LOCKS them and the pass fails to authenticate. For reliable nightly runs, set `ANTHROPIC_API_KEY` in `loop.env` (recommended over relying on the keychain).
-- **`git push`** uses `gh auth git-credential` reading gh's token from the keyring under the launchd session (no PAT). A future `gh` re-auth, a keychain ACL prompt, or a `gh` path change breaks the unattended push silently. Task 9 Step 7 verifies it under a launchd-like env.
-- **`gcloud`** (best-effort tunnel) uses your interactive SSO account, whose token expires on a corporate cadence; when it lapses, the tunnel silently degrades to repo-only audits (visible as `tunnel: down` in `state.md`). A dedicated service account + ADC is the proper unattended fix (Phase 2+).
+## Unattended auth (login-backed, by design)
+- **`claude`** runs on this laptop's **logged-in Claude Code session** (your subscription) — **no Anthropic API key, by design** (the loop runs locally, so it's the same `claude` you use interactively). Caveat: the login creds live in the macOS **login keychain**, unlocked only while you're logged in; a reboot/logout before the 02:30 fire locks them and that night's run skips — an accepted tradeoff (subscription over an API key). No `--max-budget-usd` either (subscription isn't $-billed; the wall-clock `LOOP_MAX_SECONDS` watchdog bounds each run).
+- **`git push`** uses `gh`'s **active account, which must stay `thekite-dev`** — the only account with access to `kite-production/guardian` (`ayman-m` 404s). The active-account credential IS the push auth (no per-clone PAT). If the active account drifts back to `ayman-m`, the nightly push fails; `gh auth switch --user thekite-dev` restores it.
+- **`gcloud`** (best-effort tunnel, only when `LOOP_USE_TUNNEL=1` + `.env.vm` present) uses your SSO account whose token expires on a corporate cadence; when it lapses the tunnel degrades to repo-only audits (Phase 1's default). A dedicated service account + ADC is the proper unattended fix (Phase 2+).
 
 ## Guardrails
 The loop auto-pushes to `main` with **no PR**. Its only guardrails are the full
