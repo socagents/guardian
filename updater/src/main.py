@@ -1609,23 +1609,22 @@ async def restart_service(service: str):
 # pin it. Future container-mode flip is automatic once we add the
 # style: "container" override; no additional code changes needed
 # beyond this set membership.
+# The connector roster the updater is allowed to spawn containers for.
+# The agent's container-start path posts to guardian-updater's
+# /api/v1/connectors/<id>/instances/<name>/start which validates
+# connector_id against THIS set. A connector missing here → updater
+# returns 400 "unknown connector_id" → no container spawns → tool calls
+# later error with "container_url — guardian-updater hasn't started the
+# container yet". Adding a connector to bundles/spark/connectors/ + the
+# manifest + the marketplace card REQUIRES adding it here too (the
+# new-connector checklist in docs/CICD.md lists this file).
+#
+# Guardian XSOAR pivot: roster is xsoar + cortex-docs + web. The former
+# xsiam / cortex-xdr / cortex-content connectors were removed.
 KNOWN_CONNECTORS = {
-    "xsiam",
-    "web",
+    "xsoar",
     "cortex-docs",
-    "cortex-content",
-    # v0.5.73 (issue #46): cortex-xdr was missing. v0.5.61 added the XDR
-    # connector code + synthetic-card + (v0.5.67) manifest.yaml entry,
-    # but the agent's container-start path posts to guardian-updater's
-    # /api/v1/connectors/<id>/instances/<name>/start which validates
-    # connector_id against THIS set. Missing here → updater returns 400
-    # "unknown connector_id 'cortex-xdr'" → no container spawns → tool
-    # calls later error with "container_url — guardian-updater hasn't
-    # started the container yet, or the routing entry was deleted."
-    # Same family of bug as v0.5.67's manifest miss; the new-connector
-    # checklist in docs/CICD.md (v0.5.67+) now lists THIS file as a
-    # required edit too.
-    "cortex-xdr",
+    "web",
 }
 
 
