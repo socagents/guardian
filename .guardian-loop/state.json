@@ -20,8 +20,18 @@
       "commit": "",
       "gate": "pass",
       "checker": "rejected"
+    },
+    {
+      "n": 3,
+      "started_at": "2026-06-11T13:17:22Z",
+      "focus": "redo doc-sync unit: jobs chat->prompt across docstrings, scheduler comments, system-prompt.ts, jobs/new header, RunResultBody",
+      "outcome": "checker-rejected",
+      "summary": "Fixed 5 surfaces (self_mod_tools.py docstrings, job_scheduler.py comments, system-prompt.ts:430 shape, jobs/new:9 header, jobs/[id] RunResultBody prompt match); gate PASS 7/7. Checker verified all 5 correct but rejected for 3 more same-family hits missed by my grep: describeAction jobs/[id]/page.tsx:72 (chat/log only), actionLabel jobs-list-client.tsx:205 (same), api-catalog.ts:972 (documents chat|tool_call|log as current); plus justify-or-fix docs/spec-patch-yaml-job-defs.md:87 example. Reverted, not pushed. (tunnel: down)",
+      "commit": "",
+      "gate": "pass",
+      "checker": "rejected"
     }
   ],
-  "next_focus": "Redo as ONE complete doc-sync unit: jobs_create/jobs_update docstrings chat->prompt + drop log refs (self_mod_tools.py:768,930), job_scheduler.py:119 comment, system-prompt.ts:430 jobs_create action shape, jobs/new/page.tsx:9 header comment; grep type.\"chat\"/log across agent lib+app for remaining hits",
+  "next_focus": "THIRD attempt jobs chat->prompt doc-sync — redo ALL of: self_mod_tools.py:768,930 docstrings; job_scheduler.py:119,126 comments; system-prompt.ts:430 shape (+skill?, deprecated-alias note); jobs/new/page.tsx:9 header; jobs/[id]/page.tsx RunResultBody:476 AND describeAction:72-93; jobs-list-client.tsx actionLabel:205-224; api-catalog.ts:972 action shape; docs/spec-patch-yaml-job-defs.md:87 example. Then grep chat|log patterns across mcp/agent/lib, mcp/agent/app, mcp/agent/components, docs/ before declaring complete. Keep chat as legacy-row match in renderers; journeys.ts:916 + jobs/new:264 + job_scheduler.py:498 stay (intentional legacy refs).",
   "open_findings": []
 }
