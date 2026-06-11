@@ -155,14 +155,13 @@ jobs:
         #   guardian-connector-runtime  → guardian-connector-runtime/
         #     (added v0.1.30 — base image every per-connector container
         #      inherits from; see docs/spec-per-instance-connector-containers.md)
-        #   guardian-connector-xsiam      → bundles/spark/connectors/xsiam/
+        #   guardian-connector-xsoar      → bundles/spark/connectors/xsoar/
         #     PLUS rebuilds whenever guardian-connector-runtime rebuilds,
         #     because the FROM in its Dockerfile points at the base image's
         #     digest. Same OR-logic for the other connectors below.
         #   guardian-connector-web        → bundles/spark/connectors/web/
         #   guardian-connector-cortex-docs → bundles/spark/connectors/cortex-docs/  (v0.3.1+)
-        #     Module-style today; image exists for v0.2 container-mode
-        #     future. Same FROM-runtime force-rebuild logic as the other
+        #     Same FROM-runtime force-rebuild logic as the other
         #     per-connector images.
         #
         # Exposes per-service `changed` outputs (1/0) and the previous
@@ -211,9 +210,8 @@ jobs:
             echo "::notice::No previous semver tag found — first release. Building everything."
             AGENT=1; UPDATER=1; BROWSER=1
             CONNECTOR_RUNTIME=1
-            CONNECTOR_XSIAM=1; CONNECTOR_WEB=1
-            CONNECTOR_CORTEX_DOCS=1; CONNECTOR_CORTEX_CONTENT=1
-            CONNECTOR_CORTEX_XDR=1  # v0.6.20+ — added retroactively; was missed when cortex-xdr landed in v0.5.61
+            CONNECTOR_XSOAR=1; CONNECTOR_WEB=1
+            CONNECTOR_CORTEX_DOCS=1
             PREV_VERSION=""
           else
             PREV_VERSION="${PREV#v}"
@@ -237,31 +235,17 @@ jobs:
             CONNECTOR_RUNTIME=$(changed guardian-connector-runtime/)
             # Per-connector images: rebuild when their source changed
             # OR when the runtime base rebuilt (FROM dependency).
-            CONNECTOR_XSIAM=$(changed bundles/spark/connectors/xsiam/)
+            CONNECTOR_XSOAR=$(changed bundles/spark/connectors/xsoar/)
             CONNECTOR_WEB=$(changed bundles/spark/connectors/web/)
             # v0.3.1+ — Cortex docs connector
             CONNECTOR_CORTEX_DOCS=$(changed bundles/spark/connectors/cortex-docs/)
-            # v0.5.0+ — Cortex Content connector (was module-style only
-            # in v0.3.9; v0.5.0 ships its container image alongside the
-            # universal container-mode migration).
-            CONNECTOR_CORTEX_CONTENT=$(changed bundles/spark/connectors/cortex-content/)
-            # v0.5.61+ — Cortex XDR connector (build-connectors.yml
-            # has built this image since v0.5.61, but release.yml was
-            # never updated to include it in the digest manifest). The
-            # gap surfaced in v0.6.20 when an operator restart of a
-            # cortex-xdr instance fell to tag-pinning and tried to pull
-            # `:dev-<sha>` which doesn't exist; guardian-updater's image
-            # resolution NEEDS digest-pinning to work. v0.6.20 closes
-            # the plumbing gap retroactively.
-            CONNECTOR_CORTEX_XDR=$(changed bundles/spark/connectors/cortex-xdr/)
             # OR with runtime base — if it rebuilt, every connector
             # image's FROM resolves to a new digest, so they all need
             # a fresh build to inherit the new layer.
             if [ "$CONNECTOR_RUNTIME" = "1" ]; then
-              CONNECTOR_XSIAM=1; CONNECTOR_WEB=1
-              CONNECTOR_CORTEX_DOCS=1; CONNECTOR_CORTEX_CONTENT=1
-              CONNECTOR_CORTEX_XDR=1  # v0.6.20+
-              echo "::notice::guardian-connector-runtime rebuilt — forcing rebuild of all 5 per-connector images (FROM dependency)"
+              CONNECTOR_XSOAR=1; CONNECTOR_WEB=1
+              CONNECTOR_CORTEX_DOCS=1
+              echo "::notice::guardian-connector-runtime rebuilt — forcing rebuild of all 3 per-connector images (FROM dependency)"
             fi
           fi
 
@@ -270,11 +254,9 @@ jobs:
             echo "updater=$UPDATER"
             echo "browser=$BROWSER"
             echo "connector_runtime=$CONNECTOR_RUNTIME"
-            echo "connector_xsiam=$CONNECTOR_XSIAM"
+            echo "connector_xsoar=$CONNECTOR_XSOAR"
             echo "connector_web=$CONNECTOR_WEB"
             echo "connector_cortex_docs=$CONNECTOR_CORTEX_DOCS"
-            echo "connector_cortex_content=$CONNECTOR_CORTEX_CONTENT"
-            echo "connector_cortex_xdr=$CONNECTOR_CORTEX_XDR"  # v0.6.20+
             echo "prev_version=$PREV_VERSION"
           } >> "$GITHUB_OUTPUT"
 
@@ -310,7 +292,7 @@ jobs:
             # The hyphenated cortex-docs name needs a separate iteration
             # because the env-var conversion (csvc → uppercase) only
             # works cleanly for single-word connector names.
-            for csvc in xsiam web; do
+            for csvc in xsoar web; do
               var="CONNECTOR_$(echo $csvc | tr a-z A-Z)"
               ch=$(eval "echo \$$var")
               if [ "$ch" = "1" ]; then
@@ -327,24 +309,6 @@ jobs:
               cd_action="🏷️  retag $PREV_VERSION"
             fi
             echo "| guardian-connector-cortex-docs | $CONNECTOR_CORTEX_DOCS | $cd_action |"
-            # cortex-content (also hyphenated, also missed from the
-            # for-loop above). Pre-v0.6.20 this row was missing from
-            # the summary table — the rebuild decision still HAPPENED,
-            # but operators reading the workflow summary couldn't see
-            # cortex-content's status. Same shape as cortex-docs.
-            if [ "$CONNECTOR_CORTEX_CONTENT" = "1" ]; then
-              cc_action="🔨 rebuild"
-            else
-              cc_action="🏷️  retag $PREV_VERSION"
-            fi
-            echo "| guardian-connector-cortex-content | $CONNECTOR_CORTEX_CONTENT | $cc_action |"
-            # cortex-xdr (v0.5.61+, plumbed retroactively in v0.6.20).
-            if [ "$CONNECTOR_CORTEX_XDR" = "1" ]; then
-              cx_action="🔨 rebuild"
-            else
-              cx_action="🏷️  retag $PREV_VERSION"
-            fi
-            echo "| guardian-connector-cortex-xdr | $CONNECTOR_CORTEX_XDR | $cx_action |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Log in to GHCR
@@ -519,29 +483,45 @@ jobs:
       # and need that path visible in the build context.
       # ──────────────────────────────────────────────────────────────
 
-      - name: Build or retag guardian-connector-xsiam
+      - name: Build or retag guardian-connector-xsoar
         env:
           V: ${{ steps.ver.outputs.version }}
           MM: ${{ steps.ver.outputs.minor }}
-          CHANGED: ${{ steps.changed.outputs.connector_xsiam }}
+          CHANGED: ${{ steps.changed.outputs.connector_xsoar }}
           PREV_V: ${{ steps.changed.outputs.prev_version }}
         run: |
-          IMG="$REGISTRY/$OWNER/guardian-connector-xsiam"
+          IMG="$REGISTRY/$OWNER/guardian-connector-xsoar"
           if [ "$CHANGED" = "1" ]; then
-            echo "::notice::guardian-connector-xsiam rebuilding (source or runtime base changed)"
+            echo "::notice::guardian-connector-xsoar rebuilding (source or runtime base changed)"
             docker build \
               --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
-              -f bundles/spark/connectors/xsiam/Dockerfile \
+              -f bundles/spark/connectors/xsoar/Dockerfile \
               -t "$IMG:$V" \
               -t "$IMG:$MM" \
               -t "$IMG:latest" \
               .
           else
-            echo "::notice::guardian-connector-xsiam source unchanged — retagging $PREV_V → $V/$MM/latest"
-            docker pull "$IMG:$PREV_V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$MM"
-            docker tag  "$IMG:$PREV_V" "$IMG:latest"
+            # First release with the xsoar connector in the manifest
+            # may not have a $PREV_V tag for this image (it landed in the
+            # Guardian XSOAR pivot, replacing xsiam/cortex-xdr/
+            # cortex-content). If the PREV pull fails, build from source
+            # so this release has a tagged image to pin. The next
+            # release retags normally.
+            echo "::notice::guardian-connector-xsoar source unchanged — retagging $PREV_V → $V/$MM/latest (or building if PREV pull fails)"
+            if docker pull "$IMG:$PREV_V"; then
+              docker tag  "$IMG:$PREV_V" "$IMG:$V"
+              docker tag  "$IMG:$PREV_V" "$IMG:$MM"
+              docker tag  "$IMG:$PREV_V" "$IMG:latest"
+            else
+              echo "::warning::guardian-connector-xsoar has no $PREV_V tag (first release with xsoar in the manifest). Building from source instead so this release has a tagged image to pin."
+              docker build \
+                --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
+                -f bundles/spark/connectors/xsoar/Dockerfile \
+                -t "$IMG:$V" \
+                -t "$IMG:$MM" \
+                -t "$IMG:latest" \
+                .
+            fi
           fi
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
@@ -576,8 +556,8 @@ jobs:
       - name: Build or retag guardian-connector-cortex-docs
         # v0.3.1+ — Cortex public-documentation search/lookup connector.
         # v0.5.0: flipped to container-style alongside the rest of the
-        # universal container-mode migration (xsiam/web/
-        # cortex-content/cortex-docs all run as per-instance containers).
+        # universal container-mode migration (xsoar/web/cortex-docs all
+        # run as per-instance containers).
         env:
           V: ${{ steps.ver.outputs.version }}
           MM: ${{ steps.ver.outputs.minor }}
@@ -600,89 +580,6 @@ jobs:
             docker tag  "$IMG:$PREV_V" "$IMG:$V"
             docker tag  "$IMG:$PREV_V" "$IMG:$MM"
             docker tag  "$IMG:$PREV_V" "$IMG:latest"
-          fi
-          .github/scripts/push-with-retry.sh \
-            "$IMG:$V" "$IMG:$MM" "$IMG:latest"
-
-      - name: Build or retag guardian-connector-cortex-content
-        # v0.5.0+ — Cortex Content marketplace fetch connector. New
-        # image for the universal container-mode migration; the
-        # connector source pre-existed (v0.3.7+) but ran in-process
-        # before. Stdlib + httpx — same dependency profile as the
-        # cortex-docs image.
-        env:
-          V: ${{ steps.ver.outputs.version }}
-          MM: ${{ steps.ver.outputs.minor }}
-          CHANGED: ${{ steps.changed.outputs.connector_cortex_content }}
-          PREV_V: ${{ steps.changed.outputs.prev_version }}
-        run: |
-          IMG="$REGISTRY/$OWNER/guardian-connector-cortex-content"
-          if [ "$CHANGED" = "1" ]; then
-            echo "::notice::guardian-connector-cortex-content rebuilding (source or runtime base changed)"
-            docker build \
-              --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
-              -f bundles/spark/connectors/cortex-content/Dockerfile \
-              -t "$IMG:$V" \
-              -t "$IMG:$MM" \
-              -t "$IMG:latest" \
-              .
-          else
-            echo "::notice::guardian-connector-cortex-content source unchanged — retagging $PREV_V → $V/$MM/latest"
-            docker pull "$IMG:$PREV_V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$V"
-            docker tag  "$IMG:$PREV_V" "$IMG:$MM"
-            docker tag  "$IMG:$PREV_V" "$IMG:latest"
-          fi
-          .github/scripts/push-with-retry.sh \
-            "$IMG:$V" "$IMG:$MM" "$IMG:latest"
-
-      - name: Build or retag guardian-connector-cortex-xdr
-        # v0.5.61+ — Cortex XDR connector for detection-engineering
-        # round-trip workflows. build-connectors.yml has built this
-        # image since v0.5.61, but release.yml was never updated to
-        # include it in the digest-pinning manifest. v0.6.20 closes
-        # the plumbing gap retroactively. Same shape as cortex-content
-        # and cortex-docs; depends on the same guardian-connector-
-        # runtime base.
-        env:
-          V: ${{ steps.ver.outputs.version }}
-          MM: ${{ steps.ver.outputs.minor }}
-          CHANGED: ${{ steps.changed.outputs.connector_cortex_xdr }}
-          PREV_V: ${{ steps.changed.outputs.prev_version }}
-        run: |
-          IMG="$REGISTRY/$OWNER/guardian-connector-cortex-xdr"
-          if [ "$CHANGED" = "1" ]; then
-            echo "::notice::guardian-connector-cortex-xdr rebuilding (source or runtime base changed)"
-            docker build \
-              --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
-              -f bundles/spark/connectors/cortex-xdr/Dockerfile \
-              -t "$IMG:$V" \
-              -t "$IMG:$MM" \
-              -t "$IMG:latest" \
-              .
-          else
-            # First release with cortex-xdr in the manifest may not
-            # have a $PREV_V tag for this image (pre-v0.6.20 customer
-            # releases didn't push cortex-xdr at vX.Y.Z tags — only
-            # build-connectors.yml's :dev / :<sha> tags exist). If the
-            # PREV pull fails, build from source instead so we have a
-            # tagged version under this release. The next release can
-            # retag normally.
-            echo "::notice::guardian-connector-cortex-xdr source unchanged — retagging $PREV_V → $V/$MM/latest (or building if PREV pull fails)"
-            if docker pull "$IMG:$PREV_V"; then
-              docker tag  "$IMG:$PREV_V" "$IMG:$V"
-              docker tag  "$IMG:$PREV_V" "$IMG:$MM"
-              docker tag  "$IMG:$PREV_V" "$IMG:latest"
-            else
-              echo "::warning::guardian-connector-cortex-xdr has no $PREV_V tag (first release with cortex-xdr in the manifest). Building from source instead so this release has a tagged image to pin."
-              docker build \
-                --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
-                -f bundles/spark/connectors/cortex-xdr/Dockerfile \
-                -t "$IMG:$V" \
-                -t "$IMG:$MM" \
-                -t "$IMG:latest" \
-                .
-            fi
           fi
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
@@ -729,11 +626,9 @@ jobs:
             guardian-updater
             guardian-browser
             guardian-connector-runtime
-            guardian-connector-xsiam
+            guardian-connector-xsoar
             guardian-connector-web
             guardian-connector-cortex-docs
-            guardian-connector-cortex-content
-            guardian-connector-cortex-xdr
           )
 
           {
@@ -770,7 +665,7 @@ jobs:
               DIGEST="${FULL##*@}"
               # Convert the package name to an env-var name.
               # guardian-agent → DIGEST_GUARDIAN_AGENT
-              # guardian-connector-xsiam → DIGEST_GUARDIAN_CONNECTOR_XSIAM
+              # guardian-connector-xsoar → DIGEST_GUARDIAN_CONNECTOR_XSOAR
               VAR_NAME="DIGEST_$(echo "$img" | tr 'a-z-' 'A-Z_')"
               echo "${VAR_NAME}=${DIGEST}"
             done
@@ -950,9 +845,9 @@ jobs:
             echo "- ghcr.io/$OWNER/guardian-updater:$V"
             echo "- ghcr.io/$OWNER/guardian-browser:$V (v0.1.27+, profile-gated)"
             echo "- ghcr.io/$OWNER/guardian-connector-runtime:$V (v0.1.30+, base for per-connector containers; not directly run)"
-            echo "- ghcr.io/$OWNER/guardian-connector-xsiam:$V (v0.1.30+, dormant unless an instance has runtime: container)"
-            echo "- ghcr.io/$OWNER/guardian-connector-web:$V (v0.1.30+, dormant)"
-            echo "- ghcr.io/$OWNER/guardian-connector-cortex-docs:$V (v0.3.1+, module-style today; image exists for v0.2 container-mode future)"
+            echo "- ghcr.io/$OWNER/guardian-connector-xsoar:$V (dormant unless an XSOAR instance is created)"
+            echo "- ghcr.io/$OWNER/guardian-connector-web:$V (dormant unless a web instance is created)"
+            echo "- ghcr.io/$OWNER/guardian-connector-cortex-docs:$V (dormant unless a cortex-docs instance is created)"
           } > "$NOTES"
 
           # v0.4.0 — reset-ui-password.sh standalone asset retired. The
@@ -1031,7 +926,7 @@ jobs:
         run: |
           for img in guardian-agent guardian-updater guardian-browser \
                      guardian-connector-runtime \
-                     guardian-connector-xsiam guardian-connector-web \
+                     guardian-connector-xsoar guardian-connector-web \
                      guardian-connector-cortex-docs; do
             docker image rm -f \
               "$REGISTRY/$OWNER/$img:$V" \

@@ -1023,7 +1023,7 @@ function CreateJobPage() {
                     value={allowedTools}
                     onChange={(e) => setAllowedTools(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl text-sm bg-surface-container-low border border-white/10 text-on-surface font-mono"
-                    placeholder="e.g. xsiam_*, xdr_*"
+                    placeholder="e.g. xsoar_*, cortex_*"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1033,7 +1033,7 @@ function CreateJobPage() {
                     value={deniedTools}
                     onChange={(e) => setDeniedTools(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl text-sm bg-surface-container-low border border-white/10 text-on-surface font-mono"
-                    placeholder="e.g. *_delete, xsiam_create_dataset"
+                    placeholder="e.g. *_delete, xsoar_close_incident"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1043,7 +1043,7 @@ function CreateJobPage() {
                     value={requireApproval}
                     onChange={(e) => setRequireApproval(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl text-sm bg-surface-container-low border border-white/10 text-on-surface font-mono"
-                    placeholder="e.g. xsiam_write_*, api_keys_*"
+                    placeholder="e.g. xsoar_update_*, api_keys_*"
                   />
                 </div>
               </div>
@@ -1094,7 +1094,7 @@ function CreateJobPage() {
                       type="text"
                       value={toolName}
                       onChange={(e) => setToolName(e.target.value)}
-                      placeholder="xsiam_run_xql_query"
+                      placeholder="xsoar_list_incidents"
                       className="w-full bg-surface-container-highest border-none rounded-xl py-2.5 px-4 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:ring-1 focus:ring-primary font-mono"
                     />
                   </div>
@@ -1105,7 +1105,7 @@ function CreateJobPage() {
                     <textarea
                       value={toolArgsJson}
                       onChange={(e) => setToolArgsJson(e.target.value)}
-                      placeholder='{"query": "dataset = xdr_data | limit 10"}'
+                      placeholder='{"query": "status:active severity:High", "page_size": 25}'
                       rows={5}
                       className="w-full bg-surface-container-highest border-none rounded-xl py-2.5 px-4 text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:ring-1 focus:ring-primary font-mono resize-none"
                     />

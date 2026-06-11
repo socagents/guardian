@@ -340,7 +340,7 @@ class SqliteKnowledgeBase:
         limit: int = 100,
         offset: int = 0,
     ) -> list[KbDocument]:
-        # v0.7.1: limit cap raised 500 → 2000. The xql-examples KB grew
+        # v0.7.1: limit cap raised 500 → 2000. A large bundled KB grew
         # to 787 entries in v0.7.0; the old 500 cap silently truncated.
         # 2000 is a balanced max — enough to return the full set in one
         # call for any KB that's reasonable to operate on, while still

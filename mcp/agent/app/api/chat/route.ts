@@ -285,7 +285,7 @@ const SUBAGENT_CREATE_TOOL_SPEC = {
   description:
     'Spawn a scoped subagent to perform a focused task. The subagent ' +
     'runs with its own system prompt and a curated tool subset (e.g. ' +
-    'triage subagent only sees xsiam_get_*, enrichment subagent only xdr_*). ' +
+    'triage subagent only sees xsoar_list_incidents, enrichment subagent only xsoar_search_indicators). ' +
     'Use when a task needs a different operating posture than this ' +
     "session — don't use it for trivial sub-questions you can answer " +
     'directly. Available agent_name values come from /api/v1/' +
@@ -961,21 +961,20 @@ async function callGeminiRaw(
  * Returns null for tools that don't belong to any connector (built-in
  * MCP tools like instances_list, audit_recent, etc.).
  *
- * Handles both modern dotted form ("cortex-xdr.get_alerts" → "cortex-xdr")
- * and legacy flat aliases ("xdr_get_alerts" → "cortex-xdr").
+ * Handles both modern dotted form ("xsoar.get_incident" → "xsoar")
+ * and flat aliases ("xsoar_get_incident" → "xsoar").
  *
  * Pre-v0.6.42 this was an inline `toolName.split('_', 1)[0]` which
  * produced wrong connector_ids for connectors whose function prefix
  * differs from their id:
- *   xdr_get_cases_and_issues  → "xdr"      WRONG (id is "cortex-xdr")
  *   guardian_web_navigate      → "guardian"  WRONG (id is "web")
  *   cortex_search             → "cortex"   WRONG (id is "cortex-docs")
  *
  * Resulting bug: connector failures + successes recorded against
- * non-existent connector_ids ("xdr", "guardian", "cortex"); the
+ * non-existent connector_ids ("guardian", "cortex"); the
  * connector_auth_required UI event fired with the wrong id; the
  * /observability/connectors state machine missed real failures for
- * cortex-xdr, cortex-docs, cortex-content, and web.
+ * xsoar, cortex-docs, and web.
  *
  * The prefix-to-id mapping below is hardcoded against bundles/spark/
  * connectors/*\/connector.yaml's `functionPrefix` field. When a new
@@ -988,24 +987,12 @@ function deriveConnectorId(toolName: string): string | null {
   if (toolName.includes('.')) {
     return toolName.split('.', 2)[0];
   }
-  // Legacy flat aliases — order matters (longer prefixes first).
+  // Flat aliases — order matters (longer prefixes first).
   if (toolName.startsWith('guardian_web_')) return 'web';
-  if (toolName.startsWith('xdr_')) return 'cortex-xdr';
-  if (toolName.startsWith('xsiam_')) return 'xsiam';
-  if (toolName.startsWith('cortex_')) {
-    // cortex-content + cortex-docs both use the `cortex_` prefix.
-    // Disambiguate by checking against cortex-docs's small, stable
-    // __all__ set. Everything else falls to cortex-content.
-    const CORTEX_DOCS_TOOLS = new Set([
-      'cortex_search',
-      'cortex_suggest',
-      'cortex_xql_lookup',
-      'cortex_fetch_topic',
-      'cortex_fetch_toc',
-      'cortex_deep_research',
-    ]);
-    return CORTEX_DOCS_TOOLS.has(toolName) ? 'cortex-docs' : 'cortex-content';
-  }
+  if (toolName.startsWith('xsoar_')) return 'xsoar';
+  // cortex-docs is the only surviving `cortex_`-prefixed connector
+  // (cortex-content was removed in the XSOAR pivot).
+  if (toolName.startsWith('cortex_')) return 'cortex-docs';
   // Tools that aren't connector-namespaced (e.g. instances_list,
   // audit_recent, jobs_create, marketplace_install — built-in MCP
   // tools that don't belong to any connector). Caller should skip
@@ -2929,27 +2916,28 @@ Format:
 \`\`\`
 ## Proposed plan
 
-1. **xsiam.run_xql_query** — query "dataset = xdr_data | filter
-   action_local_ip in (10.0.0.0/8) | comp count() by actor_effective_username",
-   tenant default
-   *Why: scopes the suspicious auth activity to the affected users
-   so the rest of the investigation targets the right accounts.*
+1. **xsoar.list_incidents** — query "status:active severity:High",
+   last 24h, newest first
+   *Why: surfaces the open high-severity cases that need triage so
+   the investigation targets the right incident first.*
 
-2. **xdr.get_cases_and_issues** — filter to open cases touching the
-   hosts surfaced in step 1
-   *Why: ties the XQL findings to existing cases so we don't open a
-   duplicate investigation.*
+2. **xsoar.get_incident** — incident id from the top hit in step 1
+   *Why: pulls the full case record (fields, labels, owner, linked
+   indicators) so the investigation works from the real data.*
 
-3. **xsiam.get_asset_by_id** — asset id from the top hit in step 2
-   *Why: confirms owner, criticality, and exposure of the impacted
-   asset before recommending containment.*
+3. **xsoar.get_war_room** — investigation id == the incident id
+   *Why: reads the existing analyst narrative and evidence so we
+   build on prior work instead of duplicating it.*
 
-4. **xsiam.add_lookup_data** — lookup "ir_suspicious_accounts",
-   rows from step 1's account list
-   *Why: persists the flagged accounts so detection rules and later
-   hunts can reference them.*
-   **Risk:** writes rows to a real tenant lookup. Remove the rows
-   if the investigation clears the accounts.
+4. **xsoar.search_indicators** — IOC values pulled from the case
+   *Why: enriches the indicators with XSOAR's threat-intel verdicts
+   and related-incident links before recommending a disposition.*
+
+5. **xsoar.add_note** — incident id from step 2, the investigation
+   summary as markdown
+   *Why: documents the findings inline on the case record.*
+   **Risk:** writes a war-room entry to a real case. Keep it factual
+   and evidence-grounded — it becomes part of the case audit trail.
 
 ... (etc)
 
@@ -4385,20 +4373,6 @@ export async function POST(request: NextRequest) {
         // instead of a silent dead-end.
         let exhaustedBudget = true;
 
-        // v0.6.65 — per-turn xdr_run_xql_query consecutive-failure counter.
-        // Operator chat session 26a7fdd3 (2026-05-20) showed Gemini
-        // burning 18 retries on prompt 4 (data-exfil + ASN) before
-        // hitting the tool budget limit + giving up. The skill prompt
-        // says "max 3 iterations" but that's advisory; the LLM bent
-        // the rule under pressure. v0.6.65 makes it binding: after 3
-        // consecutive FAIL responses from xdr_run_xql_query (resets on
-        // any SUCCESS), the route injects a synthetic STOP directive
-        // into the next functionResponse. The LLM sees "you've hit the
-        // 3-iteration cap; stop retrying + summarize what you learned"
-        // and breaks out of the thrash loop.
-        let xdrConsecutiveFailures = 0;
-        const XDR_FAIL_CAP = 3;
-
         // v0.17.117 — leaked-tool-call recovery counter (issue #114).
         // Gemini thinking models occasionally serialize a LARGE pending
         // tool call (e.g. xsiam_add_lookup_data with a ~3,900-token
@@ -5186,72 +5160,6 @@ export async function POST(request: NextRequest) {
               },
             });
 
-            // v0.6.65 — track consecutive xdr_run_xql_query failures
-            // for the 3-iteration cap. The result is JSON-shaped per
-            // the cortex-xdr connector contract; parse leniently +
-            // count anything that isn't a clear SUCCESS as a failure.
-            if (toolName === 'xdr_run_xql_query') {
-              let isFailure = false;
-              try {
-                const parsed = JSON.parse(resultText);
-                // FAIL response shapes (from connector.py:run_xql_query):
-                //   {ok: false, error: "..."}            transport error
-                //   {status: "FAIL"|"FAILED", ...}       XDR rejected the query
-                //   {status: "CANCELLED"|"TIMEOUT", ...} not a query bug, but counts
-                // SUCCESS shape:
-                //   {status: "SUCCESS", results: [...], total_rows: N}
-                if (parsed?.ok === false) {
-                  isFailure = true;
-                } else if (
-                  parsed?.status &&
-                  parsed.status !== 'SUCCESS' &&
-                  parsed.status !== 'PENDING'
-                ) {
-                  isFailure = true;
-                }
-              } catch {
-                // Non-JSON result — treat as opaque, don't count.
-              }
-              if (isFailure) {
-                xdrConsecutiveFailures += 1;
-              } else {
-                xdrConsecutiveFailures = 0;
-              }
-              // After hitting the cap, inject a synthetic system-style
-              // message telling the LLM to STOP retrying. The injection
-              // happens on the SAME response-parts batch so the LLM
-              // sees it together with the most recent tool result and
-              // can fold it into its next decision. The counter is
-              // reset to 0 here so a single STOP fires per breach.
-              if (xdrConsecutiveFailures >= XDR_FAIL_CAP) {
-                responseParts.push({
-                  functionResponse: {
-                    name: '__system_stop_directive__',
-                    response: {
-                      stop_directive: (
-                        `You have run xdr_run_xql_query ${XDR_FAIL_CAP} ` +
-                        `times in a row without a SUCCESS response. The ` +
-                        `build_xql_query skill's iteration loop caps at ` +
-                        `${XDR_FAIL_CAP} iterations for exactly this case ` +
-                        `— more retries won't converge; the underlying ` +
-                        `issue needs operator clarification, not more ` +
-                        `synthesis. STOP retrying xdr_run_xql_query right ` +
-                        `now. Summarize for the operator: (a) the user's ` +
-                        `original question, (b) the synthesized query ` +
-                        `text you last tried, (c) the specific error ` +
-                        `message from XDR, (d) one or two concrete ` +
-                        `clarifying questions you'd need answered to make ` +
-                        `progress (e.g. "which tenant dataset has this ` +
-                        `field?", "what's the canonical name for X in ` +
-                        `your environment?"). Do NOT call ` +
-                        `xdr_run_xql_query again in this turn.`
-                      ),
-                    },
-                  },
-                });
-                xdrConsecutiveFailures = 0; // one STOP per breach
-              }
-            }
           }
 
           if (responseParts.length > 0) {

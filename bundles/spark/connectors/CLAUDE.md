@@ -7,11 +7,10 @@ Each connector ships as its own image at customer release time. The agent dispat
 ## Layout
 
 Each connector is a subdirectory named after itself:
-- `xsiam/` — XSIAM PAPI integration
-- `cortex-content/` — Cortex content catalog (data sources / packs / modeling rules) — local catalog at `cortex-content/baked/`
+- `xsoar/` — Cortex XSOAR case (incident) integration. Supports XSOAR 6 (on-prem, single API key in the Authorization header) and XSOAR 8 / Cortex cloud (API key + key id via `x-xdr-auth-id`, `/xsoar/public/v1` path prefix). Detection: `api_id` set → v8; else v6.
 - `cortex-docs/` — Cortex documentation search
-- `cortex-xdr/` — Cortex XDR API
 - `web/` — Web browsing via Playwright + headless Chromium (guardian-browser CDP)
+- `_runtime/` — the shared `guardian-connector-runtime` base image source (not a connector itself; the others build `FROM` it).
 
 `connector.schema.json` (top-level here) is the JSON-Schema validator every `connector.yaml` validates against at boot AND at upload time.
 
@@ -42,12 +41,6 @@ The agent does NOT have INSTANCE tools — instances carry credentials, which ar
 ## Import-style discipline (v0.5.77 bug pattern)
 
 Use `from src.X import Y` (with `src.` prefix) — NOT `from usecase.X import Y`. The latter only resolves with a specific PYTHONPATH that production deployments don't always have. v0.5.77 + v0.5.80 cleaned up the family of bugs caused by mixed import styles. When in doubt, grep for `from usecase\\.` across connectors before merging.
-
-## cortex-content / baked catalog (v0.8.1+)
-
-`cortex-content/baked/` ships **inside the agent image** — 197 packs / 232 schemas / 145 vendor logos / 576 files / 2.9 MB. Zero outbound network at runtime. The catalog is excluded from agent context via `.claudeignore` — to inspect it, hit `GET /api/v1/data-sources/catalog` on the running install or read the bake script at `scripts/refresh_cortex_baked_catalog.py`.
-
-The refresh script is **maintainer-only** — never invoked at runtime, never referenced in operator-visible surfaces.
 
 ## User-uploaded connectors
 

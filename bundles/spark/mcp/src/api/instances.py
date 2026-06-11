@@ -90,7 +90,7 @@ def _instance_to_dict(
         # _agent_set_container_url callback for style:container
         # connectors) but this serializer was silently dropping it.
         # Caught during a bug-scan pass: SQLite row had a valid
-        # container_url for cortex-xdr and cortex-docs but
+        # container_url for xsoar and cortex-docs but
         # API consumers got None. Same gap is fixed in the
         # instances_list + instances_get MCP tools in self_mod_tools.py
         # (bug-family). None is the expected value for in-process
@@ -786,7 +786,7 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
                             connection-history. Default true if any
                             override is present, false otherwise.
 
-        For connectors without a wired probe (xsiam) returns the
+        For connectors without a wired probe returns the
         current state unchanged with a `probe_implemented: false`
         flag so the UI can render an explanatory message.
 

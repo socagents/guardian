@@ -56,10 +56,9 @@ Why a store (vs. inline in code):
 Same matcher as the hooks framework: comma-separated globs with
 `*` (any chars) and `?` (single char). Examples:
 
-    tools_allowed: ["xdr_*"]                   # XDR-incident focus
-    tools_allowed: ["xsiam_run_xql_query",
-                    "xsiam_get_datasets",
-                    "xsiam_get_dataset_fields"]  # query-only narrow
+    tools_allowed: ["xsoar_*"]                 # XSOAR-case focus
+    tools_allowed: ["xsoar_list_incidents",
+                    "xsoar_get_incident"]      # case-read-only narrow
     tools_allowed: ["*_get_*", "*_list_*"]     # read-only everywhere
 
 # Schema

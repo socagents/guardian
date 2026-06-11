@@ -48,16 +48,16 @@ def test_register_all_tools_first_pass(monkeypatch):
     def fake_iter(**kw):
         # Yield 3 connector-like tools + 1 built-in (no legacy alias).
         yield ToolRegistration(
-            namespaced_name="xdr.start", legacy_name="xdr_start",
-            callable=lambda: None, connector_id="xdr",
+            namespaced_name="web.start", legacy_name="web_start",
+            callable=lambda: None, connector_id="web",
         )
         yield ToolRegistration(
-            namespaced_name="xdr.stop", legacy_name="xdr_stop",
-            callable=lambda: None, connector_id="xdr",
+            namespaced_name="web.stop", legacy_name="web_stop",
+            callable=lambda: None, connector_id="web",
         )
         yield ToolRegistration(
-            namespaced_name="xsiam.run_xql", legacy_name="xsiam_run_xql_query",
-            callable=lambda: None, connector_id="xsiam",
+            namespaced_name="xsoar.list_incidents", legacy_name="xsoar_list_incidents",
+            callable=lambda: None, connector_id="xsoar",
         )
         yield ToolRegistration(
             namespaced_name="builtin_tool", legacy_name=None,
@@ -72,14 +72,14 @@ def test_register_all_tools_first_pass(monkeypatch):
         mcp=mcp, store=None, secret_store=None,
         tool_registry=registry, include_legacy=True,
     )
-    # 4 namespaced (xdr.start, xdr.stop, xsiam.run_xql, builtin_tool)
-    # 3 legacy aliases (xdr_start, xdr_stop, xsiam_run_xql_query)
+    # 4 namespaced (web.start, web.stop, xsoar.list_incidents, builtin_tool)
+    # 3 legacy aliases (web_start, web_stop, xsoar_list_incidents)
     # builtin_tool has no legacy alias (legacy_name=None).
     assert ns == 4
     assert legacy == 3
     assert len(registry) == 4 + 3
-    assert "xdr.start" in registry
-    assert "xdr_start" in registry  # legacy alias
+    assert "web.start" in registry
+    assert "web_start" in registry  # legacy alias
     assert "builtin_tool" in registry
 
 
@@ -93,8 +93,8 @@ def test_register_all_tools_re_registers_each_call(monkeypatch):
 
     def fake_iter(**kw):
         yield ToolRegistration(
-            namespaced_name="xsiam.run_xql", legacy_name="xsiam_run_xql_query",
-            callable=lambda: None, connector_id="xsiam",
+            namespaced_name="xsoar.list_incidents", legacy_name="xsoar_list_incidents",
+            callable=lambda: None, connector_id="xsoar",
         )
 
     monkeypatch.setattr(loader, "iter_registrations", fake_iter)
@@ -124,8 +124,8 @@ def test_register_all_tools_picks_up_new_instances(monkeypatch):
 
     def fake_iter_v1(**kw):
         yield ToolRegistration(
-            namespaced_name="xdr.start", legacy_name="xdr_start",
-            callable=lambda: None, connector_id="xdr",
+            namespaced_name="web.start", legacy_name="web_start",
+            callable=lambda: None, connector_id="web",
         )
 
     monkeypatch.setattr(loader, "iter_registrations", fake_iter_v1)
@@ -138,16 +138,16 @@ def test_register_all_tools_picks_up_new_instances(monkeypatch):
     )
     assert ns1 == 1
 
-    # Operator just materialized an xsiam instance; iter_registrations
+    # Operator just materialized an xsoar instance; iter_registrations
     # now yields more.
     def fake_iter_v2(**kw):
         yield ToolRegistration(
-            namespaced_name="xdr.start", legacy_name="xdr_start",
-            callable=lambda: None, connector_id="xdr",
+            namespaced_name="web.start", legacy_name="web_start",
+            callable=lambda: None, connector_id="web",
         )
         yield ToolRegistration(
-            namespaced_name="xsiam.run_xql", legacy_name="xsiam_run_xql_query",
-            callable=lambda: None, connector_id="xsiam",
+            namespaced_name="xsoar.list_incidents", legacy_name="xsoar_list_incidents",
+            callable=lambda: None, connector_id="xsoar",
         )
 
     monkeypatch.setattr(loader, "iter_registrations", fake_iter_v2)
@@ -157,10 +157,10 @@ def test_register_all_tools_picks_up_new_instances(monkeypatch):
     )
     # Both connectors are now live; counts reflect total registrations.
     assert (ns2, lg2) == (2, 2)
-    assert "xsiam.run_xql" in registry
-    assert "xsiam_run_xql_query" in registry
-    # xdr was re-registered too (FastMCP overrides on duplicate).
-    assert sum(1 for n, _ in mcp.registrations if n == "xdr.start") == 2
+    assert "xsoar.list_incidents" in registry
+    assert "xsoar_list_incidents" in registry
+    # web was re-registered too (FastMCP overrides on duplicate).
+    assert sum(1 for n, _ in mcp.registrations if n == "web.start") == 2
 
 
 def test_legacy_alias_off_skips_aliases(monkeypatch):
@@ -171,10 +171,10 @@ def test_legacy_alias_off_skips_aliases(monkeypatch):
         # Helper passes include_legacy_aliases through to iter_registrations,
         # so a real iter_registrations would yield no legacy_name when it's
         # off. We model that here.
-        legacy = "xdr_start" if kw.get("include_legacy_aliases") else None
+        legacy = "web_start" if kw.get("include_legacy_aliases") else None
         yield ToolRegistration(
-            namespaced_name="xdr.start", legacy_name=legacy,
-            callable=lambda: None, connector_id="xdr",
+            namespaced_name="web.start", legacy_name=legacy,
+            callable=lambda: None, connector_id="web",
         )
 
     monkeypatch.setattr(loader, "iter_registrations", fake_iter)
@@ -185,7 +185,7 @@ def test_legacy_alias_off_skips_aliases(monkeypatch):
         tool_registry=registry, include_legacy=False,
     )
     assert (ns, lg) == (1, 0)
-    assert "xdr_start" not in registry
+    assert "web_start" not in registry
 
 
 def test_reload_tools_now_returns_none_when_not_wired():

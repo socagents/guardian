@@ -44,49 +44,42 @@ def create_mcp_server() -> FastMCP:
     mcp = FastMCP(
         name="Guardian MCP Server",
         instructions="""
-# Guardian MCP Server - AI Incident Response Platform
+# Guardian MCP Server - AI Incident-Investigation Agent for Cortex XSOAR
 
-You are connected to the Guardian MCP Server, an AI incident-response platform that investigates security incidents in integration with Cortex XSOAR and XSIAM:
+You are connected to the Guardian MCP Server, an AI agent that investigates the cases (incidents) opened on a Cortex XSOAR tenant:
 
 ## Core Capabilities
 
-### 1. Cortex XSIAM Security Platform Integration
-- Execute XQL queries for threat hunting and investigation
-- Manage security cases, assets, and issues
-- Interact with lookup tables for enrichment data
-- Access datasets and field information
-- AI-powered XQL query assistance with knowledge-base retrieval
+### 1. Cortex XSOAR Case Integration
+- List the cases (incidents) open on the XSOAR tenant, with filters
+- Fetch a single case's full detail: fields, evidence, work notes
+- Summarize case context and build evidence-grounded timelines
+- Document findings back to the case (work notes) and update or close it
+- Supports both XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud tenants
 
-### 2. Cortex XDR Integration
-- List and inspect incidents from a Cortex XDR tenant
-- Execute XQL queries against XDR telemetry for evidence gathering
+### 2. Cortex Documentation Lookup (optional connector)
+- Search the public Palo Alto Networks Cortex documentation (XSOAR / Cortex Cloud) to ground answers in canonical product behavior
 
-### 3. Cortex Documentation & Content Lookup
-- Search the public Palo Alto Networks Cortex documentation (XDR / XSIAM / XSOAR / XQL)
-- Fetch XSIAM/XSOAR content packs from the public demisto/content repository (modeling rules, parsing rules, correlation rules)
-
-### 4. Web Research (optional connector)
+### 3. Web Research (optional connector)
 - Headless-browser fetch of threat-intel pages, vendor advisories, and CTI portals
 
 ## Common Use Cases
 
-**Incident Investigation**: Pull an incident's alerts and artifacts, query the tenant for related telemetry, and build an evidence-grounded timeline
+**Case Triage**: List the cases open on XSOAR, identify which need attention, and pull each case's context
 
-**Threat Hunting**: Author and execute XQL queries against XSIAM/XDR datasets, refining hypotheses iteratively
+**Case Investigation**: Fetch a case's fields and evidence, build an evidence-grounded timeline, and document findings back to the case
 
-**Alert Enrichment**: Correlate alerts with lookup tables, asset inventory, and external threat intelligence
-
-**Detection Context**: Reference canonical detection/parsing content from the Cortex marketplace when interpreting alerts
+**Case Closure**: After investigation, record the conclusion as a work note and update or close the case
 
 ## Best Practices
 
-1. **Identify the incident scope first** — incident ID, time window, affected assets — before running queries
-2. **Ground every conclusion in retrieved evidence** — cite incident IDs, alert IDs, and query results; never speculate where a query can answer
-3. **Use XSIAM/XDR queries** to validate hypotheses against tenant telemetry
+1. **Identify the case scope first** — case ID, time window, affected entities — before acting
+2. **Ground every conclusion in retrieved evidence** — cite case IDs and evidence references; never speculate where a case lookup can answer
+3. **Document findings back to the case** so the investigation trail lives on the XSOAR case, not just in chat
 4. **Prefer bundled skills and documented workflows** before inventing a new investigation flow
-5. **Record incident IDs, alert IDs, and evidence references** in every final answer
+5. **Require operator confirmation** before any action that changes case state (update, close)
 
-Always verify connectivity to the configured Cortex tenant before starting an investigation.
+Always verify connectivity to the configured Cortex XSOAR tenant before starting an investigation.
 """,
         lifespan=lifespan,
     )

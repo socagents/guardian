@@ -567,7 +567,7 @@ cd /opt/guardian && sudo ./reset-ui-password.sh`}
             <strong className="text-on-surface">Restore is order-aware</strong>
             : personality → instances+secrets → skills → memory → knowledge
             (no-op) → jobs. Job restores after connectors so a runtime
-            job referencing <code className="font-mono">xsiam_run_xql_query</code>
+            job referencing <code className="font-mono">xsoar_list_incidents</code>
             doesn&rsquo;t fail-closed at first cron tick.
           </li>
           <li>

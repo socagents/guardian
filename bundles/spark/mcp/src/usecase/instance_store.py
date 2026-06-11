@@ -13,8 +13,8 @@ services/connector-manager/internal/mcp/pg_instance_store.go).
 Schema:
     instances(
       id           TEXT PRIMARY KEY,    -- uuid4
-      connector_id TEXT NOT NULL,        -- e.g. "xsiam", "cortex-xdr"
-      name         TEXT NOT NULL,        -- e.g. "primary-xsiam"
+      connector_id TEXT NOT NULL,        -- e.g. "xsoar", "cortex-docs"
+      name         TEXT NOT NULL,        -- e.g. "primary-xsoar"
       config_json  TEXT NOT NULL,        -- JSON-encoded {key: value} from
                                          -- setup.bindsInstances[].template.config
                                          -- with ${setup.X} interpolated

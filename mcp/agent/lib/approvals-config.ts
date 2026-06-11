@@ -38,10 +38,6 @@ let _cache:
 // Tools the UI should render with the "soft" risk-tier styling
 // (yellow/amber). Mirrors the manifest's humanRequired list, since
 // the same gate is what makes a tool "soft" in operator perception.
-//
-// v0.1.22: dropped send_webhook_log to match the manifest change —
-// approval is now self-mod-only, so xsiam log pushes shouldn't
-// render as "this needs approval".
 const SOFT_TOOLS = new Set([
   'jobs_create',
   'jobs_update',
@@ -70,6 +66,20 @@ const DESTRUCTIVE_TOOLS = new Set([
   'settings_reset',
   'instances_delete',
   'providers_delete',
+  // XSOAR case-mutation tools — they write to a live case on the
+  // tenant (severity/owner/fields, close, war-room entries, evidence).
+  // The agent's catalog namespaces them as xsoar.<bare>; the bare
+  // name is what classifyRiskTier() sees, so list both forms.
+  'xsoar_update_incident',
+  'update_incident',
+  'xsoar_close_incident',
+  'close_incident',
+  'xsoar_add_entry',
+  'add_entry',
+  'xsoar_add_note',
+  'add_note',
+  'xsoar_save_evidence',
+  'save_evidence',
 ]);
 
 const CREDENTIAL_TOOLS = new Set([

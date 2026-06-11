@@ -784,14 +784,14 @@ def needs_human_approval(
     """Return True iff any of the tool's identifiers is in `human_required`.
 
     The manifest's `approvals.humanRequired` may use bare names
-    (`run_xql_query`), namespaced (`xsiam.run_xql_query`),
-    or legacy aliases (`xsiam_run_xql_query`). Match any.
+    (`list_incidents`), namespaced (`xsoar.list_incidents`),
+    or legacy aliases (`xsoar_list_incidents`). Match any.
 
     `instance_trusted` (v0.1.20+) bypasses the gate entirely. Set
     `trusted: true` on an instance's config to mark it as a trusted
     lab connector — tool calls against that instance skip approval
     regardless of what's in the manifest. Use this for sandbox
-    XSIAM tenants where every operation is intentional and
+    XSOAR tenants where every operation is intentional and
     the human-in-the-loop overhead is friction, not safety.
 
     Production deployments should leave `trusted` unset (default

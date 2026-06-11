@@ -274,10 +274,10 @@ def register_marketplace_routes(
           {
             "connectors": [
               {
-                "id": "xsiam",
-                "version": "0.2.0",
+                "id": "xsoar",
+                "version": "0.1.0",
                 "description": "...",
-                "tools_count": 18,
+                "tools_count": 8,
                 "tags": [...],
                 "origin": "bundle",         (from catalogue)
                 "installed": true,

@@ -240,31 +240,22 @@ jobs:
 
           # Pair env-var name → ghcr image name. Ordered same as the
           # release manifest so the manifest reads predictably.
-          # v0.6.20 — added cortex-xdr to the resolution loop. Pre-v0.6.20
-          # guardian-connector-cortex-xdr was MISSING from this map even
-          # though build-connectors.yml had been pushing the :dev tag
-          # since v0.5.61. Surfaced when an operator restart of the
-          # cortex-xdr instance fell to guardian-updater's tag-pinning
-          # fallback (because /host/connector-digests.env didn't have
-          # DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR), which then tried to
-          # pull `guardian-connector-cortex-xdr:dev-<current-sha>` — a
-          # tag that only exists when build-connectors fired for that
-          # commit. Same fix shape as cortex-content.
+          # Connector roster (XSOAR pivot): xsoar + cortex-docs + web on
+          # the shared guardian-connector-runtime base. Each per-connector
+          # image must appear here so guardian-updater can pin its digest
+          # from /host/connector-digests.env rather than falling back to a
+          # :dev-<sha> tag that only exists when build-connectors fired.
           declare -A CONN_IMGS=(
             ["DIGEST_GUARDIAN_CONNECTOR_RUNTIME"]="guardian-connector-runtime"
-            ["DIGEST_GUARDIAN_CONNECTOR_XSIAM"]="guardian-connector-xsiam"
+            ["DIGEST_GUARDIAN_CONNECTOR_XSOAR"]="guardian-connector-xsoar"
             ["DIGEST_GUARDIAN_CONNECTOR_WEB"]="guardian-connector-web"
             ["DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS"]="guardian-connector-cortex-docs"
-            ["DIGEST_GUARDIAN_CONNECTOR_CORTEX_CONTENT"]="guardian-connector-cortex-content"
-            ["DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR"]="guardian-connector-cortex-xdr"
           )
           for KEY in \
             DIGEST_GUARDIAN_CONNECTOR_RUNTIME \
-            DIGEST_GUARDIAN_CONNECTOR_XSIAM \
+            DIGEST_GUARDIAN_CONNECTOR_XSOAR \
             DIGEST_GUARDIAN_CONNECTOR_WEB \
-            DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS \
-            DIGEST_GUARDIAN_CONNECTOR_CORTEX_CONTENT \
-            DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR; do
+            DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS; do
             SVC="${CONN_IMGS[$KEY]}"
             IMG="$REGISTRY/$OWNER/$SVC"
             DIGEST=""

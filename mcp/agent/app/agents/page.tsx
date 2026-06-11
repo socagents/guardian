@@ -159,8 +159,8 @@ export default function AgentsPage() {
               with an{" "}
               <code className="font-mono">agents:</code> block — e.g.
               a case-triage subagent scoped to{" "}
-              <code className="font-mono">xsiam_get_*</code>, or an
-              evidence-collector with read-only XDR tools.
+              <code className="font-mono">xsoar_*</code>, or an
+              evidence-collector with read-only XSOAR + web tools.
             </p>
           </div>
         ) : (
@@ -461,7 +461,7 @@ function AgentEditor({
               value={allowedText}
               onChange={(e) => setAllowedText(e.target.value)}
               className="input-base font-mono min-h-[120px]"
-              placeholder={"xdr_*\nxsiam_get_*"}
+              placeholder={"xsoar_*\ncortex_*"}
             />
           </Field>
           <Field label="Tools denied (one glob per line)">
@@ -469,7 +469,7 @@ function AgentEditor({
               value={deniedText}
               onChange={(e) => setDeniedText(e.target.value)}
               className="input-base font-mono min-h-[120px]"
-              placeholder={"*_delete\nxsiam_create_*"}
+              placeholder={"*_delete\nxsoar_close_incident"}
             />
           </Field>
         </div>

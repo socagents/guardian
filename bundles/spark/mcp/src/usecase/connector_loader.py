@@ -106,13 +106,13 @@ class ToolRegistration(NamedTuple):
 def _legacy_alias(function_prefix: str, tool_name: str) -> str | None:
     """Compute the flat (pre-v1.2) legacy alias for a connector tool.
 
-    Normally `f"{function_prefix}{tool_name}"`. But the R5.1+ xsiam tools
-    and the v0.14.1+ cortex-xdr tools were authored with the connector
-    prefix ALREADY baked into `spec.tools[].name`, so naive concatenation
-    DOUBLES it (`xdr_` + `xdr_incidents_list` -> `xdr_xdr_incidents_list`).
+    Normally `f"{function_prefix}{tool_name}"`. But the xsoar tools are
+    authored with the connector prefix ALREADY baked into
+    `spec.tools[].name`, so naive concatenation DOUBLES it
+    (`xsoar_` + `xsoar_list_incidents` -> `xsoar_xsoar_list_incidents`).
     The natural single-prefix name the model / docs / skills call
-    ("xdr_incidents_list") was then never advertised and 404'd at the
-    agent layer with "Unknown tool" (v0.17.124 chat-smoke #9/#10, #120).
+    ("xsoar_list_incidents") would then never be advertised and would
+    404 at the agent layer with "Unknown tool" (#120).
 
     When the tool name already starts with the prefix, the name IS the
     legacy alias — don't re-prepend. Returns None when no prefix applies.
@@ -252,9 +252,9 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     # These tools mutate marketplace-level metadata (install state,
     # connector schemas, registry membership) — NOT credentials. The
     # operator phrases "install the web connector", "upload this
-    # connector.yaml", "remove cortex-content from the marketplace"
+    # connector.yaml", "remove cortex-docs from the marketplace"
     # are all in-bounds for the agent. The phrase "create an instance
-    # of xsiam with these credentials" is NOT (instance creation
+    # of xsoar with these credentials" is NOT (instance creation
     # carries secrets — still operator-only).
     ("marketplace_list", self_mod_tools.marketplace_list),
     ("marketplace_install", self_mod_tools.marketplace_install),
@@ -550,43 +550,25 @@ def _resolve_callable(
 # Manifest-key → Settings-attr translation table.
 #
 # `manifest.yaml:setup.bindsInstances[].template.config` uses clean
-# abstract keys (baseUrl, apiKey, etc.) — those are what bundle
+# abstract keys (api_url, api_key, etc.) — those are what bundle
 # authors write and what the connector.yaml configSchema documents.
-# But the connector function code reads Settings attribute names
-# (e.g. `get_config().papi_url_env_key`). The contextvar proxy looks
-# up keys by Settings name, so we translate manifest keys → Settings
-# names before stuffing the dict into the contextvar.
-#
-# Auto-migration uses Settings names directly (see _AUTO_MIGRATION
-# above) and therefore needs no translation; only setup-form-created
-# instances pass through this map. When phase 2C/3D refactors the
-# connector functions to use clean abstract names, this map can shrink
-# to {} and eventually be deleted.
+# The surviving connectors (xsoar / cortex-docs / web) read these
+# clean abstract keys directly, so no translation is needed and the
+# table below is empty. The proxy passes keys through unchanged when a
+# connector has no entry here. This table exists only so a future
+# connector that reads differently-named Settings attributes can map
+# manifest keys → Settings names before stuffing the dict into the
+# contextvar.
 # ─────────────────────────────────────────────────────────────────
 
 _MANIFEST_TO_SETTINGS_KEYS: dict[str, dict[str, str]] = {
-    "xsiam": {
-        # v0.5.59 (issue #35): primary keys are the new uniform names.
-        # Legacy papi* keys map to the SAME settings attributes so old
-        # manifest-template values translate identically.
-        "api_url": "papi_url_env_key",
-        "api_key": "papi_auth_header_key",
-        "api_id": "papi_auth_id_key",
-        "papiUrl": "papi_url_env_key",
-        "papiAuthHeader": "papi_auth_header_key",
-        "papiAuthId": "papi_auth_id_key",
-        "playgroundId": "playground_id",
-        "webhookEndpoint": "webhook_endpoint",
-        "webhookKey": "webhook_key",
-    },
-    "cortex-xdr": {
-        # v0.5.61 (issue #36): cortex-xdr ships greenfield with the
-        # uniform api_* names — no legacy aliases. No settings-attribute
-        # mapping needed today because cortex-xdr instance config is
-        # operator-form-driven only (no env-var first-time-setup path
-        # since v0.4.0 deleted setup.json). The empty dict keeps the
-        # connector visible in the registry without forcing any
-        # synthetic key translation.
+    "xsoar": {
+        # The xsoar connector ships greenfield with the uniform
+        # api_url / api_id / api_key field names and reads them as
+        # clean abstract keys (no legacy aliases, no env-var first-
+        # time-setup path). The empty dict keeps the connector visible
+        # in the registry without forcing any synthetic key
+        # translation — keys pass through unchanged.
     },
 }
 

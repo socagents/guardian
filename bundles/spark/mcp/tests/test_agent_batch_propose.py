@@ -408,7 +408,7 @@ def test_connector_tool_routes_through_dispatcher(tmp_path, monkeypatch):
     from usecase import connector_loader
     monkeypatch.setattr(
         connector_loader, "_reload_state",
-        {"tool_registry": {"xsiam.send_webhook_log": None}},
+        {"tool_registry": {"xsoar.list_incidents": None}},
         raising=False,
     )
 
@@ -425,14 +425,14 @@ def test_connector_tool_routes_through_dispatcher(tmp_path, monkeypatch):
     async def _race() -> dict[str, Any]:
         asyncio.create_task(_auto_approve_after_delay())
         return await self_mod_tools.agent_batch_propose(actions=[
-            {"tool": "xsiam.send_webhook_log", "args": {"payload": {"x": 1}}},
+            {"tool": "xsoar.list_incidents", "args": {"payload": {"x": 1}}},
         ])
 
     out = asyncio.run(_race())
     assert out["ok"] is True
     assert out["succeeded"] == 1
     assert len(dispatched) == 1
-    assert dispatched[0][0] == "xsiam.send_webhook_log"
+    assert dispatched[0][0] == "xsoar.list_incidents"
     assert dispatched[0][1] == {"payload": {"x": 1}}
     assert out["per_action_results"][0]["result"]["sent"] is True
 
@@ -445,7 +445,7 @@ def test_connector_tool_not_in_registry_rejected(tmp_path):
     # No dispatcher installed; no registry → connector tools can't
     # resolve.
     out = asyncio.run(self_mod_tools.agent_batch_propose(actions=[
-        {"tool": "xsiam.nonexistent_tool", "args": {}},
+        {"tool": "xsoar.nonexistent_tool", "args": {}},
     ]))
     assert out["ok"] is False
     assert "is not a known tool" in out["error"]

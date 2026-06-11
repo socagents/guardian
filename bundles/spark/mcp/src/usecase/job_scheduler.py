@@ -12,7 +12,7 @@ Per spec §6.10, `scheduling` has two backend impls:
                     back through the agent runtime.
 
 This module is the standalone variant. It composes cleanly with
-Phases 6-8: when a cron fires `xsiam.run_xql_query`, the
+Phases 6-8: when a cron fires `xsoar.list_incidents`, the
 dispatch goes through the SAME wrapped tool callable the agent uses,
 so audit, approvals, and instance contextvar all apply uniformly.
 
@@ -1543,7 +1543,7 @@ class CroniterJobScheduler:
             model: gemini-2.5-flash
             thinking: true
             permissions:
-              allowed_tools: ["xsiam_*"]
+              allowed_tools: ["xsoar_*"]
               denied_tools: ["*_delete"]
             ---
             (markdown body...)

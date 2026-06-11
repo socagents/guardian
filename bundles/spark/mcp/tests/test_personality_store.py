@@ -158,7 +158,7 @@ def test_default_personality_includes_action_policy(tmp_path: Path) -> None:
     assert policy.get("confirmExternalActions") == "soft"
     # Sanity check on category contents.
     assert "jobs" in policy["localCategories"]
-    assert "xsiam" in policy["externalCategories"]
+    assert "xsoar" in policy["externalCategories"]
 
 
 def test_action_policy_round_trips_through_put(tmp_path: Path) -> None:
@@ -170,7 +170,7 @@ def test_action_policy_round_trips_through_put(tmp_path: Path) -> None:
         **DEFAULT_PERSONALITY,
         "actionPolicy": {
             "localCategories": ["jobs", "settings", "custom-category"],
-            "externalCategories": ["xsiam", "third-party-api"],
+            "externalCategories": ["xsoar", "third-party-api"],
             "askWhenUnsure": False,
             "confirmLocalActions": "approve-card",
             "confirmExternalActions": "approve-card",

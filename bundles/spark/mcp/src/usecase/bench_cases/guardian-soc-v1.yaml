@@ -18,28 +18,29 @@ manifest:
   id: guardian-soc-v1
   version: "1.0"
   description: |
-    Three incident-response cases exercising the most common agent
-    paths: pulling incidents from Cortex XDR, hunting via an XSIAM
-    XQL query, and a no-tool conversational turn. Built to validate
-    the bench runner; not yet a quality SLO.
+    Three incident-investigation cases exercising the most common
+    agent paths: listing the cases (incidents) open on Cortex XSOAR,
+    fetching a single case's detail, and a no-tool conversational
+    turn. Built to validate the bench runner; not yet a quality SLO.
   cases:
-    - id: pull-recent-incidents
+    - id: list-recent-cases
       prompt: |
-        List the Cortex XDR cases from the last 24 hours. Use the
-        xdr_get_cases_and_issues tool. One call, no follow-up.
+        List the Cortex XSOAR cases (incidents) from the last 24
+        hours. Use the xsoar_list_incidents tool. One call, no
+        follow-up.
       expected_output_match: "case"
       expected_tool_calls:
-        - xdr_get_cases_and_issues
+        - xsoar_list_incidents
       max_wall_seconds: 60.0
 
-    - id: hunt-failed-logins
+    - id: fetch-single-case
       prompt: |
-        Run an XQL query counting failed login events in the last 24
-        hours. Use the xsiam_run_xql_query tool. Don't ask for
-        confirmation; just run it.
-      expected_output_match: "xsiam_run_xql_query"
+        Pull the full detail for Cortex XSOAR case 42. Use the
+        xsoar_get_incident tool. Don't ask for confirmation; just
+        fetch it.
+      expected_output_match: "xsoar_get_incident"
       expected_tool_calls:
-        - xsiam_run_xql_query
+        - xsoar_get_incident
       max_wall_seconds: 120.0
 
     - id: conversational-no-tool

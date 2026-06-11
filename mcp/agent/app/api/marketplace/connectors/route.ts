@@ -1,6 +1,6 @@
 /**
  * Guardian marketplace endpoint — returns the connectors that ship in
- * this bundle: xsiam, cortex-xdr, cortex-docs, cortex-content, web.
+ * this bundle: xsoar, cortex-docs, web.
  * The connectors page (lifted from Spark's workspace UI) calls
  * /api/marketplace/connectors expecting a GitHub-catalog-shaped JSON;
  * in guardian standalone, the catalog IS the bundle, so we serve
@@ -72,76 +72,53 @@ interface MarketplaceConnector {
 }
 
 const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
-  // ── xsiam ───────────────────────────────────────────────────────────────
+  // ── xsoar ───────────────────────────────────────────────────────────────
   {
-    id: "xsiam",
-    name: "Cortex XSIAM",
+    id: "xsoar",
+    name: "Cortex XSOAR",
     type: "tool",
-    version: "1.0.0",
+    version: "0.1.0",
     publisher: "Palo Alto Networks / kite-production",
     description:
-      "Palo Alto Cortex XSIAM connector — run XQL queries via PAPI, list cases and issues, look up assets, manage datasets and lookups.",
+      "Cortex XSOAR connector — monitor and investigate cases (incidents): list, fetch full case data, read the War Room, add entries/notes, update fields, manage evidence, and close incidents. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud.",
     longDescription:
-      "Bridges Guardian to your Cortex XSIAM tenant. The agent can run XQL queries, search the bundled xql-examples knowledge base, list cases and issues, look up assets, create datasets, and read/write lookup data — the core read-and-investigate paths for incident response and threat hunting.",
+      "Guardian's interface to your Cortex XSOAR tenant. The chat agent monitors cases opened on XSOAR, fetches full case data, summarizes and investigates, documents findings, and updates/closes cases. Thirteen tools cover the incident-investigation lifecycle: list and get incidents, read the War Room timeline, add entries and investigation notes, update incident fields, save and search evidence, enumerate incident types and fields, search threat indicators, and close incidents once the investigation is documented. The connector auto-detects the platform: when an API key ID is supplied it speaks the XSOAR 8 / Cortex cloud dialect (x-xdr-auth-id header, /xsoar/public/v1 path prefix, api-<fqdn> base); otherwise it speaks XSOAR 6 on-prem (single API key in the Authorization header against the server base URL).",
     category: "Security",
-    tags: ["siem", "xql", "cortex", "incident-response"],
-    icon: "query_stats",
-    iconColor: "#1f7bff",
-    iconBg: "rgba(31, 123, 255, 0.12)",
-    toolCount: 59,
+    tags: ["xsoar", "cortex", "soar", "cases", "incident-response"],
+    icon: "shield",
+    iconColor: "#6366f1",
+    iconBg: "rgba(99, 102, 241, 0.12)",
+    toolCount: 13,
     installs: "bundle-internal",
-    installCount: 1,
+    installCount: 0,
     status: "installed",
     reliability: "stable",
-    authType: "PAPI bearer + auth-id",
-    tools: [
-      {
-        name: "run_xql_query",
-        method: "POST",
-        description: "Run an XQL query against the XSIAM tenant and return rows.",
-        args: [
-          { name: "query", type: "string", description: "XQL query text", required: true },
-          { name: "tenant_id", type: "string", description: "XSIAM tenant id", required: false },
-        ],
-      },
-      {
-        name: "get_cases",
-        method: "POST",
-        description: "List recent XSIAM cases with filters.",
-        args: [],
-      },
-      {
-        name: "get_issues",
-        method: "POST",
-        description: "List recent XSIAM issues (alerts) with filters.",
-        args: [],
-      },
-      {
-        name: "get_assets",
-        method: "POST",
-        description: "List assets known to the XSIAM tenant.",
-        args: [],
-      },
-    ],
+    authType: "XSOAR API key (v6 or v8/Cortex)",
+    tools: [],
     config: [
-      // v0.5.59 (issue #35): renamed from papiUrl/papiAuthHeader/papiAuthId
-      // to api_url/api_key/api_id for uniformity with the Cortex XDR connector
-      // (issue #36). Connector code + probe accept both name pairs at read
-      // time, so existing instances keep working through the rename.
       { display: "API URL", name: "api_url", type: "url", required: true },
       { display: "API key", name: "api_key", type: "secret", required: true },
-      { display: "API ID", name: "api_id", type: "string", required: true },
-      { display: "Playground ID", name: "playgroundId", type: "string", required: true },
+      { display: "API key ID", name: "api_id", type: "string", required: false },
+      { display: "Verify SSL", name: "verify_ssl", type: "boolean", required: false, defaultValue: "true" },
     ],
-    versions: [{ version: "1.0.0", date: "2026-04-15", changes: ["Initial PAPI integration"] }],
+    versions: [
+      {
+        version: "0.1.0",
+        date: "2026-06-10",
+        changes: [
+          "Initial release — 13 tools covering the incident-investigation lifecycle (list/get incidents, War Room, entries/notes, field updates, evidence, indicator search, close).",
+          "Supports XSOAR 6 (on-prem: single API key in the Authorization header) and XSOAR 8 / Cortex cloud (API key + key id via x-xdr-auth-id header, /xsoar/public/v1 path prefix). Auto-detected from whether an API key ID is supplied.",
+        ],
+      },
+    ],
     setupGuide:
-      "In XSIAM, create a PAPI key with detection-read + remote-script-exec scopes, then supply CORTEX_MCP_PAPI_* env values.",
-    dockerImage: "ghcr.io/kite-production/guardian-mcp:latest",
+      "1) Mint an XSOAR API key. XSOAR 6 (on-prem): Settings → Integrations → API Keys → Get Your Key — copy the key, leave the API key ID blank, and set the API URL to your server base (https://<server>). XSOAR 8 / Cortex cloud: Settings → Configurations → API Keys → New Key with a role that can read and update incidents — copy both the key and its numeric ID, and set the API URL to https://api-<your-fqdn>. 2) Click 'Add instance' on the Cortex XSOAR card. 3) Paste the API URL, API key, and (XSOAR 8 only) the API key ID; leave Verify SSL on unless your tenant uses a self-signed cert. 4) Save, then click 'Test Connection' — a green check means the agent can reach your cases. 5) Ask the agent in chat: 'show me the open incidents' or 'investigate incident <id> and document your findings'.",
+    dockerImage: "ghcr.io/kite-production/guardian-connector-xsoar:latest",
     runtime: "python",
     sdkLanguage: "Python",
-    sdkPackage: "guardian-spark-xsiam-connector",
-    ingestion: { enabled: false, mode: "pull", description: "Queries run on demand" },
-    topAgents: [{ name: "guardian-agent", color: "#1f7bff" }],
+    sdkPackage: "guardian-spark-xsoar-connector",
+    ingestion: { enabled: false, mode: "pull", description: "Cases fetched on demand per tool call. No background polling." },
+    topAgents: [{ name: "guardian-agent", color: "#6366f1" }],
   },
   // ── web (v0.1.27) ────────────────────────────────────────────────────────
   {
@@ -422,235 +399,13 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
     },
     topAgents: [{ name: "guardian-agent", color: "#fa582d" }],
   },
-  // ── cortex-content (v0.3.9) ──────────────────────────────────────────────
-  {
-    id: "cortex-content",
-    name: "Cortex Content",
-    type: "tool",
-    version: "0.3.9",
-    publisher: "kite-production",
-    description:
-      "Cortex content catalog bundled with Guardian — XSIAM/XSOAR content packs, ModelingRules, ParsingRules, CorrelationRules. Ten tools for listing/searching packs, fetching rule bundles, plus index_kb to embed pack content into the agent's semantic-search KB.",
-    longDescription:
-      "Gives the chat agent a reference for canonical XSIAM content. When operators ask 'show me how Cortex models cisco_esa_raw' or 'pull the F5APM modeling rule so I can adapt it', the agent uses cortex-content/get_modeling_rule to fetch the three-file bundle (.xif + .yml + _schema.json) from the local catalog. The agent uses these as references when authoring or updating data models for the operator's tenant — instead of guessing XDM paths (which produces broken parsers, as the v0.3.7 model-authoring session showed), it can ground each mapping against the canonical implementation. v0.3.9 adds cortex_index_kb which walks a pack's rules and upserts each into the agent's knowledge_search KB (kb_name='cortex-content'), enabling semantic search across the ~200 packs that ship ModelingRules without round-tripping through list/get tools per rule. Idempotent — source_hash dedupe means re-indexing is cheap. All reads are local file reads; no network calls.",
-    category: "Security",
-    tags: ["cortex", "xsiam", "xdm", "modeling-rules", "parsing-rules", "correlation-rules", "kb-embedding", "v0.3.9"],
-    icon: "library_books",
-    iconColor: "#1963b3",
-    iconBg: "rgba(25, 99, 179, 0.12)",
-    toolCount: 13,
-    installs: "bundle-internal",
-    installCount: 0,
-    status: "installed",
-    reliability: "stable",
-    authType: "None — local catalog bundled with Guardian.",
-    tools: [
-      {
-        name: "list_packs",
-        method: "internal — pack listing",
-        description:
-          "List all packs in the bundled catalog, optionally filtered by supportedModules. Returns name + description + version + supportedModules per pack.",
-        args: [
-          { name: "supported_module", type: "string", description: "Filter by supportedModules (e.g. 'xsiam', 'agentix').", required: false },
-          { name: "limit", type: "integer", description: "Max packs per page (default 100, max 500).", required: false },
-          { name: "offset", type: "integer", description: "Pagination offset (default 0).", required: false },
-        ],
-      },
-      {
-        name: "search_packs",
-        method: "GET + fuzzy match",
-        description: "Fuzzy-search packs by name/description/keywords/categories.",
-        args: [
-          { name: "query", type: "string", description: "Search term — vendor / log source / category.", required: true },
-          { name: "limit", type: "integer", description: "Max results (default 20, max 100).", required: false },
-        ],
-      },
-      {
-        name: "get_pack",
-        method: "internal — pack lookup",
-        description: "Fetch pack_metadata.json + top-level file tree + README for one pack.",
-        args: [
-          { name: "pack_name", type: "string", description: "Exact pack name (e.g. 'F5APM').", required: true },
-        ],
-      },
-      {
-        name: "list_modeling_rules",
-        method: "internal — ModelingRules listing",
-        description: "List ModelingRules directories under a pack with their datasets parsed from _schema.json.",
-        args: [
-          { name: "pack_name", type: "string", description: "Pack to list ModelingRules under.", required: true },
-        ],
-      },
-      {
-        name: "get_modeling_rule",
-        method: "internal — three-file bundle",
-        description:
-          "Fetch the three-file bundle for ONE modeling rule: .xif (XQL code), .yml (metadata), _schema.json (dataset → field-type schema).",
-        args: [
-          { name: "pack_name", type: "string", description: "Pack containing the rule.", required: true },
-          { name: "rule_name", type: "string", description: "Modeling rule directory name (usually same as pack name).", required: true },
-        ],
-      },
-      {
-        name: "list_parsing_rules",
-        method: "internal — ParsingRules listing",
-        description: "List ParsingRules directories under a pack.",
-        args: [
-          { name: "pack_name", type: "string", description: "Pack to list ParsingRules under.", required: true },
-        ],
-      },
-      {
-        name: "get_parsing_rule",
-        method: "internal — three-file bundle",
-        description: "Fetch .xif + .yml + _schema.json for one parsing rule.",
-        args: [
-          { name: "pack_name", type: "string", description: "Pack containing the rule.", required: true },
-          { name: "rule_name", type: "string", description: "Parsing rule directory name.", required: true },
-        ],
-      },
-      {
-        name: "list_correlation_rules",
-        method: "internal — CorrelationRules listing",
-        description: "List CorrelationRules directories under a pack.",
-        args: [
-          { name: "pack_name", type: "string", description: "Pack to list CorrelationRules under.", required: true },
-        ],
-      },
-      {
-        name: "get_correlation_rule",
-        method: "internal — .yml + .xql",
-        description: "Fetch the .yml metadata + .xql query for one correlation rule.",
-        args: [
-          { name: "pack_name", type: "string", description: "Pack containing the rule.", required: true },
-          { name: "rule_name", type: "string", description: "Correlation rule name.", required: true },
-        ],
-      },
-    ],
-    config: [],
-    setupGuide:
-      "No setup required. The Cortex content catalog is bundled with Guardian and read from local files — no configuration, no network, no credentials.",
-    versions: [
-      {
-        version: "0.3.7",
-        date: "2026-05-11",
-        changes: [
-          "Initial release — fetch surface only.",
-          "9 tools for listing/searching packs.",
-          "ModelingRules + ParsingRules + CorrelationRules fetch + cache.",
-          "v0.3.8 will add semantic embedding (cortex-content KB via Vertex gemini-embedding-001).",
-        ],
-      },
-    ],
-    dockerImage: "ghcr.io/kite-production/guardian-mcp:latest",
-    runtime: "python",
-    sdkLanguage: "Python",
-    sdkPackage: "guardian-spark-cortex-content-connector",
-    ingestion: {
-      enabled: false,
-      mode: "pull",
-      description: "Pack content fetched on demand per tool call; cached locally for 24h by default.",
-    },
-    topAgents: [{ name: "guardian-agent", color: "#1963b3" }],
-  },
-
-  // ── cortex-xdr (v0.5.61 base, v0.5.68 description rewrite) ───────────────
-  {
-    id: "cortex-xdr",
-    name: "Cortex XDR",
-    type: "tool",
-    version: "0.1.1",
-    publisher: "Palo Alto Networks / kite-production",
-    description:
-      "Cortex XDR API wrapper — list incidents and alerts, drill into specific cases, and run XQL queries against the XDR data lake. General-purpose interface for incident response, threat hunting, investigation reporting, and detection coverage validation.",
-    longDescription:
-      "Guardian's interface to your Cortex XDR tenant's Public API. The chat agent can answer operator questions like 'show me unresolved high-severity incidents in the last 24 hours', 'pull the alerts from incident <id>', or 'run XQL: dataset=xdr_data | filter agent_hostname=\"xdragent\" and event_type=ENUM.PROCESS | dedup actor_process_image_name | limit 50'. Four tools cover the core read paths: get_cases_and_issues (incident listing with filters by time, endpoint, severity, status), get_incident_extra_data (full alerts + network/file artifacts for a specific incident), run_xql_query (synchronous XQL with bounded polling — returns rows when complete or execution_id for long queries), and get_xql_results (poll an in-flight async execution). Same Cortex Public API family + Authorization + x-xdr-auth-id auth pattern as XSIAM; unified api_url / api_id / api_key field names per v0.5.59 / #35. Use cases: incident response (triage + drill-down), threat hunting (XQL ad-hoc queries), and investigation reporting (incident details + related artifacts). Read-only: no write/action endpoints in v0.1.x (isolate endpoint, run remote script, etc. deferred behind an explicit approval gate in a future release).",
-    category: "Security",
-    tags: ["cortex", "xdr", "edr", "siem", "incidents", "alerts", "xql", "threat-hunting", "investigation", "incident-response"],
-    icon: "shield_lock",
-    iconColor: "#ef4444",
-    iconBg: "rgba(239, 68, 68, 0.12)",
-    toolCount: 50,
-    installs: "bundle-internal",
-    installCount: 0,
-    status: "installed",
-    reliability: "stable",
-    authType: "XDR Advanced API Key + auth-id",
-    tools: [
-      {
-        name: "get_cases_and_issues",
-        method: "POST /incidents/get_incidents",
-        description: "List Cortex XDR incidents (cases) and the alerts (issues) within them. Supports filters by time, endpoint, severity, status.",
-        args: [
-          { name: "from_time", type: "string", description: "ISO timestamp lower bound. Default: 24h ago.", required: false },
-          { name: "to_time", type: "string", description: "ISO timestamp upper bound. Default: now.", required: false },
-          { name: "endpoint", type: "string", description: "Filter by endpoint hostname.", required: false },
-          { name: "severity", type: "array", description: "Subset of ['low','medium','high','critical'].", required: false },
-          { name: "status", type: "array", description: "Subset of XDR status values.", required: false },
-          { name: "limit", type: "integer", description: "Max incidents (default 50, max 100).", required: false },
-        ],
-      },
-      {
-        name: "get_incident_extra_data",
-        method: "POST /incidents/get_incident_extra_data",
-        description: "Drill into one incident — full alerts, network/file artifacts, related users/hosts.",
-        args: [
-          { name: "incident_id", type: "string", description: "From a prior get_cases_and_issues hit.", required: true },
-          { name: "alerts_limit", type: "integer", description: "Cap on alerts returned (default 50).", required: false },
-        ],
-      },
-      {
-        name: "run_xql_query",
-        method: "POST /xql/start_xql_query + poll /xql/get_query_results",
-        description: "Execute an XQL query synchronously against the XDR data lake. Returns rows if complete within the poll window, or execution_id if still running.",
-        args: [
-          { name: "query", type: "string", description: "XQL query text.", required: true },
-          { name: "tenant_ids", type: "array", description: "Optional multi-tenant scope.", required: false },
-          { name: "timeframe_from", type: "string", description: "ISO timestamp lower bound.", required: false },
-          { name: "timeframe_to", type: "string", description: "ISO timestamp upper bound. Default: now.", required: false },
-        ],
-      },
-      {
-        name: "get_xql_results",
-        method: "POST /xql/get_query_results",
-        description: "Retrieve results from an in-flight XQL query by execution_id.",
-        args: [
-          { name: "execution_id", type: "string", description: "From a prior run_xql_query call.", required: true },
-          { name: "limit", type: "integer", description: "Max rows (default 1000, max 10000).", required: false },
-        ],
-      },
-    ],
-    // v0.5.61 (issue #36): unified api_url / api_id / api_key field names
-    // matching v0.5.59 / issue #35's XSIAM rename. Both connectors share
-    // the same Cortex Public API auth model — operators don't translate.
-    config: [
-      { display: "API URL", name: "api_url", type: "url", required: true },
-      { display: "API key", name: "api_key", type: "secret", required: true },
-      { display: "API ID", name: "api_id", type: "string", required: true },
-    ],
-    versions: [
-      { version: "0.1.0", date: "2026-05-17", changes: ["Initial connector — 4 tools: get_cases_and_issues, get_incident_extra_data, run_xql_query, get_xql_results. Closes #36."] },
-      { version: "0.1.1", date: "2026-05-17", changes: ["Description + metadata rewritten to focus on general-purpose Cortex XDR API use (incident response, threat hunting, investigation reporting). Tags broadened (added siem/threat-hunting/investigation/incident-response; removed v0.5.61 + the narrow detection/validation focus)."] },
-    ],
-    setupGuide:
-      "1) In the Cortex XDR console, navigate to Settings → Configurations → API Keys. 2) Generate a key with 'Advanced' security level (required for x-xdr-auth-id header path). 3) Copy the api_id (integer next to the key), api_key (long alphanumeric — paste raw, no 'Bearer' prefix), and api_url (format: https://api-yourtenant.xdr.us.paloaltonetworks.com). 4) Click 'Add instance' on the Cortex XDR card. 5) Paste, save. 6) Click 'Test Connection' on the new instance card — green check means creds valid. 7) Try natural-language queries via chat: 'show me unresolved high-severity incidents in the last 24h', 'pull the alerts from incident <id>', 'run XQL to count process events on hostname X yesterday'. The agent picks the right tool (get_cases_and_issues / get_incident_extra_data / run_xql_query) automatically based on your question.",
-    dockerImage: "ghcr.io/kite-production/guardian-connector-cortex-xdr:latest",
-    runtime: "python",
-    sdkLanguage: "Python",
-    sdkPackage: "guardian-spark-cortex-xdr-connector",
-    ingestion: {
-      enabled: false,
-      mode: "pull",
-      description: "Incidents + XQL results fetched on demand per tool call. No background polling.",
-    },
-    topAgents: [{ name: "guardian-agent", color: "#ef4444" }],
-  },
 ];
 
 /**
  * v0.15.5 — overlay live `spec.tools[]` from each connector.yaml on top
  * of the hardcoded metadata. Pre-v0.15.5 the toolCount + tools[] arrays
- * here were hand-maintained and drifted (operator-visible counts were
- * stale after R4/R5 expanded XDR/XSIAM from 8/14 → 50/59 tools).
+ * here were hand-maintained and drifted (operator-visible counts went
+ * stale whenever a connector's tool surface expanded).
  *
  * Resolution order for the bundle dir:
  *   1. /app/bundle/connectors/<id>/connector.yaml   (production, image-mounted)

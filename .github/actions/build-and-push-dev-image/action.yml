@@ -11,7 +11,7 @@ description: >
 
 inputs:
   service-name:
-    description: 'Service name (e.g. guardian-agent, guardian-updater, guardian-connector-xsiam)'
+    description: 'Service name (e.g. guardian-agent, guardian-updater, guardian-connector-xsoar)'
     required: true
   build-context:
     description: 'Path passed to docker build as the build context'

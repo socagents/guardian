@@ -33,17 +33,17 @@ validates the scoring shape is sensible.
       version: "1.0"
       description: "Sample SOC-scenario benchmark"
       cases:
-        - id: summarize-incident
-          prompt: "Summarize incident INC-1042 with its key alerts"
-          expected_output_match: "INC-1042"      # substring / regex
+        - id: summarize-case
+          prompt: "Summarize Cortex XSOAR case 1042 with its key fields"
+          expected_output_match: "1042"          # substring / regex
           expected_tool_calls:                    # ordered tool names
-            - xdr_get_cases_and_issues
+            - xsoar_get_incident
           max_wall_seconds: 60.0
-        - id: hunt-bruteforce
-          prompt: "Hunt for brute-force auth patterns in the last 24h"
-          expected_output_match: "brute-force"
+        - id: list-open-cases
+          prompt: "List the cases open on Cortex XSOAR in the last 24h"
+          expected_output_match: "case"
           expected_tool_calls:
-            - xsiam_run_xql_query
+            - xsoar_list_incidents
           max_wall_seconds: 120.0
 """
 

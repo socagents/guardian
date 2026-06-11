@@ -332,7 +332,7 @@ def read_skill(file_path: str) -> Dict[str, Any]:
     Read a skill file content.
 
     Args:
-        file_path: Relative path from skills directory (e.g., "workflows/build_xql_query.md")
+        file_path: Relative path from skills directory (e.g., "workflows/xsoar_case_investigation.md")
 
     Returns:
         Result dictionary with skill content
@@ -362,7 +362,7 @@ def update_skill(file_path: str, content: str) -> Dict[str, Any]:
     Update an existing skill file.
 
     Args:
-        file_path: Relative path from skills directory (e.g., "workflows/build_xql_query.md")
+        file_path: Relative path from skills directory (e.g., "workflows/xsoar_case_investigation.md")
         content: New markdown content
 
     Returns:
@@ -396,7 +396,7 @@ def delete_skill(file_path: str) -> Dict[str, Any]:
     Delete a skill file.
 
     Args:
-        file_path: Relative path from skills directory (e.g., "workflows/build_xql_query.md")
+        file_path: Relative path from skills directory (e.g., "workflows/xsoar_case_investigation.md")
 
     Returns:
         Result dictionary with success status
@@ -450,7 +450,7 @@ def get_tools() -> List[mcp_types.Tool]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to skill file from skills directory (e.g., 'workflows/build_xql_query.md')"
+                        "description": "Relative path to skill file from skills directory (e.g., 'workflows/xsoar_case_investigation.md')"
                     }
                 },
                 "required": ["file_path"]
@@ -487,7 +487,7 @@ def get_tools() -> List[mcp_types.Tool]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to skill file (e.g., 'workflows/build_xql_query.md')"
+                        "description": "Relative path to skill file (e.g., 'workflows/xsoar_case_investigation.md')"
                     },
                     "content": {
                         "type": "string",
@@ -505,7 +505,7 @@ def get_tools() -> List[mcp_types.Tool]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to skill file (e.g., 'workflows/build_xql_query.md')"
+                        "description": "Relative path to skill file (e.g., 'workflows/xsoar_case_investigation.md')"
                     }
                 },
                 "required": ["file_path"]
@@ -532,7 +532,7 @@ def skills_read(file_path: str) -> str:
     Read the content of a specific skill file.
 
     Args:
-        file_path: Relative path to skill file from skills directory (e.g., 'workflows/build_xql_query.md')
+        file_path: Relative path to skill file from skills directory (e.g., 'workflows/xsoar_case_investigation.md')
 
     Returns:
         JSON with skill content and metadata
@@ -564,7 +564,7 @@ def skills_update(file_path: str, content: str) -> str:
     Creates a backup (.md.bak) before updating.
 
     Args:
-        file_path: Relative path to skill file (e.g., 'workflows/build_xql_query.md')
+        file_path: Relative path to skill file (e.g., 'workflows/xsoar_case_investigation.md')
         content: New markdown content
 
     Returns:
@@ -581,7 +581,7 @@ def skills_delete(file_path: str) -> str:
     Creates a backup in .deleted directory before deletion.
 
     Args:
-        file_path: Relative path to skill file (e.g., 'workflows/build_xql_query.md')
+        file_path: Relative path to skill file (e.g., 'workflows/xsoar_case_investigation.md')
 
     Returns:
         JSON with success status and backup file location

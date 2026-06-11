@@ -145,7 +145,7 @@ export default function TracesPage() {
           commitQuery("");
         }}
         parsed={parsed}
-        placeholder='trigger:job:my-job*  target:tool:xsiam_*  since:2026-05-02'
+        placeholder='trigger:job:my-job*  target:tool:xsoar_*  since:2026-05-02'
         dynamicSources={{ jobNames }}
       />
 

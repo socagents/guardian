@@ -1,12 +1,13 @@
 """Regression guard for the connector legacy-alias doubled-prefix bug (#120).
 
-The R5.1+ xsiam tools and v0.14.1+ cortex-xdr tools were authored with the
-connector prefix already baked into ``spec.tools[].name``. The flat legacy
-alias ``f"{functionPrefix}{tool_name}"`` then doubled it
-(``xdr_`` + ``xdr_incidents_list`` -> ``xdr_xdr_incidents_list``), so the
-natural single-prefix name the model / docs / skills call
-(``xdr_incidents_list``) was never advertised and 404'd at the agent layer
-with "Unknown tool" (v0.17.124 chat-smoke #9/#10).
+The xsoar tools are authored with the connector prefix already baked into
+``spec.tools[].name`` (e.g. ``xsoar_list_incidents``). The flat legacy alias
+``f"{functionPrefix}{tool_name}"`` would double it
+(``xsoar_`` + ``xsoar_list_incidents`` -> ``xsoar_xsoar_list_incidents``), so
+the natural single-prefix name the model / docs / skills call
+(``xsoar_list_incidents``) would never be advertised and would 404 at the
+agent layer with "Unknown tool". The fix: when the name already carries the
+prefix, the name IS the legacy alias — don't re-prepend.
 """
 
 from __future__ import annotations
@@ -21,27 +22,26 @@ from usecase.connector_loader import _legacy_alias
 
 def test_bare_name_gets_prefixed():
     # Normal case: spec.tools[].name is bare → alias = prefix + name.
-    assert _legacy_alias("xsiam_", "incidents_list") == "xsiam_incidents_list"
+    assert _legacy_alias("foo_", "incidents_list") == "foo_incidents_list"
     assert _legacy_alias("web_", "navigate") == "web_navigate"
 
 
 def test_already_prefixed_name_is_not_doubled():
     # The #120 bug: the name already carries the prefix → do NOT re-prepend.
-    assert _legacy_alias("xdr_", "xdr_incidents_list") == "xdr_incidents_list"
-    assert _legacy_alias("xsiam_", "xsiam_alerts_list") == "xsiam_alerts_list"
+    assert _legacy_alias("xsoar_", "xsoar_list_incidents") == "xsoar_list_incidents"
+    assert _legacy_alias("xsoar_", "xsoar_get_incident") == "xsoar_get_incident"
 
 
 def test_no_prefix_returns_none():
     assert _legacy_alias("", "anything") is None
 
 
-def test_incidents_tools_resolve_to_natural_single_prefix_names():
-    """The two connectors the #120 smoke caught. The model-facing alias must
-    be the single-prefix natural name in both cases — regardless of whether
-    the container strips the prefix (xsiam, bare spec name) or not
-    (cortex-xdr, prefixed spec name because xdr_ != cortex-xdr_)."""
-    assert _legacy_alias("xsiam_", "incidents_list") == "xsiam_incidents_list"
-    assert _legacy_alias("xdr_", "xdr_incidents_list") == "xdr_incidents_list"
+def test_prefixed_tools_resolve_to_natural_single_prefix_names():
+    """The xsoar connector authors fully-prefixed spec.tools[].name entries.
+    The model-facing alias must be the single-prefix natural name — never a
+    doubled prefix — whether the name arrives bare or already prefixed."""
+    assert _legacy_alias("xsoar_", "list_incidents") == "xsoar_list_incidents"
+    assert _legacy_alias("xsoar_", "xsoar_list_incidents") == "xsoar_list_incidents"
 
 
 def test_no_bundled_connector_yaml_yields_a_doubled_alias():

@@ -113,13 +113,13 @@ def test_registry_rejects_type_mismatch() -> None:
 def test_registry_format_prometheus_round_trip() -> None:
     r = MetricsRegistry()
     c = r.counter("guardian_mcp_tool_calls_total", "Total tool calls")
-    c.inc(tool="xsiam.execute_xql_query", status="ok")
+    c.inc(tool="xsoar.get_incident", status="ok")
     g = r.gauge("guardian_mcp_active_sessions", "Active")
     g.set(2)
     out = r.format_prometheus()
     assert "# TYPE guardian_mcp_tool_calls_total counter" in out
     assert (
-        'guardian_mcp_tool_calls_total{status="ok",tool="xsiam.execute_xql_query"} 1'
+        'guardian_mcp_tool_calls_total{status="ok",tool="xsoar.get_incident"} 1'
         in out
     )
     assert "guardian_mcp_active_sessions 2" in out

@@ -83,7 +83,7 @@ const LAYER_GROUPS: LayerGroup[] = [
       },
       {
         name: "guardian-mcp (embedded)", icon: "extension", language: "Python 3.12 / FastMCP",
-        description: "MCP server hosting the connector tool catalog (xsiam, cortex-xdr, cortex-docs, cortex-content, web). Sqlite-backed audit, sessions, secrets, settings.",
+        description: "MCP server hosting the connector tool catalog (xsoar, cortex-docs, web). Sqlite-backed audit, sessions, secrets, settings.",
         layer: "Cognitive", port: ":8080", healthEndpoint: "/api/v1/health",
         envVars: [
           { key: "MCP_TRANSPORT", value: "streamable-http" },

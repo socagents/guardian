@@ -6,8 +6,8 @@
  * Three representative connector containers shown side-by-side, each
  * as a card with: protocol · endpoint · auth header · tool family ·
  * sample call. Below the cards: the investigation pipeline showing
- * how a case flows from intake through XQL authoring to evidence in
- * chat. (cortex-docs + cortex-content follow the same anatomy.)
+ * how a case flows from intake through documentation lookup to
+ * evidence in chat. (xsoar, cortex-docs, and web are the full roster.)
  */
 
 import { DIAGRAM_THEME_CSS, DiagramMarkers } from "./_diagram-theme";
@@ -20,8 +20,8 @@ const STYLES =
   stroke: var(--dgm-stroke-strong);
   stroke-width: 1.6;
 }
-.dgm-root.exc .conn-card.xsiam { stroke: var(--dgm-edge-external); }
-.dgm-root.exc .conn-card.xdr { stroke: var(--dgm-edge-external); }
+.dgm-root.exc .conn-card.xsoar { stroke: var(--dgm-edge-external); }
+.dgm-root.exc .conn-card.cortex-docs { stroke: var(--dgm-edge-external); }
 .dgm-root.exc .conn-card.web { stroke: var(--dgm-edge-compose); }
 .dgm-root.exc .conn-name {
   fill: var(--dgm-text-main);
@@ -50,16 +50,16 @@ const STYLES =
   stroke: var(--dgm-stroke-muted);
   stroke-width: 1;
 }
-.dgm-root.exc .tool-pill.xsiam { stroke: var(--dgm-edge-external); }
-.dgm-root.exc .tool-pill.xdr { stroke: var(--dgm-edge-external); }
+.dgm-root.exc .tool-pill.xsoar { stroke: var(--dgm-edge-external); }
+.dgm-root.exc .tool-pill.cortex-docs { stroke: var(--dgm-edge-external); }
 .dgm-root.exc .tool-pill.web { stroke: var(--dgm-edge-compose); }
 .dgm-root.exc .tool-pill-text {
   font-size: 10.5px;
   font-weight: 600;
   font-family: "JetBrains Mono", "SFMono-Regular", monospace;
 }
-.dgm-root.exc .tool-pill-text.xsiam { fill: var(--dgm-edge-external); }
-.dgm-root.exc .tool-pill-text.xdr { fill: var(--dgm-edge-external); }
+.dgm-root.exc .tool-pill-text.xsoar { fill: var(--dgm-edge-external); }
+.dgm-root.exc .tool-pill-text.cortex-docs { fill: var(--dgm-edge-external); }
 .dgm-root.exc .tool-pill-text.web { fill: var(--dgm-edge-compose); }
 .dgm-root.exc .pipeline-card {
   fill: var(--dgm-bg-1);
@@ -87,7 +87,7 @@ const STYLES =
 `;
 
 interface Connector {
-  id: "xsiam" | "xdr" | "web";
+  id: "xsoar" | "cortex-docs" | "web";
   name: string;
   tagline: string;
   protocol: string;
@@ -102,43 +102,40 @@ interface Connector {
 
 const CONNECTORS: Connector[] = [
   {
-    id: "xsiam",
-    name: "xsiam",
-    tagline: "Cortex XSIAM PAPI · external SaaS",
+    id: "xsoar",
+    name: "xsoar",
+    tagline: "Cortex XSOAR case management · external SaaS",
     protocol: "HTTPS",
-    port: "api-<tenant>.xdr.<region>.paloaltonetworks.com",
+    port: "<tenant>.crtx.<region>.paloaltonetworks.com",
     auth: "AUTH",
     authValue: "x-xdr-auth-id + Authorization",
-    toolPrefix: "xsiam_*",
-    toolCount: "59 tools",
-    sampleTool: "xsiam_run_xql_query",
+    toolPrefix: "xsoar_*",
+    toolCount: "13 tools",
+    sampleTool: "xsoar_list_incidents",
     tools: [
-      "run_xql_query",
-      "find_xql_examples_rag",
-      "get_datasets",
-      "get_cases",
-      "get_issues",
-      "get_assets",
+      "list_incidents",
+      "get_incident",
+      "get_war_room",
+      "add_note",
+      "close_incident",
+      "search_indicators",
     ],
   },
   {
-    id: "xdr",
-    name: "cortex-xdr",
-    tagline: "Cortex XDR API · external SaaS",
+    id: "cortex-docs",
+    name: "cortex-docs",
+    tagline: "Cortex documentation search · external SaaS",
     protocol: "HTTPS",
-    port: "api-<tenant>.xdr.<region>.paloaltonetworks.com",
+    port: "docs.paloaltonetworks.com",
     auth: "AUTH",
-    authValue: "x-xdr-auth-id + Authorization",
-    toolPrefix: "xdr_*",
-    toolCount: "50 tools",
-    sampleTool: "xdr_get_cases_and_issues",
+    authValue: "Authorization bearer",
+    toolPrefix: "cortex_*",
+    toolCount: "3 tools",
+    sampleTool: "cortex_search",
     tools: [
-      "get_cases_and_issues",
-      "run_xql_query",
-      "get_xql_results",
-      "list_datasets",
-      "xdr_endpoints_isolate",
-      "xdr_alerts_list",
+      "search",
+      "fetch_topic",
+      "deep_research",
     ],
   },
   {
@@ -155,8 +152,8 @@ const CONNECTORS: Connector[] = [
     tools: [
       "navigate",
       "get_text",
-      "screenshot",
       "extract_links",
+      "screenshot",
       "click",
       "fill",
     ],
@@ -189,7 +186,7 @@ export function ExternalConnectorsAnatomy() {
       >
         <title id="exc-title">External Connectors Anatomy</title>
         <desc id="exc-desc">
-          xsiam, cortex-xdr, and web side-by-side with their protocols,
+          xsoar, cortex-docs, and web side-by-side with their protocols,
           endpoints, auth, and tool families.
         </desc>
 
@@ -302,7 +299,7 @@ export function ExternalConnectorsAnatomy() {
           );
         })}
 
-        {/* Investigation pipeline (bottom strip) — case → XQL → evidence */}
+        {/* Investigation pipeline (bottom strip) — case → docs → evidence */}
         <g>
           <rect
             className="pipeline-card"
@@ -318,16 +315,16 @@ export function ExternalConnectorsAnatomy() {
             y={PIPE_TOP - 8}
             fontSize="11"
           >
-            INVESTIGATION PIPELINE (case → XQL → evidence)
+            INVESTIGATION PIPELINE (case → docs → evidence)
           </text>
 
           {/* Pipeline steps */}
           {[
-            { name: "case intake", detail: "xsiam_get_cases / get_issues" },
-            { name: "example retrieval", detail: "find_xql_examples_rag(query)" },
-            { name: "query authoring", detail: "build_xql_query skill" },
-            { name: "XQL execution", detail: "xsiam_run_xql_query" },
-            { name: "evidence in chat", detail: "rows → agent analysis" },
+            { name: "case intake", detail: "xsoar_list_incidents / get_incident" },
+            { name: "context retrieval", detail: "cortex_search(query)" },
+            { name: "war room review", detail: "xsoar_get_war_room" },
+            { name: "evidence capture", detail: "xsoar_save_evidence" },
+            { name: "evidence in chat", detail: "notes → agent analysis" },
           ].map((s, si, all) => {
             const stepW = 240;
             const totalSteps = all.length;
@@ -390,9 +387,9 @@ export function ExternalConnectorsAnatomy() {
           </text>
           <text className="legend-text" x="180" y="4">
             web runs inside the Compose network against the guardian-browser
-            sidecar (green); XSIAM and XDR are external SaaS (orange). All
-            connectors present the same shape — a namespaced tool family the
-            agent invokes via function_call.
+            sidecar (green); xsoar and cortex-docs are external SaaS (orange).
+            All connectors present the same shape — a namespaced tool family
+            the agent invokes via function_call.
           </text>
         </g>
       </svg>

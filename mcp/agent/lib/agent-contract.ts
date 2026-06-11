@@ -73,28 +73,28 @@ export const agentContract = {
 
 export const agentWorkflows: AgentWorkflow[] = [
   {
-    id: 'investigate-cases',
-    title: 'Investigate cases',
+    id: 'monitor-cases',
+    title: 'Monitor open cases',
     prompt:
-      'List the most recent XSIAM cases with their issues, pick the highest-severity open case, and summarize what happened with the key evidence.',
-    requiredTools: ['xsiam_get_cases', 'xsiam_get_issues'],
-    outputs: ['case_summary', 'key_issues', 'recommended_next_steps'],
+      'List the open Cortex XSOAR cases from the last 24 hours, ordered by severity, and flag the ones that need investigation first.',
+    requiredTools: ['xsoar_list_incidents'],
+    outputs: ['open_cases', 'triage_order', 'recommended_first_case'],
   },
   {
-    id: 'author-xql-query',
-    title: 'Author an XQL query',
+    id: 'investigate-case',
+    title: 'Investigate a case end-to-end',
     prompt:
-      'Author an XQL query that answers the investigation question. Pull similar examples from the xql-examples knowledge base as a pattern prior, then run the query against the tenant and report the results.',
-    requiredTools: ['xsiam_find_xql_examples_rag', 'xsiam_get_xql_examples', 'xsiam_run_xql_query'],
-    outputs: ['xql_query', 'query_results', 'citations'],
+      'Pick the highest-severity open XSOAR case, fetch its full record and war-room narrative, enrich the related indicators, summarize what happened with the key evidence, and recommend next steps.',
+    requiredTools: ['xsoar_get_incident', 'xsoar_get_war_room', 'xsoar_search_indicators'],
+    outputs: ['case_summary', 'evidence_timeline', 'recommended_next_steps'],
   },
   {
-    id: 'asset-context',
-    title: 'Pull asset context',
+    id: 'document-and-resolve',
+    title: 'Document findings and update the case',
     prompt:
-      'Fetch the inventory entry for the asset involved in the current case and report its owner, exposure, and related findings.',
-    requiredTools: ['xsiam_get_assets', 'xsiam_get_asset_by_id'],
-    outputs: ['asset_profile', 'exposure_summary'],
+      'Write the investigation summary as a war-room note on the case, set the appropriate severity and owner, and close the case with a reason and closing notes if the investigation is complete.',
+    requiredTools: ['xsoar_add_note', 'xsoar_update_incident', 'xsoar_close_incident'],
+    outputs: ['war_room_note', 'updated_fields', 'closure_disposition'],
   },
   {
     id: 'web-research',

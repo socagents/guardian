@@ -17,7 +17,7 @@
 
 id: "guardian-embedded-mcp"
 version: "0.2.0"
-description: "Embedded MCP that aggregates the agent's tool connectors (xsiam, cortex-xdr, cortex-docs, cortex-content, web)."
+description: "Embedded MCP that aggregates the agent's tool connectors (xsoar, cortex-docs, web)."
 
 source:
   language: "python"

@@ -11,7 +11,7 @@ Why this exists:
     creators, Phase H hook subprocess invocations are all
     candidates for "background work the operator should be able
     to see and cancel."
-  - Spark connector tools (XSIAM XQL queries, XDR incident pulls)
+  - Spark connector tools (XSOAR case lookups, web fetches)
     can run for minutes. Today they block a chat turn. With a
     task surface, the agent can spawn one as a task, return
     immediately with a task id, and the operator polls /tasks for

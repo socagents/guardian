@@ -14,13 +14,13 @@
  *
  * Common patterns the form helps with:
  *
- *   - "Block any xsiam_create_dataset against the production tenant
+ *   - "Block any xsoar_close_incident against the production tenant
  *      until the on-call approves" → PreToolUse, command transport,
  *      failurePolicy:'block'
  *   - "Inject the active incident's ticket id into every chat" →
  *      UserPromptSubmit, http transport, returns
  *      `{injectContext: 'Active incident: INC-1234'}`
- *   - "Notify #soc-ops when an xsiam_run_xql_query completes" →
+ *   - "Notify #soc-ops when an xsoar_update_incident completes" →
  *      PostToolUse, http transport (Slack webhook)
  */
 
@@ -619,7 +619,7 @@ function HookEditor({
               })
             }
             className="input-base font-mono"
-            placeholder="e.g. xdr_*, xsiam_*"
+            placeholder="e.g. xsoar_*, cortex_*"
           />
         </Field>
 

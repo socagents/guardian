@@ -30,7 +30,8 @@ export type JourneyCategory =
   // [guardian v0.1.0] Retired categories: the log-generation,
   // red-team-emulation, and vendor-log-schema marketplace categories
   // were removed with their subsystems. `validation` survives but now
-  // covers XQL authoring + Cortex investigation workflows.
+  // covers XSOAR incident-investigation workflows (case triage,
+  // war-room review, indicator search, documentation, closure).
   | "validation"
   | "ops"
   // Authentication covers operator identity, sessions, password
@@ -79,8 +80,10 @@ export type JourneyComponent =
   | "settings"
   // [guardian v0.1.0] Retired components: the synthetic-log-generation
   // connector and the red-team-emulation connector were removed with
-  // their subsystems.
-  | "xsiam"
+  // their subsystems. The telemetry-era xsiam / cortex-xdr connectors
+  // were removed in the XSOAR pivot; `xsoar` is the surviving
+  // incident-investigation connector component.
+  | "xsoar"
   | "mcp"
   | "auth"
   | "secrets";
@@ -177,10 +180,10 @@ export const CATEGORY_META: Record<
   // [guardian v0.1.0] Retired: the log-generation + red-team category
   // tabs — both subsystems were removed.
   validation: {
-    label: "Investigation & Queries",
+    label: "Incident Investigation",
     icon: "fact_check",
     description:
-      "Author and run XQL queries against Cortex XSIAM / XDR, grounded in the official docs and the bundled xql-examples KB.",
+      "Monitor XSOAR cases, pull case context and the war room, search indicators, document findings, and update or close incidents.",
   },
   ops: {
     label: "Operations",
@@ -381,11 +384,13 @@ export const COMPONENT_META: Record<JourneyComponent, ComponentMeta> = {
   },
   // [guardian v0.1.0] Retired: the synthetic-log-generation and
   // red-team-emulation connector component chips — subsystems removed.
-  xsiam: {
-    label: "XSIAM connector",
+  // The telemetry-era xsiam / cortex-xdr chips were removed in the
+  // XSOAR pivot; xsoar is the incident-investigation connector.
+  xsoar: {
+    label: "XSOAR connector",
     icon: "security",
     guide: "architecture",
-    anchor: "xsiam-connector",
+    anchor: "xsoar-connector",
   },
   mcp: {
     label: "MCP server",
@@ -445,10 +450,10 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open a fresh chat at the Guardian UI.",
       "Paste the prompt and submit.",
-      "Read the response — should enumerate the XSIAM, Cortex XDR, Cortex docs/content, and web connector tools plus Memory, Knowledge, and Skills built-ins.",
+      "Read the response — should enumerate the XSOAR, Cortex docs, and web connector tools plus Memory, Knowledge, and Skills built-ins.",
     ],
     expectedResult:
-      "Multi-paragraph response with grouped tool list (XSIAM / Cortex XDR / Cortex docs / Web / Memory & Knowledge). The agent should mention `memory_store`, `memory_search`, `xsiam_run_xql_query` — proving the latest system prompt is loaded.",
+      "Multi-paragraph response with grouped tool list (XSOAR / Cortex docs / Web / Memory & Knowledge). The agent should mention `memory_store`, `memory_search`, `xsoar_list_incidents` — proving the latest system prompt is loaded.",
     verifyVia: [
       "GET /api/agent/audit?action=tool_call&limit=5 — should show NO new tool_call rows for this turn.",
       "Session sidebar should show this conversation auto-titled with the prompt's first 60 chars.",
@@ -606,7 +611,7 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Visit /jobs and click 'Create Job'.",
       "Identity: name='nightly-case-summary'; enabled=true.",
-      "Action: type='Prompt' (the picker offers Prompt + Tool Call only), message='Summarize the open XSIAM cases from the last 24 hours'.",
+      "Action: type='Prompt' (the picker offers Prompt + Tool Call only), message='Summarize the open XSOAR cases from the last 24 hours'.",
       "Schedule: Daily at 02:00 — or pick a time 1-2 minutes ahead for fast testing.",
       "Submit — redirects to /jobs and the new row shows a 'Runtime' badge.",
       "Click the ⋯ menu on the job row → 'Run Now' to test out-of-band.",
@@ -633,7 +638,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Schedule a recurring tool_call job",
     summary:
-      "Direct MCP tool dispatch on a cron schedule — no chat pipeline involved. Faster + cheaper than chat for known-shape automations like 'pull the open XSIAM cases every Monday'.",
+      "Direct MCP tool dispatch on a cron schedule — no chat pipeline involved. Faster + cheaper than chat for known-shape automations like 'pull the open XSOAR cases every Monday'.",
     difficulty: "intermediate",
     durationMin: 4,
     icon: "build",
@@ -656,15 +661,15 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Visit /jobs/new.",
       "Identity: name='weekly-case-pull'.",
-      "Action: type='tool_call', tool name='xsiam_get_cases', arguments JSON='{}' (or add filters per the tool's schema).",
+      "Action: type='tool_call', tool name='xsoar_list_incidents', arguments JSON='{}' (or add filters per the tool's schema).",
       "Schedule: Weekly, Mondays at 09:00.",
       "Submit. Then click 'Run Now' on the job row to fire immediately.",
     ],
     expectedResult:
       "Job fires via the MCP tool registry directly (no Gemini / chat round-trip). result_json contains the tool's structured output (the same case list shape the agent gets when it calls the tool interactively).",
     verifyVia: [
-      "GET /api/agent/jobs/<name>/runs → run row's result_json should match the shape of xsiam_get_cases' response.",
-      "Audit feed: action='tool_call' row with target='tool:xsiam.get_cases' and trigger='job:<name>'.",
+      "GET /api/agent/jobs/<name>/runs → run row's result_json should match the shape of xsoar_list_incidents' response.",
+      "Audit feed: action='tool_call' row with target='tool:xsoar.list_incidents' and trigger='job:<name>'.",
       "Compare to the chat-action equivalent (schedule-runtime-job): tool_call jobs run in ~50-200ms plus the upstream API latency; chat jobs run in ~3-30s because they go through the model loop.",
     ],
     related: [
@@ -703,7 +708,7 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Visit /jobs/new.",
       "Identity: name='now-case-snapshot'.",
-      "Action: either type (prompt / tool_call) — try prompt with message='Summarize the open XSIAM cases right now'.",
+      "Action: either type (prompt / tool_call) — try prompt with message='Summarize the open XSOAR cases right now'.",
       "Schedule: pick 'Run Now' — UI shows green info banner 'Job will fire immediately on save and then disable itself.'",
       "Submit. Form's submit handler POSTs the job, then immediately POSTs /run.",
       "Land on /jobs — see the new row with last_status='success' and a Disabled badge within seconds.",
@@ -740,7 +745,7 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Visit /jobs/new.",
       "Identity: name='maintenance-window-summary'.",
-      "Action: prompt with message='Summarize XSIAM issues created during tonight's maintenance window' (or any action).",
+      "Action: prompt with message='Summarize XSOAR cases created during tonight's maintenance window' (or any action).",
       "Schedule: pick 'Run Once'. The datetime picker defaults to 1 hour from now; pick a moment 2-5 minutes in the future for fast testing.",
       "Submit. Form blocks submission if the picked datetime is in the past or <1min away.",
       "Wait until the picked time → cron tick fires the job → auto-disables.",
@@ -1013,7 +1018,7 @@ export const JOURNEYS: Journey[] = [
         note: "Tier-1 read. Agent calls jobs_list — no approval, immediate.",
       },
       {
-        text: "schedule a daily XSIAM case summary at 8am UTC",
+        text: "schedule a daily XSOAR case summary at 8am UTC",
         note:
           "Tier-2 soft write. Agent reads current jobs, proposes new one, requests approval — green inline card appears below the chat thread. Click Approve.",
       },
@@ -1081,7 +1086,7 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open a fresh chat at /. (Tier-1 reads need no setup; Tier-2+ require an operator browser session for inline approvals.)",
       "Paste prompt #1 (\"what jobs are scheduled?\"). Confirm the agent enumerates current jobs WITHOUT showing an approval card — Tier-1 reads run immediately.",
-      "Paste prompt #2 (\"schedule a daily XSIAM case summary at 8am UTC\"). The agent will tell you what it's about to do, then a GREEN approval card appears below the chat. Click Approve. The agent's next message confirms 'Job created'.",
+      "Paste prompt #2 (\"schedule a daily XSOAR case summary at 8am UTC\"). The agent will tell you what it's about to do, then a GREEN approval card appears below the chat. Click Approve. The agent's next message confirms 'Job created'.",
       "Paste prompt #3 (\"always reply in three bullet points\"). The agent reads the current personality.md, proposes a markdown edit, and a card appears showing the new markdown content. Click Approve. Future replies should be terser.",
       "Paste prompt #4 (\"are you healthy?\"). Confirm health_status returns embedder_mode: vertex (or stub if Vertex not configured).",
       "Paste prompt #5 (\"delete the daily-case-summary job\"). The card now shows a RED banner ('this is irrecoverable'). Confirm the destructive styling renders. Click Approve to remove the job.",
@@ -1118,7 +1123,7 @@ export const JOURNEYS: Journey[] = [
     icon: "route",
     prompts: [
       {
-        text: "create a job that pulls the open XSIAM cases immediately",
+        text: "create a job that pulls the open XSOAR cases immediately",
         note:
           "DELIBERATELY ambiguous: could mean (a) create a one-shot job that fires now, or (b) just pull the cases now. With askWhenUnsure ON the agent should ASK with two numbered options before calling any tool.",
       },
@@ -1128,9 +1133,9 @@ export const JOURNEYS: Journey[] = [
           "Picks the LOCAL interpretation. Agent should now call jobs_create with run_once: true; an inline approval card appears, click Approve.",
       },
       {
-        text: "pull the open XSIAM cases right now",
+        text: "pull the open XSOAR cases right now",
         note:
-          "Unambiguous EXTERNAL request. Per default policy (confirmExternalActions: 'soft'), agent says 'About to call xsiam_get_cases — fire it?'. Reply 'yes' or 'go' to proceed.",
+          "Unambiguous EXTERNAL request. Per default policy (confirmExternalActions: 'soft'), agent says 'About to call xsoar_list_incidents — fire it?'. Reply 'yes' or 'go' to proceed.",
       },
       {
         text: "show me my action policy",
@@ -1147,7 +1152,7 @@ export const JOURNEYS: Journey[] = [
       "personality_get",
       "personality_update",
       "jobs_create",
-      "xsiam_get_cases",
+      "xsoar_list_incidents",
     ],
     apis: [
       {
@@ -1164,10 +1169,10 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Visit /settings/personality. Confirm the new 'Action Policy' section is visible between 'Autonomy & Permissions' and 'Thinking & Reasoning'.",
-      "Verify the defaults: askWhenUnsure=ON, confirmLocalActions=approve-card, confirmExternalActions=soft. The localCategories chip list includes jobs/settings/personality/etc; externalCategories includes xsiam/xdr/web/cortex.",
-      "Open a fresh chat. Paste the deliberately-ambiguous prompt #1. The agent must ASK with two numbered options labeled (LOCAL · jobs_create with run_once) and (EXTERNAL · xsiam_get_cases). It must NOT call a tool yet.",
+      "Verify the defaults: askWhenUnsure=ON, confirmLocalActions=approve-card, confirmExternalActions=soft. The localCategories chip list includes jobs/settings/personality/etc; externalCategories includes xsoar/web/cortex.",
+      "Open a fresh chat. Paste the deliberately-ambiguous prompt #1. The agent must ASK with two numbered options labeled (LOCAL · jobs_create with run_once) and (EXTERNAL · xsoar_list_incidents). It must NOT call a tool yet.",
       "Reply with prompt #2 ('a' or 'option a' or similar). The agent now calls jobs_create with run_once=true; the green approval card appears below the chat. Click Approve. Job created; it fires once and auto-disables.",
-      "Send prompt #3 ('pull the open XSIAM cases right now'). With confirmExternalActions=soft, the agent should announce 'About to call xsiam_get_cases — fire it?' and wait. Reply 'yes' / 'go'. Tool fires.",
+      "Send prompt #3 ('pull the open XSOAR cases right now'). With confirmExternalActions=soft, the agent should announce 'About to call xsoar_list_incidents — fire it?' and wait. Reply 'yes' / 'go'. Tool fires.",
       "Send prompt #4 ('show me my action policy'). Agent calls personality_get; the reply enumerates the policy fields.",
       "Send prompt #5 to change external confirmation to off. Approve the personality_update card. Test: ask the agent 'pull the cases now' again — this time it should fire immediately without the soft confirmation step.",
     ],
@@ -1256,11 +1261,11 @@ export const JOURNEYS: Journey[] = [
     icon: "download",
     prompts: [
       {
-        text: "List the open XSIAM cases from the last 24 hours.",
+        text: "List the open XSOAR cases from the last 24 hours.",
         note: "Run this so the export contains a tool round-trip plus the assistant's recap.",
       },
     ],
-    toolsExercised: ["xsiam_get_cases"],
+    toolsExercised: ["xsoar_list_incidents"],
     apis: [
       {
         method: "GET",
@@ -1336,11 +1341,11 @@ export const JOURNEYS: Journey[] = [
     icon: "monitoring",
     prompts: [
       {
-        text: "What datasets exist in our XSIAM tenant?",
-        note: "Triggers a tool_call to xsiam_get_datasets — appears in the telemetry panel as a live row.",
+        text: "List the open cases in our XSOAR tenant.",
+        note: "Triggers a tool_call to xsoar_list_incidents — appears in the telemetry panel as a live row.",
       },
     ],
-    toolsExercised: ["xsiam_get_datasets"],
+    toolsExercised: ["xsoar_list_incidents"],
     apis: [],
     howToTest: [
       "Click the Live Telemetry icon in the chat header (right side, looks like a monitor).",
@@ -1370,11 +1375,11 @@ export const JOURNEYS: Journey[] = [
     icon: "delete_sweep",
     prompts: [
       {
-        text: "List the XSIAM datasets.",
+        text: "List the open XSOAR cases.",
         note: "Populates the telemetry with a tool call to clear next.",
       },
     ],
-    toolsExercised: ["xsiam_get_datasets"],
+    toolsExercised: ["xsoar_list_incidents"],
     apis: [],
     howToTest: [
       "Open the live telemetry panel and run a prompt that fires at least one tool call.",
@@ -1438,12 +1443,12 @@ export const JOURNEYS: Journey[] = [
     icon: "history",
     prompts: [
       {
-        text: "Query XSIAM for failed logins in the last hour.",
+        text: "Pull the highest-severity open XSOAR case and show me its war room.",
         note: "Run this in session A so it has tool round-trips. Then later, load session A from history and verify the telemetry panel shows them.",
         newSession: true,
       },
     ],
-    toolsExercised: ["xsiam_run_xql_query"],
+    toolsExercised: ["xsoar_get_incident", "xsoar_get_war_room"],
     apis: [
       {
         method: "GET",
@@ -1462,7 +1467,7 @@ export const JOURNEYS: Journey[] = [
       "Now click Session A in the sidebar.",
       "The chat thread rehydrates with all prior messages.",
       "Open the live telemetry panel.",
-      "It should show the tool round-trip from Session A (xsiam_run_xql_query with its args + result).",
+      "It should show the tool round-trips from Session A (xsoar_get_incident + xsoar_get_war_room with their args + results).",
     ],
     expectedResult:
       "Both the chat thread AND the telemetry panel rehydrate. The panel doesn't restart from empty when you switch sessions — it shows what happened in that specific session.",
@@ -1490,15 +1495,15 @@ export const JOURNEYS: Journey[] = [
         newSession: true,
       },
       {
-        text: "The host is 10.10.20.5 — check XSIAM for SSH brute-force activity against it in the last 24 hours.",
-        note: "Follow-up: agent should remember 'Linux server compromise' from turn 1 and run the right XQL query without re-asking.",
+        text: "The host is 10.10.20.5 — pull the open XSOAR case that references it and show me its war room.",
+        note: "Follow-up: agent should remember 'Linux server compromise' from turn 1 and fetch the right case without re-asking.",
       },
       {
-        text: "How many results did that query return again?",
-        note: "Second follow-up: agent should reference the XQL query it just ran, not ask 'which query?'",
+        text: "How many war-room entries did that case have again?",
+        note: "Second follow-up: agent should reference the case it just pulled, not ask 'which case?'",
       },
     ],
-    toolsExercised: ["xsiam_run_xql_query", "memory_search"],
+    toolsExercised: ["xsoar_get_incident", "xsoar_get_war_room", "memory_search"],
     apis: [
       {
         method: "POST",
@@ -1515,8 +1520,8 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Run the three prompts in order in the SAME session.",
-      "After turn 2, the agent should run the XQL query without asking 'which target?' (it remembers 10.10.20.5 from turn 2).",
-      "After turn 3, the agent should answer with the actual result count of the query it just ran (not ask 'which query?').",
+      "After turn 2, the agent should pull the case without asking 'which host?' (it remembers 10.10.20.5 from turn 2).",
+      "After turn 3, the agent should answer with the actual war-room entry count of the case it just pulled (not ask 'which case?').",
     ],
     expectedResult:
       "Turn 2 reads as a coherent continuation of turn 1 (no clarifying re-ask). Turn 3 references the query just run. If the agent asks 'what are you referring to?' or 'which target?', context wasn't loaded — check that loadSessionHistory() ran (search audit log for the chat_append rows from prior turns).",
@@ -1604,16 +1609,16 @@ export const JOURNEYS: Journey[] = [
     icon: "compress",
     prompts: [
       {
-        text: "What datasets exist in our XSIAM tenant?",
+        text: "List the open cases in our XSOAR tenant.",
         note: "Turn 1 — populate some history. Any prompt works; this one is fast.",
         newSession: true,
       },
       {
-        text: "Pick one dataset and explain what kind of investigations it supports.",
+        text: "Pick one case and explain what kind of investigation it needs.",
         note: "Turn 2 — more context to compact.",
       },
       {
-        text: "Which XQL example queries from the KB cover that dataset?",
+        text: "What indicators are attached to that case?",
         note: "Turn 3 — final turn before /compress.",
       },
       {
@@ -1621,11 +1626,11 @@ export const JOURNEYS: Journey[] = [
         note: "Triggers compaction. Watch the telemetry panel for compaction_start → compaction_end events; the chat thread gets a horizontal divider; the chat header shows a 'Compacted N messages' badge.",
       },
       {
-        text: "What was the second dataset you mentioned?",
-        note: "Final turn — the agent answers from the summary, NOT the full transcript. The summary preserves opaque IDs (dataset names) verbatim per the SUMMARIZE_INSTRUCTIONS contract, so this should still resolve correctly.",
+        text: "What was the second case you mentioned?",
+        note: "Final turn — the agent answers from the summary, NOT the full transcript. The summary preserves opaque IDs (case IDs) verbatim per the SUMMARIZE_INSTRUCTIONS contract, so this should still resolve correctly.",
       },
     ],
-    toolsExercised: ["xsiam_get_datasets"],
+    toolsExercised: ["xsoar_list_incidents", "xsoar_get_incident", "xsoar_search_indicators"],
     apis: [
       {
         method: "POST",
@@ -1735,7 +1740,7 @@ export const JOURNEYS: Journey[] = [
     icon: "restart_alt",
     prompts: [
       {
-        text: "List the datasets in XSIAM.",
+        text: "List the open cases in XSOAR.",
         note: "Turn 1 — populates the session with a tool-call round-trip so /clear has something meaningful to clear.",
         newSession: true,
       },
@@ -1748,7 +1753,7 @@ export const JOURNEYS: Journey[] = [
         note: "Verifies the chat is now driving the NEW session — the agent's reply (or the chat header) carries the freshly minted id, not the old one.",
       },
     ],
-    toolsExercised: ["xsiam_get_datasets"],
+    toolsExercised: ["xsoar_list_incidents"],
     apis: [
       {
         method: "POST",
@@ -2219,22 +2224,22 @@ export const JOURNEYS: Journey[] = [
     category: "chat",
     title: "Plan a multi-step workflow with /plan",
     summary:
-      "Ask the agent to plan before executing — useful for long investigations that fire many tools across XSIAM + Cortex XDR + the docs connector. Operator approves once instead of a dozen inline cards.",
+      "Ask the agent to plan before executing — useful for long investigations that fire many tools across the XSOAR + Cortex-docs connectors. Operator approves once instead of a dozen inline cards.",
     difficulty: "starter",
     durationMin: 4,
     icon: "map",
     prompts: [
       {
-        text: "/plan investigate the most recent critical XSIAM case: pull the case, query the related events with XQL, and summarize the affected assets",
+        text: "/plan investigate the most recent critical XSOAR case: pull the case, read its war room, search the related indicators, and summarize the affected assets",
         note: "Triggers PLAN_MODE_INSTRUCTIONS on the model. Returns a numbered plan WITHOUT executing any tools — the model can't sneak in a side effect because callGemini runs with no tools wired during planning.",
         newSession: true,
       },
       {
-        text: "investigate the most recent critical XSIAM case: pull the case, query the related events with XQL, and summarize the affected assets",
+        text: "investigate the most recent critical XSOAR case: pull the case, read its war room, search the related indicators, and summarize the affected assets",
         note: "Same prompt without /plan. Now the agent executes the plan (subject to per-tool approval cards for tier-2+ destructive tools).",
       },
     ],
-    toolsExercised: ["xsiam_get_cases", "xsiam_run_xql_query", "xsiam_get_assets"],
+    toolsExercised: ["xsoar_list_incidents", "xsoar_get_incident", "xsoar_get_war_room", "xsoar_search_indicators"],
     apis: [
       {
         method: "POST",
@@ -2275,7 +2280,7 @@ export const JOURNEYS: Journey[] = [
     icon: "pending_actions",
     prompts: [
       {
-        text: "Use a subagent to review the open XSIAM cases from the last 24 hours and summarize them",
+        text: "Use a subagent to review the open XSOAR cases from the last 24 hours and summarize them",
         note: "Spawns a subagent run — that's a long-running task. It lands in the registry with kind='subagent' and parent_session_id linking back to this chat.",
         newSession: true,
       },
@@ -2329,8 +2334,8 @@ export const JOURNEYS: Journey[] = [
     icon: "payments",
     prompts: [
       {
-        text: "List the datasets in our XSIAM tenant and explain what each one contains",
-        note: "Real turn that fires a tool call (xsiam_get_datasets) — burns ~15-30K input tokens and a few hundred output tokens.",
+        text: "List the open cases in our XSOAR tenant and explain what each one is about",
+        note: "Real turn that fires a tool call (xsoar_list_incidents) — burns ~15-30K input tokens and a few hundred output tokens.",
         newSession: true,
       },
       {
@@ -2338,7 +2343,7 @@ export const JOURNEYS: Journey[] = [
         note: "Aggregates chat_turn_cost audit rows for THIS session and today (UTC). Shows by-model breakdown when more than one model fired.",
       },
     ],
-    toolsExercised: ["xsiam_get_datasets"],
+    toolsExercised: ["xsoar_list_incidents"],
     apis: [
       {
         method: "GET",
@@ -2386,12 +2391,12 @@ export const JOURNEYS: Journey[] = [
     ],
     howToTest: [
       "Open /jobs/new. Scroll to Section 01 → confirm the Permission policy section appears below the Extended-thinking toggle, with three glob inputs (Allowed / Denied / Require approval).",
-      "Fill Allowed tools: 'xsiam_*' (whitelist the XSIAM family). Save the job with a simple prompt action (say 'list the open XSIAM cases').",
-      "Run the job now. Open the run-detail page. Confirm the agent's chat turn called only xsiam-family tools; any attempt to call non-xsiam tools shows status=denied_by_policy with the denial reason.",
-      "Edit the job: clear Allowed tools, set Denied tools to '*_delete'. Save. Re-run. Confirm the job can call most tools but any *_delete call is denied.",
-      "Set Require approval to 'xsiam_create_*'. Even with bypass_approvals=true, confirm any xsiam_create_* call routes through the approval card (bypass doesn't override require_approval — policy intent wins).",
+      "Fill Allowed tools: 'xsoar_*' (whitelist the XSOAR family). Save the job with a simple prompt action (say 'list the open XSOAR cases').",
+      "Run the job now. Open the run-detail page. Confirm the agent's chat turn called only xsoar-family tools; any attempt to call non-xsoar tools shows status=denied_by_policy with the denial reason.",
+      "Edit the job: clear Allowed tools, set Denied tools to '*_close_*,*_delete'. Save. Re-run. Confirm the job can call most tools but any close/delete call is denied.",
+      "Set Require approval to 'xsoar_close_*'. Even with bypass_approvals=true, confirm any xsoar_close_* call routes through the approval card (bypass doesn't override require_approval — policy intent wins).",
       "Open /observability/events → filter action=tool_denied_by_policy. Confirm every denied dispatch appears with matched_list + matched_pattern metadata.",
-      "Chat with the agent: 'restrict the test-job to only allow XSIAM tools'. Confirm the agent calls jobs_update with permission_policy.allowed_tools=['xsiam_*'].",
+      "Chat with the agent: 'restrict the test-job to only allow XSOAR tools'. Confirm the agent calls jobs_update with permission_policy.allowed_tools=['xsoar_*'].",
       "Clear ALL THREE permission policy fields → save. Confirm the next dispatch is unrestricted (policy effectively cleared via the {} sentinel).",
       "CLI verify schema: docker exec guardian_agent sqlite3 /app/data/jobs.db 'PRAGMA table_info(jobs)' → permission_policy_json TEXT column present.",
       "Verify pre-migration jobs.db: copy an older jobs.db to /tmp, point the agent at it, restart. Confirm the column gets ALTER TABLE'd on boot (no manual migration needed).",
@@ -2489,10 +2494,10 @@ export const JOURNEYS: Journey[] = [
       "Open /settings/hooks → Add hook.",
       "Transport dropdown defaults to 'Built-in (in-process, no subprocess)'. Confirm the Builtin dropdown lists 'Slack approval'.",
       "Pick 'Slack approval'. The dynamic form renders three fields: Webhook URL (required), Auth header name (optional), Auth header value (optional, accepts secret:<ENV_NAME>).",
-      "Fill: name 'soc-ops slack', event PreToolUse, toolGlob 'xsiam_create_*,xsiam_add_*,*_delete', webhookUrl '<your-receiver-url>', timeout 60000, failurePolicy 'allow'.",
+      "Fill: name 'soc-ops slack', event PreToolUse, toolGlob 'xsoar_close_*,xsoar_update_*,*_delete', webhookUrl '<your-receiver-url>', timeout 60000, failurePolicy 'allow'.",
       "Save. The hook lands in the SqliteHookStore with transport.type='builtin' + transport.name='slack-approval' + transport.config={webhookUrl,...}.",
       "Confirm the list row shows a 'built-in' badge in the transport column.",
-      "In chat, ask the agent to create an XSIAM dataset. Slack #soc-ops gets a message with Approve/Deny buttons.",
+      "In chat, ask the agent to close an XSOAR case. Slack #soc-ops gets a message with Approve/Deny buttons.",
       "Click Approve — tool call proceeds. Click Deny on a follow-up — chat thread surfaces the analyst's reason.",
       "Compare latency vs the legacy http-transport slack-approval: the builtin runs in-process so the round-trip cost is just the receiver call (no extra HTTP layer between Guardian and the receiver).",
     ],
@@ -2524,16 +2529,16 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/hooks",
         description:
-          "Body: {name, event:'PreToolUse', matcher:{toolGlob:'xsiam_create_*,xsiam_add_*,*_delete'}, transport:{type:'http',url:'https://your-receiver/pre-tool-approval'}, timeoutMs:60000, failurePolicy:'allow', enabled:true}. The chat-route loads hooks fresh per fire-site.",
+          "Body: {name, event:'PreToolUse', matcher:{toolGlob:'xsoar_close_*,xsoar_update_*,*_delete'}, transport:{type:'http',url:'https://your-receiver/pre-tool-approval'}, timeoutMs:60000, failurePolicy:'allow', enabled:true}. The chat-route loads hooks fresh per fire-site.",
       },
     ],
     howToTest: [
       "Deploy a small webhook receiver (Lambda / Cloud Function / Slack-bot). It must: (1) accept POST with the PreToolUse JSON payload, (2) post to Slack with Approve/Deny interactive buttons, (3) wait for the analyst's click, (4) return JSON {decision:'allow'|'deny', reason}.",
       "See lib/slack-approval-hook.ts:SLACK_APPROVAL_INSTRUCTIONS for a reference receiver skeleton.",
       "Open /settings/hooks → Add hook.",
-      "Set: name 'soc-ops slack approval', event PreToolUse, transport HTTP with your receiver URL, toolGlob 'xsiam_create_*,xsiam_add_*,*_delete', timeout 60000, failurePolicy 'allow' (so a receiver outage doesn't block all chat).",
+      "Set: name 'soc-ops slack approval', event PreToolUse, transport HTTP with your receiver URL, toolGlob 'xsoar_close_*,xsoar_update_*,*_delete', timeout 60000, failurePolicy 'allow' (so a receiver outage doesn't block all chat).",
       "Save. The hook lands in the SqliteHookStore.",
-      "In chat, ask the agent to create an XSIAM dataset. Watch the wire-events panel — hook_dispatched event fires.",
+      "In chat, ask the agent to close an XSOAR case. Watch the wire-events panel — hook_dispatched event fires.",
       "Slack channel #soc-ops gets a message with Approve/Deny buttons. Click Approve.",
       "The chat-route's hook dispatcher receives {decision:'allow', reason}. Tool call proceeds.",
       "Try again with Deny — tool call blocks; the model sees an error response with the analyst's reason.",
@@ -2555,7 +2560,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Block destructive tools against production targets",
     summary:
-      "Install a PreToolUse hook that inspects tool args and denies any xsiam_create_dataset / xsiam_add_lookup_data call targeting a name that contains 'prod'. Defense in depth alongside the standard tier-gating.",
+      "Install a PreToolUse hook that inspects tool args and denies any xsoar_close_incident / xsoar_update_incident call targeting a case whose name contains 'prod'. Defense in depth alongside the standard tier-gating.",
     difficulty: "intermediate",
     durationMin: 6,
     icon: "block",
@@ -2566,16 +2571,16 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/hooks",
         description:
-          "Body for a command-transport hook: {name, event:'PreToolUse', matcher:{toolGlob:'xsiam_create_*,xsiam_add_*'}, transport:{type:'command', command:'/etc/guardian/policy/check-target.sh', env:{POLICY_DENY_LIST:'prod'}}, failurePolicy:'block'}. The hook script reads JSON from stdin, returns JSON to stdout.",
+          "Body for a command-transport hook: {name, event:'PreToolUse', matcher:{toolGlob:'xsoar_close_*,xsoar_update_*'}, transport:{type:'command', command:'/etc/guardian/policy/check-target.sh', env:{POLICY_DENY_LIST:'prod'}}, failurePolicy:'block'}. The hook script reads JSON from stdin, returns JSON to stdout.",
       },
     ],
     howToTest: [
-      "Write a small shell script (or any executable). Read JSON from stdin. Inspect payload.args.dataset_name (or the relevant target arg). If 'prod' appears, output {\"decision\":\"deny\",\"reason\":\"Production datasets require ops director approval\"}. Else output {} (no-op).",
+      "Write a small shell script (or any executable). Read JSON from stdin. Inspect payload.args.incident_name (or the relevant target arg). If 'prod' appears, output {\"decision\":\"deny\",\"reason\":\"Production cases require ops director approval\"}. Else output {} (no-op).",
       "Make the script executable and place it on the guardian-agent container's filesystem (/etc/guardian/policy/check-target.sh — mount via docker compose volume, or bake into the bundle).",
       "Open /settings/hooks → Add hook with the configuration above.",
       "Save. failurePolicy='block' = if your script errors / times out, treat as deny. Strict.",
-      "In chat: ask the agent to create a scratch dataset named 'ir_test_lookup'. Tool call proceeds — no production marker.",
-      "Now ask: 'Create a dataset named prod_blocklist'. The PreToolUse hook fires, your script returns {\"decision\":\"deny\"}, and the chat-route synthesizes a tool result with the reason.",
+      "In chat: ask the agent to close a scratch case named 'ir_test_case'. Tool call proceeds — no production marker.",
+      "Now ask: 'Close the case named prod_blocklist'. The PreToolUse hook fires, your script returns {\"decision\":\"deny\"}, and the chat-route synthesizes a tool result with the reason.",
       "Audit row hook_dispatched logs the per-hook decision in metadata.",
     ],
     expectedResult:
@@ -2594,17 +2599,17 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Recover a connector when its auth expires",
     summary:
-      "When XSIAM PAPI auth expires, the chat-route classifies the 401 as auth-related, the connector flips to needs-auth, the chat shows a connector_auth_required indicator, and /observability/connectors offers a Reauth action.",
+      "When the XSOAR API key expires, the chat-route classifies the 401 as auth-related, the connector flips to needs-auth, the chat shows a connector_auth_required indicator, and /observability/connectors offers a Reauth action.",
     difficulty: "starter",
     durationMin: 3,
     icon: "key",
     prompts: [
       {
-        text: "List the open cases in XSIAM",
-        note: "Exercises an XSIAM tool. If the configured auth has expired, the call returns 401 — the chat-route's classifier flips the connector state to 'needs-auth'.",
+        text: "List the open cases in XSOAR",
+        note: "Exercises an XSOAR tool. If the configured auth has expired, the call returns 401 — the chat-route's classifier flips the connector state to 'needs-auth'.",
       },
     ],
-    toolsExercised: ["xsiam_get_cases"],
+    toolsExercised: ["xsoar_list_incidents"],
     apis: [
       {
         method: "GET",
@@ -2620,10 +2625,10 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Set up: deliberately rotate the XSIAM API key in the upstream tenant (or wait for it to expire) WITHOUT updating guardian's stored credential.",
-      "Send the prompt above. The xsiam_get_cases tool returns 401.",
+      "Set up: deliberately rotate the XSOAR API key in the upstream tenant (or wait for it to expire) WITHOUT updating guardian's stored credential.",
+      "Send the prompt above. The xsoar_list_incidents tool returns 401.",
       "Watch the chat: a connector_auth_required SSE event fires.",
-      "Visit /observability/connectors. The xsiam connector shows state='needs-auth' with the last_error truncated.",
+      "Visit /observability/connectors. The xsoar connector shows state='needs-auth' with the last_error truncated.",
       "Update the credential (via /providers or settings).",
       "Click 'Reauth' on the /observability/connectors row. State flips to 'pending'.",
       "Send the same prompt again. Tool succeeds. State flips to 'connected'.",
@@ -2632,7 +2637,7 @@ export const JOURNEYS: Journey[] = [
       "Auth expiration is diagnosable from the agent UI without parsing tool errors. Operators have a one-click Reauth path; the chat-route's success-recording transitions the state back automatically once auth works.",
     verifyVia: [
       "GET /api/agent/audit?action=connector_auth_required → row with metadata.from_state='connected', to_state='needs-auth', error",
-      "After Reauth + successful tool call: GET /api/agent/connectors/xsiam → state='connected', consecutive_failures=0",
+      "After Reauth + successful tool call: GET /api/agent/connectors/xsoar → state='connected', consecutive_failures=0",
     ],
     related: ["chat-load-history-with-telemetry"],
     components: ["connectors", "audit", "pipeline"],
@@ -2876,8 +2881,8 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Visit /agents. Click 'New agent'.",
       "Fill in: name='firewall-analyzer'. Description: 'Pulls FortiGate alerts and identifies coordinated patterns.'",
-      "System prompt (long-form): instructions for the subagent — what XQL queries to run, what to look for, output format.",
-      "Tools allowed (one per line): xsiam_run_xql_query, xsiam_get_cases, memory_search.",
+      "System prompt (long-form): instructions for the subagent — which cases to pull, what to look for in the war room, output format.",
+      "Tools allowed (one per line): xsoar_list_incidents, xsoar_get_incident, xsoar_get_war_room, memory_search.",
       "Tools denied: leave empty (allowlist gates already).",
       "Max turns: 8. Isolation: fresh_session.",
       "Save. Auto-toggle to enabled.",
@@ -2947,7 +2952,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Browse a knowledge base",
     summary:
-      "Navigate to /knowledge, pick a KB, search semantically, and read an entry. The bundled xql-examples KB (787 curated XQL queries) is the reference content.",
+      "Navigate to /knowledge, pick a KB, search semantically, and read an entry. Any KB the install ships (or that an operator imports) renders here.",
     difficulty: "starter",
     durationMin: 2,
     icon: "menu_book",
@@ -2967,15 +2972,15 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /knowledge. The xql-examples card renders with its entry count.",
-      "Click xql-examples. Entry list renders, sorted by entry id.",
-      "Click any entry. Full markdown renders in a drawer — XQL with syntax highlighting.",
-      "Use the search bar at the top. Type 'failed logins'. Results re-rank by similarity.",
+      "Open /knowledge. Each available KB renders as a card with its entry count.",
+      "Click a KB. Entry list renders, sorted by entry id.",
+      "Click any entry. Full markdown renders in a drawer.",
+      "Use the search bar at the top. Type a phrase from one of the entries. Results re-rank by similarity.",
     ],
     expectedResult:
       "KB browsing works without any Vertex calls (embeddings cached at boot); search calls Vertex once per query and reuses cached entry embeddings.",
     verifyVia: [
-      "GET /api/agent/knowledge → xql-examples listed with entry_count",
+      "GET /api/agent/knowledge → each KB listed with entry_count",
       "Search returns results ordered by descending score; each row carries kb + entry_id",
       "/observability/events?action=tool_call → no rows during browsing (only during search)",
     ],
@@ -2994,7 +2999,7 @@ export const JOURNEYS: Journey[] = [
     icon: "auto_awesome",
     prompts: [
       {
-        text: "What skills do you have for XQL query authoring?",
+        text: "What skills do you have for incident investigation?",
         note: "Agent enumerates from skills_list_all. Watch which it returns.",
       },
     ],
@@ -3014,7 +3019,7 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open /skills. Cards render grouped by category (foundation / workflows).",
       "If any skill carries locked: true frontmatter, its toggle is greyed — locked skills can't be disabled. (None of the five bundled skills are locked.)",
-      "Click a skill (e.g. 'build_xql_query' under 'workflows'). Detail panel opens with full markdown + analytics + per-workspace override.",
+      "Click a skill (e.g. 'investigate_xsoar_case' under 'workflows'). Detail panel opens with full markdown + analytics + per-workspace override.",
       "Toggle off. The card dims; an audit row writes.",
       "Open a chat. Ask the agent to invoke that skill's domain. It declines or works around.",
       "Re-toggle on; chat resumes following.",
@@ -3380,7 +3385,7 @@ export const JOURNEYS: Journey[] = [
         note: "Tests the providers_create boundary. Expected: agent refuses, points the operator to /providers + /api-keys. NO tool_call event in the audit — the agent never attempted, it just answered.",
       },
       {
-        text: "Rotate the API key for the xsiam connector instance",
+        text: "Rotate the API key for the xsoar connector instance",
         note: "Tests the instances_update boundary (connector-secret rotation). Expected: agent refuses, points to /connectors → Instances. The tool catalog genuinely lacks instances_update, so the agent isn't role-playing — verify by asking: 'What tools do you have for managing providers?' Agent should say 'none'.",
       },
       {
@@ -3400,7 +3405,7 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/audit?action=tool_call",
         description:
-          "Cross-check: filter for tool_call events around the test prompts' timestamps. There should be NONE referencing providers_create/update or instances_create/update. Compare against a normal chat (e.g. 'list the XSIAM datasets') where you'd see xsiam_get_datasets fire.",
+          "Cross-check: filter for tool_call events around the test prompts' timestamps. There should be NONE referencing providers_create/update or instances_create/update. Compare against a normal chat (e.g. 'list the open XSOAR cases') where you'd see xsoar_list_incidents fire.",
       },
     ],
     howToTest: [
@@ -3409,13 +3414,13 @@ export const JOURNEYS: Journey[] = [
       "Cross-check: in /observability/events, find the chat turn you just made. The audit row is action=chat_turn_cost (with cost breakdown). There should be NO tool_call rows tied to that session_id during this turn.",
       "Repeat prompts 2 and 3 (instance-secret rotation, instance creation). Same shape: clean refusal, no attempted tool call, correct UI route in the response.",
       "Sanity test the catalog: ask the agent 'What MCP tools do you have for creating providers?' Expected: 'I don't have any.' (Or similar honest 'no such tool in my catalog' answer — the agent isn't role-playing the refusal; the tools genuinely aren't registered.)",
-      "Negative test: ask the agent for something it CAN do — 'list the XSIAM datasets'. The audit should now show a tool_call for xsiam_get_datasets (or equivalent). That contrast — refusal for credentials, normal tool_call for non-credential ops — is the guardrail working as intended.",
+      "Negative test: ask the agent for something it CAN do — 'list the open XSOAR cases'. The audit should now show a tool_call for xsoar_list_incidents (or equivalent). That contrast — refusal for credentials, normal tool_call for non-credential ops — is the guardrail working as intended.",
     ],
     expectedResult:
       "The credential-writing tools (providers_create/update, instances_create/update) are absent from the agent's catalog, and the remaining credential-adjacent operations (api_keys_*, instances_delete, providers_delete) only run through tier-gated approvals with the type-CONFIRM ceremony (see configure-agent-via-chat). Asking the agent to mint or rotate a connector secret produces a polite refusal with a UI route — NOT a failed tool call. The same operations remain reachable via REST so the operator's /providers, /connectors, /api-keys pages work as expected. This is the 'agent credential guardrail' rule materialized as observable behavior.",
     verifyVia: [
       "Three test prompts → three assistant_text responses, zero tool_call events in /observability/events for those chat turns",
-      "Sanity 'list the XSIAM datasets' prompt → produces a tool_call for xsiam_get_datasets, proving the agent CAN call non-credential tools — the absence is specifically the credential surface",
+      "Sanity 'list the open XSOAR cases' prompt → produces a tool_call for xsoar_list_incidents, proving the agent CAN call non-credential tools — the absence is specifically the credential surface",
       "Direct REST: POST /api/agent/providers (with bearer MCP_TOKEN) still works — the UI operator path is unchanged",
       "Code reference: grep _BUILTIN_LEGACY_TOOLS in bundles/spark/mcp/src/usecase/connector_loader.py — providers_*, instances_*, api_keys_* are commented out / absent from the mcp.tool() registration block",
     ],
@@ -3450,7 +3455,7 @@ export const JOURNEYS: Journey[] = [
       "Compute the env var name: prefix='GUARDIAN_SECRET__', segments uppercased and joined with '__'. Example: /ui/auth/admin/password_hash → GUARDIAN_SECRET__UI__AUTH__ADMIN__PASSWORD_HASH.",
       "Set the env var on guardian-agent. For dev compose, edit .env or pass via `docker compose run -e ...`. For K8s, mount a Secret as env vars.",
       "Restart guardian-agent. Boot log shows: 'SecretStore env-overlay: 1 secret(s) sourced from env vars: GUARDIAN_SECRET__... → /...path'.",
-      "Trigger a tool call that reads the secret (e.g. xsiam_run_xql_query for the xsiam api_key).",
+      "Trigger a tool call that reads the secret (e.g. xsoar_list_incidents for the xsoar api_key).",
       "Audit the read: GET /api/agent/audit?action=secret:read → row with metadata.source='env'.",
       "Toggle off: set GUARDIAN_ENV_SECRETS_DISABLED=1, restart, repeat the call → audit row metadata.source='file' (or SecretStoreError if the file isn't there).",
     ],
@@ -3600,11 +3605,11 @@ export const JOURNEYS: Journey[] = [
     icon: "stacked_line_chart",
     prompts: [
       {
-        text: "Run an XSIAM XQL query with a 24-hour window for failed logins, then summarize.",
+        text: "Pull the highest-severity open XSOAR case, read its war room, and summarize.",
         note: "A multi-tool chat turn — perfect for tracing.",
       },
     ],
-    toolsExercised: ["xsiam_run_xql_query"],
+    toolsExercised: ["xsoar_get_incident", "xsoar_get_war_room"],
     apis: [
       {
         method: "GET",
@@ -3615,19 +3620,19 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Run the prompt above; wait for it to complete.",
       "Open /observability/traces. The most recent turn appears at the top.",
-      "Click into the turn. Span tree expands: chat-turn → tool_call(xsiam_run_xql_query) → connector PAPI request → model assistant.",
-      "Note the timing on each span. Longest is typically the XQL execution.",
+      "Click into the turn. Span tree expands: chat-turn → tool_call(xsoar_get_incident) → connector API request → model assistant.",
+      "Note the timing on each span. Longest is typically the war-room fetch.",
       "Click /observability/metrics to see aggregate latency histograms across all turns.",
-      "Filter on action:tool_call target:tool:xsiam.* in the query bar to isolate XSIAM latency.",
+      "Filter on action:tool_call target:tool:xsoar.* in the query bar to isolate XSOAR latency.",
     ],
     expectedResult:
       "Trace view recovers the turn shape from audit rows. Operators can identify whether slowness is in the model, the tool, or the connector backend without a separate APM.",
     verifyVia: [
       "GET /api/agent/audit?session=<id>&action=tool_call → matches the spans rendered",
-      "Aggregate metrics show tool_call_duration_seconds_bucket{tool=\"xsiam.run_xql_query\"}",
+      "Aggregate metrics show tool_call_duration_seconds_bucket{tool=\"xsoar.get_war_room\"}",
     ],
     related: ["observability-trace-compaction-lifecycle"],
-    components: ["audit", "xsiam"],
+    components: ["audit", "xsoar"],
   },
 
   {
@@ -3681,7 +3686,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Rotate connector credentials in place",
     summary:
-      "Update an XSIAM PAPI auth-header without changing the instance name. The instance is identity-stable; secrets rotate underneath.",
+      "Update an XSOAR API key without changing the instance name. The instance is identity-stable; secrets rotate underneath.",
     difficulty: "intermediate",
     durationMin: 4,
     icon: "key",
@@ -3701,18 +3706,18 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /connectors → xsiam → Instances → your instance → Edit. Secret fields show ***.",
-      "Paste a new XSIAM PAPI auth-header. Save.",
+      "Open /connectors → xsoar → Instances → your instance → Edit. Secret fields show ***.",
+      "Paste a new XSOAR API key. Save.",
       "The instance row keeps its id; only the secret envelope rotates.",
-      "Open /observability/connectors. The xsiam instance state is 'probed' briefly, then 'enabled'.",
-      "Open a chat. Run an XQL query. It succeeds with the new secret.",
-      "Verify GET /api/agent/instances/primary-xsiam returns the new redacted values; the instance ID is unchanged.",
+      "Open /observability/connectors. The xsoar instance state is 'probed' briefly, then 'enabled'.",
+      "Open a chat. List the open cases. It succeeds with the new secret.",
+      "Verify GET /api/agent/instances/primary-xsoar returns the new redacted values; the instance ID is unchanged.",
     ],
     expectedResult:
       "Bindings are keyed by name, not content; rotation = update in place. Old envelope is GC'd on the next sweep. Audit log records secrets_rotated without the value.",
     verifyVia: [
       "GET /api/agent/audit?action=secrets_rotated → recent rotation event",
-      "GET /api/agent/instances/primary-xsiam → secret fields show *** (still)",
+      "GET /api/agent/instances/primary-xsoar → secret fields show *** (still)",
       "DB-level: only one envelope row per (instance, field) pair",
     ],
     related: ["ops-recover-connector-needs-auth"],
@@ -3727,7 +3732,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Browse the connector marketplace + install a connector",
     summary:
-      "Walk the /connectors marketplace tab. Install state is the canonical functional gate — install before creating instances. Fresh installs come up with all 5 bundle connectors visible as 'available, not installed'; zero instances exist until you explicitly create them.",
+      "Walk the /connectors marketplace tab. Install state is the canonical functional gate — install before creating instances. Fresh installs come up with all 3 bundle connectors visible as 'available, not installed'; zero instances exist until you explicitly create them.",
     difficulty: "starter",
     durationMin: 3,
     icon: "storefront",
@@ -3754,7 +3759,7 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /connectors → Marketplace tab. 5 bundle connectors are visible (cortex-content, cortex-docs, cortex-xdr, web, xsiam). Each card shows version, tool count, origin (bundle), tags, installed: false, instances_count: 0 (fresh install) or whatever exists.",
+      "Open /connectors → Marketplace tab. 3 bundle connectors are visible (cortex-docs, web, xsoar). Each card shows version, tool count, origin (bundle), tags, installed: false, instances_count: 0 (fresh install) or whatever exists.",
       "Click a card → drawer with tool inventory + config schema + secret slots. Top right: 'Install Connector' button (when not installed) or 'Installed' badge + 'Uninstall' button.",
       "Click Install. Spinner. Success toast 'connector installed — go to Instances to create one.' Audit row: marketplace_install (visible in /observability/events).",
       "Try creating an instance for a NON-installed connector via Instances → Add Instance → pick connector → submit. Server returns 409 connector_not_installed; the form surfaces 'Install this connector from the marketplace first.' This is the functional install gate.",
@@ -3780,7 +3785,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Upload your own connector to the marketplace",
     summary:
-      "Add a custom connector to the marketplace alongside the 5 bundle-shipped ones. The operator publishes the connector container image to any OCI registry, writes a connector.yaml describing it, uploads via POST /api/agent/marketplace/upload, then installs + creates an instance like any bundle connector.",
+      "Add a custom connector to the marketplace alongside the 3 bundle-shipped ones. The operator publishes the connector container image to any OCI registry, writes a connector.yaml describing it, uploads via POST /api/agent/marketplace/upload, then installs + creates an instance like any bundle connector.",
     difficulty: "advanced",
     durationMin: 12,
     icon: "upload_file",
@@ -3812,7 +3817,7 @@ export const JOURNEYS: Journey[] = [
       "Upload via curl: `curl -F connector_yaml=@my-connector.yaml -H \"Authorization: Bearer $MCP_TOKEN\" https://<host>:8080/api/agent/marketplace/upload`. Expect 201 with {ok: true, connector: {...}, next_step}. The YAML lands at /app/data/user_connectors/<id>/connector.yaml.",
       "Refresh /connectors → Marketplace. Your connector appears with origin: user.",
       "Click Install on your connector. Then go to Instances → Add Instance → pick your connector → fill in the config + secrets per the connector.yaml's configSchema / secretSlots → submit. guardian-updater pulls the image ref you declared, starts the per-instance container, MCP routes tool calls to it.",
-      "Negative: upload a YAML with an id matching a bundle connector (e.g. 'xsiam') → 409 id_collides_with_bundle. Upload a YAML with no image field → 400 image_ref_required. Upload a YAML with runtimeMapping.style: module → 400 (schema validator rejects).",
+      "Negative: upload a YAML with an id matching a bundle connector (e.g. 'xsoar') → 409 id_collides_with_bundle. Upload a YAML with no image field → 400 image_ref_required. Upload a YAML with runtimeMapping.style: module → 400 (schema validator rejects).",
       "Cleanup: delete instances first, then DELETE /api/agent/marketplace/<your-id>. Connector + install row + on-disk directory all removed.",
     ],
     expectedResult:
@@ -3824,7 +3829,7 @@ export const JOURNEYS: Journey[] = [
       "After install + instance create + tool call: guardian-updater logs show 'pulling <your image ref>'; tool dispatches over MCP-over-HTTP to the per-instance container",
       "DELETE /api/agent/marketplace/<your-id> while instance exists → 409 has_instances",
       "GET /api/agent/audit?action=connector_uploaded → the upload event with origin=user + image ref recorded",
-      "DELETE on a bundle connector id (e.g. xsiam) → 403 cannot_delete_bundle (regardless of instance state)",
+      "DELETE on a bundle connector id (e.g. xsoar) → 403 cannot_delete_bundle (regardless of instance state)",
     ],
     related: [
       "ops-marketplace-browse",
@@ -3853,7 +3858,7 @@ export const JOURNEYS: Journey[] = [
         note: "Tests marketplace_install. The agent calls the tool, gets ok:true + the install row, and replies with a confirmation + next step (instance creation is operator-only per the credential guardrail).",
       },
       {
-        text: "Uninstall cortex-content. (Assume no instances exist for it.)",
+        text: "Uninstall cortex-docs. (Assume no instances exist for it.)",
         note: "Tests marketplace_uninstall. Should succeed. If instances exist the agent should report the 409 + tell you to delete instances first.",
       },
     ],
@@ -3862,8 +3867,8 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open the agent chat. Paste prompt 1. Expected: marketplace_list fires; audit row appears in /observability/events; agent replies with the actual catalogue from disk, NOT a hallucinated list.",
       "Paste prompt 2 (install web). Expected: marketplace_install fires; audit row marketplace_install with actor='agent' in metadata; agent confirms with the install row's installed_at timestamp + reminds you to create the instance yourself ('the agent can hand you an installed connector but instance creation requires secrets').",
-      "Paste prompt 3 (uninstall cortex-content). Expected: marketplace_uninstall fires; succeeds if no instances; 409 if instances exist with a clear next-step.",
-      "Negative test: ask the agent to 'create an instance of xsiam with API key sk_test_xxxxx'. The agent should REFUSE (credential boundary) and direct you to /connectors → Instances tab. NO instances_create tool exists in the agent's catalogue.",
+      "Paste prompt 3 (uninstall cortex-docs). Expected: marketplace_uninstall fires; succeeds if no instances; 409 if instances exist with a clear next-step.",
+      "Negative test: ask the agent to 'create an instance of xsoar with API key sk_test_xxxxx'. The agent should REFUSE (credential boundary) and direct you to /connectors → Instances tab. NO instances_create tool exists in the agent's catalogue.",
       "Verify in /observability/events: marketplace_install / marketplace_uninstall events recorded with actor metadata showing 'by: agent'.",
     ],
     expectedResult:
@@ -4018,7 +4023,7 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open /skills. Confirm the four summary widgets (Total Skills / Active / Categories / Invocations) render LIVE values derived from the loaded skills array. Total should match `find /app/skills -name '*.md' | wc -l`.",
       "Confirm the page header carries Import + Create Skill — Guardian is single-tenant, no workspace selector.",
-      "Click any unlocked skill card (e.g. build_xql_query). Detail panel opens with Download / Save / Delete in the header.",
+      "Click any unlocked skill card (e.g. investigate_xsoar_case). Detail panel opens with Download / Save / Delete in the header.",
       "Click 'Download'. Browser downloads <name>.md with the live body (frontmatter + body).",
       "Click into the body textarea. Body lazy-loads from skills_read. Edit something. The 'Save' button enables; an 'Unsaved changes' indicator appears.",
       "Click 'Save'. Backend creates a .md.bak alongside, then writes the new content. Refresh — change persists.",
@@ -4049,14 +4054,14 @@ export const JOURNEYS: Journey[] = [
     icon: "extension",
     prompts: [
       {
-        text: "Build and run an XQL query that counts failed logins over the last 24 hours, then summarize the results.",
+        text: "Triage the open XSOAR cases from the last 24 hours and summarize the highest-severity ones.",
         note: "When the job fires, the scheduler prepends the bound skill's MD body inside <skill> tags so the agent runs that exact runbook regardless of model drift.",
       },
     ],
     toolsExercised: [
       "skills_list_all",
       "skills_read",
-      "xsiam_run_xql_query",
+      "xsoar_list_incidents",
     ],
     apis: [
       {
@@ -4076,14 +4081,14 @@ export const JOURNEYS: Journey[] = [
       "Open /jobs/new. Pick action type 'Prompt'.",
       "In the prompt textarea, enter the example prompt above (or any natural-language task).",
       "Open the new 'Skill (optional)' dropdown. Confirm it groups by category and shows every skill from /api/skills.",
-      "Pick a specific skill (e.g. 'Build a working Cortex XQL query from natural language'). The card below the dropdown shows that skill's description so you can confirm it's the right one.",
+      "Pick a specific skill (e.g. 'Investigate an XSOAR case end-to-end'). The card below the dropdown shows that skill's description so you can confirm it's the right one.",
       "Set a cron schedule (or pick Repeating + 5 minutes for fast iteration). Submit.",
       "Wait for the cron to fire (or trigger manually via the run-now button on the job card).",
-      "Open the run detail page. The agent's first user message in the trace shows the wrapping: <skill name='build_xql_query'>{body}</skill>{your prompt}.",
+      "Open the run detail page. The agent's first user message in the trace shows the wrapping: <skill name='investigate_xsoar_case'>{body}</skill>{your prompt}.",
       "Edit the job (kebab → Edit). Change the dropdown to 'Let agent decide' and save. Next run uses the system-prompt skill registry instead of explicit binding.",
     ],
     expectedResult:
-      "Skill binding is the difference between deterministic and 'model-best-judgment' scheduled runs. Use binding for reproducible runs (a weekly query-health check should always run the build_xql_query skill); leave it on 'agent decides' for fuzzy intent jobs.",
+      "Skill binding is the difference between deterministic and 'model-best-judgment' scheduled runs. Use binding for reproducible runs (a weekly case-triage check should always run the investigate_xsoar_case skill); leave it on 'agent decides' for fuzzy intent jobs.",
     verifyVia: [
       "GET /api/agent/jobs/<name> → action.skill matches the dropdown selection",
       "GET /api/agent/audit?target=job:<name> → run row's metadata includes the skill name",
@@ -4213,9 +4218,9 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /connectors. Pick a connector with at least one instance (e.g. xsiam, cortex-xdr).",
+      "Open /connectors. Pick a connector with at least one instance (e.g. xsoar, cortex-docs).",
       "For full config changes, the flow is delete + recreate: delete the existing instance via the kebab menu → reopen the create form (it pre-fills from the bundle's configSchema + sane defaults) → edit the field you want to change → submit. The bundle's bindsInstances template fired ONCE at first-run install; post-install you own the instance directly.",
-      "Trigger a tool call that uses the connector (e.g. ask the agent to query xsiam). Confirm the new value is in effect — chat-side MCP tools read from InstanceStore on every call, no rebuild needed.",
+      "Trigger a tool call that uses the connector (e.g. ask the agent to list the open XSOAR cases). Confirm the new value is in effect — chat-side MCP tools read from InstanceStore on every call, no rebuild needed.",
       "Confirm there is no parallel setup surface: /connectors is the only post-install path for instance config; nothing else can re-materialise an instance with stale values.",
     ],
     expectedResult:
@@ -4237,57 +4242,59 @@ export const JOURNEYS: Journey[] = [
 
   // [guardian v0.1.0] Retired: ops-edit-*-via-connectors-v0135 (red-team
   // C2 connector instance editing) — the connector it edited was removed.
-  // The same InstanceStore-backed edit flow survives in
-  // ops-edit-xsiam-via-connectors-v0135 below.
+  // Also retired: ops-edit-xsiam-via-connectors-v0135 — the telemetry-era
+  // xsiam connector + its send_webhook_log log-injection tool were removed
+  // in the XSOAR pivot. The same InstanceStore-backed edit flow survives
+  // in ops-edit-xsoar-via-connectors below.
 
   {
-    id: "ops-edit-xsiam-via-connectors-v0135",
+    id: "ops-edit-xsoar-via-connectors",
     category: "connectors",
-    title: "Edit xsiam connector config via /connectors",
+    title: "Edit xsoar connector config via /connectors",
     summary:
-      "Edit xsiam api_url / api_key / api_id / webhookEndpoint / webhookKey via /connectors and see the change reflected on the very next tool call. The xsiam connector has an InstanceStore-backed _get_xsiam_config() helper used by the PAPI fetcher (every XQL + get_issues tool) and the send_webhook_log tool (webhookEndpoint + webhookKey). Config keys use uniform api_url/api_key/api_id naming; legacy papiUrl/papiAuthHeader/papiAuthId aliases stay accepted on read for backwards compat with older instances.",
+      "Edit xsoar api_url / api_key / api_id via /connectors and see the change reflected on the very next tool call. The xsoar connector resolves its config from InstanceStore on every tool call. Set api_id to target XSOAR 8 / Cortex cloud (the connector adds the /xsoar/public/v1 path prefix + x-xdr-auth-id header); leave api_id empty for XSOAR 6 on-prem (single API key in the Authorization header, base https://<server>).",
     difficulty: "intermediate",
     durationMin: 4,
     icon: "cable",
     prompts: [
       {
-        text: "Show me xsiam issues from the last 24 hours.",
-        note: "Baseline: confirm xsiam.get_issues currently works against the existing PAPI auth. Returns a list (possibly empty if no recent issues) — what matters is the call doesn't error.",
+        text: "List the open XSOAR cases from the last 24 hours.",
+        note: "Baseline: confirm xsoar.list_incidents currently works against the existing auth. Returns a list (possibly empty if no recent cases) — what matters is the call doesn't error.",
       },
       {
-        text: "Show me xsiam issues from the last 24 hours again.",
-        note: "Run AFTER editing /connectors. The MCP resolves api_url + api_key + api_id from InstanceStore on every fetcher build (which happens on every PAPI tool call), so the new values are in effect immediately. Legacy papiUrl/papiAuthHeader/papiAuthId names also accepted as fallback.",
+        text: "List the open XSOAR cases from the last 24 hours again.",
+        note: "Run AFTER editing /connectors. The MCP resolves api_url + api_key + api_id from InstanceStore on every tool call, so the new values are in effect immediately. The api_id presence is what selects the XSOAR 8 (x-xdr-auth-id + path prefix) vs XSOAR 6 (bare Authorization) request shape.",
       },
     ],
-    toolsExercised: ["xsiam_get_issues", "xsiam_send_webhook_log"],
+    toolsExercised: ["xsoar_list_incidents"],
     apis: [
       {
         method: "PATCH",
         path: "/api/agent/instances/{id}",
         description:
-          "Update the xsiam instance config (api_url, api_id, webhookEndpoint) or secrets (api_key, webhookKey). Every callsite that reads instance config resolves from this row. Uniform api_* names; legacy papi* aliases still accepted on read.",
+          "Update the xsoar instance config (api_url, api_id) or secrets (api_key). Every callsite that reads instance config resolves from this row. Setting api_id flips the connector to the XSOAR 8 / Cortex cloud request shape; clearing it reverts to XSOAR 6 on-prem.",
       },
     ],
     howToTest: [
-      "PREREQ: an existing xsiam connector instance with valid PAPI creds.",
-      "Run prompt 1 in chat. Confirm xsiam.get_issues fires and returns.",
-      "Open /connectors → xsiam → Instances → your instance → Edit. Change api_url OR rotate api_key. Save.",
-      "Run prompt 2. Confirm the call goes to the NEW PAPI URL with the NEW auth header.",
-      "Optional: if your instance has a webhook configured, change webhookEndpoint or webhookKey. Trigger 'send a synthetic xsiam webhook' in chat. Confirm the next dispatch uses the new endpoint/key (look at /observability/events → tool:xsiam.send_webhook_log → outbound URL).",
-      "Negative: temporarily set api_key to garbage. Run prompt 2. Expect a 401 from PAPI, surfaced verbatim. Restore the real value.",
+      "PREREQ: an existing xsoar connector instance with valid creds.",
+      "Run prompt 1 in chat. Confirm xsoar.list_incidents fires and returns.",
+      "Open /connectors → xsoar → Instances → your instance → Edit. Change api_url OR rotate api_key. Save.",
+      "Run prompt 2. Confirm the call goes to the NEW base URL with the NEW auth.",
+      "Optional (v6 ↔ v8): set api_id to your Cortex cloud key id. Confirm the next call adds the /xsoar/public/v1 path prefix + x-xdr-auth-id header. Clear api_id to go back to the XSOAR 6 bare-Authorization shape.",
+      "Negative: temporarily set api_key to garbage. Run prompt 2. Expect a 401 from XSOAR, surfaced verbatim. Restore the real value.",
     ],
     expectedResult:
-      "Edits to any xsiam config field via /connectors take effect on the very next tool call. The PAPI fetcher reads three fields (api_url, api_key, api_id) on every build; the webhook tool reads webhookEndpoint + webhookKey — all on every call. No MCP restart, no env-var stamping, no probe-vs-tool-call divergence — probes and tool-call paths both resolve from InstanceStore.",
+      "Edits to any xsoar config field via /connectors take effect on the very next tool call. The connector reads three fields (api_url, api_key, api_id) on every call. No MCP restart, no env-var stamping, no probe-vs-tool-call divergence — probes and tool-call paths both resolve from InstanceStore.",
     verifyVia: [
-      "GET /api/agent/instances/<xsiam-instance-id> reflects the edit",
-      "Audit feed: next xsiam.* tool call after the edit shows the call resolved to the new URL/header",
-      "Negative: a misconfigured instance produces 'api_key (Authorization header) is not configured' or similar field-specific error from _get_xsiam_config() (not a generic 500, not a silent retry)",
+      "GET /api/agent/instances/<xsoar-instance-id> reflects the edit",
+      "Audit feed: next xsoar.* tool call after the edit shows the call resolved to the new URL/auth",
+      "Negative: a misconfigured instance produces 'api_key is not configured' or similar field-specific error (not a generic 500, not a silent retry)",
     ],
     related: [
       "ops-override-connector-via-instances",
       "ops-rotate-connector-creds",
     ],
-    components: ["chat", "xsiam", "connectors", "secrets"],
+    components: ["chat", "xsoar", "connectors", "secrets"],
   },
 
   // [v0.4.0] Retired: ops-reset-ui-password-cli-v0135. The
@@ -4352,7 +4359,7 @@ export const JOURNEYS: Journey[] = [
       "Cross-KEK restore works — source's GUARDIAN_SECRET_KEK doesn't have to match the destination's",
     ],
     related: [
-      "ops-edit-xsiam-via-connectors-v0135",
+      "ops-edit-xsoar-via-connectors",
       "ops-override-vertex-via-providers",
       "ops-change-ui-password",
     ],
@@ -4365,134 +4372,130 @@ export const JOURNEYS: Journey[] = [
   // it was removed too. The forgot-password path is now the always-
   // baked-in /app/cli/reset-admin.mjs (no separate file to "recover").
 
+  // [guardian v0.1.0] Retired: cortex-xql-query-authoring — XQL authoring
+  // was xsiam/xdr-backed; the XQL capability + the xql-examples KB were
+  // removed in the XSOAR pivot. The cortex-docs connector survives, but it
+  // no longer drives XQL composition.
+  // [guardian v0.1.0] Retired: xdr-discover-datasets-and-query-v070 — the
+  // cortex-xdr connector (and its dataset-discovery + run_xql_query tools)
+  // was removed entirely. Replaced by the XSOAR incident-investigation
+  // journeys below (xsoar-monitor-cases, xsoar-investigate-case).
+
   // ─────────────────────────────────────────────────────────────────
-  // VALIDATION — v0.3.1 Cortex docs lookup for XQL query authoring
+  // VALIDATION — XSOAR incident investigation (Guardian's core use case)
   // ─────────────────────────────────────────────────────────────────
   {
-    id: "cortex-xql-query-authoring",
+    id: "xsoar-monitor-cases",
     category: "validation",
-    title: "Author an XQL query grounded in Cortex docs",
+    title: "List and triage open XSOAR cases",
     summary:
-      "Use the cortex-docs connector + cortex_xql_query_authoring skill to compose an XQL query that's both pattern-correct (matches your KB examples) and syntax-correct (cited against Palo Alto's official docs).",
-    difficulty: "intermediate",
-    durationMin: 3,
-    icon: "query_stats",
+      "The first stop for incident work: pull the open cases (incidents) from XSOAR, see severity / status / owner at a glance, and decide what to investigate next.",
+    difficulty: "starter",
+    durationMin: 2,
+    icon: "inbox",
     prompts: [
       {
-        text: "Author an XQL query for Cortex XSIAM that finds users with more than 50 successful logins in any 5-minute window. Cite the Cortex docs for each stage and function used.",
-        note: "Agent should: (1) embedding-search your KB if you have one configured, (2) call cortex_xql_lookup for filter, alter, bin, comp, sort (the canonical 5 stages it'll likely pick), (3) emit the query with per-stage citations. Expect 5-10 cortex_xql_lookup tool calls in the wire-event trace.",
+        text: "show me the open XSOAR cases from the last 24 hours",
+        note: "Agent calls xsoar_list_incidents and returns a structured list — case id, name, severity, status, owner — sorted so the highest-severity open cases surface first.",
+        newSession: true,
+      },
+    ],
+    toolsExercised: ["xsoar_list_incidents"],
+    apis: [
+      {
+        method: "POST",
+        path: "/api/chat",
+        description:
+          "Streams SSE; the wire-event trace shows one tool_call to xsoar_list_incidents plus the tool_result with the case list, then the agent's summary.",
       },
       {
-        text: "What does the arrayindexof function do in Cortex Query Language?",
-        note: "Single-function lookup — tests cortex_xql_lookup directly without the full authoring workflow. Agent should call it once with kind='function' product='xql' and return the canonical Arrayindexof Function topic.",
+        method: "GET",
+        path: "/api/agent/connectors",
+        description:
+          "After the chat, /observability/connectors should show the xsoar row with state=connected.",
+      },
+    ],
+    howToTest: [
+      "Ensure an XSOAR connector instance is configured at /connectors (Instances tab) — XSOAR 6 (api_url + api_key) or XSOAR 8 / Cortex cloud (api_url + api_key + api_id).",
+      "Open a fresh chat at the Guardian UI.",
+      "Paste the prompt and submit.",
+      "Watch the wire-event trace — a single xsoar_list_incidents tool call + its result, then a triage-ready summary.",
+      "Open /observability/connectors and confirm xsoar is listed and healthy.",
+    ],
+    expectedResult:
+      "The agent returns the open cases as a readable list (id, name, severity, status, owner) and calls out which ones look most urgent. No XQL, no dataset discovery — incident monitoring is a direct XSOAR API read.",
+    verifyVia: [
+      "Wire-event trace export shows an xsoar_list_incidents tool_call + tool_result pair with the case list payload",
+      "/observability/connectors shows xsoar in healthy state",
+      "GET /api/agent/audit?action=tool_call → row with target='tool:xsoar.list_incidents'",
+    ],
+    related: ["xsoar-investigate-case"],
+    components: ["connectors", "chat", "audit"],
+  },
+
+  {
+    id: "xsoar-investigate-case",
+    category: "validation",
+    title: "Investigate an XSOAR case end-to-end",
+    summary:
+      "Drive a full incident investigation from chat: list the cases, pull one, read its war room, search the related indicators, document a finding as a note, update the case, and close it when resolved.",
+    difficulty: "intermediate",
+    durationMin: 6,
+    icon: "manage_search",
+    prompts: [
+      {
+        text: "Walk me through investigating the highest-severity open XSOAR case. Pull it, read the war room, and search the indicators attached to it.",
+        note: "Agent chains: xsoar_list_incidents → xsoar_get_incident → xsoar_get_war_room → xsoar_search_indicators. Read-only so far — no approval cards.",
+        newSession: true,
+      },
+      {
+        text: "Add a note to that case documenting what you found, then set its severity and owner.",
+        note: "Tier-2 writes: xsoar_add_note + xsoar_update_incident. Each surfaces an inline approval card — click Approve to apply.",
+      },
+      {
+        text: "If the case is resolved, close it with a short closing summary.",
+        note: "Tier-2/3 write: xsoar_close_incident. The inline approval card carries the closing notes; click Approve to close.",
       },
     ],
     toolsExercised: [
-      "cortex_xql_lookup",
-      "cortex_search",
-      "knowledge_search",
+      "xsoar_list_incidents",
+      "xsoar_get_incident",
+      "xsoar_get_war_room",
+      "xsoar_search_indicators",
+      "xsoar_add_note",
+      "xsoar_update_incident",
+      "xsoar_close_incident",
     ],
     apis: [
       {
         method: "POST",
         path: "/api/chat",
         description:
-          "Streams SSE; the wire-event trace includes one tool_call event per cortex_xql_lookup invocation, plus tool_result events with the canonical doc topic + citation string.",
+          "Streams SSE; the wire-event trace shows the full investigation chain — list → get → war-room → indicators → note → update → close — with one tool_call/tool_result pair per step.",
       },
       {
         method: "GET",
-        path: "/api/agent/connectors",
+        path: "/api/agent/approvals?status=pending",
         description:
-          "After the chat, /observability/connectors should show the cortex-docs row with state=connected and the Image Digests panel listing its sha256 digest.",
+          "The write steps (add_note, update_incident, close_incident) are tier-gated; the chat route polls this while a gated tool blocks on operator approval.",
       },
     ],
     howToTest: [
-      "Open a fresh chat at the Guardian UI.",
-      "Paste the first prompt and submit.",
-      "Watch the wire-event trace — should show 5-10 cortex_xql_lookup tool calls + their results, then a synthesized query with citations.",
-      "Open /observability/connectors and confirm cortex-docs is listed and healthy.",
-      "Paste the second prompt to verify a single-term lookup also works.",
+      "Ensure an XSOAR connector instance is configured at /connectors (Instances tab) with valid creds.",
+      "Open a fresh chat. Paste prompt 1. Watch the wire-event trace exercise list → get → war-room → indicators (read-only, no approval cards).",
+      "Paste prompt 2. The agent proposes a note + an update; an inline approval card appears for each write. Click Approve.",
+      "Paste prompt 3 (only if the case is genuinely resolved). The close_incident card appears; click Approve to close.",
+      "Open /observability/connectors and confirm xsoar is healthy throughout.",
     ],
     expectedResult:
-      "First prompt: agent emits an XQL query in a code fence, with one citation per stage/function used (e.g. 'filter from Cortex XSIAM Documentation', 'bin from Cortex XSIAM Documentation', 'comp from Cortex XSIAM Documentation'), plus a 1-2 line notes block flagging non-obvious choices (window size, threshold defaults). Second prompt: agent returns Arrayindexof Function's canonical description, syntax, and source citation in <2s.",
+      "A complete investigation lifecycle runs from chat: the agent reads the case + its war room + indicators, documents a finding, updates the case fields, and closes it — with every write routed through an inline approval card so the operator stays in control.",
     verifyVia: [
-      "Wire-event trace export shows cortex_xql_lookup tool_call + tool_result pairs, each with title/publication/reader_url in the result payload",
-      "/observability/connectors shows cortex-docs in healthy state + image digest pinned per the digest-pinning contract",
-      "Each query stage/function in the response has a docs-cortex.paloaltonetworks.com source citation",
+      "Wire-event trace export shows the chain xsoar_list_incidents → xsoar_get_incident → xsoar_get_war_room → xsoar_search_indicators → xsoar_add_note → xsoar_update_incident → xsoar_close_incident",
+      "GET /api/agent/audit?action=tool_call → rows for each xsoar.* tool in the chain",
+      "After close: the case's status in XSOAR reflects the closure (re-run prompt 1 and confirm it no longer appears in the open list)",
     ],
-    related: ["xdr-discover-datasets-and-query-v070"],
-    components: ["connectors", "skills", "knowledge"],
-  },
-
-  // ─────────────────────────────────────────────────────────────────
-  // v0.7.0 — Cortex XDR end-to-end: discover datasets + KB-search + query
-  // ─────────────────────────────────────────────────────────────────
-  {
-    id: "xdr-discover-datasets-and-query-v070",
-    category: "validation",
-    title: "Cortex XDR — discover tenant datasets, find a KB template, run XQL (v0.7.0)",
-    summary:
-      "End-to-end XDR workflow that exercises the full v0.7.0 capability arc: empirically discover which datasets your XDR tenant has via xdr_list_datasets, semantic-search the 787-entry xql-examples KB for a template matching your question, then run the adapted query against the tenant and read the results.",
-    difficulty: "intermediate",
-    durationMin: 5,
-    icon: "shield_lock",
-    prompts: [
-      {
-        text: "What XDR datasets are available in our tenant?",
-        note: "Agent should call xdr_list_datasets (no args). On a typical XDR-only tenant: returns ~11 datasets with exists=true — xdr_data, agent_auditing, endpoints, host_inventory, asset_inventory, alerts, issues, incidents, va_endpoints, va_cves, cloud_audit_logs, metrics_source. Datasets with exists=false in the response are the ones probed but not present (e.g. panw_ngfw_* requires NGFW integration).",
-      },
-      {
-        text: "Show me the top MITRE tactics in alerts the last 30 days",
-        note: "Agent should: (1) knowledge_search for 'alerts mitre tactic' → top-1 XQL-795 'Alerts by MITRE tactic + technique (30d)', (2) confirm the query shape via the KB entry, (3) call xdr_run_xql_query with the validated query, (4) return the table of tactic counts. Exercises the full KB-grounded query pipeline.",
-      },
-      {
-        text: "Find me CVEs in our XDR catalog affecting the most hosts",
-        note: "Agent should knowledge_search for 'cves affected hosts' → top-1 XQL-805 'Top 10 CVEs by affected-host count', adapt + run. va_cves dataset query.",
-      },
-    ],
-    toolsExercised: [
-      "cortex-xdr/list_datasets",
-      "knowledge_search",
-      "cortex-xdr/run_xql_query",
-      "cortex_xql_lookup",
-    ],
-    apis: [
-      {
-        method: "POST",
-        path: "/api/agent/tool/call",
-        description:
-          "Tool dispatch — agent invokes xdr_list_datasets, knowledge_search, and xdr_run_xql_query via this path.",
-      },
-      {
-        method: "POST",
-        path: "/api/agent/knowledge/xql-examples/search",
-        description:
-          "Direct KB search if you want to bypass the agent. Returns ranked entries with full query body.",
-      },
-      {
-        method: "GET",
-        path: "/api/agent/instances",
-        description:
-          "Confirm the Cortex XDR instance is listed with state=connected before running.",
-      },
-    ],
-    howToTest: [
-      "Ensure a Cortex XDR instance is configured at /connectors (Instances tab).",
-      "Open a fresh chat at the Guardian UI.",
-      "Paste prompt 1 (datasets) — confirm the response includes a list of 10+ datasets with exists/missing breakdown.",
-      "Paste prompt 2 (mitre tactics) — confirm the agent retrieved XQL-795 from the KB (visible in tool-call trace) and ran the query against live XDR. Result should be a tactic-count table.",
-      "Paste prompt 3 (CVEs) — confirm same retrieval+execute pattern for va_cves dataset.",
-    ],
-    expectedResult:
-      "Prompt 1: structured dataset list (typically 11 datasets exists=true for an XDR-only tenant). Prompt 2: table of MITRE tactics with alert counts, rendered as markdown table. Prompt 3: table of CVEs sorted by affected_hosts_count, rendered as markdown table.",
-    verifyVia: [
-      "Wire-event trace shows xdr_list_datasets, knowledge_search, xdr_run_xql_query tool_call + tool_result pairs",
-      "/observability/connectors shows cortex-xdr in healthy state",
-      "/knowledge shows 787 entries (629 baseline + 158 v0.7.0)",
-      "The query body in the tool_result for xdr_run_xql_query matches the KB entry's ```sql block exactly (proves the agent used the KB template verbatim or with minimal adaptation)",
-    ],
-    related: ["cortex-xql-query-authoring"],
-    components: ["connectors", "skills", "knowledge"],
+    related: ["xsoar-monitor-cases", "chat-plan-multi-step"],
+    components: ["connectors", "chat", "approvals", "audit"],
   },
 
 ];

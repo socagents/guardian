@@ -32,12 +32,6 @@ uv.lock
 poetry.lock
 *.lock
 
-# Bundled vendor data (v0.8.1+ — cortex-content catalog: 576 files / 2.9 MB)
-# These ship inside the agent image at build time. Treat them as
-# vendor data, not source. If you need to inspect the catalog, use
-# the bake script at scripts/refresh_cortex_baked_catalog.py.
-bundles/spark/connectors/cortex-content/baked/
-
 # Reports + scratch
 reports/
 tmp/

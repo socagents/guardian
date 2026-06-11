@@ -57,15 +57,15 @@ PLUGIN_SYNC_PAIRS = [
 
 # Directories that must have every matching file tracked in git. Catches the
 # v0.8.1-class regression where `.gitignore`'s blanket `*.png` rule silently
-# dropped 93 baked vendor logos because a new content directory didn't get an
+# dropped baked vendor logos because a new content directory didn't get an
 # `!`-exception added. Each tuple: (repo-relative dir, glob pattern, label).
-SILENT_DROP_GUARDS = [
-    (
-        "bundles/spark/connectors/cortex-content/baked",
-        "*.png",
-        "baked vendor logos",
-    ),
-]
+#
+# [Guardian pivot] Retired the cortex-content/baked vendor-logo guard: the
+# cortex-content connector + its baked catalog were deleted (log-simulation-era
+# surface, out of scope for the XSOAR incident-investigation agent). No
+# blanket-glob content directory remains to guard; re-add an entry here if a
+# future content dir reintroduces the silent-drop risk.
+SILENT_DROP_GUARDS: list[tuple[str, str, str]] = []
 
 
 EXPECTED_PLUGIN_FILES = [
@@ -112,100 +112,36 @@ def check_claude_md_hierarchy() -> Check:
 
 
 def check_claudeignore() -> Check:
-    """`.claudeignore` exists and excludes the baked vendor catalog."""
+    """`.claudeignore` exists and excludes generated artifacts + caches.
+
+    [Guardian pivot] Dropped the cortex-content/baked exclusion assertion: the
+    baked vendor catalog was deleted with the cortex-content connector, so the
+    ignore line was removed in the same release. The check now confirms the
+    file exists and still excludes the core noise classes (caches, deps,
+    secrets) without requiring any connector-specific path.
+    """
     ignore = ROOT / ".claudeignore"
     if not ignore.is_file():
         return Check(".claudeignore", False, "missing")
     text = ignore.read_text(encoding="utf-8")
-    if "bundles/spark/connectors/cortex-content/baked" not in text:
+    required = ["__pycache__/", "node_modules/", ".env.vm"]
+    missing = [tok for tok in required if tok not in text]
+    if missing:
         return Check(
             ".claudeignore",
             False,
-            "does NOT exclude bundles/spark/connectors/cortex-content/baked/ — "
-            "576 vendor files would bloat agent context",
+            f"missing core exclusions: {', '.join(missing)}",
         )
-    return Check(".claudeignore", True, "excludes baked vendor catalog + caches")
+    return Check(".claudeignore", True, "excludes caches, deps, and local secrets")
 
 
-def check_pack_theme_variants_complete() -> Check:
-    """v0.10.0 — Every pack in vendor_map.yaml maps to a vendor whose light + dark
-    SVG variants both exist in baked/vendor_svgs/.
-
-    This is the structural guarantee for R1's theme-aware logo route: if every
-    pack resolves to a vendor and every vendor ships both variants, the route
-    never falls through to the legacy PNG/dark.svg fallback chain in practice.
-    """
-    try:
-        import yaml  # type: ignore
-    except ImportError:
-        return Check("pack theme variants", False, "PyYAML not installed; required for vendor_map.yaml parsing")
-
-    baked = ROOT / "bundles/spark/connectors/cortex-content/baked"
-    vmap_path = baked / "vendor_map.yaml"
-    vsvgs_dir = baked / "vendor_svgs"
-    packs_dir = baked / "Packs"
-
-    if not vmap_path.is_file():
-        return Check("pack theme variants", False, f"missing {vmap_path.relative_to(ROOT)}")
-    if not vsvgs_dir.is_dir():
-        return Check("pack theme variants", False, f"missing {vsvgs_dir.relative_to(ROOT)}")
-
-    try:
-        vmap = yaml.safe_load(vmap_path.read_text())
-    except Exception as exc:
-        return Check("pack theme variants", False, f"vendor_map.yaml unparseable: {exc}")
-    vendors = (vmap or {}).get("vendors") or {}
-    if not vendors:
-        return Check("pack theme variants", False, "vendor_map.yaml has no vendors")
-
-    # Build the inverse: pack → vendor
-    pack_to_vendor: dict[str, str] = {}
-    for vk, info in vendors.items():
-        for pack in info.get("packs") or []:
-            pack_to_vendor[pack] = vk
-
-    # Check 1: every pack on disk is in some vendor's packs[]
-    disk_packs = {p.name for p in packs_dir.iterdir() if p.is_dir()}
-    unmapped = sorted(disk_packs - set(pack_to_vendor.keys()))
-    if unmapped:
-        sample = unmapped[:3]
-        return Check(
-            "pack theme variants",
-            False,
-            f"{len(unmapped)} pack(s) on disk not in vendor_map.yaml (e.g. {sample})",
-        )
-
-    # Check 2: every vendor in the map has both _light.svg + _dark.svg
-    missing: list[str] = []
-    for vk in vendors.keys():
-        light = vsvgs_dir / f"{vk}_light.svg"
-        dark = vsvgs_dir / f"{vk}_dark.svg"
-        if not light.is_file():
-            missing.append(f"{vk}_light.svg")
-        if not dark.is_file():
-            missing.append(f"{vk}_dark.svg")
-    if missing:
-        sample = missing[:3]
-        return Check(
-            "pack theme variants",
-            False,
-            f"{len(missing)} variant file(s) missing in vendor_svgs/ (e.g. {sample})",
-        )
-
-    # Check 3: every pack-in-map references a vendor that exists
-    stale = sorted(set(pack_to_vendor.values()) - set(vendors.keys()))
-    if stale:
-        return Check(
-            "pack theme variants",
-            False,
-            f"vendor reference(s) in pack_to_vendor not found in vendors[]: {stale[:3]}",
-        )
-
-    return Check(
-        "pack theme variants",
-        True,
-        f"{len(disk_packs)} packs → {len(vendors)} vendors, all light+dark SVG present",
-    )
+# [Guardian pivot] Retired check_pack_theme_variants_complete (was v0.10.0).
+# It asserted "every pack in cortex-content/baked/vendor_map.yaml ships
+# light+dark SVG variants" — structural cover for the theme-aware vendor-logo
+# route. The cortex-content connector + its entire baked/ catalog were deleted
+# (log-simulation/telemetry-era surface, out of scope for the XSOAR
+# incident-investigation agent), so there are no packs or vendor SVGs left to
+# validate. Removed from the main() checks list in the same release.
 
 
 def check_no_silent_gitignore_drops() -> Check:
@@ -712,9 +648,11 @@ def check_connector_tool_args_flat() -> Check:
                 continue
             yargs = {a.get("name") for a in (tool.get("args") or []) if a.get("name")}
             # Connector tool funcs are named <prefix>_<tool> (the dispatched
-            # name, e.g. guardian_/xsiam_/cortex_) or bare <tool>. Prefer the
-            # PREFIXED function over a bare-named internal helper that happens
-            # to share the tool name (else the helper shadows the real tool).
+            # name, e.g. xsoar_/web_) or bare <tool>. Prefer the PREFIXED
+            # function over a bare-named internal helper that happens to share
+            # the tool name (else the helper shadows the real tool). The match
+            # is prefix-agnostic, so the check recounts automatically as the
+            # connector roster changes.
             cand = next(
                 (fn for fn in sigs if fn.endswith("_" + name)), None
             ) or (name if name in sigs else None)
@@ -763,9 +701,12 @@ def check_factory_default_clean_slate() -> Check:
          tech stack on first boot and break the clean slate.
     """
     problems: list[str] = []
+    # [Guardian pivot] Dropped the `simulation_runs?` alternative: the
+    # log-simulation feature was removed, so no simulation-run state db exists.
+    # The remaining terms still guard the live operator-state DBs.
     state_db = re.compile(
         r"(marketplace|instances|log_destinations|operator_state|chats?|jobs?|"
-        r"sessions?|simulation_runs?)\.db$",
+        r"sessions?|runs?)\.db$",
         re.I,
     )
     try:
@@ -816,7 +757,6 @@ def main() -> int:
         check_claude_md_hierarchy(),
         check_claudeignore(),
         check_no_silent_gitignore_drops(),
-        check_pack_theme_variants_complete(),
         check_codebase_map(),
         check_ai_layer_md(),
         check_settings_json(),

@@ -25,8 +25,8 @@ adapter over the same interface.
                                           -- secret_*, instance_*, provider_*
                                           -- events introduced here)
       target        TEXT,                 -- the thing acted on:
-                                          --   "connector:xsiam"
-                                          --   "tool:xsiam.run_xql_query"
+                                          --   "connector:xsoar"
+                                          --   "tool:xsoar.list_incidents"
                                           --   "secret:/agents/guardian/..."
                                           --   "instance:<uuid>"
       status        TEXT,                 -- "success" | "failure" | "skipped"

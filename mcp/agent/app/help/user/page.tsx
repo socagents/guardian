@@ -298,10 +298,11 @@ export default function HelpPage() {
               </h1>
             </div>
             <p className="text-base text-on-surface-variant leading-relaxed">
-              Guardian is an AI incident-response agent for Cortex XSIAM
-              and XSOAR: it investigates security incidents — evidence
-              gathering, XQL queries, case enrichment, and response
-              orchestration — through an AI agent surface. This guide
+              Guardian is an AI incident-investigation agent for Cortex
+              XSOAR: it monitors cases (incidents) on your XSOAR tenant,
+              fetches their data, summarizes and investigates, enriches
+              indicators, documents findings, and updates or closes the
+              case — through an AI agent surface. This guide
               walks every operator surface end-to-end — what it does,
               where it lives in the UI, and how to drive it day-to-day.
             </p>
@@ -320,7 +321,7 @@ export default function HelpPage() {
                 (memory, knowledge, skills, hooks, tasks, plan mode,
                 subagents, plugins, jobs, notifications, approvals,
                 models, providers, secret store, audit log), and the
-                five external connectors (XSIAM / Cortex XDR / Cortex Docs / Cortex Content / Web Browser)
+                three external connectors (XSOAR / Cortex Docs / Web Browser)
                 live in the dedicated{" "}
                 <Link
                   href="/help/architecture"
@@ -346,32 +347,32 @@ export default function HelpPage() {
               connector instance. The agent is the human-facing surface
               — a UI where you chat, run jobs, configure connectors,
               and watch telemetry. Behind it sits an MCP server that
-              aggregates roughly 140 tools from five connectors:{" "}
-              <Term>xsiam</Term> for Cortex XSIAM cases, issues, and XQL
-              queries, <Term>cortex-xdr</Term> for Cortex XDR incidents
-              and XQL, <Term>cortex-docs</Term> for official Palo Alto
-              Networks documentation search, <Term>cortex-content</Term>{" "}
-              for the baked Cortex content catalog, and <Term>web</Term>{" "}
+              aggregates tools from three connectors:{" "}
+              <Term>xsoar</Term> for Cortex XSOAR cases (list / fetch /
+              war room / indicators / notes / evidence / update / close),{" "}
+              <Term>cortex-docs</Term> for official Palo Alto Networks
+              documentation search, and <Term>web</Term>{" "}
               for evidence-gathering browsing via the browser sidecar.
             </p>
             <p>
-              The intended workflow is: a case or issue lands in your
-              Cortex tenant → ask the agent to investigate → it gathers
-              evidence with XQL queries and documentation lookups →
-              enriches and updates the incident → you review and respond.
+              The intended workflow is: a case (incident) opens on your
+              Cortex XSOAR tenant → ask the agent to investigate → it
+              fetches the case + war room, researches the unknowns in the
+              docs and on the web, enriches the indicators → documents its
+              findings on the case and updates or closes it → you review.
               The agent orchestrates all of that through natural-language
-              chat plus optional scheduled jobs. You don&apos;t need XQL
-              fluency or API scripting to drive an investigation end-to-end.
+              chat plus optional scheduled jobs. You don&apos;t need API
+              scripting to drive an investigation end-to-end.
             </p>
             <p>
               Who&apos;s it for? <Term>SOC tier-1 / tier-2 analysts</Term>{" "}
-              who want investigation legwork — evidence pulls, query
-              authoring, enrichment — handled conversationally.{" "}
+              who want investigation legwork — case reads, indicator
+              enrichment, documentation — handled conversationally.{" "}
               <Term>Incident responders</Term> who need fast, repeatable
-              access to case context across XSIAM and XDR tenants.{" "}
-              <Term>Detection engineers</Term> who want a low-friction
-              path from natural-language question to validated XQL query
-              result.
+              access to case context on the XSOAR tenant.{" "}
+              <Term>SOC leads</Term> who want a low-friction
+              path from &ldquo;a case just opened&rdquo; to a documented,
+              resolved incident.
             </p>
             <p>
               What it&apos;s not: a SIEM (it queries your Cortex tenant,
@@ -402,10 +403,10 @@ export default function HelpPage() {
 
             <SubSection icon="chat_bubble" title="Chat — for ad-hoc work">
               <p>
-                Type a request — &ldquo;pull the high-severity cases from
-                the last 24 hours&rdquo; or &ldquo;run an XQL query for
-                failed logins on host web-01&rdquo; — and the agent
-                dispatches the right tool.
+                Type a request — &ldquo;pull the open high-severity cases
+                from the last 24 hours&rdquo; or &ldquo;investigate
+                incident 482 and document what you find&rdquo; — and the
+                agent dispatches the right tool.
                 For sensitive operations (creating jobs, rotating keys,
                 deleting instances), an approval card appears inline; click
                 Approve to unblock the call. Every chat session is
@@ -877,7 +878,7 @@ sudo ./guardian-installer`}
                     /observability/connectors
                   </Term>{" "}
                   → an env var (e.g.{" "}
-                  <Code>DIGEST_GUARDIAN_CONNECTOR_XSIAM</Code>) is
+                  <Code>DIGEST_GUARDIAN_CONNECTOR_XSOAR</Code>) is
                   missing from{" "}
                   <Code>/opt/guardian/.env</Code> or wasn&apos;t
                   forwarded into the affected service&apos;s container.
@@ -985,7 +986,7 @@ sudo ./guardian-installer`}
                 </li>
                 <li>
                   <em>&quot;What does the
-                  <Code>build_xql_query</Code> skill do?&quot;</em>{" "}
+                  <Code>xsoar_case_investigation</Code> skill do?&quot;</em>{" "}
                   — pulls from the skill catalog and explains.
                 </li>
                 <li>
@@ -1063,26 +1064,26 @@ sudo ./guardian-installer`}
               </p>
               <ul className="list-disc pl-5 space-y-1 text-sm">
                 <li>
-                  <Code>^get_cases_and_issues limit=10</Code> &mdash;
-                  bare name resolves to <Code>xdr_get_cases_and_issues</Code>{" "}
+                  <Code>^list_incidents query=&quot;status:active&quot;</Code> &mdash;
+                  bare name resolves to <Code>xsoar_list_incidents</Code>{" "}
                   (the only registered tool with that suffix). Returns the
-                  raw incident list.
+                  raw open-case list.
                 </li>
                 <li>
                   <Code>
-                    ^xdr_run_xql_query query=&quot;dataset = xdr_data | limit 5&quot;
+                    ^xsoar_get_incident incident_id=&quot;482&quot;
                   </Code>{" "}
                   &mdash; quoted strings support whitespace.
                 </li>
                 <li>
                   <Code>
-                    ^get_cases_and_issues &#123;&quot;limit&quot;:3, &quot;severity&quot;:[&quot;high&quot;]&#125;
+                    ^list_incidents &#123;&quot;query&quot;:&quot;status:active&quot;, &quot;limit&quot;:3&#125;
                   </Code>{" "}
                   &mdash; JSON-literal args for structured shapes (arrays,
                   nested objects).
                 </li>
                 <li>
-                  <Code>^cortex-docs.search query=&quot;Broker VM Azure&quot; product=xdr</Code>{" "}
+                  <Code>^cortex-docs.search query=&quot;close incident&quot; product=xsoar</Code>{" "}
                   &mdash; fully-qualified <Code>connector.tool</Code> form
                   also works.
                 </li>
@@ -1099,7 +1100,7 @@ sudo ./guardian-installer`}
                 <strong>Critical property:</strong> direct tool invocation
                 works <em>even without a provider configured</em>. On a
                 fresh install before you&apos;ve set up Gemini or Vertex,
-                you can still <Code>^xdr_run_xql_query query=&quot;...&quot;</Code>{" "}
+                you can still <Code>^xsoar_list_incidents query=&quot;...&quot;</Code>{" "}
                 to validate the connector. The model is never called; the
                 tool dispatches through the embedded MCP&apos;s JSON-RPC
                 surface (POST <Code>/api/agent/tool/call</Code>) which
@@ -1123,7 +1124,7 @@ sudo ./guardian-installer`}
                 </li>
                 <li>
                   Debugging connector container state (
-                  <Code>^xdr_get_cases_and_issues</Code> with no args
+                  <Code>^xsoar_list_incidents</Code> with no args
                   proves the container is reachable + auth is valid).
                 </li>
               </ul>
@@ -1429,9 +1430,9 @@ aborted      ── operator clicked Cancel before completion`}</Pre>
                   <Term>Foundation</Term> — reusable building blocks.
                   Guardian ships four: the Cortex KB search discipline
                   (<Code>cortex_kb_search</Code>), its query-patterns
-                  and raw-API companions, and the XQL query-authoring
-                  reference. The agent draws on these to compose larger
-                  flows.
+                  and raw-API companions, and the XSOAR case-triage
+                  reference (<Code>xsoar_case_triage</Code>). The agent
+                  draws on these to compose larger flows.
                 </li>
                 <li>
                   <Term>Scenarios</Term> — operator-authored multi-step
@@ -1446,9 +1447,9 @@ aborted      ── operator clicked Cancel before completion`}</Pre>
                 </li>
                 <li>
                   <Term>Workflows</Term> — multi-step orchestration.
-                  Guardian ships <Code>build_xql_query</Code>, the
-                  mandatory chain that turns a natural-language
-                  question into a working Cortex XQL query.
+                  Guardian ships <Code>xsoar_case_investigation</Code>,
+                  the load-first chain that takes an XSOAR case from
+                  &ldquo;it just opened&rdquo; to documented + resolved.
                 </li>
               </ul>
             </SubSection>
@@ -1555,10 +1556,9 @@ Networks documentation and returning evidence-backed, cited answers.
                 the full body when it&apos;s actually going to use it.
               </p>
               <p>
-                Practical effect: ask the agent to &ldquo;build a
-                query for failed logins on the domain
-                controllers&rdquo; and it picks{" "}
-                <Code>workflows/build_xql_query.md</Code>{" "}
+                Practical effect: ask the agent to &ldquo;investigate
+                the newest open critical case&rdquo; and it picks{" "}
+                <Code>workflows/xsoar_case_investigation.md</Code>{" "}
                 from the registry on its own. You don&apos;t have to
                 tell it where to look. The metadata is also fresh per
                 turn — adding a new skill via the UI makes it
@@ -1641,7 +1641,7 @@ Networks documentation and returning evidence-backed, cited answers.
                   <Term>Allowed tools / skills</Term> — scoped catalogs.
                   An agent only sees the intersection of its allow-list
                   and the runtime&apos;s active set. Wildcards supported
-                  (<Code>xsiam_*</Code>, <Code>xsiam_run_xql_query</Code>).
+                  (<Code>xsoar_*</Code>, <Code>xsoar_get_incident</Code>).
                 </li>
                 <li>
                   <Term>Model preference</Term> — overrides the runtime
@@ -1828,8 +1828,8 @@ Networks documentation and returning evidence-backed, cited answers.
                 </li>
                 <li>
                   <Term>system</Term> — platform-managed entries. Created
-                  by background jobs (e.g., XSIAM rule snapshots) — read
-                  by the agent, not directly by the operator.
+                  by background jobs (e.g., periodic open-case snapshots)
+                  — read by the agent, not directly by the operator.
                 </li>
               </ul>
             </SubSection>
@@ -1919,41 +1919,33 @@ Networks documentation and returning evidence-backed, cited answers.
 
             <SubSection icon="library_books" title="Bundled KBs">
               {/* [guardian v0.1.0] Retired: guardian-soc KB — simulation
-                  subsystem removed; xql-examples is the only bundled KB. */}
-              <ul className="list-disc pl-5 space-y-1.5 text-sm">
-                <li>
-                  <Term>xql-examples</Term> — 787 curated Cortex XQL / XSIAM
-                  queries indexed for natural-language retrieval
-                  (787 entries:
-                  live-tenant-validated examples spanning 12 datasets +
-                  16+ MITRE techniques + ~35 XQL stages). The agent
-                  retrieves via the universal <Code>knowledge_search</Code>
-                  tool (one call covers all loaded KBs); both the XSIAM
-                  connector&apos;s <Code>find_xql_examples_rag</Code> and
-                  the <Code>build_xql_query</Code> skill chain consume this corpus.
-                  Validated against the live tenant before each entry
-                  ships — every query in the KB is guaranteed to return{" "}
-                  <Code>status: SUCCESS</Code> when executed.
-                </li>
-              </ul>
+                  subsystem removed. */}
+              {/* [guardian XSOAR pivot] Retired: xql-examples KB — it
+                  served XQL authoring against the now-removed XSIAM/XDR
+                  connectors. No KB ships with the bundle today. */}
+              <p>
+                No knowledge base ships with the bundle today. The KB
+                pipeline (schema-validated, embedded, retrieved via{" "}
+                <Code>knowledge_search</Code>) remains available for any
+                future bundle-shipped or operator-added corpus. For case
+                research, the agent uses the <Term>cortex-docs</Term>{" "}
+                connector (live documentation search), not a baked KB.
+              </p>
             </SubSection>
 
-            <SubSection icon="search" title="How the agent uses the KB">
+            <SubSection icon="search" title="How the agent researches a case">
               <p>
-                When you ask the agent &ldquo;show me X&rdquo; where X
-                involves XDR/XSIAM telemetry, the chain is:
-                (1)&nbsp;<Code>knowledge_search</Code> over{" "}
-                <Code>xql-examples</Code> to find a template matching your
-                question; (2)&nbsp;adapt the template&apos;s SQL block to
-                your specific parameters (hostnames, time windows, etc.);
-                (3)&nbsp;run via <Code>xdr_run_xql_query</Code> or{" "}
-                <Code>xsiam_run_xql_query</Code>; (4)&nbsp;return the table.
-                Combined with the{" "}
-                <Code>xdr_list_datasets</Code> tool (which empirically
-                enumerates the datasets available in your specific
-                tenant), this gives operators a low-friction path from
-                natural-language question to validated query result —
-                no XQL fluency required.
+                When a case references something the agent can&apos;t
+                interpret from the record alone — a Cortex field, a
+                detection name, a playbook, a close reason — it researches
+                rather than guesses: (1)&nbsp;<Code>cortex_search</Code> /{" "}
+                <Code>cortex_suggest</Code> against the live Cortex docs to
+                find the authoritative topic; (2)&nbsp;<Code>cortex_fetch_topic</Code>{" "}
+                to read it; (3)&nbsp;for external context (IP/domain
+                reputation, CVE advisories), the <Code>web</Code> connector;
+                (4)&nbsp;it cites each source when it writes findings back
+                onto the case. The <Code>cortex_kb_search</Code> skill
+                governs the query discipline.
               </p>
             </SubSection>
 
@@ -2033,7 +2025,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 tool-dispatch loop. Without a policy, every job-dispatched
                 chat turn could call ANY tool the agent has access to;
                 a scheduled &quot;morning case sweep&quot; job could
-                technically also call <Code>xdr_incidents_update</Code>{" "}
+                technically also call <Code>xsoar_close_incident</Code>{" "}
                 if the model decided to. Permission policies let you
                 scope what each job can touch.
               </p>
@@ -2045,20 +2037,20 @@ Networks documentation and returning evidence-backed, cited answers.
                 <li>
                   <Term>Allowed tools</Term> — whitelist when non-empty.
                   Tools not matching any pattern are denied. Example:{" "}
-                  <Code>xsiam_*, cortex_*</Code> restricts the job to
-                  the xsiam and cortex-docs tool families.
+                  <Code>xsoar_*, cortex_*</Code> restricts the job to
+                  the xsoar and cortex-docs tool families.
                 </li>
                 <li>
                   <Term>Denied tools</Term> — blacklist. Denies even
                   tools that matched the allowed list (denied wins).
-                  Example: <Code>*_delete, xdr_incidents_update</Code>{" "}
+                  Example: <Code>*_delete, xsoar_close_incident</Code>{" "}
                   forbids destructive tools.
                 </li>
                 <li>
                   <Term>Require approval</Term> — forces the standard
                   approval card for matching tools, regardless of the
                   job&apos;s <Code>bypass_approvals</Code> setting.
-                  Example: <Code>xdr_*_update, api_keys_*</Code>{" "}
+                  Example: <Code>xsoar_update_incident, xsoar_close_incident</Code>{" "}
                   routes state-mutating tools through operator
                   confirmation.
                 </li>
@@ -2179,7 +2171,7 @@ Networks documentation and returning evidence-backed, cited answers.
               <ul className="list-disc pl-5 space-y-2 text-sm">
                 <li>
                   <Term>Prompt</Term> — a natural-language message
-                  (&quot;check XSIAM for new high-severity cases and
+                  (&quot;check XSOAR for new high-severity cases and
                   summarize what changed overnight&quot;). Runs through the
                   same chat pipeline as your interactive sessions:
                   personality from{" "}
@@ -2396,9 +2388,8 @@ Networks documentation and returning evidence-backed, cited answers.
                 config schema, secret slots, tool list, and the OCI
                 container image that runs when an instance is created.
                 Two flavors:{" "}
-                <Code>origin: bundle</Code> (the 5 connectors shipped in
-                the agent image: cortex-content, cortex-docs,
-                cortex-xdr, web, xsiam) and{" "}
+                <Code>origin: bundle</Code> (the 3 connectors shipped in
+                the agent image: cortex-docs, web, xsoar) and{" "}
                 <Code>origin: user</Code> (connectors you upload via
                 the marketplace).
               </li>
@@ -2451,31 +2442,26 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="cable" title="The five connectors">
+            <SubSection icon="cable" title="The three connectors">
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Term>xsiam</Term> — Cortex XSIAM PAPI gateway. Tools
-                  include <Code>run_xql_query</Code>,{" "}
-                  <Code>get_cases</Code>, <Code>get_issues</Code>,{" "}
-                  <Code>find_xql_examples_rag</Code>, dataset and
-                  lookup management.
-                </li>
-                <li>
-                  <Term>cortex-xdr</Term> — Cortex XDR API gateway.
-                  Tools include <Code>get_cases_and_issues</Code>,{" "}
-                  <Code>run_xql_query</Code>, incident/alert readers
-                  and updaters, IoC management.
+                  <Term>xsoar</Term> — Cortex XSOAR gateway, the
+                  investigation surface. Tools include{" "}
+                  <Code>list_incidents</Code>, <Code>get_incident</Code>,{" "}
+                  <Code>get_war_room</Code>,{" "}
+                  <Code>search_indicators</Code>, <Code>add_note</Code>,{" "}
+                  <Code>add_entry</Code>, <Code>save_evidence</Code>,{" "}
+                  <Code>update_incident</Code>, <Code>close_incident</Code>.
+                  Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud —
+                  the connector auto-detects the version from the instance
+                  config.
                 </li>
                 <li>
                   <Term>cortex-docs</Term> — official Palo Alto Networks
-                  documentation search. Tools include{" "}
+                  documentation search (case research). Tools include{" "}
                   <Code>search</Code>, <Code>suggest</Code>,{" "}
-                  <Code>xql_lookup</Code>, <Code>fetch_topic</Code>.
-                </li>
-                <li>
-                  <Term>cortex-content</Term> — baked Cortex content
-                  catalog (packs, modeling/parsing/correlation rules).
-                  No network access required.
+                  <Code>fetch_topic</Code>, <Code>fetch_toc</Code>,{" "}
+                  <Code>deep_research</Code>.
                 </li>
                 <li>
                   <Term>web</Term> — evidence-gathering browsing via the
@@ -2520,10 +2506,11 @@ Networks documentation and returning evidence-backed, cited answers.
               </pre>
               <p className="text-sm text-on-surface-variant mt-2">
                 A UI checkbox affordance is on the roadmap. The
-                manifest&apos;s <Code>humanRequired</Code> list is
-                already empty for connector tools (xsiam, cortex-xdr),
-                making the trusted flag less critical for default
-                deployments.
+                manifest&apos;s <Code>humanRequired</Code> list gates the
+                xsoar case-write tools (<Code>update_incident</Code>,{" "}
+                <Code>close_incident</Code>, <Code>add_entry</Code>,{" "}
+                <Code>add_note</Code>, <Code>save_evidence</Code>); a
+                trusted lab instance bypasses that gate.
               </p>
             </SubSection>
           </Section>
@@ -2568,8 +2555,8 @@ probed          ── transient state during an in-flight probe`}</Pre>
             <SubSection icon="key" title="Reauth flow">
               <p>
                 When an instance hits <Code>auth_required</Code> (the
-                most common cause: XSIAM PAPI tokens expiring after 90
-                days), the row turns amber and a <Term>Reauth</Term>{" "}
+                most common cause: an XSOAR API key revoked or rotated
+                on the tenant), the row turns amber and a <Term>Reauth</Term>{" "}
                 button appears. Click it → the setup form opens with that
                 instance&apos;s fields prefilled (URL, auth ID, etc.) and
                 only the secret slots empty. Submit → the instance flips
@@ -2660,14 +2647,14 @@ probed          ── transient state during an in-flight probe`}</Pre>
             <p>
               The Marketplace tab on{" "}
               <Link href="/connectors" className="link">/connectors</Link>{" "}
-              shows the connector catalogue: 5 bundle-shipped connectors
-              (cortex-content, cortex-docs, cortex-xdr, web, xsiam)
+              shows the connector catalogue: 3 bundle-shipped connectors
+              (cortex-docs, web, xsoar)
               plus any user-uploaded connectors. Every card shows
               version, tool count, install state, origin (bundle or
               user), tags, and instances count.
             </p>
             <p>
-              Fresh installs come up with all 5 bundle connectors in
+              Fresh installs come up with all 3 bundle connectors in
               the catalogue marked &quot;available, not installed.&quot;
               No instances exist yet. The marketplace is the explicit
               first-step entry point — you install, then you create
@@ -2846,10 +2833,11 @@ probed          ── transient state during an in-flight probe`}</Pre>
               <p>
                 Each connector ships a defined set of tools the agent
                 can call. By default every tool the connector exposes
-                is enabled. For instances with large tool catalogs
-                (the Cortex XDR connector ships 50 tools),
-                you can selectively disable tools to bound the agent&apos;s
-                catalog noise OR to lock down destructive actions.
+                is enabled. For instances with larger tool catalogs
+                (the XSOAR connector ships the full case-investigation
+                family), you can selectively disable tools to bound the
+                agent&apos;s catalog noise OR to lock down destructive
+                case-write actions.
               </p>
               <ol className="list-decimal pl-5 space-y-1.5 text-sm">
                 <li>
@@ -2874,14 +2862,14 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </ol>
               <p className="text-sm">
                 Use cases: hide{" "}
-                <Code>xdr_endpoints_scan_all</Code> (high-impact),
-                disable IoC mutators (<Code>xdr_ioc_disable</Code>,
-                <Code>xdr_ioc_enable</Code>) on a hardened tenant,
+                <Code>xsoar_close_incident</Code> (high-impact),
+                disable the case-write tools (<Code>xsoar_update_incident</Code>,
+                <Code>xsoar_add_entry</Code>) on a read-only deployment,
                 trim agent context budget by disabling tools you
                 never use.
               </p>
               <p className="text-sm text-on-surface-variant">
-                Toggle state is per-instance. Two XDR tenants (two
+                Toggle state is per-instance. Two XSOAR tenants (two
                 instances) can have different sets of tools enabled
                 — the agent picks the right set based on which
                 instance handles the request.
@@ -2895,8 +2883,8 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 timestamps. Clicking an instance opens a config panel
                 where you can rotate credentials or edit the
                 wire-up. The agent automatically picks the right instance
-                when you mention a system by name in chat (&quot;query
-                the prod tenant&quot; → primary-xsiam).
+                when you mention a system by name in chat (&quot;check
+                the prod tenant&quot; → primary-xsoar).
               </p>
               <p className="text-sm">
                 Install state has two sources today, union&apos;d server-side:
@@ -3151,7 +3139,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 <li>
                   <Term>Matcher</Term> — optional filter to scope when
                   the handler runs. Tool patterns
-                  (<Code>xsiam_*</Code>), session tags
+                  (<Code>xsoar_*</Code>), session tags
                   (<Code>session.tag:prod</Code>), or actor filters
                   (<Code>actor:user:*</Code>).
                 </li>
@@ -3399,8 +3387,10 @@ probed          ── transient state during an in-flight probe`}</Pre>
             <p>
               Approvals gate the tools where the agent is changing
               <em> its own runtime state</em> — schedules, persona, settings,
-              notifications. Connector calls (XQL queries, case reads,
-              documentation searches) do <em>not</em> require approval —
+              notifications — plus the XSOAR tools that <em>write to a
+              live case</em> (update, close, war-room entries, evidence).
+              Read-only connector calls (case reads, indicator searches,
+              documentation lookups) do <em>not</em> require approval —
               those are explicit operator intent at chat level.
             </p>
             <p>
@@ -3423,8 +3413,12 @@ probed          ── transient state during an in-flight probe`}</Pre>
                   <Term>Destructive</Term>: <Code>jobs_delete</Code>,
                   <Code> skills_delete</Code>, <Code>personality_reset</Code>,
                   <Code> settings_reset</Code>, <Code>instances_delete</Code>,
-                  <Code> providers_delete</Code>. Same gate; UI shows a red
-                  banner.
+                  <Code> providers_delete</Code>, plus the XSOAR case-write
+                  tools (<Code>xsoar_update_incident</Code>,{" "}
+                  <Code>xsoar_close_incident</Code>,{" "}
+                  <Code>xsoar_add_entry</Code>, <Code>xsoar_add_note</Code>,{" "}
+                  <Code>xsoar_save_evidence</Code>). Same gate; UI shows a
+                  red banner.
                 </li>
                 <li>
                   <Term>Credentials</Term>: <Code>api_keys_create</Code>,
@@ -3438,18 +3432,14 @@ probed          ── transient state during an in-flight probe`}</Pre>
             <SubSection icon="block" title="What does NOT require approval">
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Term>XSIAM</Term> — <Code>run_xql_query</Code>,{" "}
-                  <Code>get_cases</Code>, <Code>get_issues</Code>, etc.
-                  Run inline.
-                </li>
-                <li>
-                  <Term>Cortex XDR</Term> — <Code>get_cases_and_issues</Code>,{" "}
-                  <Code>run_xql_query</Code>, etc. Run inline.
+                  <Term>XSOAR reads</Term> — <Code>xsoar_list_incidents</Code>,{" "}
+                  <Code>xsoar_get_incident</Code>,{" "}
+                  <Code>xsoar_get_war_room</Code>,{" "}
+                  <Code>xsoar_search_indicators</Code>. Run inline.
                 </li>
                 <li>
                   <Term>Docs &amp; web</Term> — documentation search,
-                  content-catalog lookups, evidence-gathering browsing.
-                  Run inline.
+                  evidence-gathering browsing. Run inline.
                 </li>
                 <li>
                   <Term>Reads</Term> — anything classified as a read query
@@ -3677,7 +3667,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 <Term>Edge pulses</Term> — the audit log feed gives
                 action-by-action history. Edges pulse if matching events
                 appeared in the last 60s (e.g., a tool_call to{" "}
-                <Code>tool:xsiam.*</Code> pulses the mcp→xsiam edge).
+                <Code>tool:xsoar.*</Code> pulses the mcp→xsoar edge).
               </li>
             </ul>
             <p>
@@ -3755,13 +3745,13 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </p>
               <Pre>{`actor:user:operator         // who triggered the event
 action:tool_call            // what the event was
-target:tool:xsiam.*         // wildcard prefix match
+target:tool:xsoar.*         // wildcard prefix match
 severity:error              // error / warn / info / debug
 session:s_4k21m             // chat session id
 job:weekly-coverage         // job name`}</Pre>
               <p>Common composed queries:</p>
-              <Pre>{`actor:user:operator action:tool_call target:tool:xsiam.*
-   // operator-triggered xsiam tool calls
+              <Pre>{`actor:user:operator action:tool_call target:tool:xsoar.*
+   // operator-triggered xsoar tool calls
 
 severity:error action:tool_call
    // failed tool calls (good first stop when chat broke)
@@ -3944,10 +3934,10 @@ session:s_4k21m
                   <Term>Instructions</Term> — system-prompt-style
                   guidance the operator wants the agent to follow
                   every turn. Things like{" "}
-                  <em>&ldquo;Always cite the XQL dataset name when
-                  reporting query results&rdquo;</em> or{" "}
-                  <em>&ldquo;Before destructive operations, name the
-                  target system in plain English&rdquo;</em>.
+                  <em>&ldquo;Always cite the source when reporting
+                  case findings&rdquo;</em> or{" "}
+                  <em>&ldquo;Before closing a case, name the close
+                  reason in plain English&rdquo;</em>.
                 </li>
               </ul>
               <p className="text-sm">
@@ -4289,7 +4279,7 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
                 AuthGate detects no setup-completed flag at{" "}
                 <Code>/app/runtime/.setup_complete</Code> → renders the
                 setup form. You fill everything (UI password, Vertex
-                SA JSON, connector configs — XSIAM, Cortex XDR) and
+                SA JSON, connector configs — XSOAR) and
                 submit.
               </p>
               <p>
@@ -4337,8 +4327,8 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
 
             <SubSection icon="cable" title="Scenario 3a — Change connector creds via /connectors">
               <p>
-                Want to rotate the XSIAM PAPI key, change the XSIAM
-                API URL, or update the Cortex XDR auth header? Use{" "}
+                Want to rotate the XSOAR API key, change the XSOAR
+                server URL, or update the key id? Use{" "}
                 <Link href="/connectors" className="link">/connectors</Link>.
                 Each connector has an instance (created at first-run
                 from the bundle&apos;s <Code>bindsInstances</Code>{" "}
@@ -4346,12 +4336,12 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
                 place. Writes go through the MCP&apos;s instance API
                 directly to the InstanceStore + SecretStore — no setup
                 re-run, no agent restart. Tool calls (
-                <Code>xsiam_*</Code>, <Code>xdr_*</Code>) read from
+                <Code>xsoar_*</Code>) read from
                 InstanceStore on every
                 invocation, so changes take effect at the next call.
               </p>
               <p className="text-sm text-on-surface-variant/85">
-                Every xsiam + cortex-xdr tool routes through a single
+                Every xsoar tool routes through a single
                 chokepoint helper that calls{" "}
                 <Code>store.list_for(...)</Code> and{" "}
                 <Code>instance.merged_config(secret_store)</Code> on every
@@ -4525,7 +4515,7 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
               <p>
                 Early versions of the pipeline page probed
                 container-internal hostnames (e.g.,{" "}
-                <Code>http://guardian-connector-xsiam-primary:9000</Code>)
+                <Code>http://guardian-connector-xsoar-primary:9000</Code>)
                 directly from the browser —
                 which can&apos;t reach those names. The current version
                 routes all probes through{" "}
@@ -4568,8 +4558,8 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
               chat-route pipeline, every subsystem (memory, knowledge,
               skills, hooks, tasks, plan mode, subagents, plugins,
               jobs, notifications, approvals, models, providers,
-              secret store), the five external connectors (XSIAM /
-              Cortex XDR / Cortex Docs / Cortex Content / Web Browser),
+              secret store), the three external connectors (XSOAR /
+              Cortex Docs / Web Browser),
               audit-row schemas, REST endpoint wire
               formats, and the design decisions that shaped each
               substrate.
@@ -4594,8 +4584,8 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
           <Section id="ref-journeys" icon="tour" title="User Journeys">
             <p>
               Hands-on, step-by-step walkthroughs for common operator
-              tasks — onboarding a new connector, investigating a case
-              end-to-end, building an XQL query from natural language,
+              tasks — onboarding a new connector, investigating an XSOAR
+              case end-to-end, documenting and closing a case,
               installing a Slack policy hook, monitoring tasks,
               spawning scoped subagents. Each journey lists the
               prompts to paste, the tools that fire, and the expected

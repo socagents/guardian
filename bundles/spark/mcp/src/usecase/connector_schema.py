@@ -17,7 +17,7 @@ regressions this produced:
   * v0.1.27 — web/connector.yaml shipped without a `version` field
     for two releases; instance store fell back to 'unknown' which
     broke version-comparison in the UI.
-  * v0.3.x — a typo in xsiam's runtimeMapping.style ('moudle')
+  * v0.3.x — a typo in a connector's runtimeMapping.style ('moudle')
     silently disabled tool registration for that connector for one
     release.
 
@@ -161,7 +161,7 @@ def validate_connector_spec(
 
     `expected_id` enables a defense-in-depth check: when the loader
     knows what id it expected (e.g. "the connector dir is named
-    'xsiam', so the YAML's id field should also be 'xsiam'"),
+    'xsoar', so the YAML's id field should also be 'xsoar'"),
     it can pass that in and we'll fail loudly on mismatch. Catches
     a copy-paste class of error where someone forks a connector
     directory but forgets to update the id.

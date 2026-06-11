@@ -60,13 +60,11 @@ class Settings(BaseSettings):
     log_level: str = Field("INFO", validation_alias="LOG_LEVEL")
     log_file_path: str | None = Field(None, validation_alias="LOG_FILE_PATH")
 
-    # --- XSIAM PAPI Settings ---
-    papi_url_env_key: str = Field("", validation_alias="CORTEX_MCP_PAPI_URL")
-    papi_auth_header_key: str = Field("", validation_alias="CORTEX_MCP_PAPI_AUTH_HEADER")
-    papi_auth_id_key: str = Field("", validation_alias="CORTEX_MCP_PAPI_AUTH_ID")
-    playground_id: str = Field("", validation_alias="PLAYGROUND_ID")
-    webhook_endpoint: str | None = Field(None, validation_alias="WEBHOOK_ENDPOINT")
-    webhook_key: str | None = Field(None, validation_alias="WEBHOOK_KEY")
+    # Connector-specific upstream settings (XSOAR api_url / api_id /
+    # api_key, etc.) are NOT declared here. Each connector instance
+    # carries its own config + secrets, injected per-call via the
+    # _current_instance_overrides contextvar (see _ConfigProxy below);
+    # the connector functions read them by clean abstract key name.
 
     # --- v1.2 stage 3C — admin/setup HTTP API auth ---
     mcp_token: str | None = Field(

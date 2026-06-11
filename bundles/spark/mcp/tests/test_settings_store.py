@@ -15,13 +15,13 @@ def store(tmp_path) -> SqliteSettingsStore:
     return SqliteSettingsStore(
         defaults={
             "geminiModel": "gemini-3.1-pro-preview",
-            "defaultLogDestination": "XSIAM_WEBHOOK",
+            "defaultCaseQueue": "all-open",
             "requireHumanApprovalForOperations": True,
             "coverageReportFormat": "json",
         },
         overridable=[
             "geminiModel",
-            "defaultLogDestination",
+            "defaultCaseQueue",
             "requireHumanApprovalForOperations",
             "coverageReportFormat",
         ],

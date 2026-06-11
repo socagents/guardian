@@ -156,8 +156,8 @@ const DEFAULT_WORKSPACES: { name: string; slug: string; icon: string; enabled: b
 // ─── Guardian Skills (sourced from bundles/spark/mcp/skills/*) ─────────────
 //
 // 5 skills shipped with the bundle, organized by the on-disk layout:
-//   foundation/  — Cortex KB search + XQL query-authoring helpers — 4 skills
-//   workflows/   — multi-step orchestration (build_xql_query) — 1 skill
+//   foundation/  — Cortex KB search family + XSOAR case-triage reference — 4 skills
+//   workflows/   — multi-step orchestration (xsoar_case_investigation) — 1 skill
 //
 // Description text is paraphrased from the skill's MD frontmatter; the
 // `content` field is a one-line summary so the detail panel renders
@@ -172,7 +172,7 @@ const SKILLS: SkillDef[] = [
     displayName: "Cortex KB Search",
     category: "foundation",
     description:
-      "Answer Cortex product questions (XDR, XSIAM, XSOAR, AgentiX, Cortex Cloud, Xpanse, XQL) by searching the official public docs via the cortex-docs connector and returning evidence-backed answers with citations.",
+      "Answer Cortex product questions (XSOAR, XDR, XSIAM, AgentiX, Cortex Cloud, Xpanse) by searching the official public docs via the cortex-docs connector and returning evidence-backed answers with citations. Used during case investigation to resolve unknowns — field meanings, detections, playbooks, close reasons.",
     icon: "menu_book",
     source: "platform",
     loadingMode: "on-demand",
@@ -193,7 +193,7 @@ const SKILLS: SkillDef[] = [
     displayName: "Cortex KB Search — query patterns",
     category: "foundation",
     description:
-      "Lazy-loaded companion to cortex_kb_search — query-shaping tables by intent, fallback strategies when search returns 0 or off-topic hits, the XQL stage quick-lookup reference, and the response quality checklist.",
+      "Lazy-loaded companion to cortex_kb_search — query-shaping tables by intent, fallback strategies when search returns 0 or off-topic hits, and the response quality checklist.",
     icon: "pattern",
     source: "platform",
     loadingMode: "on-demand",
@@ -230,20 +230,20 @@ const SKILLS: SkillDef[] = [
     analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
   },
   {
-    id: "foundation-cortex-xql-query-authoring",
-    name: "cortex_xql_query_authoring",
-    displayName: "Cortex XQL query authoring",
+    id: "foundation-xsoar-case-triage",
+    name: "xsoar_case_triage",
+    displayName: "XSOAR case triage reference",
     category: "foundation",
     description:
-      "Compose authoritative XQL queries by chaining the operator's example-query KB with the official Cortex docs — embedding-search the KB, extract stages/functions, cortex-docs xql_lookup per term, then author with citations.",
-    icon: "query_stats",
+      "Reference card for triaging Cortex XSOAR cases — severity codes (1-4), status codes (0/1/2/3), common close reasons, how to filter xsoar_list_incidents (open = active status), and the escalate-vs-close decision rule.",
+    icon: "rule",
     source: "platform",
     loadingMode: "on-demand",
     enabled: true,
     locked: false,
     agentCount: 1,
     calls7d: 0,
-    content: "See bundles/spark/mcp/skills/foundation/cortex_xql_query_authoring.md",
+    content: "See bundles/spark/mcp/skills/foundation/xsoar_case_triage.md",
     charCount: 0,
     tokenCount: 0,
     maxConcurrentAgents: 0,
@@ -252,20 +252,20 @@ const SKILLS: SkillDef[] = [
   },
   // ── Workflows ───────────────────────────────────────────────────────
   {
-    id: "workflow-build-xql-query",
-    name: "build_xql_query",
-    displayName: "Build a working XQL query",
+    id: "workflow-xsoar-case-investigation",
+    name: "xsoar_case_investigation",
+    displayName: "Investigate an XSOAR case end-to-end",
     category: "workflows",
     description:
-      "Load-first workflow for ANY XQL request — mandatory 7-step procedure chaining knowledge_search (operator KB), cortex_xql_lookup (canonical docs), and xsiam/xdr run_xql_query, with named error patterns for iteration.",
-    icon: "query_stats",
+      "Load-first workflow for ANY XSOAR case investigation — monitor (xsoar_list_incidents) → fetch (xsoar_get_incident + xsoar_get_war_room) → research (cortex-docs + web) → enrich (xsoar_search_indicators) → document (xsoar_add_note / xsoar_save_evidence) → resolve (xsoar_update_incident with version, xsoar_close_incident with reason).",
+    icon: "cases",
     source: "platform",
     loadingMode: "on-demand",
     enabled: true,
     locked: false,
     agentCount: 1,
     calls7d: 0,
-    content: "See bundles/spark/mcp/skills/workflows/build_xql_query.md",
+    content: "See bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md",
     charCount: 0,
     tokenCount: 0,
     maxConcurrentAgents: 0,

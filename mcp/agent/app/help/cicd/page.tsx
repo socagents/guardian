@@ -619,9 +619,9 @@ DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:pqr...
                   <Code>bundles/spark/connectors/*/src/</Code>; fix every hit OR document
                   why the remaining hits are left alone. The blast radius of a
                   connector-system bug is rarely one connector — usually a code pattern
-                  that was copy-evolved across the family. Caught after a
-                  cortex-xdr <Code>usecase.instance_store</Code> fix missed identical
-                  bugs in xsiam and cortex-content.
+                  that was copy-evolved across the family. Example: an import-style
+                  fix in one connector&rsquo;s <Code>src/</Code> should be grepped across
+                  every connector in the same release.
                 </li>
               </ol>
             </SubSection>

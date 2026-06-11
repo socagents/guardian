@@ -31,7 +31,7 @@ The customer installer has zero knowledge of dev — no flags, no branches, no t
 | File | Owned by | Content |
 |---|---|---|
 | `/opt/guardian/.env` | installer at install time | Service credentials + 3 core stack-service digests (`DIGEST_GUARDIAN_AGENT`, `DIGEST_GUARDIAN_UPDATER`, `DIGEST_GUARDIAN_BROWSER`) + `GUARDIAN_VERSION` marker |
-| `/opt/guardian/connector-digests.env` | installer at install time, **guardian-updater reads** | 6 per-connector image pins (`DIGEST_GUARDIAN_CONNECTOR_*`) |
+| `/opt/guardian/connector-digests.env` | installer at install time, **guardian-updater reads** | 4 per-connector image pins (`DIGEST_GUARDIAN_CONNECTOR_*`) |
 
 **The split is load-bearing (v0.6.7+):** per-connector containers aren't declared in `docker-compose.yml`, so their digests are NOT compose-substitution variables — they're consumed at runtime by guardian-updater when an operator creates a connector instance.
 

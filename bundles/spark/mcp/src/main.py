@@ -1093,8 +1093,8 @@ async def async_main(transport: str):
 
         # OTel tracing — opt-in via GUARDIAN_OTEL=1 + OTEL_EXPORTER_OTLP_
         # ENDPOINT. No-op when either is unset. Auto-instruments the
-        # Starlette app + outbound httpx (Vertex, XSIAM
-        # PAPI) so operators get a per-request waterfall in Jaeger /
+        # Starlette app + outbound httpx (Vertex, XSOAR
+        # API) so operators get a per-request waterfall in Jaeger /
         # Honeycomb / Tempo / etc. without any tool-side annotation.
         from api.tracing import install as install_tracing
         install_tracing(app)

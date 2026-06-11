@@ -2,10 +2,10 @@ name: Build connectors
 
 # v0.5.0+ — per-connector image build workflow.
 #
-# CI/CD step 1 of 3 for the 5 per-connector images
-# (xsiam/cortex-xdr/web/cortex-docs/cortex-content + the runtime
-# base). Each connector has its own path-filter; only the ones
-# whose paths matched the push actually rebuild. See docs/CICD.md
+# CI/CD step 1 of 3 for the 3 per-connector images
+# (xsoar/web/cortex-docs + the runtime base). Each connector has its
+# own path-filter; only the ones whose paths matched the push
+# actually rebuild. See docs/CICD.md
 # § Per-service path-filter contract for the broader invariant.
 # Per-connector containers preserve their instance state across
 # pushes that don't touch their source, just like the 5 stack
@@ -110,8 +110,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-actor: ${{ github.actor }}
 
-  build-xsiam-connector:
-    name: Build guardian-connector-xsiam
+  build-xsoar-connector:
+    name: Build guardian-connector-xsoar
     runs-on: [self-hosted, Linux, X64, guardian]
     needs: build-runtime
     steps:
@@ -124,9 +124,9 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
       - uses: ./.github/actions/build-and-push-dev-image
         with:
-          service-name: guardian-connector-xsiam
+          service-name: guardian-connector-xsoar
           build-context: '.'
-          dockerfile-path: bundles/spark/connectors/xsiam/Dockerfile
+          dockerfile-path: bundles/spark/connectors/xsoar/Dockerfile
           build-args: |
             GUARDIAN_RUNTIME_VERSION=dev
           pull-policy: never
@@ -175,57 +175,6 @@ jobs:
           service-name: guardian-connector-cortex-docs
           build-context: '.'
           dockerfile-path: bundles/spark/connectors/cortex-docs/Dockerfile
-          build-args: |
-            GUARDIAN_RUNTIME_VERSION=dev
-          pull-policy: never
-          owner: ${{ github.repository_owner }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-actor: ${{ github.actor }}
-
-  build-cortex-content-connector:
-    name: Build guardian-connector-cortex-content
-    runs-on: [self-hosted, Linux, X64, guardian]
-    needs: build-runtime
-    steps:
-      - name: Reset workspace ownership (pre-checkout)
-        run: |
-          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
-      - uses: actions/checkout@v4
-      - name: Fix bind-mount perms
-        run: |
-          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
-      - uses: ./.github/actions/build-and-push-dev-image
-        with:
-          service-name: guardian-connector-cortex-content
-          build-context: '.'
-          dockerfile-path: bundles/spark/connectors/cortex-content/Dockerfile
-          build-args: |
-            GUARDIAN_RUNTIME_VERSION=dev
-          pull-policy: never
-          owner: ${{ github.repository_owner }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-actor: ${{ github.actor }}
-
-  # v0.5.61 (issue #36) — Cortex XDR connector. Same pull-policy:never
-  # pattern as the other per-connector builds — see the build-runtime
-  # comment above for the #38 rationale.
-  build-cortex-xdr-connector:
-    name: Build guardian-connector-cortex-xdr
-    runs-on: [self-hosted, Linux, X64, guardian]
-    needs: build-runtime
-    steps:
-      - name: Reset workspace ownership (pre-checkout)
-        run: |
-          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
-      - uses: actions/checkout@v4
-      - name: Fix bind-mount perms
-        run: |
-          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
-      - uses: ./.github/actions/build-and-push-dev-image
-        with:
-          service-name: guardian-connector-cortex-xdr
-          build-context: '.'
-          dockerfile-path: bundles/spark/connectors/cortex-xdr/Dockerfile
           build-args: |
             GUARDIAN_RUNTIME_VERSION=dev
           pull-policy: never

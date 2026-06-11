@@ -25,7 +25,7 @@ Pre-v0.5.20 guardian-updater also drove an in-UI Update button for Scenario 1 up
 
 ## Per-instance container naming
 
-`guardian-connector-<connector-id>-<instance-name>` — e.g. `guardian-connector-xsiam-primary-xsiam`. Connect from the agent via:
+`guardian-connector-<connector-id>-<instance-name>` — e.g. `guardian-connector-xsoar-primary-xsoar`. Connect from the agent via:
 
 ```
 http://guardian-connector-<id>-<name>:9000

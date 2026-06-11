@@ -128,10 +128,11 @@ const SECTIONS: SectionDef[] = [
  // ── External Connectors ────────────────────────────────────────
  // [guardian v0.1.0] Retired: xlog-connector — simulation subsystem removed.
  // [guardian v0.1.0] Retired: caldera-connector — simulation subsystem removed.
- { id: "xsiam-connector", label: "XSIAM Connector", group: "External Connectors", icon: "security" },
- { id: "cortex-xdr-connector", label: "Cortex XDR Connector", group: "External Connectors", icon: "shield_lock" },
+ // [guardian XSOAR pivot] Retired: xsiam-connector, cortex-xdr-connector,
+ // cortex-content-connector — log-simulation/telemetry-era; out of scope
+ // for the incident-investigation product. Roster is now xsoar + cortex-docs + web.
+ { id: "xsoar-connector", label: "XSOAR Connector", group: "External Connectors", icon: "cases" },
  { id: "cortex-docs-connector", label: "Cortex Docs Connector", group: "External Connectors", icon: "menu_book" },
- { id: "cortex-content-connector", label: "Cortex Content Connector", group: "External Connectors", icon: "library_books" },
  { id: "web-connector", label: "Web Browser Connector", group: "External Connectors", icon: "language" },
 
  // ── Auth & Security ────────────────────────────────────────────
@@ -395,10 +396,10 @@ export default function ArchitectureGuide() {
  <OperatorState />
  {/* External Connectors */}
  {/* [guardian v0.1.0] Retired: XlogConnector + CalderaConnector — simulation subsystem removed */}
- <XsiamConnector />
- <CortexXdrConnector />
+ {/* [guardian XSOAR pivot] Retired: XsiamConnector + CortexXdrConnector + CortexContentConnector
+     — log-simulation/telemetry-era connectors, out of scope. Roster is xsoar + cortex-docs + web. */}
+ <XsoarConnector />
  <CortexDocsConnector />
- <CortexContentConnector />
  <WebConnector />
  {/* Auth & Security */}
  <AuthIdentity />
@@ -440,12 +441,13 @@ function Intro() {
  return (
  <Section id="intro" icon="info" title="Introduction">
  <p>
- Guardian is an AI incident-response agent for Cortex XSIAM/XSOAR:
- it investigates cases and issues, runs evidence-gathering XQL
- queries against XSIAM, consults Cortex documentation and content,
- and orchestrates IR workflows over an MCP (Model Context Protocol)
- tool surface. This guide documents Guardian&apos;s architecture for
- engineers extending it.
+ Guardian is an AI incident-investigation agent for Cortex XSOAR:
+ it monitors cases (incidents) opened on the XSOAR tenant, fetches
+ case data, summarizes and investigates, enriches indicators,
+ documents findings, and updates/closes cases — consulting Cortex
+ documentation and the web for research — all over an MCP (Model
+ Context Protocol) tool surface. This guide documents
+ Guardian&apos;s architecture for engineers extending it.
  </p>
  <p>
  Guardian is built on{" "}
@@ -602,8 +604,8 @@ container_url         = http://guardian-connector-<connector>-<instance>:9000
  </li>
  <li>
  <Term>External connectors</Term>: per-instance credentials in
- the SecretStore (XSIAM PAPI auth header, Cortex XDR API key,
- web connector cdp_url, etc). The connector state machine{" "}
+ the SecretStore (XSOAR API key + optional key id, web
+ connector cdp_url, etc). The connector state machine{" "}
  (<a href="#connector-state" className="link">below</a>)
  tracks per-instance lifecycle (connected / failed /
  needs-auth / pending / disabled).
@@ -661,10 +663,8 @@ DIGEST_GUARDIAN_AGENT=sha256:abc...
 DIGEST_GUARDIAN_UPDATER=sha256:def...
 DIGEST_GUARDIAN_BROWSER=sha256:ghi...
 DIGEST_GUARDIAN_CONNECTOR_RUNTIME=sha256:jkl...
-DIGEST_GUARDIAN_CONNECTOR_XSIAM=sha256:mno...
-DIGEST_GUARDIAN_CONNECTOR_CORTEX_XDR=sha256:pqr...
+DIGEST_GUARDIAN_CONNECTOR_XSOAR=sha256:mno...
 DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS=sha256:stu...
-DIGEST_GUARDIAN_CONNECTOR_CORTEX_CONTENT=sha256:vwx...
 DIGEST_GUARDIAN_CONNECTOR_WEB=sha256:yz0...`}</Pre>
  <p>
  Same manifest content is{" "}
@@ -978,8 +978,8 @@ function ConnectorContainers() {
  <Section id="connector-containers" icon="apps" title="Per-instance Connector Containers">
  <p>
  <strong>Universal container-mode.</strong> Every connector — all
- 5 in the bundle (cortex-content, cortex-docs, cortex-xdr, web,
- xsiam) plus any user-uploaded connectors — runs as a
+ 3 in the bundle (cortex-docs, web, xsoar) plus any
+ user-uploaded connectors — runs as a
  per-instance container. The agent&apos;s connector_loader is a
  routing proxy that forwards tool calls over MCP-over-HTTP. The
  schema enum is tightened to <Code>[&quot;container&quot;]</Code>{" "}
@@ -1008,8 +1008,8 @@ function ConnectorContainers() {
  takes down one connector container, which docker restarts.
  </li>
  <li>
- <Term>Resource isolation</Term>: a runaway XQL result-set
- parse in the xsiam connector can&apos;t
+ <Term>Resource isolation</Term>: a runaway parse of a large
+ case payload in the xsoar connector can&apos;t
  starve the agent&apos;s chat handler of CPU because they run
  in different cgroups.
  </li>
@@ -1105,7 +1105,7 @@ MCP read connector.yaml.runtimeMapping.style
  <li>
  <Term>No outbound to operator network</Term> by default. The
  container is on the compose network only; if a connector
- needs internet (e.g. xsiam → tenant API), that&apos;s
+ needs internet (e.g. xsoar → tenant API), that&apos;s
  explicit operator config in the instance.
  </li>
  </ul>
@@ -1135,8 +1135,8 @@ function Manifest() {
 │ │ └── usecase/ # Stores + loaders + business logic
 │ ├── skills/ # Bundle-default skills (markdown)
 │ └── tests/
-├── kbs/ # Bundle-shipped knowledge bases
-│ └── xql-examples/ # Curated XQL example corpus
+# [guardian XSOAR pivot] Retired: kbs/xql-examples — the XQL example
+# corpus went away with the XSIAM/XDR connectors. No bundled KB ships today.
 ├── plugins/ # Filesystem-discovered plugin tree
 │ └── example-vendor/
 │ ├── manifest.yaml # Plugin contract — agents, skills, seeds
@@ -1591,7 +1591,7 @@ function ToolDispatch() {
  → <Code>recordConnectorSuccess(connectorId)</Code>; failure
  → <Code>recordConnectorFailure(connectorId, isAuthError)</Code>.
  The connector id is the first segment of the tool name
- (<Code>xsiam.run_xql_query</Code> → xsiam).
+ (<Code>xsoar.get_incident</Code> → xsoar).
  </li>
  <li>
  <Term>PostToolUse / PostToolUseFailure hook</Term>:
@@ -2037,12 +2037,10 @@ function ObservabilityOverview() {
  {" "}— benchmark run history with per-run scored output + side-by-side compare view across runs.
  Tracks agent quality regression as the bundle or prompt changes.
  </li>
- <li>
- <Term><Link href="/observability/detections" className="link">/observability/detections</Link></Term>
- {" "}— XSIAM detection inventory: rules indexed locally, per-rule fire counts, MITRE ATT&amp;CK
- technique coverage gaps. Sync from XSIAM via{" "}
- <Code>POST /api/agent/detections/sync</Code>.
- </li>
+ {/* [guardian XSOAR pivot] Retired: /observability/detections bullet —
+     the detection inventory + POST /api/agent/detections/sync were
+     XSIAM-backed (the XSIAM connector is removed). The observability page
+     + sync endpoint are owned by other surfaces and tracked for removal. */}
  <li>
  <Term><Link href="/observability/plugins" className="link">/observability/plugins</Link></Term>
  {" "}— entry-point plugin inventory (pip-installed Python packages exposing{" "}
@@ -2108,8 +2106,8 @@ Q: "Which jobs failed today?"
 Q: "Which tool calls are erroring?"
    → /observability/runtime-events (filter by 'rt.tool.failed').
 
-Q: "Is XSIAM healthy?"
-   → /observability/connectors → xsiam row. State + last-50
+Q: "Is XSOAR healthy?"
+   → /observability/connectors → xsoar row. State + last-50
      probes table. If degraded, /observability/pipeline shows
      the upstream/downstream impact.
 
@@ -2311,7 +2309,7 @@ function BackupRestore() {
  <li>
  <strong>Jobs</strong> — last because runtime jobs may
  reference connector tools (e.g.{" "}
- <Code>xsiam_run_xql_query</Code>) that need their
+ <Code>xsoar_list_incidents</Code>) that need their
  instance enabled before the first cron tick.
  </li>
  </ol>
@@ -2861,8 +2859,8 @@ function Tasks() {
  <Section id="tasks" icon="pending_actions" title="Task Registry">
  <p>
  The task registry is the persisted home for every long-running
- unit of work the chat-route spawns or observes: XQL query
- runs, compaction summarizers, hook
+ unit of work the chat-route spawns or observes: connector tool
+ calls, compaction summarizers, hook
  subprocess invocations, subagent runs. The diagram below shows
  the task state machine alongside connector and session — three
  subsystems sharing the same persistence + transition pattern.
@@ -2881,7 +2879,7 @@ function Tasks() {
  <SubSection icon="schema" title="Task model">
  <Pre>{`Task {
  id uuid
- kind 'xql_query' | 'compaction' | 'hook_command' |
+ kind 'tool_call' | 'compaction' | 'hook_command' |
  'subagent' | etc. (free-form)
  status 'pending' | 'running' | 'succeeded' |
  'failed' | 'aborted'
@@ -3826,8 +3824,8 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  The widget vocabulary above
  replaced a smaller union (<Code>text | secret | boolean | select | array</Code>)
  grew out of an earlier render path that silently dropped fields with unrecognized types. That older path
- cortex-xdr and xsiam shipped <Code>type: &quot;url&quot;</Code> and{" "}
- <Code>type: &quot;string&quot;</Code> in their synthetic-card config blocks,
+ surfaced when connectors shipped <Code>type: &quot;url&quot;</Code> and{" "}
+ <Code>type: &quot;string&quot;</Code> in their config blocks,
  which fell outside the union — the renderer returned undefined for those
  fields, so labels rendered without inputs. Same release deleted the{" "}
  <Code>standardConfig / advancedConfig</Code> slice() hack that arbitrarily
@@ -4198,7 +4196,8 @@ function SkillActivation() {
  Matching is model-mediated: the agent reads the index and
  picks the skill that fits the request — the system prompt
  instructs it to check for a matching skill FIRST (e.g.{" "}
- <Code>build_xql_query</Code> for XQL authoring requests).
+ <Code>xsoar_case_investigation</Code> for case-investigation
+ requests).
  Skills without declared keywords are still listed (no
  keywords = no opinion).
  </p>
@@ -4521,7 +4520,7 @@ function AuditSchema() {
  ts TEXT NOT NULL, -- ISO8601 UTC, microsecond precision
  actor TEXT, -- 'system' | 'user:<name>' | 'agent'
  action TEXT NOT NULL, -- one of manifest.audit.events
- target TEXT, -- 'connector:xsiam' | 'tool:xsiam.run_xql_query'
+ target TEXT, -- 'connector:xsoar' | 'tool:xsoar.get_incident'
  -- 'session:<uuid>' | 'task:<uuid>' | etc.
  status TEXT, -- 'success' | 'failure' | 'skipped'
  duration_ms INTEGER, -- nullable
@@ -5309,8 +5308,8 @@ POST   /api/agent/providers/vertex/test -- probe credentials`}</Pre>
  With at least one provider configured, the operator picks
  connectors from the marketplace at{" "}
  <Code>/connectors</Code> and creates per-connector instances.
- Instance config (XSIAM PAPI auth headers + tenant URL,
- Cortex XDR API key + auth id, web connector CDP
+ Instance config (XSOAR API key + optional key id + server
+ URL, web connector CDP
  endpoint, etc.) flows through the same dynamic-form
  widget vocabulary the manifest declares. See{" "}
  <Link href="#connectors-design" className="link">
@@ -5585,16 +5584,14 @@ function KnowledgePipeline() {
  <Pre>{`bundles/spark/kbs/<name>/
 ├── schema.json            # JSON-Schema for entry validation
 └── entries/
-    ├── 001-process-hunting.md
-    ├── 002-network-events.md
+    ├── 001-example.md
+    ├── 002-example.md
     └── ...
 
-# One KB ships today:
-#   xql-examples   — 787 curated Cortex XQL / XSIAM queries for
-#                    RAG retrieval (787 entries:
-#                    158 hand-curated + live-tenant-validated
-#                    entries spanning 12 datasets + 16+ MITRE
-#                    techniques + ~35 XQL stages)`}</Pre>
+# [guardian XSOAR pivot] No KB ships today. The former xql-examples
+# corpus was retired with the XSIAM/XDR connectors. The pipeline below
+# (reconcile + embed + knowledge_search) remains available for any
+# future bundle-shipped KB.`}</Pre>
  </SubSection>
  <SubSection icon="loop" title="Boot reconcile">
  <p>
@@ -5610,9 +5607,8 @@ function KnowledgePipeline() {
  <p>
  <Code>knowledge_search(kb, query, top_k)</Code> embeds the query
  and runs cosine similarity against the KB&apos;s vector index.
- The xsiam connector wraps this in{" "}
- <Code>find_xql_examples_rag</Code> for natural-language XQL
- example retrieval.
+ It is the generic retrieval entry point any bundle-shipped KB
+ (or a connector wrapper over one) would call.
  </p>
  </SubSection>
  <SubSection icon="science" title="Why bundle-shipped (not runtime CRUD)">
@@ -5640,10 +5636,12 @@ function SkillCatalogue() {
  <em>guidance</em> — they tell the agent &ldquo;when X, do
  Y&rdquo; in natural language. Two categories live under{" "}
  <Code>bundles/spark/mcp/skills/</Code>: foundation (4 skills —
- the Cortex KB-search + XQL-authoring family) and workflows
- (1 skill — <Code>build_xql_query</Code>) — 5 skills total.
- Each MD file carries optional YAML frontmatter declaring its
- category, activation triggers, locked state, and loading mode.
+ the Cortex KB-search family plus the{" "}
+ <Code>xsoar_case_triage</Code> reference) and workflows
+ (1 skill — <Code>xsoar_case_investigation</Code>) — 5 skills
+ total. Each MD file carries optional YAML frontmatter declaring
+ its category, activation triggers, locked state, and loading
+ mode.
  </p>
 
  <SkillsActivation />
@@ -5658,24 +5656,25 @@ function SkillCatalogue() {
  </p>
  <SubSection icon="article" title="Skill anatomy">
  <Pre>{`---
-name: build_xql_query
-displayName: Build a working Cortex XQL query from natural language
+name: xsoar_case_investigation
+displayName: Investigate an XSOAR case end-to-end
 category: workflows
 locked: false              # locked: true = platform-enforced; can't be disabled
 loadingMode: on-demand     # vs "always" (inject every turn)
-keywords: [xql, query, hunt, detect]
+keywords: [xsoar, incident, case, investigate, triage, close]
 ---
 
-# Build a working Cortex XQL query
+# Investigate an XSOAR case end-to-end
 
-Mandatory 7-step procedure for authoring XQL against XDR / XSIAM.
+Load-first lifecycle for any XSOAR case investigation.
 
 ## When to use
 ...
 
 ## Steps
-1. Call \`knowledge_search\` against the XQL-examples KB
-2. ...`}</Pre>
+1. Monitor with \`xsoar_list_incidents\` (open = active status)
+2. Fetch with \`xsoar_get_incident\` + \`xsoar_get_war_room\`
+3. ...`}</Pre>
  </SubSection>
  <SubSection icon="dns" title="Volume-mounted runtime">
  <p>
@@ -6180,281 +6179,177 @@ Next.js proxy: /api/agent/operator-state/{key} (session-gated).
 // [guardian v0.1.0] Retired: xlog-connector — simulation subsystem removed.
 // [guardian v0.1.0] Retired: caldera-connector — simulation subsystem removed.
 
-function XsiamConnector() {
+function XsoarConnector() {
  return (
- <Section id="xsiam-connector" icon="security" title="XSIAM Connector">
+ <Section id="xsoar-connector" icon="cases" title="XSOAR Connector">
  <p>
- The XSIAM connector wraps Cortex XSIAM&apos;s public API
- (PAPI). It is Guardian&apos;s primary investigation surface —
- the agent runs evidence-gathering XQL queries, reads cases and
- issues, inspects assets, and manages lookup datasets through
- this connector (tool prefix <Code>xsiam_</Code>). The anatomy
- diagram below shows the xsiam, cortex-xdr, and web connector
+ The XSOAR connector wraps the Cortex XSOAR API. It is
+ Guardian&apos;s primary — and only — investigation surface:
+ the agent monitors cases (incidents) opened on the XSOAR
+ tenant, fetches their data and war-room timelines, searches
+ indicators, writes findings back, and updates or closes the
+ case (tool prefix <Code>xsoar_</Code>). The anatomy diagram
+ below shows the xsoar, cortex-docs, and web connector
  containers side-by-side, plus the investigation pipeline they
  serve.
  </p>
 
  <ExternalConnectorsAnatomy />
 
- <SubSection icon="api" title="Tool family">
- <ul className="list-disc pl-5 space-y-1 text-sm">
- <li>
- <Code>xsiam_run_xql_query</Code> — execute XQL with a
- timestamp window; returns rows.
- </li>
- <li>
- <Code>xsiam_get_xql_examples</Code> /{" "}
- <Code>xsiam_find_xql_examples_rag</Code> — curated +
- natural-language
- retrieval against the bundled <Code>xql-examples</Code> KB
- (787 curated queries).
- </li>
- <li>
- Datasets + lookups —{" "}
- <Code>xsiam_get_datasets</Code>,{" "}
- <Code>xsiam_create_dataset</Code>,{" "}
- <Code>xsiam_get_dataset_fields</Code>,{" "}
- <Code>xsiam_add_lookup_data</Code>,{" "}
- <Code>xsiam_get_lookup_data</Code>.
- </li>
- <li>
- Cases / issues / assets —{" "}
- <Code>xsiam_get_cases</Code>, <Code>xsiam_get_issues</Code>,{" "}
- <Code>xsiam_get_assets</Code>,{" "}
- <Code>xsiam_get_asset_by_id</Code>.
- </li>
- <li>
- Incident-response families — incidents, alerts, IoCs,
- endpoint actions (isolate / scan / retrieve file), scripts,
- audit logs (<Code>xsiam_incidents_*</Code>,{" "}
- <Code>xsiam_alerts_*</Code>, <Code>xsiam_endpoints_*</Code>,{" "}
- <Code>xsiam_scripts_*</Code>, …).
- </li>
- <li>
- <Code>xsiam_send_webhook_log</Code> — ad-hoc one-off log
- injection to the tenant&apos;s HTTP custom collector (e.g.
- a test event while validating a collector).
- </li>
- </ul>
- </SubSection>
- <SubSection icon="lock" title="Authentication">
+ <SubSection icon="hub" title="Dispatch + container">
  <p>
- PAPI uses a bearer-style auth pair:{" "}
- <Code>x-xdr-auth-id</Code> (a numeric id) plus an{" "}
- <Code>Authorization</Code> header (a long secret). Both come
- from XSIAM&apos;s API Keys page. Guardian stores them via the
- secret store envelope; the connector attaches both on every
- call.
+ Like every Guardian connector, xsoar runs as a per-instance
+ container on port <Code>9000</Code>. The agent&apos;s embedded
+ MCP never talks to the XSOAR tenant directly — it dispatches
+ each <Code>xsoar_*</Code> tool call over MCP-over-HTTP through{" "}
+ <Code>connector_proxy</Code> to{" "}
+ <Code>http://guardian-connector-xsoar-&lt;instance&gt;:9000</Code>,
+ which holds the tenant credentials and makes the upstream
+ call. The runtime strips the <Code>xsoar_</Code>{" "}
+ (=&lt;connector-id&gt;_) prefix and registers the bare tool
+ names; the agent sees them namespaced as{" "}
+ <Code>xsoar.&lt;bare&gt;</Code> and aliased as{" "}
+ <Code>xsoar_&lt;bare&gt;</Code>.
  </p>
  </SubSection>
- <SubSection icon="science" title="Playground id">
+
+ <SubSection icon="api" title="Tool family (case-investigation lifecycle)">
+ <ul className="list-disc pl-5 space-y-1 text-sm">
+ <li>
+ <strong>Monitor</strong> —{" "}
+ <Code>xsoar_list_incidents</Code> lists/filters open cases
+ by status, severity, and time.
+ </li>
+ <li>
+ <strong>Fetch</strong> —{" "}
+ <Code>xsoar_get_incident</Code> (full case record + the{" "}
+ <Code>version</Code> needed to write back) and{" "}
+ <Code>xsoar_get_war_room</Code> (the investigation
+ timeline).
+ </li>
+ <li>
+ <strong>Enrich</strong> —{" "}
+ <Code>xsoar_search_indicators</Code> searches the
+ threat-intel indicator store (IPs, hashes, domains, URLs).
+ </li>
+ <li>
+ <strong>Document</strong> —{" "}
+ <Code>xsoar_add_note</Code> / <Code>xsoar_add_entry</Code>{" "}
+ append war-room findings; <Code>xsoar_save_evidence</Code>{" "}
+ pins proof to the case&apos;s Evidence Board.
+ </li>
+ <li>
+ <strong>Resolve</strong> —{" "}
+ <Code>xsoar_update_incident</Code> (mutate fields; requires
+ the case <Code>version</Code> for optimistic concurrency)
+ and <Code>xsoar_close_incident</Code> (close with a reason +
+ notes).
+ </li>
+ </ul>
+ <p className="text-sm leading-relaxed mt-2">
+ The write tools (<Code>xsoar_update_incident</Code>,{" "}
+ <Code>xsoar_close_incident</Code>,{" "}
+ <Code>xsoar_add_entry</Code>, <Code>xsoar_add_note</Code>,{" "}
+ <Code>xsoar_save_evidence</Code>) are destructive-tier and
+ may be approval-gated. The{" "}
+ <Code>xsoar_case_investigation</Code> skill is the load-first
+ runbook that chains the lifecycle in order.
+ </p>
+ </SubSection>
+
+ <SubSection icon="lock" title="Authentication (XSOAR 6 + XSOAR 8 / Cortex cloud)">
  <p>
- PAPI executes XQL against an &ldquo;issue war room&rdquo;
- context. Guardian uses one fixed playground id
- (<Code>PLAYGROUND_ID</Code>) for all execution. Configurable
- per-instance, but the typical install uses a single
- dedicated playground that the operator created for Guardian.
+ The connector supports <strong>both</strong> deployment
+ shapes and auto-detects which from the instance config:
+ </p>
+ <ul className="list-disc pl-5 space-y-1 text-sm">
+ <li>
+ <strong>XSOAR 6 (on-prem)</strong> — a single API key in the{" "}
+ <Code>Authorization</Code> header; base{" "}
+ <Code>https://&lt;server&gt;</Code>.
+ </li>
+ <li>
+ <strong>XSOAR 8 / Cortex cloud</strong> — API key{" "}
+ <em>plus</em> a key id sent via{" "}
+ <Code>x-xdr-auth-id</Code>; base{" "}
+ <Code>https://api-&lt;fqdn&gt;</Code>, path prefix{" "}
+ <Code>/xsoar/public/v1</Code>.
+ </li>
+ </ul>
+ <p className="text-sm leading-relaxed mt-2">
+ Detection rule: if an <Code>api_id</Code> (key id) is
+ configured → v8 (add the path prefix +{" "}
+ <Code>x-xdr-auth-id</Code> header); otherwise → v6. Guardian
+ stores the credentials via the secret store envelope; the
+ connector attaches the right headers per detected version on
+ every call.
  </p>
  </SubSection>
  </Section>
 );
 }
 
-function CortexXdrConnector() {
- return (
- <Section id="cortex-xdr-connector" icon="shield_lock" title="Cortex XDR Connector">
- <p>
- The Cortex XDR connector wraps the Cortex XDR Public API — the same{" "}
- <Code>/public_api/v1/…</Code> endpoint family as XSIAM, with
- identical <Code>Authorization</Code> + <Code>x-xdr-auth-id</Code>{" "}
- header auth. The unified field names (<Code>api_url</Code>,{" "}
- <Code>api_id</Code>, <Code>api_key</Code>) match XSIAM exactly,
- so operators don&apos;t translate between products.
- </p>
- <SubSection icon="api" title="Tool family (5 tools)">
- <ul className="list-disc pl-5 space-y-1 text-sm">
- <li>
- <Code>xdr_get_cases_and_issues</Code> — list incidents (cases)
- and the alerts (issues) within them, filtered by time range,
- hostname, severity, or status.
- </li>
- <li>
- <Code>xdr_get_incident_extra_data</Code> — drill into one
- incident: all alerts, forensic artifacts, network/file
- artifacts, related users/hosts.
- </li>
- <li>
- <Code>xdr_run_xql_query</Code> — execute an XQL query against
- the XDR data lake. Returns results inline when the query
- completes in the synchronous poll window (default 2 min);
- otherwise returns an <Code>execution_id</Code> for async
- retrieval.
- </li>
- <li>
- <Code>xdr_get_xql_results</Code> — fetch results for an
- in-flight XQL query by its <Code>execution_id</Code>. Use
- when a long query exceeded the synchronous window.
- </li>
- <li>
- <Code>xdr_list_datasets</Code> — empirically
- enumerate XQL datasets available in this tenant. Tries{" "}
- <Code>dataset = X | limit 1</Code> against ~20 well-known
- dataset names and reports which exist. Works on every XDR
- tier (the XSIAM-license-gated <Code>datamodel</Code> stage
- is bypassed).
- </li>
- </ul>
- </SubSection>
- <SubSection icon="dataset" title="Datasets discoverable in a typical tenant">
- <p>
- <Code>xdr_list_datasets</Code> probes ~20 names and reports
- which exist. A representative XDR-only tenant returns ~11–12
- datasets:
- </p>
- <ul className="list-disc pl-5 space-y-1 text-sm">
- <li>
- <Code>xdr_data</Code> — process, file, network, registry,
- login events (the firehose telemetry)
- </li>
- <li>
- <Code>agent_auditing</Code> — XDR agent self-audit events
- (start/stop, policy changes)
- </li>
- <li>
- <Code>endpoints</Code> — XDR-managed endpoints with agent
- installed (inventory)
- </li>
- <li>
- <Code>host_inventory</Code> / <Code>asset_inventory</Code> —
- discovered hosts and broader assets (XSIAM asset management)
- </li>
- <li>
- <Code>alerts</Code> — flat legacy schema (
- <Code>alert_id</Code>, <Code>severity</Code>,{" "}
- <Code>mitre_attack_tactic</Code>)
- </li>
- <li>
- <Code>issues</Code> — XDM-normalized parallel of alerts (
- <Code>xdm.issue.severity</Code>,{" "}
- <Code>xdm.issue.mitre_tactics</Code>). Operators often pick
- one schema or the other based on whether they want flat-XQL
- ergonomics or XDM normalization. Both contain the same
- source data.
- </li>
- <li>
- <Code>incidents</Code> — incident records aggregating
- related alerts
- </li>
- <li>
- <Code>va_endpoints</Code> / <Code>va_cves</Code> —
- vulnerability assessment (endpoints + CVE catalog)
- </li>
- <li>
- <Code>cloud_audit_logs</Code> — cloud provider audit logs
- (AWS CloudTrail, GCP Audit, Azure)
- </li>
- <li>
- <Code>metrics_source</Code> — broker / collector performance
- metrics
- </li>
- </ul>
- </SubSection>
- <SubSection icon="psychology" title="The XQL skill capability arc">
- <p>
- The connector is paired with the{" "}
- <Code>build_xql_query</Code> skill plus the{" "}
- <Code>xql-examples</Code> KB (787 validated examples as of
- the connector). The chain: operator asks &ldquo;show me X&rdquo; →
- agent runs <Code>knowledge_search</Code> over the KB to find
- a matching template → adapts the query → runs it via{" "}
- <Code>xdr_run_xql_query</Code>. The KB covers 12 datasets,
- 16+ MITRE techniques, and ~35 XQL stages including{" "}
- <Code>iploc</Code>, <Code>search</Code>,{" "}
- <Code>replacenull</Code>, <Code>transaction</Code>,{" "}
- <Code>view</Code>, plus window functions (<Code>rank</Code>,{" "}
- <Code>lag</Code>, <Code>first_value</Code>,{" "}
- <Code>last_value</Code>) and aggregation variants (
- <Code>median</Code>, <Code>list</Code>,{" "}
- <Code>earliest</Code>, <Code>latest</Code>).
- </p>
- </SubSection>
- </Section>
-);
-}
+// [guardian XSOAR pivot] Retired: CortexXdrConnector — Cortex XDR was a
+// log-simulation/telemetry-era connector (XQL against the XDR data lake).
+// Removed with the XSOAR pivot; the investigation surface is the xsoar
+// connector. Replaced by XsoarConnector above.
+
+// [guardian XSOAR pivot] Retired: CortexContentConnector — the cortex-content
+// connector (palo-cortex/content rule/parser/dashboard search) was telemetry/
+// detection-engineering-era and out of scope. Removed with the XSOAR pivot;
+// documentation research now goes through the surviving cortex-docs connector.
 
 function CortexDocsConnector() {
  return (
  <Section id="cortex-docs-connector" icon="menu_book" title="Cortex Docs Connector">
  <p>
  The Cortex Docs connector (<Code>cortex-docs</Code>) exposes
- the public Cortex XSIAM / XDR documentation as a searchable
- reference. Used by the <Code>build_xql_query</Code> skill to
- look up XQL function/stage syntax when the local{" "}
- <Code>xql-examples</Code> KB doesn&apos;t have a matching
- template — semantic-search complement to the in-product KB.
+ the official public Cortex documentation (docs-cortex.
+ paloaltonetworks.com) as a searchable reference. It is the
+ agent&apos;s research surface during a case investigation:
+ when a case references a Cortex field, detection, playbook, or
+ close reason the agent can&apos;t interpret from the record
+ alone, it looks the concept up here. Used by the{" "}
+ <Code>cortex_kb_search</Code> skill family.
  </p>
  <SubSection icon="api" title="Tool family">
  <ul className="list-disc pl-5 space-y-1 text-sm">
  <li>
- <Code>cortex_xql_lookup</Code> — semantic search across all
- indexed Cortex doc pages for an XQL term (e.g. &ldquo;arraymap
- example&rdquo;, &ldquo;windowcomp frame&rdquo;,{" "}
- &ldquo;coverage of MITRE Attack tactics&rdquo;). Returns
- page-level summaries with publication metadata and a deep
- link to the canonical doc URL.
+ <Code>cortex_search</Code> — full-text, product-scoped
+ search against the live Fluid Topics docs API.
+ </li>
+ <li>
+ <Code>cortex_suggest</Code> — autocomplete; map a partial
+ term to the exact Palo Alto doc title.
+ </li>
+ <li>
+ <Code>cortex_fetch_topic</Code> /{" "}
+ <Code>cortex_fetch_toc</Code> — fetch full topic content
+ (with stub-child fallback) or browse a publication&apos;s
+ table of contents.
+ </li>
+ <li>
+ <Code>cortex_deep_research</Code> — heavyweight
+ multi-section synthesis for deliverables.
  </li>
  </ul>
  </SubSection>
  <SubSection icon="lock" title="Authentication">
  <p>
  No external auth required — the docs are public. The connector
- runs an embedded vector index built at image-bake time from a
- snapshot of the official docs site. Updating to a newer
- documentation snapshot requires rebuilding the connector image.
+ wraps the public Fluid Topics API; instances have no secret
+ slots, only an optional <Code>baseUrl</Code> override (defaults
+ to the public endpoint).
  </p>
  </SubSection>
  </Section>
 );
 }
 
-function CortexContentConnector() {
- return (
- <Section id="cortex-content-connector" icon="library_books" title="Cortex Content Connector">
- <p>
- The Cortex Content connector (<Code>cortex-content</Code>)
- exposes the official Palo Alto Networks{" "}
- <Code>palo-cortex/content</Code> GitHub repository — detection
- rules, parsers, dashboards, playbooks — as a searchable
- reference. Operators use it to (a) look up the Cortex-published
- rule for a behavior they care about, (b) ground their own rule
- authoring on the official content shape, (c) confirm a
- detection name they saw in alerts originates from official
- content versus a custom rule.
- </p>
- <SubSection icon="api" title="Tool family">
- <ul className="list-disc pl-5 space-y-1 text-sm">
- <li>
- <Code>cortex_content_search</Code> — semantic search across
- the indexed content repo (rules, BIOCs, parsers, dashboards)
- for a natural-language query.
- </li>
- <li>
- <Code>cortex_content_get</Code> — fetch a specific content
- artifact by path or ID.
- </li>
- </ul>
- </SubSection>
- <SubSection icon="lock" title="Authentication">
- <p>
- No external auth required — the content repo is public. Like{" "}
- <Code>cortex-docs</Code>, an embedded vector index ships in
- the connector image at bake time. Updating to a newer content
- snapshot requires rebuilding the connector image.
- </p>
- </SubSection>
- </Section>
-);
-}
+// [guardian XSOAR pivot] Retired: CortexContentConnector function body —
+// see the retirement-stub comment above CortexDocsConnector. The
+// cortex-content connector is removed; cortex-docs is the surviving
+// research surface.
 
 function WebConnector() {
  return (
@@ -6574,9 +6469,8 @@ function AuthIdentity() {
  <SubSection icon="cable" title="Guardian → external (per-connector)">
  <p>
  Each connector instance carries its own credentials in the
- secret store: XSIAM PAPI
- auth-id + auth-header, Cortex XDR API key + auth id,
- Vertex SA JSON. The
+ secret store: XSOAR API key + optional key id (v8 / Cortex
+ cloud), Vertex SA JSON. The
  connector reads from the secret store at call time, never
  from process env.
  </p>
@@ -6838,9 +6732,8 @@ function SecretStore() {
  <ul className="list-disc pl-5 space-y-1.5 text-sm">
  <li>
  <Code>/agents/guardian/connectors/&lt;instance_id&gt;/&lt;slot&gt;</Code>{" "}
- &mdash; per-connector-instance secrets (xsiam{" "}
- <Code>apiToken</Code>, cortex-xdr{" "}
- <Code>api_key</Code>, etc.)
+ &mdash; per-connector-instance secrets (xsoar{" "}
+ <Code>api_key</Code> + <Code>api_id</Code>, etc.)
  </li>
  <li>
  <Code>/agents/guardian/providers/&lt;instance_id&gt;/&lt;slot&gt;</Code>{" "}
@@ -6886,8 +6779,8 @@ function SecretStore() {
  </p>
  <p>
  Reads also audit (<Code>secret:read</Code>) so an operator
- can answer &quot;when did the agent last touch the xsiam
- webhook key?&quot; from{" "}
+ can answer &quot;when did the agent last touch the xsoar
+ API key?&quot; from{" "}
  <Code>/observability/events</Code>.
  </p>
  </SubSection>
@@ -6959,8 +6852,8 @@ throw new ApprovalDeniedError(toolName, decision);`}</Pre>
  </p>
  <p>
  Dispatch flows through the <Code>tool_dispatcher()</Code>{" "}
- singleton so connector tools (xsiam, cortex-xdr, web,
- cortex-content, …) reach the same fastmcp.Client path the
+ singleton so connector tools (xsoar, cortex-docs, web, …)
+ reach the same fastmcp.Client path the
  job scheduler uses — preserving per-instance contextvar
  setup. Two hard exclusions:{" "}
  <Code>agent_batch_propose</Code> itself (no nesting) and{" "}
@@ -7461,7 +7354,7 @@ function PipelineHealth() {
  <li>
  <Term>Why server-side</Term> — browsers can&apos;t resolve
  compose-internal hostnames like{" "}
- <Code>http://guardian-connector-xsiam-&lt;instance&gt;:9000</Code>.
+ <Code>http://guardian-connector-xsoar-&lt;instance&gt;:9000</Code>.
  Routing all probes through
  the agent backend solves that and gives one normalised
  contract.
@@ -7470,9 +7363,9 @@ function PipelineHealth() {
  </SubSection>
  <SubSection icon="bolt" title="Edge pulses from audit">
  <p>
- Each edge on the graph (e.g. mcp → xsiam) maps to a
+ Each edge on the graph (e.g. mcp → xsoar) maps to a
  substring of <Code>target</Code> in the audit log
- (<Code>tool:xsiam.*</Code>). The page subscribes to recent
+ (<Code>tool:xsoar.*</Code>). The page subscribes to recent
  audit rows; an edge pulses if matching events appeared in the
  last 60 seconds. Source of truth is the same audit log that
  backs <Code>/observability/events</Code>.
@@ -7512,7 +7405,7 @@ function LogsEventsTraces() {
  </p>
  <Pre>{`actor:user:operator         // who triggered the event
 action:tool_call            // what the event was
-target:tool:xsiam.*         // wildcard prefix match
+target:tool:xsoar.*         // wildcard prefix match
 severity:error              // error / warn / info / debug
 session:s_4k21m             // chat session id
 job:weekly-coverage         // job name`}</Pre>

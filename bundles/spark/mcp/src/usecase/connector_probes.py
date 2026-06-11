@@ -18,10 +18,10 @@ and `secrets` dicts explicitly; absent kwargs still fall through to
 the env defaults so the legacy /connectors/{id}/probe endpoint keeps
 working without instance context.
 
-Naming convention: instance config keys vary depending on creation
-path. The bindsInstances templates in bundles/spark/manifest.yaml
-use `api_url`/`api_id`/`api_key`. Older instances may use legacy
-names (`papiUrl`, `baseUrl`). The probe checks both.
+Naming convention: instance config keys come from the bindsInstances
+templates in bundles/spark/manifest.yaml, which use the uniform
+`api_url`/`api_id`/`api_key` names. The probe also accepts the legacy
+`baseUrl` key as a fallback.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ import httpx
 
 
 PROBE_IMPLEMENTED: frozenset[str] = frozenset(
-    {"xsiam", "cortex-docs", "cortex-content", "cortex-xdr"}
+    {"xsoar", "cortex-docs"}
 )
 
 
@@ -71,69 +71,57 @@ async def real_probe(
     verify = os.environ.get("GUARDIAN_TLS_VERIFY", "0") == "1"
 
     try:
-        if connector_id == "xsiam":
-            # XSIAM PAPI auth: Authorization=<api_key> + x-xdr-auth-id=<id>.
-            # Probe endpoint: POST /public_api/v1/xql/get_datasets with
-            # empty body. Lightweight, authenticated, no side effects —
-            # the connector already uses this in xsiam_get_datasets()
-            # at bundles/spark/connectors/xsiam/src/connector.py.
+        if connector_id == "xsoar":
+            # Cortex XSOAR supports two deployment shapes; the connector
+            # detects them by whether `api_id` is set:
+            #   v6 (on-prem): single API key in the Authorization header,
+            #     base https://<server>, no path prefix.
+            #   v8 / Cortex cloud: API key + key id (Authorization +
+            #     x-xdr-auth-id headers), base https://api-<fqdn>, path
+            #     prefix /xsoar/public/v1.
             #
-            # v0.5.59 (issue #35): config + secret names migrated to
-            # uniform api_url/api_id/api_key (matches the new Cortex XDR
-            # connector). Legacy papi* names still accepted on read so
-            # existing instances don't need migration; new instances
-            # write the new names.
+            # Probe endpoint: POST /incidents/search with a minimal
+            # filter (page 0, size 1). Lightweight, authenticated, no
+            # side effects — the same endpoint the connector's
+            # xsoar_list_incidents tool uses. A 401/403 means the creds
+            # are rejected; 200 (or a 4xx that isn't auth-shaped) means
+            # the upstream is reachable and the creds are valid.
             base = _first(
                 cfg.get("api_url"),
-                cfg.get("papiUrl"),
                 cfg.get("baseUrl"),
-                cfg.get("xsiam_papi_url"),
-                os.environ.get("CORTEX_MCP_PAPI_URL"),
-                os.environ.get("XSIAM_API_URL"),
             ).rstrip("/")
             if not base:
                 return (False, "api_url is not configured", False)
-            # Connector normalizes the URL to end at /public_api/v1; do
-            # the same here so operators can paste either form into the
-            # setup field.
-            if "/public_api/v1" not in base:
-                base = base.split("/public_api")[0].rstrip("/") + "/public_api/v1"
-            api_key = _first(
-                sec.get("api_key"),
-                sec.get("papiAuthHeader"),
-                os.environ.get("CORTEX_MCP_PAPI_AUTH_HEADER"),
-                os.environ.get("XSIAM_API_KEY"),
-            )
-            api_key_id = _first(
-                cfg.get("api_id"),
-                cfg.get("papiAuthId"),
-                cfg.get("xsiam_api_id"),
-                sec.get("papiAuthId"),  # belt-and-suspenders if migrated to a secret
-                os.environ.get("CORTEX_MCP_PAPI_AUTH_ID"),
-                os.environ.get("XSIAM_API_ID"),
-            )
+            api_key = _first(sec.get("api_key"))
             if not api_key:
                 return (False, "api_key (Authorization header) is not configured", True)
-            if not api_key_id:
-                return (False, "api_id (X-Auth-ID header) is not configured", True)
+            api_id = _first(cfg.get("api_id"), sec.get("api_id"))
+
             headers = {
                 "Authorization": api_key,
-                "x-xdr-auth-id": str(api_key_id),
                 "Content-Type": "application/json",
+                "Accept": "application/json",
             }
+            if api_id:
+                # v8 / Cortex cloud: add the key id + the public-API path
+                # prefix (only when the base doesn't already carry it).
+                headers["x-xdr-auth-id"] = str(api_id)
+                if "/xsoar/public/v1" not in base:
+                    base = base + "/xsoar/public/v1"
+
             async with httpx.AsyncClient(timeout=timeout, verify=verify) as c:
                 r = await c.post(
-                    f"{base}/xql/get_datasets",
+                    f"{base}/incidents/search",
                     headers=headers,
-                    json={},
+                    json={"filter": {"page": 0, "size": 1}},
                 )
             if r.status_code == 200:
                 return (True, None, False)
             if r.status_code in (401, 403):
-                return (False, f"HTTP {r.status_code} from XSIAM PAPI", True)
+                return (False, f"HTTP {r.status_code} from XSOAR API (creds rejected)", True)
             return (
                 False,
-                f"HTTP {r.status_code} from {base}/xql/get_datasets",
+                f"HTTP {r.status_code} from {base}/incidents/search",
                 False,
             )
 
@@ -158,7 +146,7 @@ async def real_probe(
                 r = await c.post(
                     f"{base}/api/khub/suggest",
                     headers={"Content-Type": "application/json"},
-                    json={"inputText": "xql"},
+                    json={"inputText": "incident"},
                 )
             # The suggest API may return 200 (matches) or 200 with
             # empty list (no matches) — either is healthy. 4xx (e.g.
@@ -177,80 +165,6 @@ async def real_probe(
                 f"HTTP {r.status_code} from {base}/api/khub/suggest",
                 False,
             )
-
-        if connector_id == "cortex-xdr":
-            # v0.5.61 (issue #36): probe the Cortex XDR Public API.
-            # Same auth model as XSIAM (Authorization + x-xdr-auth-id)
-            # but XDR has a dedicated healthcheck endpoint we can hit
-            # without any side effects.
-            #
-            # Probe choice: POST /public_api/v1/incidents/get_incidents
-            # with an empty request_data — XDR returns 200 with zero
-            # results when filters are empty, OR 400 if it interprets
-            # the body as malformed. Either way, the upstream is
-            # reachable + the creds are valid (we'd get 401 otherwise).
-            base = _first(
-                cfg.get("api_url"),
-                cfg.get("baseUrl"),
-            ).rstrip("/")
-            if not base:
-                return (False, "api_url is not configured", False)
-            if "/public_api/v1" not in base:
-                base = base.split("/public_api")[0].rstrip("/") + "/public_api/v1"
-            api_key = _first(sec.get("api_key"))
-            api_id = _first(cfg.get("api_id"), sec.get("api_id"))
-            if not api_key:
-                return (False, "api_key (Authorization header) is not configured", True)
-            if not api_id:
-                return (False, "api_id (X-Auth-ID header) is not configured", True)
-            headers = {
-                "Authorization": api_key,
-                "x-xdr-auth-id": str(api_id),
-                "Content-Type": "application/json",
-            }
-            async with httpx.AsyncClient(timeout=timeout, verify=verify) as c:
-                # Use search_to=1 to minimize data transfer.
-                r = await c.post(
-                    f"{base}/incidents/get_incidents",
-                    headers=headers,
-                    json={"request_data": {"search_from": 0, "search_to": 1}},
-                )
-            if r.status_code == 200:
-                return (True, None, False)
-            if r.status_code in (401, 403):
-                return (False, f"HTTP {r.status_code} from XDR API (creds rejected)", True)
-            # 400 with empty filters can happen depending on XDR API
-            # version; surface as auth-shaped because the operator's
-            # config is the actionable surface.
-            return (
-                False,
-                f"HTTP {r.status_code} from {base}/incidents/get_incidents",
-                False,
-            )
-
-        if connector_id == "cortex-content":
-            # Probe verifies the bundled catalog directory is present
-            # and readable. The catalog ships with the agent image; if
-            # it's missing the image was built without it (CI defect).
-            try:
-                from pathlib import Path as _Path
-                # The catalog lives at /app/bundle/connectors/cortex-content/baked/
-                # in the agent container. In tests / dev, walk up from this
-                # module to bundles/spark/connectors/cortex-content/baked/.
-                candidates = [
-                    _Path("/app/bundle/connectors/cortex-content/baked/_manifest.json"),
-                    _Path(__file__).resolve().parents[3]
-                    / "connectors" / "cortex-content" / "baked" / "_manifest.json",
-                ]
-                if any(p.is_file() for p in candidates):
-                    return (True, None, False)
-                return (
-                    False,
-                    "cortex-content catalog directory is missing from the bundle",
-                    False,
-                )
-            except Exception as exc:  # noqa: BLE001
-                return (False, f"catalog probe: {type(exc).__name__}: {exc}", False)
 
         # No real probe wired — caller falls back to reset-to-pending.
         return (True, None, False)

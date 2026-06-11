@@ -2,9 +2,9 @@
 
 Covers the required-field strict-validation behavior added in v0.6.53.
 Pre-v0.6.53 the loader logged a warning for missing-required-fields
-but still upserted the doc into the KB — README.md sitting at the
-xql-examples KB root + the v0.6.51 operator_dataset_2026-05-20.json
-source file in _tools/ leaked into the KB as broken docs (no id,
+but still upserted the doc into the KB — README.md sitting at a
+bundled KB root + a stray operator dataset JSON in _tools/ leaked
+into the KB as broken docs (no id,
 no title, no category). The smoke matrix for v0.6.52 caught this as
 doc_count=631 instead of the expected 629. v0.6.53 makes required
 mean required: missing-required-field docs are skipped, not upserted.
@@ -77,7 +77,7 @@ class _FakeKb:
 
 
 def _seed_kb_dir(tmp_path: Path) -> tuple[Path, dict]:
-    """Build a small KB directory mirroring the xql-examples shape +
+    """Build a small KB directory mirroring a bundled-KB shape +
     return its path + the matching schema dict. Two valid entries,
     one missing-required-field entry, plus README.md at the root
     (frontmatterless) — the v0.6.52 leak pattern."""
@@ -87,7 +87,7 @@ def _seed_kb_dir(tmp_path: Path) -> tuple[Path, dict]:
     # Valid entry 1
     (kb_root / "entries" / "001-valid.md").write_text(
         "---\n"
-        "id: XQL-001-valid\n"
+        "id: DOC-001-valid\n"
         "title: Valid Entry One\n"
         "category: detection\n"
         "---\n"
@@ -98,7 +98,7 @@ def _seed_kb_dir(tmp_path: Path) -> tuple[Path, dict]:
     # Valid entry 2
     (kb_root / "entries" / "002-valid.md").write_text(
         "---\n"
-        "id: XQL-002-valid\n"
+        "id: DOC-002-valid\n"
         "title: Valid Entry Two\n"
         "category: investigation\n"
         "---\n"
@@ -109,7 +109,7 @@ def _seed_kb_dir(tmp_path: Path) -> tuple[Path, dict]:
     # Invalid: missing category (required)
     (kb_root / "entries" / "003-broken.md").write_text(
         "---\n"
-        "id: XQL-003-broken\n"
+        "id: DOC-003-broken\n"
         "title: Broken Entry\n"
         "---\n"
         "\n"
@@ -195,7 +195,7 @@ def test_required_field_validation_is_enforcing(tmp_path):
 
     # Verify the upsert calls cover only the valid entries.
     upserted_doc_ids = {u["doc_id"] for u in kb.upserts}
-    assert upserted_doc_ids == {"XQL-001-valid", "XQL-002-valid"}, (
+    assert upserted_doc_ids == {"DOC-001-valid", "DOC-002-valid"}, (
         f"upserted unexpected docs: {upserted_doc_ids}"
     )
 
@@ -215,9 +215,9 @@ def test_previously_loaded_invalid_doc_is_reaped(tmp_path):
     (kb_root / "schema.json").write_text(json.dumps(schema))
 
     kb = _FakeKb()
-    # Simulate: XQL-003-broken WAS in the KB from a previous boot
+    # Simulate: DOC-003-broken WAS in the KB from a previous boot
     # (when it had its category set). Now it's missing category.
-    kb.existing_doc_ids = {"XQL-001-valid", "XQL-002-valid", "XQL-003-broken"}
+    kb.existing_doc_ids = {"DOC-001-valid", "DOC-002-valid", "DOC-003-broken"}
 
     summary = kb_loader.load_bundled_knowledge(
         kb=kb,
@@ -230,9 +230,9 @@ def test_previously_loaded_invalid_doc_is_reaped(tmp_path):
     )
 
     counts = summary["test-kb"]
-    # XQL-003-broken: not in seen_doc_ids → reaped → counts["removed"] += 1
-    assert "XQL-003-broken" in kb.removes, (
-        f"expected XQL-003-broken to be reaped; removes={kb.removes}"
+    # DOC-003-broken: not in seen_doc_ids → reaped → counts["removed"] += 1
+    assert "DOC-003-broken" in kb.removes, (
+        f"expected DOC-003-broken to be reaped; removes={kb.removes}"
     )
     assert counts["removed"] >= 1, f"expected at least 1 removed, got {counts}"
 

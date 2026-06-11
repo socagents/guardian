@@ -202,7 +202,7 @@ async function resolveBareName(
   );
   if (matches.length === 0) {
     return {
-      error: `no tool matched "${bareName}"; try the fully-qualified name (e.g. "cortex-xdr.get_cases_and_issues" or "xdr_get_cases_and_issues")`,
+      error: `no tool matched "${bareName}"; try the fully-qualified name (e.g. "xsoar.get_incident" or "xsoar_get_incident")`,
     };
   }
   if (matches.length > 1) {

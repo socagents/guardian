@@ -28,10 +28,8 @@ The agent's behavior is entirely encoded in the bundle (`bundles/spark/`) — ma
 
 | Connector | What it does |
 |---|---|
-| `xsiam` | Cortex XSIAM PAPI — XQL queries (with RAG-backed example retrieval), datasets, cases, issues, incidents, alerts, assets, lookups, webhook log delivery. 59 tools, `xsiam_` prefix. |
-| `cortex-xdr` | Cortex XDR incidents, alerts, cases + issues. 50 tools, `xdr_` prefix. |
+| `xsoar` | Cortex XSOAR case management — list/triage incidents, fetch case detail + war-room entries, search indicators, add notes, update fields, close cases. 13 tools, `xsoar_` prefix. Supports XSOAR 6 and XSOAR 8 / Cortex cloud. |
 | `cortex-docs` | Cortex documentation search (`cortex_` prefix). |
-| `cortex-content` | Cortex content catalog — fully baked local data, no network egress. |
 | `web` | Web browsing via Playwright through the `guardian-browser` CDP sidecar (`guardian_web_` prefix). |
 
 Connector source lives under [`bundles/spark/connectors/`](bundles/spark/connectors/); each ships as its own image on the shared [`guardian-connector-runtime`](guardian-connector-runtime/) base.

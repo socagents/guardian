@@ -2,7 +2,7 @@
 name: cortex_kb_api_reference
 displayName: Cortex KB Search — Raw Fluid Topics API Reference
 category: foundation
-description: 'Lazy-loaded raw-API reference for the docs-cortex.paloaltonetworks.com Fluid Topics platform. Use only when crafting a custom API call beyond what the cortex-docs connector tools expose (e.g. advanced metadata filtering by Version + License + Solution facet combinations, raw clustered-search request body construction, parsing the inverse-search facets response shape). The cortex-docs connector wraps these endpoints with cortex_search / cortex_suggest / cortex_xql_lookup / cortex_fetch_topic / cortex_fetch_toc / cortex_deep_research — load this skill only when the connector tools are insufficient for the operator question.'
+description: 'Lazy-loaded raw-API reference for the docs-cortex.paloaltonetworks.com Fluid Topics platform. Use only when crafting a custom API call beyond what the cortex-docs connector tools expose (e.g. advanced metadata filtering by Version + License + Solution facet combinations, raw clustered-search request body construction, parsing the inverse-search facets response shape). The cortex-docs connector wraps these endpoints with cortex_search / cortex_suggest / cortex_fetch_topic / cortex_fetch_toc / cortex_deep_research — load this skill only when the connector tools are insufficient for the operator question.'
 icon: api
 source: platform
 loadingMode: on-demand
@@ -18,7 +18,7 @@ attack: []
 > - You need to build advanced filters (by Version, Category, License, Solution facets) beyond `product`
 > - You are debugging an unexpected API response (4xx, 5xx, empty results)
 >
-> You do NOT need this skill to use the cortex-docs connector — its tools (`search`, `suggest`, `fetch_topic`, `fetch_toc`, `xql_lookup`, `deep_research`) work with sensible defaults and cover ~95% of operator questions.
+> You do NOT need this skill to use the cortex-docs connector — its tools (`search`, `suggest`, `fetch_topic`, `fetch_toc`, `deep_research`) work with sensible defaults and cover ~95% of operator questions.
 
 ---
 
@@ -28,7 +28,6 @@ attack: []
 |---|---|---|
 | `cortex-docs/search` | `POST /api/khub/clustered-search` | Standard full-text + product-scoped search |
 | `cortex-docs/suggest` | `POST /api/khub/suggest` | Autocomplete; find the exact Palo Alto title |
-| `cortex-docs/xql_lookup` | `search + rank + fetch_topic_with_fallback` | Focused XQL stage/function lookup |
 | `cortex-docs/fetch_topic` | `GET /api/khub/maps/{mapId}/topics/{topicId}/content` (with auto-children fallback) | Get full topic content |
 | `cortex-docs/fetch_toc` | `GET /api/khub/maps/{mapId}/pages` | Browse the full TOC of a publication |
 | `cortex-docs/deep_research` | plan → search → fetch → gap-check → synthesize | Multi-section deliverables (whitepapers, briefings) |
@@ -70,7 +69,7 @@ Full-text search returning ranked results grouped by cluster (publication).
 
 ```json
 {
-  "query": "filter stage",
+  "query": "close incident",
   "clusterSortCriterions": [],
   "metadataFilters": [],
   "facets": [
@@ -177,11 +176,11 @@ By last updated:
           "topic": {
             "id": "IykutIp5DU_1VHx_mvyQFA",
             "topicId": "IykutIp5DU_1VHx_mvyQFA",
-            "title": "Stages",
+            "title": "Close an Incident",
             "mapId": "2iKvnhFnGXeKYHSA2AFcVw",
-            "mapTitle": "Cortex AgentiX Documentation",
-            "readerUrl": "/r/Cortex-AgentiX/Cortex-AgentiX-Documentation/Stages",
-            "htmlExcerpt": "<p>A <b>stage</b> is a building block...</p>",
+            "mapTitle": "Cortex XSOAR Administrator Guide",
+            "readerUrl": "/r/Cortex-XSOAR/Cortex-XSOAR-Administrator-Guide/Close-an-Incident",
+            "htmlExcerpt": "<p>To <b>close</b> an incident, select a close reason...</p>",
             "score": 0.95
           }
         },
@@ -189,8 +188,8 @@ By last updated:
           "type": "MAP",
           "map": {
             "mapId": "2iKvnhFnGXeKYHSA2AFcVw",
-            "title": "Cortex AgentiX Documentation",
-            "readerUrl": "/r/Cortex-AgentiX/Cortex-AgentiX-Documentation"
+            "title": "Cortex XSOAR Administrator Guide",
+            "readerUrl": "/r/Cortex-XSOAR/Cortex-XSOAR-Administrator-Guide"
           }
         }
       ]
@@ -214,7 +213,7 @@ Returns typeahead suggestions for a partial search string.
 ```json
 {
   "contentLocale": "en-US",
-  "input": "filter st",
+  "input": "close inc",
   "metadataFilters": [],
   "sort": []
 }
@@ -223,7 +222,7 @@ Returns typeahead suggestions for a partial search string.
 Scoped to a publication:
 ```json
 {
-  "input": "alter",
+  "input": "close",
   "metadataFilters": [
     {
       "key": "ft:publicationId",
@@ -240,8 +239,8 @@ Response:
 ```json
 {
   "suggestions": [
-    {"type": "TOPIC", "value": "filter stage"},
-    {"type": "TOPIC", "value": "filter command"}
+    {"type": "TOPIC", "value": "close incident"},
+    {"type": "TOPIC", "value": "close reason"}
   ]
 }
 ```
@@ -257,14 +256,14 @@ Response:
 Returns metadata for a publication (book):
 ```json
 {
-  "title": "Cortex AgentiX Documentation",
+  "title": "Cortex XSOAR Administrator Guide",
   "lang": "en-US",
   "id": "2iKvnhFnGXeKYHSA2AFcVw",
   "lastEdition": "2026-02-24",
   "clusterId": "UUID-31d9be61-b2f0-809d-635c-b3d1a8b82d07",
   "editorialType": "BOOK",
-  "prettyUrl": "/go/Cortex-AgentiX/Cortex-AgentiX-Documentation",
-  "readerUrl": "/r/Cortex-AgentiX/Cortex-AgentiX-Documentation"
+  "prettyUrl": "/go/Cortex-XSOAR/Cortex-XSOAR-Administrator-Guide",
+  "readerUrl": "/r/Cortex-XSOAR/Cortex-XSOAR-Administrator-Guide"
 }
 ```
 
@@ -284,14 +283,14 @@ Returns the full nested TOC for a publication:
         {
           "tocId": "w5PYxh2oKLDMfhpyQVeTtA",
           "contentId": "Yqz_cGxQkF9m8qIWIoS0tA",
-          "title": "Learn about Cortex AgentiX",
-          "prettyUrl": "/r/Cortex-AgentiX/Cortex-AgentiX-Documentation/Learn-about-Cortex-AgentiX",
+          "title": "Learn about Cortex XSOAR",
+          "prettyUrl": "/r/Cortex-XSOAR/Cortex-XSOAR-Administrator-Guide/Learn-about-Cortex-XSOAR",
           "hasRating": true,
           "children": [
             {
               "tocId": "2XTyy6gPIOWOEGn7F_Mphg",
               "contentId": "iT_cKZXfP8ceo_dZ0F6yvA",
-              "title": "Get Started with Cortex AgentiX",
+              "title": "Get Started with Cortex XSOAR",
               "children": []
             }
           ]
@@ -315,13 +314,13 @@ Returns the full nested TOC for a publication:
 
 ```json
 {
-  "title": "Stages",
+  "title": "Close an Incident",
   "id": "IykutIp5DU_1VHx_mvyQFA",
   "contentApiEndpoint": "/api/khub/maps/2iKvnhFnGXeKYHSA2AFcVw/topics/IykutIp5DU_1VHx_mvyQFA/content",
   "metadata": [
-    {"key": "Product", "values": ["Cortex AgentiX"]},
+    {"key": "Product", "values": ["Cortex XSOAR"]},
     {"key": "Version", "values": ["All"]},
-    {"key": "Category", "values": ["Reference"]}
+    {"key": "Category", "values": ["Administrator Guide"]}
   ]
 }
 ```
@@ -372,12 +371,12 @@ Always obtain `map_id` and `topic_id` values dynamically from live search result
 
 ```
 # Get map_id and topic_id from the search
-cortex-docs/search(query="<your query>", product="xdr")
+cortex-docs/search(query="<your query>", product="xsoar")
 # Then use the map_id and topic_id from the results:
 cortex-docs/fetch_topic(map_id="<map_id>", topic_id="<topic_id>")
 ```
 
-**Preferred alternative to `ft:publicationId` filtering:** Use the `Product` metadata facet instead. Product names (e.g. `Cortex XDR`, `Cortex XSIAM`) are stable brand identifiers that survive publication restructuring — this is what the connector's `product` arg already does internally.
+**Preferred alternative to `ft:publicationId` filtering:** Use the `Product` metadata facet instead. Product names (e.g. `Cortex XSOAR`, `Cortex XSIAM`) are stable brand identifiers that survive publication restructuring — this is what the connector's `product` arg already does internally.
 
 ---
 

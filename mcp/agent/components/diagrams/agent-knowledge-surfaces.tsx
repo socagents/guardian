@@ -162,7 +162,7 @@ const COLUMNS: KnowledgeColumn[] = [
       {
         tag: "BUNDLE",
         name: "kbs/*/entries/*.md",
-        detail: "xql-examples · curated XQL queries",
+        detail: "agent KB · curated reference content",
       },
       {
         tag: "LOADER",
@@ -177,7 +177,7 @@ const COLUMNS: KnowledgeColumn[] = [
       {
         tag: "CONSUMED VIA",
         name: "knowledge_search()",
-        detail: "find_xql_examples_rag(query, top_k)",
+        detail: "knowledge_search(query, top_k) + cortex_search",
       },
     ],
   },

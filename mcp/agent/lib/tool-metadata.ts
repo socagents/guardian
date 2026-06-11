@@ -69,44 +69,106 @@ const DEFAULT_METADATA: ToolMetadata = {
  * realistically going to call.
  */
 export const TOOL_METADATA_TABLE: Record<string, ToolMetadata> = {
-  // ── Read-only / informational ─────────────────────────────────
+  // ── XSOAR read-only / informational ───────────────────────────
+  // These fetch case (incident) data without mutating anything.
+  // concurrencySafe so the agent can fan out reads (e.g. pull
+  // several incidents in parallel while triaging a queue).
 
-  // XSIAM read-only — XQL queries can be SLOW (some take minutes
-  // against TB-scale logs) but they don't write. Keep them
-  // concurrencySafe so the agent can run multiple queries in
-  // parallel for cross-rule coverage analysis.
-  xsiam_execute_xql_query: {
+  xsoar_list_incidents: {
     readOnly: true,
     destructive: false,
     openWorld: false,
     concurrencySafe: true,
-    hint: "Read-only XQL query against XSIAM PAPI. May be slow.",
+    hint: "Lists XSOAR incidents (cases) with filters.",
   },
-  xsiam_get_dataset_metadata: {
+  xsoar_get_incident: {
+    readOnly: true,
+    destructive: false,
+    openWorld: false,
+    concurrencySafe: true,
+    hint: "Fetches full data for one XSOAR incident.",
+  },
+  xsoar_get_war_room: {
+    readOnly: true,
+    destructive: false,
+    openWorld: false,
+    concurrencySafe: true,
+    hint: "Reads the War Room entry timeline for an incident.",
+  },
+  xsoar_list_incident_types: {
     readOnly: true,
     destructive: false,
     openWorld: false,
     concurrencySafe: true,
   },
-  xsiam_list_rules: {
+  xsoar_get_incident_fields: {
     readOnly: true,
     destructive: false,
     openWorld: false,
     concurrencySafe: true,
   },
+  xsoar_search_indicators: {
+    readOnly: true,
+    destructive: false,
+    openWorld: false,
+    concurrencySafe: true,
+    hint: "Searches XSOAR threat indicators.",
+  },
+  xsoar_search_evidence: {
+    readOnly: true,
+    destructive: false,
+    openWorld: false,
+    concurrencySafe: true,
+    hint: "Searches the evidence board for an incident.",
+  },
+  xsoar_health_check: {
+    readOnly: true,
+    destructive: false,
+    openWorld: false,
+    concurrencySafe: true,
+    hint: "Probes XSOAR API reachability + auth.",
+  },
 
-  // ── Open-world (external side effects) ────────────────────────
-  // These post to external systems. Visible amber border on the
-  // approval card. Not parallelizable because two sends might
-  // interact (e.g. two webhook fires arriving out-of-order at the
-  // SIEM and confusing dedup logic).
+  // ── XSOAR state-changing (case mutations) ─────────────────────
+  // These write to the operator's XSOAR tenant — add entries/notes,
+  // update fields, store evidence, close cases. Destructive so the
+  // operator sees the red border AND humanRequired gates them. Not
+  // concurrencySafe: two writes to the same case can race.
 
-  send_webhook_log: {
+  xsoar_add_entry: {
     readOnly: false,
-    destructive: false,
-    openWorld: true,
+    destructive: true,
+    openWorld: false,
     concurrencySafe: false,
-    hint: "POSTs to WEBHOOK_ENDPOINT. External side effect.",
+    hint: "Posts a War Room entry to an incident.",
+  },
+  xsoar_add_note: {
+    readOnly: false,
+    destructive: true,
+    openWorld: false,
+    concurrencySafe: false,
+    hint: "Adds an investigation note to an incident.",
+  },
+  xsoar_update_incident: {
+    readOnly: false,
+    destructive: true,
+    openWorld: false,
+    concurrencySafe: false,
+    hint: "Updates incident fields (severity, owner, status, custom).",
+  },
+  xsoar_save_evidence: {
+    readOnly: false,
+    destructive: true,
+    openWorld: false,
+    concurrencySafe: false,
+    hint: "Saves an entry to the incident's evidence board.",
+  },
+  xsoar_close_incident: {
+    readOnly: false,
+    destructive: true,
+    openWorld: false,
+    concurrencySafe: false,
+    hint: "Closes an XSOAR incident with a resolution.",
   },
 
   // ── Self-modification (Phase 11) ─────────────────────────────

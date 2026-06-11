@@ -1,0 +1,248 @@
+# Cortex XSOAR tool connector for the Guardian incident-investigation agent.
+#
+# Tool names auto-namespace as `xsoar/<bare_name>` in the agent's tool
+# catalog (the connector-runtime strips the "xsoar_" = "<id>_" prefix at
+# registration; the agent aliases them as `xsoar_<bare>`).
+#
+# Wraps Cortex XSOAR's REST API for everyday incident investigation:
+# list + drill into cases, read the war room, document findings, update
+# + close cases, and pull supporting context (indicators, evidence,
+# incident fields).
+#
+# Dual-generation auth (detection is config-driven via api_id):
+#   XSOAR 6 (on-prem):     Authorization: <api_key>                base https://<server>
+#   XSOAR 8 / Cortex cloud: Authorization: <api_key>
+#                           x-xdr-auth-id: <api_id>                base https://api-<fqdn>
+#                           + path prefix /xsoar/public/v1
+# Logical paths + request bodies are identical across generations.
+
+id: "xsoar"
+version: "0.1.0"
+description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, and enrich with indicators and evidence. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
+displayName: "Cortex XSOAR"
+tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]
+# Blue-tinted shield glyph with a check-mark — the case-resolution motif.
+logo: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMwYjFhMmUiLz48cGF0aCBkPSJNMzIgNkw1MiAxMlYzMkM1MiA0NCA0MiA1NCAzMiA1OEMyMiA1NCAxMiA0NCAxMiAzMlYxMkwzMiA2WiIgZmlsbD0iIzI1NjNlYiIgZmlsbC1vcGFjaXR5PSIwLjE4IiBzdHJva2U9IiMzYjgyZjYiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik0yNCAzMmw2IDYgMTItMTQiIHN0cm9rZT0iIzM4YmRmOCIgc3Ryb2tlLXdpZHRoPSIzLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg=="
+
+source:
+  language: "python"
+  entrypoint: "src.connector"
+
+# Container-style connector. Wraps the Cortex XSOAR REST API (external);
+# the wrapper itself is stateless. API credentials live in the
+# SecretStore, resolved into the per-call config via get_config().
+runtimeMapping:
+  style: "container"
+  functionPrefix: "xsoar_"
+
+executionMode: "persistent"
+
+# Cortex XSOAR auth model — dual-generation, detected from api_id:
+#   XSOAR 6 (on-prem):      Authorization: <api_key>   (api_id left blank)
+#   XSOAR 8 / Cortex cloud: Authorization: <api_key> + x-xdr-auth-id: <api_id>
+#                           and the connector prepends /xsoar/public/v1.
+configSchema:
+  type: "object"
+  required: ["api_url"]
+  properties:
+    api_url:
+      type: "string"
+      description: "XSOAR API base URL. XSOAR 6 (on-prem): https://your-xsoar-server (no path suffix). XSOAR 8 / Cortex cloud: https://api-yourtenant.xdr.region.paloaltonetworks.com — don't include /xsoar/public/v1, the connector appends it when api_id is set."
+    api_id:
+      type: "string"
+      description: "XSOAR 8 / Cortex API key ID for the x-xdr-auth-id header; leave blank for XSOAR 6. Setting this switches the connector to v8 mode (adds the /xsoar/public/v1 path prefix + the x-xdr-auth-id header)."
+    verify_ssl:
+      type: "boolean"
+      description: "Verify the XSOAR server's TLS certificate. Default true. Set false only for on-prem XSOAR 6 servers with self-signed certs."
+      default: true
+
+secretSlots:
+  - name: "api_key"
+    description: "XSOAR API key — the Authorization header value. XSOAR 6: Settings → Integrations → API Keys → Get Your Key. XSOAR 8 / Cortex: Settings → Configurations → API Keys → Generate Key (Standard security level; pair it with its key ID in api_id). Paste the raw key value, no 'Bearer' prefix."
+    required: true
+
+spec:
+  tools:
+    # ─── Case listing + drill-down ───────────────────────────────
+    - name: "xsoar_list_incidents"
+      method: "POST /incidents/search"
+      description: |
+        List Cortex XSOAR incidents (cases) matching a filter. The primary
+        triage entrypoint: "what cases are open?", "show me today's
+        high-severity incidents", "find cases mentioning <host>". Returns a
+        compact summary per case; drill into one with xsoar_get_incident.
+
+        Use the `query` string OR the structured status/severity filters —
+        not both (when `query` is set, XSOAR mostly ignores the structured
+        fields). status codes: 0 pending, 1 active/open, 2 closed,
+        3 archived. severity levels: 1 low, 2 medium, 3 high, 4 critical.
+      args:
+        - { name: "query",     type: "string",  description: "XSOAR search-query string (e.g. 'status:active and severity:High', or free text 'phishing'). When set, structured status/severity are mostly ignored.", required: false }
+        - { name: "from_date", type: "string",  description: "ISO lower bound on created time (e.g. '2026-06-01T00:00:00Z').", required: false }
+        - { name: "to_date",   type: "string",  description: "ISO upper bound on created time.", required: false }
+        - { name: "status",    type: "array",   description: "Status codes (ints): 0 pending, 1 active/open, 2 closed, 3 archived. e.g. [1] for open cases.", required: false }
+        - { name: "severity",  type: "array",   description: "Severity levels (ints 1-4): 1 low, 2 medium, 3 high, 4 critical. e.g. [3,4].", required: false }
+        - { name: "page",      type: "integer", description: "Zero-based page index (default 0).", required: false }
+        - { name: "page_size", type: "integer", description: "Page size (default 50, max 200).", required: false }
+      returns: { type: "object", description: "{ ok, incidents: [{id, name, type, severity, status, owner, created, modified}], total }" }
+
+    - name: "xsoar_get_incident"
+      method: "POST /incidents/search (filter.id)"
+      description: |
+        Fetch the full record for one XSOAR incident by id. XSOAR has NO
+        GET /incident/{id} endpoint — this searches with filter.id and
+        returns the first match. Use AFTER xsoar_list_incidents to drill
+        into a case AND to read the `version` field needed for
+        xsoar_update_incident.
+      args:
+        - { name: "incident_id", type: "string", description: "The XSOAR incident id.", required: true }
+      returns: { type: "object", description: "{ ok, incident: { ... full record incl. version, CustomFields, labels, investigationId ... } }" }
+
+    - name: "xsoar_get_war_room"
+      method: "POST /investigation/{id}"
+      description: |
+        Read the war-room (investigation) entries for one incident — the
+        case's running log of analyst notes, playbook task outputs, command
+        results, and evidence markers. Read it to understand what's already
+        been investigated before adding your own findings.
+      args:
+        - { name: "incident_id", type: "string",  description: "The XSOAR incident id (its investigation shares the id).", required: true }
+        - { name: "page_size",   type: "integer", description: "Max entries (default 100, max 200).", required: false }
+        - { name: "tags",        type: "array",   description: "Filter to entries carrying these tags (e.g. ['evidence','note']).", required: false }
+        - { name: "from_time",   type: "string",  description: "ISO lower bound — only entries at/after this time.", required: false }
+      returns: { type: "object", description: "{ ok, entries: [{id, type, contents, format, tags, created, user}], count }" }
+
+    # ─── Documenting findings ────────────────────────────────────
+    - name: "xsoar_add_entry"
+      method: "POST /entry"
+      description: |
+        Append a war-room entry to an incident's investigation. The primary
+        "document a finding" tool: write your analysis, summary, or
+        investigation step into the case's running log. To pin the entry as
+        a persistent note instead, use xsoar_add_note.
+      args:
+        - { name: "incident_id", type: "string",  description: "The XSOAR incident id.", required: true }
+        - { name: "content",     type: "string",  description: "The entry text (markdown-rendered when markdown=true).", required: true }
+        - { name: "markdown",    type: "boolean", description: "Render content as markdown (default true). Set false for plain text.", required: false }
+      returns: { type: "object", description: "{ ok, entry_id, incident_id }" }
+
+    - name: "xsoar_add_note"
+      method: "POST /entry + POST /entry/note"
+      description: |
+        Add a pinned NOTE to an incident's war room. Two-step: create the
+        entry, then pin it as a note (notes are highlighted in the XSOAR UI
+        and survive war-room filtering). Use for durable investigation
+        conclusions the operator wants flagged — vs. xsoar_add_entry for an
+        ordinary log line.
+      args:
+        - { name: "incident_id", type: "string",  description: "The XSOAR incident id.", required: true }
+        - { name: "content",     type: "string",  description: "The note text (markdown-rendered when markdown=true).", required: true }
+        - { name: "markdown",    type: "boolean", description: "Render as markdown (default true).", required: false }
+      returns: { type: "object", description: "{ ok, entry_id, incident_id, note: true }" }
+
+    # ─── Case mutation ───────────────────────────────────────────
+    - name: "xsoar_update_incident"
+      method: "POST /incident"
+      description: |
+        Update an XSOAR incident's metadata (upsert). Use to triage a case:
+        reassign owner, bump severity, set labels, write custom fields. Only
+        the fields you pass are changed.
+
+        version is REQUIRED (optimistic concurrency) — XSOAR rejects a stale
+        version with HTTP 409, so read the current value via
+        xsoar_get_incident first. custom_fields use the lowercase MACHINE
+        name (cliName), not the display label — discover cliNames via
+        xsoar_get_incident_fields.
+      args:
+        - { name: "incident_id",   type: "string",  description: "The XSOAR incident id.", required: true }
+        - { name: "version",       type: "integer", description: "The incident's current version (from xsoar_get_incident). Required for the optimistic-concurrency check.", required: true }
+        - { name: "severity",      type: "integer", description: "New severity level 1-4 (1 low … 4 critical).", required: false }
+        - { name: "owner",         type: "string",  description: "New owner username.", required: false }
+        - { name: "labels",        type: "array",   description: "Label dicts [{type, value}] or simple strings.", required: false }
+        - { name: "custom_fields", type: "object",  description: "Dict of {cliName: value} written under CustomFields (lowercase machine names from xsoar_get_incident_fields).", required: false }
+      returns: { type: "object", description: "{ ok, incident_id, updated }" }
+
+    - name: "xsoar_close_incident"
+      method: "POST /incident/batchClose"
+      description: |
+        Close one or more XSOAR incidents in a single batch (sets each to
+        status closed). Use at the end of an investigation once findings are
+        documented.
+      args:
+        - { name: "incident_ids", type: "array",  description: "List of incident ids to close. A bare id is wrapped into a single-element list.", required: true }
+        - { name: "close_reason", type: "string", description: "XSOAR close reason (e.g. 'Resolved', 'False Positive', 'Duplicate', 'Other').", required: true }
+        - { name: "close_notes",  type: "string", description: "Optional free-text closing summary.", required: false }
+      returns: { type: "object", description: "{ ok, closed_count, incident_ids }" }
+
+    # ─── Schema discovery (derived — no native list endpoints) ───
+    - name: "xsoar_list_incident_types"
+      method: "POST /incidents/search (derive distinct type)"
+      description: |
+        List the distinct incident TYPES in use on this XSOAR tenant. XSOAR
+        has no public list-incident-types endpoint, so this DERIVES the set
+        by searching recent incidents (size up to 200) and collecting their
+        distinct `type` values. The result reflects types actually in use —
+        which is what you want when picking a type for
+        xsoar_get_incident_fields.
+      args: []
+      returns: { type: "object", description: "{ ok, incident_types: ['Phishing','Malware',...], sampled }" }
+
+    - name: "xsoar_get_incident_fields"
+      method: "GET /incidentfields/associatedTypes/{incident_type}"
+      description: |
+        List the incident fields associated with a given incident type —
+        including each field's cliName (the lowercase machine name you must
+        use as a CustomFields key in xsoar_update_incident). Use to discover
+        what custom fields a Phishing/Malware/etc. case carries before
+        writing to them.
+      args:
+        - { name: "incident_type", type: "string", description: "The incident type name (e.g. 'Phishing'). Discover types via xsoar_list_incident_types.", required: true }
+      returns: { type: "object", description: "{ ok, fields: [{id, name, cliName, type, required}], count }" }
+
+    # ─── Enrichment ──────────────────────────────────────────────
+    - name: "xsoar_search_indicators"
+      method: "POST /indicators/search"
+      description: |
+        Search the XSOAR threat-intel indicator store (IoCs — IPs, domains,
+        hashes, URLs with reputation + relationship context). Use to enrich
+        an investigation: "is this IP a known indicator?", "show malicious
+        domains seen this week".
+      args:
+        - { name: "query", type: "string",  description: "XSOAR indicator-search query (e.g. 'type:IP and reputation:Bad', or a bare value '1.2.3.4'). Omit to list recent indicators.", required: false }
+        - { name: "page",  type: "integer", description: "Zero-based page index (default 0).", required: false }
+        - { name: "size",  type: "integer", description: "Page size (default 50, max 200).", required: false }
+      returns: { type: "object", description: "{ ok, indicators: [...], total }" }
+
+    - name: "xsoar_save_evidence"
+      method: "POST /evidence"
+      description: |
+        Mark a war-room entry as evidence for an incident. XSOAR's evidence
+        board collects the key artifacts that justify a case's conclusion.
+        Use after xsoar_add_entry / xsoar_get_war_room to promote a specific
+        entry (command output, screenshot, analysis note) to evidence.
+      args:
+        - { name: "incident_id", type: "string", description: "The XSOAR incident id.", required: true }
+        - { name: "entry_id",    type: "string", description: "The war-room entry id to mark as evidence (from xsoar_add_entry or xsoar_get_war_room).", required: true }
+        - { name: "description", type: "string", description: "Optional note describing why this is evidence.", required: false }
+      returns: { type: "object", description: "{ ok, evidence_id, incident_id, entry_id }" }
+
+    - name: "xsoar_search_evidence"
+      method: "POST /evidence/search"
+      description: |
+        List the evidence collected for one incident — the entries promoted
+        to the case's evidence board. Use to review what's already been
+        flagged before drawing a conclusion.
+      args:
+        - { name: "incident_id", type: "string", description: "The XSOAR incident id whose evidence to list.", required: true }
+      returns: { type: "object", description: "{ ok, evidence: [...], count }" }
+
+    # ─── Server probe (connector-test path) ──────────────────────
+    - name: "xsoar_health_check"
+      method: "GET /health"
+      description: |
+        Probe XSOAR server availability (the connector instance-test path).
+        A quick "is XSOAR up and are my credentials valid?" check — a
+        401/403 surfaces as an auth-error envelope (server reachable but
+        credentials bad).
+      args: []
+      returns: { type: "object", description: "{ ok, reachable, detail, generation: 'v6' | 'v8' }" }

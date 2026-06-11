@@ -272,7 +272,7 @@ def register_connector_routes(
         include_in_schema=False,
     )
     async def probe_connector(request: Request) -> JSONResponse:
-        """Run a real health probe (xsiam, cortex-xdr, etc.) and update
+        """Run a real health probe (xsoar, cortex-docs, etc.) and update
         state accordingly. For connectors without a wired probe, falls
         back to the legacy reset-to-pending behavior so the next
         tool call re-evaluates.

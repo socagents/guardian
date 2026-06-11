@@ -2,10 +2,12 @@ schemaVersion: "1.2"
 
 # Guardian Incident Response Agent — Spark v1.2 bundle.
 #
-# Guardian is an AI incident-response agent: it investigates security
-# incidents in integration with Cortex XSOAR / XSIAM. The bundle ships
-# an embedded MCP server (`./mcp/`) that aggregates tool catalogs from
-# the connectors below, plus the agent's prompts, skills, and KBs.
+# Guardian is an AI incident-investigation agent for Cortex XSOAR: it
+# monitors cases (incidents) opened on XSOAR, fetches case data,
+# summarizes, investigates, documents findings, and updates/closes
+# cases. The bundle ships an embedded MCP server (`./mcp/`) that
+# aggregates tool catalogs from the connectors below, plus the agent's
+# prompts, skills, and KBs.
 #
 # Per the "no native tools" rule: the embedded MCP carries ZERO native
 # tools — every tool the agent calls comes through one of the tool
@@ -15,7 +17,7 @@ schemaVersion: "1.2"
 name: "guardian-incident-response"
 displayName: "Guardian Incident Response Agent"
 version: "0.1.0"
-description: "AI incident response agent: investigates security incidents in integration with Cortex XSOAR and XSIAM — evidence gathering, XQL queries, incident enrichment, and response orchestration."
+description: "AI incident-investigation agent for Cortex XSOAR — monitors cases, fetches and summarizes case data, investigates, documents findings, and updates/closes cases."
 author: "kite-production"
 authorEmail: "agents@kite-production.example"
 homepage: "https://github.com/kite-production/guardian"
@@ -39,15 +41,8 @@ capabilities:
     # Tool-connector secrets are bound at setup-submit time via
     # setup.bindsInstances[].secretRefs and stored under data_root —
     # the paths below are illustrative of where they LAND post-setup.
-    - "/agents/guardian/instances/primary-xsiam/papi-auth-header"
-  kbReads:
-    # XQL example library — curated Cortex XSIAM XQL queries indexed
-    # for natural-language retrieval. Replaces the legacy Chroma-backed
-    # xsiam.find_xql_examples_rag tool with a spec-compliant SQLite KB
-    # served via the runtime's knowledge_search built-in. The xsiam
-    # connector still exposes find_xql_examples_rag as a thin back-compat
-    # wrapper that proxies to env.kb.search("xql-examples", ...).
-    - "xql-examples"
+    - "/agents/guardian/instances/primary-xsoar/api-key"
+  kbReads: []
   kbWrites: []
   scheduling: true
   delegation: false
@@ -88,20 +83,11 @@ memory:
   embeddingDims: 768
 
 knowledge:
-  bundled:
-    # Minimal-default-state policy: only the XQL query knowledge ships
-    # in the image. Operator-needed KBs come in via the operator's own
-    # workflow (manifest fork / future KB upload surface), not bundled
-    # by default.
-    #
-    # xql-examples lives in the spec-compliant SqliteKnowledgeBase
-    # (one row per ### entry, embedded via VertexEmbedder /
-    # text-embedding-004). The xsiam connector's find_xql_examples_rag
-    # is a thin wrapper that calls knowledge_search(kb_name=
-    # "xql-examples", query=...).
-    - name: "xql-examples"
-      path: "./kbs/xql-examples/"
-      schema: "./kbs/xql-examples/schema.json"
+  # Minimal-default-state policy: no KBs ship in the image by default.
+  # Operator-needed KBs come in via the operator's own workflow
+  # (manifest fork / future KB upload surface) or via the cortex-docs
+  # connector's runtime KB-indexing tools — not bundled by default.
+  bundled: []
   required: []
   optional: []
 
@@ -141,14 +127,19 @@ embeddedMcp:
 # plus implementation source. Tool names are auto-namespaced as
 # `<id>/<tool_name>` in the agent's tool catalog.
 toolConnectors:
-  # XSIAM connector — XQL query execution, incident/alert retrieval,
-  # dataset + asset lookups against a Cortex XSIAM tenant.
-  - id: "xsiam"
-    path: "./connectors/xsiam/"
-    version: "0.2.0"
-    required: false              # agent functions without XSIAM (no
-                                 # tenant-side evidence gathering, but
-                                 # docs/content lookups still work)
+  # XSOAR connector — case (incident) listing, retrieval, enrichment,
+  # work-notes, and close/update against a Cortex XSOAR tenant.
+  # Supports BOTH XSOAR 6 (on-prem: single API key in the Authorization
+  # header, base https://<server>) and XSOAR 8 / Cortex cloud (API key
+  # + key id via the x-xdr-auth-id header, base https://api-<fqdn>,
+  # path prefix /xsoar/public/v1). Detection: if api_id is set the
+  # connector treats the tenant as v8; otherwise v6.
+  - id: "xsoar"
+    path: "./connectors/xsoar/"
+    version: "0.1.0"
+    required: false              # agent functions without an XSOAR
+                                 # tenant (no case investigation, but
+                                 # docs lookups still work)
   # Optional headless-browser connector. Lets the agent fetch
   # threat-intel pages, vendor advisories, CTI portals — anything the
   # operator wants to point it at. The actual Chromium runs in a
@@ -167,60 +158,20 @@ toolConnectors:
     required: false
 
   # cortex-docs connector — search/lookup against the public
-  # Palo Alto Networks Cortex documentation (XDR / XSIAM / XSOAR /
-  # Cortex Cloud / AgentiX / Xpanse / XQL). Wraps four upstream scripts
-  # (preserved verbatim under src/{search,fetch_topic,xql_lookup,
-  # research_planner}.py). Stdlib-only (urllib); no network credentials
+  # Palo Alto Networks Cortex documentation, focused on Cortex XSOAR /
+  # Cortex Cloud. Stdlib-only (urllib); no network credentials
   # required because the docs API is public.
   #
-  # Primary use case: XQL query authoring — see the
-  # `cortex_xql_query_authoring` foundation skill, which orchestrates
-  # operator-KB embedding-search + per-stage/function lookup against
-  # Cortex docs. Heavyweight `cortex-docs/deep_research` also exists
-  # for multi-section deliverables (whitepapers, partner briefings).
+  # Primary use case: grounding incident-investigation answers in
+  # canonical Cortex XSOAR documentation — playbook semantics, case
+  # fields, integration behavior. Heavyweight `cortex-docs/deep_research`
+  # also exists for multi-section deliverables (whitepapers, briefings).
   #
-  # required: false — agent functions without Cortex docs lookup; XQL
-  # query authoring just falls back to operator-KB-only mode with a
-  # confidence note.
+  # required: false — agent functions without Cortex docs lookup; it
+  # just falls back to operator-KB-only mode with a confidence note.
   - id: "cortex-docs"
     path: "./connectors/cortex-docs/"
     version: "0.3.1"
-    required: false
-
-  # cortex-content connector — fetches XSIAM/XSOAR content packs from
-  # the public demisto/content GitHub repository. Surfaces
-  # ModelingRules (XDM data-model parsers), ParsingRules (raw-log
-  # normalization), and CorrelationRules (XQL alert queries) per
-  # pack. Stdlib-only (urllib + json); no credentials required
-  # because the demisto/content repo is public. Operators can
-  # optionally set the `githubToken` connector secret to lift the
-  # anonymous 60/hr api.github.com rate limit to 5000/hr — most
-  # flows are well under 60/hr because file contents go via
-  # raw.githubusercontent.com (CDN, no rate limit).
-  #
-  # Primary use case: referencing canonical detection/parsing content
-  # during incident investigations. cortex_index_kb walks a pack's
-  # rules and upserts them into the agent's knowledge_search KB
-  # (kb_name='cortex-content') so the agent can semantic-search
-  # canonical content inline instead of round-tripping through
-  # the list_*/get_* tools.
-  #
-  # required: false — agent functions without it; only operators
-  # asking about Cortex content marketplace content need it.
-  - id: "cortex-content"
-    path: "./connectors/cortex-content/"
-    version: "0.3.9"
-    required: false
-
-  # cortex-xdr connector — wraps Cortex XDR's Public API
-  # (/public_api/v1/...) for incident listing + XQL execution. Same
-  # Cortex auth pattern as XSIAM (Authorization + x-xdr-auth-id
-  # headers); uniform api_url / api_id / api_key field names.
-  #
-  # required: false — agent functions without an XDR tenant.
-  - id: "cortex-xdr"
-    path: "./connectors/cortex-xdr/"
-    version: "0.1.0"
     required: false
 
 # Model providers (per spec v1.2 §7.6). Parallel to toolConnectors[]
@@ -306,8 +257,9 @@ tools:
     - "api_keys_create"
     - "api_keys_rotate"
     - "api_keys_revoke"
-    # XSIAM connector — query, incidents, dataset, asset, issue
-    - "xsiam.*"
+    # XSOAR connector — case (incident) list / get / enrich /
+    # work-notes / update / close against a Cortex XSOAR tenant.
+    - "xsoar.*"
     # Web connector — headless-browser fetch / interact.
     # Tools only advertise once the operator creates an instance via
     # /connectors UI; until then the wildcard matches nothing. No
@@ -320,24 +272,13 @@ tools:
     # Alto Networks Cortex documentation. Tools wrap
     # docs-cortex.paloaltonetworks.com's public API; no creds. Read-
     # only (no mutations); none are approval-gated. The heavyweight
-    # cortex-docs/deep_research is allow-listed but the
-    # cortex_xql_query_authoring skill won't reach for it on the
-    # standard query-authoring path — it's for explicit multi-
-    # section research deliverables.
+    # cortex-docs/deep_research is allow-listed for explicit multi-
+    # section research deliverables; standard lookups use the lighter
+    # search/fetch tools.
     - "cortex-docs.*"
-    # Cortex content connector — fetches XSIAM/XSOAR content packs
-    # from the public demisto/content repo. Read-only (no mutations);
-    # none are approval-gated. Used by the agent to reference
-    # canonical detection/parsing content during investigations.
-    - "cortex-content.*"
-    # Cortex XDR connector — incident listing + XQL execution against
-    # a Cortex XDR tenant. Read-only evidence gathering.
-    - "cortex-xdr.*"
   deny:
     - "shell_exec"
     - "file_write"
-    # Destructive operations even within a connector namespace
-    - "xsiam.remove_lookup_data"
     # Phase 11 — security boundary for self-modification (Tier 5).
     # These tools MUST NOT exist as MCP-callable. The agent can configure
     # its own runtime data (jobs, personality, settings) but CANNOT alter
@@ -363,8 +304,8 @@ approvals:
   # whichever form is most readable.
   #
   # Policy: approval is ONLY for tools where the agent is modifying its
-  # own runtime state. Read-only evidence-gathering tools (xsiam /
-  # cortex-xdr queries, docs lookups) are explicit operator intent at
+  # own runtime state. Read-only evidence-gathering tools (xsoar case
+  # reads, docs lookups) are explicit operator intent at
   # the chat level; gating them again at tool-call time is friction
   # without safety value, especially since the agent already has
   # explicit guard rails (per-instance `trusted` flag, deny-by-default
@@ -599,9 +540,6 @@ observability:
     # tool itself — manifest pre-registration is counters-only.
     - "guardian.batch_proposals_total"
     - "guardian.batch_actions_total"
-    # cortex-content KB indexing metrics (for the index_kb feature).
-    - "guardian.cortex_content_index_runs_total"
-    - "guardian.cortex_content_indexed_docs_total"
   events:
     # rt.tool.failed — every MCP tool call that raises an exception
     # is recorded here, including FastMCP's own dispatch errors. Lets
@@ -630,11 +568,11 @@ update:
 agent:
   systemPromptTemplate: "./prompts/system.md"
   standingOrders:
-    - "Always identify the incident scope and investigation objective before taking action."
+    - "Always identify the case scope and investigation objective before taking action."
     - "Prefer bundled skills and documented workflows before inventing a new one."
-    - "Ground every investigation conclusion in evidence retrieved from the connected Cortex tools — never speculate where a query can answer."
+    - "Ground every investigation conclusion in evidence retrieved from the connected Cortex XSOAR case data — never speculate where a case lookup can answer."
     - "Require human approval before modifying agent runtime state (jobs, settings, personality, instances)."
-    - "Record incident IDs, alert IDs, query references, and evidence citations in every final answer."
+    - "Record case IDs, evidence references, and citations in every final answer; document findings back to the XSOAR case."
   thinkLevel: "medium"
   ui:
     mode: "a2ui"
@@ -662,28 +600,23 @@ setup:
     source: "settings"
   generated: []
   bindsInstances:
-    - connectorId: "xsiam"
+    - connectorId: "xsoar"
       template:
-        name: "primary-xsiam"
+        name: "primary-xsoar"
         config:
-          # Uniform Cortex auth field names: api_url / api_id / api_key.
-          # Setup-template variables (${setup.xsiam*}) remain on the
-          # right-hand side — those are setup-form variable names, not
-          # connector config keys.
-          api_url: "${setup.xsiamPapiUrl}"
-          api_id: "${setup.xsiamPapiAuthId}"
-          playgroundId: "${setup.xsiamPlaygroundId}"
-          # Bind the optional webhookEndpoint slot so the form can
-          # resolve its formKey to "xsiamWebhookEndpoint" (per
-          # extractSetupKey in setup-screen.tsx). Without this bind,
-          # the xsiam connector's webhookEndpoint configSchema field
-          # falls back to the bare schemaKey "webhookEndpoint" and
-          # never prefills.
-          webhookEndpoint: "${setup.xsiamWebhookEndpoint}"
+          # Cortex XSOAR auth field names: api_url / api_id / api_key.
+          # Setup-template variables (${setup.xsoar*}) on the right-hand
+          # side are setup-form variable names, not connector config
+          # keys. api_id is optional: leave it blank for XSOAR 6
+          # (on-prem, single API key) — the connector detects v8 /
+          # Cortex cloud when api_id is present and switches to the
+          # Authorization + x-xdr-auth-id header pair + the
+          # /xsoar/public/v1 path prefix.
+          api_url: "${setup.xsoarApiUrl}"
+          api_id: "${setup.xsoarApiId}"
+          verify_ssl: true
         secretRefs:
-          api_key: "${setup.xsiamPapiAuthHeader}"
-          # Same fix for the optional webhook-auth secret slot.
-          webhookKey: "${setup.xsiamWebhookKey}"
+          api_key: "${setup.xsoarApiKey}"
 
   # v1.2 §7.6 — model provider instance materialization. The setup
   # form prompts for vertex project + region + service account JSON;

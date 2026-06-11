@@ -4066,8 +4066,7 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
               on /connectors after the new instance card renders. This
               removes the dual-action ambiguity and the misleading
               "Could not reach the service" message that fired for
-              connectors with no wired probe (cortex-docs, cortex-content,
-              etc — issue #34 adds those probes). */}
+              connectors with no wired probe. */}
         </div>
 
         {/* ── Sticky Footer ───────────────────────────────────── */}

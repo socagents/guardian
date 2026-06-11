@@ -92,18 +92,18 @@ DEFAULT_PERSONALITY: dict[str, Any] = {
     "escalationThreshold": 80,
     "personalityMd": (
         "# Guardian Personality\n\n"
-        "You are Guardian, an AI incident response agent. Your job is "
-        "to help operators investigate security incidents in "
-        "integration with Cortex XSOAR and XSIAM: pull incident "
-        "context, query tenant telemetry, and build evidence-grounded "
-        "timelines and recommendations.\n\n"
+        "You are Guardian, an AI incident-investigation agent for "
+        "Cortex XSOAR. Your job is to help operators investigate the "
+        "cases (incidents) opened on XSOAR: pull case context, "
+        "summarize, build evidence-grounded timelines, document "
+        "findings back to the case, and update or close it.\n\n"
         "## Operating principles\n\n"
-        "- Cite incident IDs, alert IDs, and query results in every "
-        "final answer.\n"
+        "- Cite case IDs and evidence references in every final "
+        "answer.\n"
         "- Prefer bundled skills and documented workflows before "
         "inventing an investigation flow.\n"
         "- Require explicit operator confirmation before any action "
-        "that changes tenant state.\n"
+        "that changes case state.\n"
     ),
     # ─── Action policy (the local/external boundary) ───────────────
     #
@@ -137,11 +137,10 @@ DEFAULT_PERSONALITY: dict[str, Any] = {
             "knowledge",
         ],
         # Tools that act on the SOC environment outside the agent's
-        # boundary. Queries and actions against the customer's live
-        # Cortex tenant (XSIAM / XDR / XSOAR).
+        # boundary. Case reads and actions against the customer's live
+        # Cortex XSOAR tenant.
         "externalCategories": [
-            "xsiam",
-            "cortex-xdr",
+            "xsoar",
         ],
         # When the agent's classification confidence is low, ASK the
         # operator instead of guessing. The agent must emit text with

@@ -2,7 +2,7 @@
 name: cortex_kb_search_patterns
 displayName: Cortex KB Search — Query Patterns & Quality Guide
 category: foundation
-description: 'Lazy-loaded companion to cortex_kb_search. Holds the query-shaping tables (by intent, per Cortex product), the fallback strategies for when search returns 0 or off-topic hits, the XQL stage quick-lookup reference, and the response quality checklist. The parent skill loads THIS skill only when one of these triggers fires: search returned 0 or irrelevant hits, the user question is vague, or the agent is about to write a final answer and wants the quality checklist. Not loaded preemptively — keeps the agent context lean for standard search-fetch-answer flows.'
+description: 'Lazy-loaded companion to cortex_kb_search. Holds the query-shaping tables (by intent, per Cortex product), the fallback strategies for when search returns 0 or off-topic hits, and the response quality checklist. The parent skill loads THIS skill only when one of these triggers fires: search returned 0 or irrelevant hits, the user question is vague, or the agent is about to write a final answer and wants the quality checklist. Not loaded preemptively — keeps the agent context lean for standard search-fetch-answer flows.'
 icon: pattern
 source: platform
 loadingMode: on-demand
@@ -17,6 +17,8 @@ attack: []
 > - The user's question is vague or uses industry terms Palo Alto doesn't use → use § Query Shaping by Intent
 > - You are about to write a final answer and want to verify quality → use § Response Quality Checklist
 >
+> Investigation context: load this when a `cortex-docs` lookup during an XSOAR case investigation comes back empty or off-topic.
+>
 > You do NOT need this skill for a standard `cortex-docs/search` → `cortex-docs/fetch_topic` → answer workflow.
 
 ---
@@ -25,27 +27,24 @@ attack: []
 
 Map the user's question type to effective search keywords:
 
-### XQL / Query Language
+### Cortex XSOAR — Incident Investigation
 
-> **Important:** XQL stage topics are titled with just the stage name (`filter`, `dedup`, `comp`).
-> Do NOT append "stage XQL" — that matches dashboard widget topics, not the stage reference pages.
-> See § XQL Stage Reference for the complete list.
+> The primary investigation surface. These map case-investigation questions to the doc titles that explain the concept.
 
 | User says | Search query | `product` value |
 |---|---|---|
-| "how to write an XQL query" | `XQL query syntax` | `agentix` |
-| "filter stage in XQL" | `Cortex Query Language filter` | `agentix` |
-| "aggregate / group by" | `Cortex Query Language comp` | `agentix` |
-| "deduplicate results" | `Cortex Query Language dedup` | `agentix` |
-| "join datasets" | `Cortex Query Language call` | `agentix` |
-| "time-based filtering" | `Cortex Query Language config` | `agentix` |
-| "regex in XQL" | `XQL regex pattern match` | `agentix` |
-| "array operations" | `Cortex Query Language arrayexpand` | `agentix` |
-| "call a dataset / sub-query" | `Cortex Query Language call` | `agentix` |
-| "limit fields in output" | `Cortex Query Language fields` | `agentix` |
-| "sort results" | `Cortex Query Language sort` | `agentix` |
-| "alter / transform fields" | `Cortex Query Language alter` | `agentix` |
-| "bin values / bucket" | `Cortex Query Language bin` | `agentix` |
+| "what does the severity field mean" | `incident severity field` | `xsoar` |
+| "incident status codes / states" | `incident status` | `xsoar` |
+| "how to close an incident" | `close incident` | `xsoar` |
+| "close reasons / resolution codes" | `incident close reason` | `xsoar` |
+| "what is the War Room" | `War Room overview` | `xsoar` |
+| "add a note / entry to a case" | `War Room note entry` | `xsoar` |
+| "pin / mark evidence" | `Evidence Board` | `xsoar` |
+| "what does a playbook do" | `playbook overview` | `xsoar` |
+| "playbook task / automation" | `playbook task` | `xsoar` |
+| "indicators / IOC reputation" | `indicators threat intelligence` | `xsoar` |
+| "custom incident field" | `create incident field` | `xsoar` |
+| "assign / change owner" | `incident assignment owner` | `xsoar` |
 
 ### Cortex XSIAM — SOC / Analyst Workflows
 | User says | Search query | `product` value |
@@ -135,7 +134,8 @@ Use this as a normalization guide when rewriting user queries.
 | `Cloud Identity Engine` | `cie`, `cloud identity engine`, `identity engine` |
 | `WildFire` | `wildfire`, `sandbox`, `signature matching` |
 | `Behavioral Indicator of Compromise` | `bioc`, `behavior indicator of compromise` |
-| `XQL (Extended Query Language)` | `xql`, `extended query language` |
+| `Indicators` | `ioc`, `indicator`, `threat intel`, `reputation` |
+| `War Room` | `war room`, `investigation timeline`, `case notes` |
 | `Data Security Posture Management` | `dspm` |
 | `Cloud Security Posture Management` | `cspm` |
 
@@ -165,35 +165,33 @@ Try these in order when initial search yields low relevance or empty results:
 
 0. **Run autocomplete first** — Returns exact topic titles from the knowledge base, preventing keyword mismatch:
    ```
-   cortex-docs/suggest(input_text="<core term>", product="xdr")
+   cortex-docs/suggest(input_text="<core term>", product="xsoar")
    ```
    Use the returned phrase verbatim as your next search query.
 
 1. **Simplify the query** — Remove product name, keep only the feature term.
-   - `"Cortex XSIAM filter XQL stage"` → `"filter stage"`
+   - `"Cortex XSOAR close incident reason"` → `"incident close reason"`
 
 2. **Use the exact doc term** — Palo Alto docs use specific vocabulary:
-   - "pipeline" → `stage` (XQL)
-   - "groupBy / aggregate" → `comp stage`
-   - "time window" → `timeframe`
-   - "deduplication" → `dedup stage`
-   - "join / lookup" → `call stage`
-   - "war room" → `investigation war room`
-   - "storyline" → `causality chain`
+   - "ticket / case" → `incident`
+   - "resolution code / disposition" → `close reason`
+   - "investigation timeline / case notes" → `War Room`
+   - "automation / runbook" → `playbook`
+   - "IOC / reputation / threat intel" → `indicators`
+   - "pin proof / mark evidence" → `Evidence Board`
    - "DSPM" → `Cortex Cloud Data Security`
    - "CSPM" → `Cortex Cloud Posture Management`
    - "CIEM" → `Cortex Cloud Identity Security`
-   - "incident" (XSOAR context) → `case` (XDR context uses "case")
 
 3. **Scope with `product`** — Global search may drown signal in noise:
    ```
-   cortex-docs/search(query="filter", product="agentix")
+   cortex-docs/search(query="incident", product="xsoar")
    ```
 
 4. **Browse the TOC** — When you know the product but not the exact topic, search first to get a `map_id` from the results, then browse:
    ```
    # Step 1: get a map_id for the publication you want
-   cortex-docs/search(query="XQL overview", product="agentix")
+   cortex-docs/search(query="incident management overview", product="xsoar")
    # Step 2: use the map_id from hit results to browse the TOC
    cortex-docs/fetch_toc(map_id="<map_id_from_search>")
    ```
@@ -203,52 +201,18 @@ Try these in order when initial search yields low relevance or empty results:
 
 ---
 
-## XQL Stage Reference (Quick Lookup)
-
-All XQL stages live under the Cortex AgentiX product. **XQL stage topics are titled with just the stage name** (e.g., `filter`, `dedup`, `comp`).
-
-- Do NOT use `"filter stage XQL"` — hits dashboard widget topics.
-- Do NOT use just `"filter"` alone — too generic, hits playbook filter topics instead.
-- **Use `"Cortex Query Language <stage>"`** — tested live, returns the exact stage page as the #1 hit for every stage.
-
-```
-# Correct — prefix guarantees exact stage as top result (verified for all 10 stages)
-cortex-docs/search(query="Cortex Query Language filter", product="agentix")
-cortex-docs/search(query="Cortex Query Language dedup", product="agentix")
-cortex-docs/search(query="Cortex Query Language comp", product="agentix")
-
-# Or fetch the Stages container to get all stage pages at once
-cortex-docs/fetch_topic(map_id="2iKvnhFnGXeKYHSA2AFcVw", topic_id="IykutIp5DU_1VHx_mvyQFA", max_children=5)
-```
-
-| Stage | Description | Correct search term |
-|---|---|---|
-| `alter` | Add/modify dataset fields | `Cortex Query Language alter` |
-| `arrayexpand` | Expand array fields to rows | `Cortex Query Language arrayexpand` |
-| `bin` | Bucket numeric/time values | `Cortex Query Language bin` |
-| `call` | Sub-query / dataset join | `Cortex Query Language call` |
-| `comp` | Aggregate / group by | `Cortex Query Language comp` |
-| `config` | Query config (timeframe, runtime) | `Cortex Query Language config` |
-| `dedup` | Deduplicate results | `Cortex Query Language dedup` |
-| `fields` | Select/rename output fields | `Cortex Query Language fields` |
-| `filter` | Filter rows by condition | `Cortex Query Language filter` |
-| `sort` | Sort results | `Cortex Query Language sort` |
-| All stages | Fetches all stage pages at once | fetch Stages container above |
-
----
-
 ## Response Quality Checklist
 
 Before finalizing an answer, verify:
 
 - [ ] **Direct answer first** — Lead with a 1-sentence answer to the question.
 - [ ] **Source is present** — Every answer ends with a `Source:` line citing the doc title.
-- [ ] **Code blocks used** — XQL syntax, CLI commands, and JSON shown in ` ``` ` fences.
+- [ ] **Code blocks used** — API calls, field codes, and JSON shown in ` ``` ` fences.
 - [ ] **Steps are numbered** — Procedural instructions use a numbered list (3-6 items).
 - [ ] **Uncertainty flagged** — If no relevant result was found, state: "I couldn't find specific documentation on this. Here's what I know generally…"
 - [ ] **No hallucination** — Only assert facts that appeared in the fetched content.
 - [ ] **Excerpt cited correctly** — When quoting, use the actual excerpt text returned by the API.
-- [ ] **Product name accurate** — Distinguish: Cortex XDR (endpoint), XSIAM (SOC platform), AgentiX (agentic AI), Cortex CLOUD (cloud security).
+- [ ] **Product name accurate** — Distinguish: Cortex XSOAR (incident response / cases), XSIAM (SOC platform), Cortex XDR (endpoint), AgentiX (agentic AI), Cortex CLOUD (cloud security).
 
 ---
 
@@ -260,7 +224,7 @@ Source: docs-cortex.paloaltonetworks.com — <Topic Title> (<Publication Name>)
 
 Examples:
 ```
-Source: docs-cortex.paloaltonetworks.com — filter Stage (Cortex AgentiX Documentation)
+Source: docs-cortex.paloaltonetworks.com — Close an Incident (Cortex XSOAR Administrator Guide)
 Source: docs-cortex.paloaltonetworks.com — Alert Triage Overview (Cortex XSIAM Admin Guide)
 Source: General knowledge (docs lookup returned no results for this query)
 ```

@@ -34,10 +34,10 @@ async def main() -> int:
 
     # ─── Happy path: request → wait → resolve(approve) ─────
     aid = bus.request(
-        tool="create_operation",
-        namespaced="xsiam.run_xql_query",
+        tool="list_incidents",
+        namespaced="xsoar.list_incidents",
         actor="agent",
-        args={"adversary_id": "abc-123", "name": "phase7-verify"},
+        args={"query": "status:open", "name": "phase7-verify"},
     )
     print(f"[2] requested: {aid}")
 
@@ -46,7 +46,7 @@ async def main() -> int:
         approval = bus.resolve(
             aid, resolver="user:operator",
             decision="approved",
-            reason="purple-team drill OK",
+            reason="investigation drill OK",
         )
         print(f"[3] resolved: status={approval.status if approval else None}")
 
@@ -65,8 +65,8 @@ async def main() -> int:
 
     # ─── Timeout path ──────────────────────────────────────
     aid2 = bus.request(
-        tool="send_webhook_log",
-        namespaced="xsiam.send_webhook_log",
+        tool="get_incident",
+        namespaced="xsoar.get_incident",
         actor="agent",
         args={},
     )
@@ -83,8 +83,8 @@ async def main() -> int:
 
     # ─── Unknown decision ──────────────────────────────────
     aid3 = bus.request(
-        tool="create_operation",
-        namespaced="xsiam.run_xql_query",
+        tool="list_incidents",
+        namespaced="xsoar.list_incidents",
         actor="agent",
         args={},
     )

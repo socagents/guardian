@@ -179,9 +179,9 @@ def personality_get() -> dict[str, Any]:
 
 
 # ─────────────────────────────────────────────────────────────────
-# Connector instances — XSIAM, Cortex XDR, web config blobs.
-# Trigger phrases: "what's my XSIAM URL?", "show me the connector
-# instances", "is XSIAM configured?"
+# Connector instances — XSOAR, cortex-docs, web config blobs.
+# Trigger phrases: "what's my XSOAR URL?", "show me the connector
+# instances", "is XSOAR configured?"
 # ─────────────────────────────────────────────────────────────────
 
 
@@ -190,7 +190,7 @@ def instances_list(connector_id: str | None = None) -> dict[str, Any]:
     returned — only secret-slot path references.
 
     Args:
-        connector_id: optional filter — "xsiam", "cortex-xdr", "web".
+        connector_id: optional filter — "xsoar", "cortex-docs", "web".
             Null = all.
 
     Returns {instances: [{id, name, connector_id, config, secret_refs:
@@ -415,7 +415,7 @@ def notifications_unread_count() -> dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────
 # Audit log — forensic queries on the agent's own behavior.
 # Trigger phrases: "show me the last 20 tool calls", "what did the
-# agent do at 3pm?", "audit search 'xsiam'"
+# agent do at 3pm?", "audit search 'xsoar'"
 # ─────────────────────────────────────────────────────────────────
 
 
@@ -435,7 +435,7 @@ def audit_search(
             params; use action/actor/target_prefix when you can.
         action: exact action filter (e.g. "tool_call", "job_fired").
         actor: exact actor filter (e.g. "operator", "scheduler").
-        target_prefix: target prefix filter (e.g. "memory:", "kb:xql-examples:").
+        target_prefix: target prefix filter (e.g. "memory:", "kb:cortex-docs:").
         limit: max rows (1-500). Default 50.
 
     Returns {events: [...], count}.
@@ -840,11 +840,11 @@ async def jobs_create(
             Patterns are globs (same as HookMatcher.toolGlob: `*`, `?`,
             comma-separated lists). Set when the operator scopes the
             job — concrete trigger phrases: "only let this job touch
-            xsiam tools", "don't let this job call any cortex-xdr
+            xsoar tools", "don't let this job call any web
             tools", "approve any *_delete this job tries". Omit /
             pass None to leave the policy unrestricted (the runtime
-            default). Example: `{"allowed_tools": ["xsiam_*"],
-            "denied_tools": ["*_delete"]}` restricts the job to xsiam
+            default). Example: `{"allowed_tools": ["xsoar_*"],
+            "denied_tools": ["*_delete"]}` restricts the job to xsoar
             tools AND blocks destructive deletes within that family.
             Evaluation order: denied beats allowed beats
             require_approval beats default-allow.
@@ -1380,7 +1380,7 @@ async def approvals_resolve(
 #   "remove the legacy skill X"                    → skills_delete
 #   "reset my personality to defaults"             → personality_reset
 #   "clear the geminiModel override"               → settings_reset
-#   "delete the primary-xsiam instance"            → instances_delete
+#   "delete the primary-xsoar instance"            → instances_delete
 #   "remove the secondary-vertex provider"         → providers_delete
 # ═════════════════════════════════════════════════════════════════
 
@@ -1427,7 +1427,7 @@ async def skills_delete(file_path: str) -> dict[str, Any]:
 
     Args:
         file_path: Relative path to skill file (e.g.,
-                   'workflows/build_xql_query.md'). Parameter name MUST match
+                   'workflows/investigate_incident.md'). Parameter name MUST match
                    the underlying skills_crud.skills_delete signature
                    AND the legacy MCP Tool inputSchema in
                    skills_crud.py — both expect `file_path`. Pre-v0.3.4
@@ -1554,11 +1554,10 @@ async def settings_reset(
 async def instances_delete(instance_id: str) -> dict[str, Any]:
     """Remove a connector instance. Approval-gated (destructive).
 
-    Connector instances bind credentials (XSIAM PAPI auth, Cortex XDR
-    API keys, etc.). Deleting one disconnects the agent from that
+    Connector instances bind credentials (XSOAR API keys, etc.). Deleting one disconnects the agent from that
     backend until the operator runs setup again.
 
-    For container-style connectors (web, cortex-content, etc.), the
+    For container-style connectors (web, cortex-docs, etc.), the
     guardian-updater daemon also stops + removes the per-instance docker
     container associated with this instance — call this tool, don't
     `docker stop` manually. Other instances of the same connector are
@@ -1897,7 +1896,7 @@ async def api_keys_revoke(key_id: str) -> dict[str, Any]:
 #      _BATCHABLE_TOOLS whitelist excludes it.
 #   3. approvals_resolve is also excluded — resolving approvals as part
 #      of a batch under approval would be a logical loop.
-#   4. Connector tools (web.*, xsiam.*, etc.) are out of scope for
+#   4. Connector tools (web.*, xsoar.*, etc.) are out of scope for
 #      v0.3.10 because they need per-instance contextvar setup that
 #      doesn't survive the simple await-loop here. v0.3.11+ may extend
 #      coverage to connector tools via the connector_loader's instance
@@ -1982,7 +1981,7 @@ async def agent_batch_propose(actions: list[dict[str, Any]]) -> dict[str, Any]:
               `personality_*`, `api_keys_*`, `notifications_*`,
               `skills_delete`). Dispatched directly for speed.
             - A connector tool registered on the running MCP (e.g.
-              `xsiam.run_xql_query`, `xdr.get_cases_and_issues`,
+              `xsoar.list_incidents`, `xsoar.get_incident`,
               `web.navigate`). Dispatched through the unified
               tool_dispatcher (same path the scheduler uses), which
               preserves per-instance contextvar setup, Pydantic

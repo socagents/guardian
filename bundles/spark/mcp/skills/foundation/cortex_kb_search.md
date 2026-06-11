@@ -2,7 +2,7 @@
 name: cortex_kb_search
 displayName: Cortex KB Search (docs-cortex.paloaltonetworks.com)
 category: foundation
-description: 'Answer questions about Palo Alto Networks Cortex products (XDR, XSIAM, XSOAR, AgentiX, Cortex CLOUD, Xpanse, XQL) by searching the official public documentation via the cortex-docs connector and returning evidence-backed answers with citations. Use this skill when the operator asks ANY Cortex product question — feature, configuration, troubleshooting, API endpoint, XQL syntax. The skill enforces a discipline-driven workflow: (1) decompose multi-topic requests, (2) strip user-language and use Palo Alto vocabulary in queries, (3) use cortex-docs/suggest to find the exact title before searching, (4) cortex-docs/search with --product scope, (5) cortex-docs/fetch_topic with auto-children fallback for stub topics, (6) synthesize per concept, (7) cite sources. Two related skills hold the lookup tables: cortex_kb_search_patterns for query-shaping by intent + fallback strategies + XQL stage reference, and cortex_kb_api_reference for raw Fluid Topics API spec (load only when needed).'
+description: 'Answer questions about Palo Alto Networks Cortex products (XSOAR, XDR, XSIAM, AgentiX, Cortex CLOUD, Xpanse) by searching the official public documentation via the cortex-docs connector and returning evidence-backed answers with citations. Use this skill during incident investigation to resolve unknowns — how a Cortex incident/case field is defined, what a detection means, which playbook or close-reason applies, an API endpoint, a configuration or troubleshooting question. The skill enforces a discipline-driven workflow: (1) decompose multi-topic requests, (2) strip user-language and use Palo Alto vocabulary in queries, (3) use cortex-docs/suggest to find the exact title before searching, (4) cortex-docs/search with --product scope, (5) cortex-docs/fetch_topic with auto-children fallback for stub topics, (6) synthesize per concept, (7) cite sources. Two related skills hold the lookup tables: cortex_kb_search_patterns for query-shaping by intent + fallback strategies, and cortex_kb_api_reference for raw Fluid Topics API spec (load only when needed).'
 icon: menu_book
 source: platform
 loadingMode: on-demand
@@ -20,7 +20,7 @@ foundation
 
 Answer questions about Palo Alto Networks Cortex products by searching the official public documentation at `docs-cortex.paloaltonetworks.com` and returning accurate, sourced answers.
 
-**This skill is the single front-door for any Cortex product question.** XDR, XSIAM, XSOAR, AgentiX, Cortex CLOUD, Xpanse, XQL — they all share one docs site, one search API, and one workflow. The skill enforces the discipline that makes that search actually work: title-weighted full-text search demands Palo Alto vocabulary, not user phrasing.
+**This skill is the single front-door for any Cortex product question.** XSOAR, XDR, XSIAM, AgentiX, Cortex CLOUD, Xpanse — they all share one docs site, one search API, and one workflow. During a case investigation, this is how you resolve the unknowns: what a Cortex incident field means, what a detection name signals, which close reason or playbook applies. The skill enforces the discipline that makes that search actually work: title-weighted full-text search demands Palo Alto vocabulary, not user phrasing.
 
 ## Available tools
 
@@ -32,14 +32,13 @@ Answer questions about Palo Alto Networks Cortex products by searching the offic
 | `cortex-docs/suggest` | Autocomplete — finds the exact Palo Alto title for a partial term |
 | `cortex-docs/fetch_topic` | Fetch full topic content (auto-descends into children when topic is a stub) |
 | `cortex-docs/fetch_toc` | Get the full table of contents for a publication |
-| `cortex-docs/xql_lookup` | Focused lookup for an XQL stage or function (ranks against authority heuristics) |
 | `cortex-docs/deep_research` | Heavyweight multi-section synthesis for deliverables |
 
 **Related skills — load only when the trigger condition is met:**
 
 | Skill | Load when… |
 |---|---|
-| `cortex_kb_search_patterns` | Search returns 0 or irrelevant results; question is vague; need the response quality checklist before finalizing; need the XQL stage quick-lookup |
+| `cortex_kb_search_patterns` | Search returns 0 or irrelevant results; question is vague; need the response quality checklist before finalizing |
 | `cortex_kb_api_reference` | Need to craft a custom raw API call; debug unexpected response shape; build advanced metadata filters beyond `--product` |
 
 Do not load these reference skills preemptively. Load them only at the specific step where their trigger condition is met.
@@ -57,9 +56,9 @@ Before searching, analyze the user's message for **multiple distinct information
 | Signal | Example |
 |---|---|
 | Explicit conjunction | "install XDR agent **and** configure prevention profiles" |
-| Multiple product areas | "XQL filter stage **and** XSIAM alert triage" |
-| Sequential procedure steps from separate domains | "set up the tenant **then** create a correlation rule" |
-| Compare-and-contrast | "difference between `filter` and `dedup` stages" |
+| Multiple product areas | "what the XSOAR incident severity field means **and** how alert triage works" |
+| Sequential procedure steps from separate domains | "set up the tenant **then** create a playbook" |
+| Compare-and-contrast | "difference between the `Resolved` and `False Positive` close reasons" |
 | Mixed concept types | "what ports does the agent use **and** how do I troubleshoot connectivity" |
 
 **How to handle multi-topic requests:**
@@ -74,17 +73,17 @@ Before searching, analyze the user's message for **multiple distinct information
 
 ```
 # Single topic — one search is enough
-"how do I use the filter stage in XQL?"
+"what does the XSOAR incident severity field mean?"
 
 # Multi-topic — requires two separate searches
-"how do I install the XDR agent on macOS and configure prevention profiles?"
-→ Search 1: "xdr agent install macos" + product=xdr
-→ Search 2: "prevention profile configuration" + product=xdr
+"how do I close an XSOAR incident and what close reasons are available?"
+→ Search 1: "close incident" + product=xsoar
+→ Search 2: "incident close reason" + product=xsoar
 
 # Multi-topic across products — two searches, different product scope
-"how does XSIAM handle alert triage and how do I write an XQL query for it?"
-→ Search 1: "alert triage workflow" + product=xsiam
-→ Search 2: "XQL query alerts dataset" + product=agentix
+"what does this XSOAR playbook do and how does XSIAM raise the alert that triggers it?"
+→ Search 1: "playbook overview" + product=xsoar
+→ Search 2: "alert triage workflow" + product=xsiam
 ```
 
 ---
@@ -100,21 +99,21 @@ This API is **title-weighted full-text search**. Queries that match or closely r
 | Strip (adds noise) | Keep (drives ranking) |
 |---|---|
 | Question openers: "How do I", "What is", "List", "Build an executive comparison of", "Can I", "Explain" | Feature names: "Broker VM", "high availability", "false positive", "SSO", "RBAC" |
-| Filler conjunctions: "and", "or", "while", "in order to" | Palo Alto product terms: "XDR agent", "correlation rule", "BIOC", "XQL filter stage" |
+| Filler conjunctions: "and", "or", "while", "in order to" | Palo Alto product terms: "incident", "playbook", "War Room", "correlation rule", "BIOC" |
 | User-language verbs: "deploy", "provision", "govern", "control" | Canonical doc verbs (when part of a title): "set up", "configure", "manage" |
 | Platform generics: "in the platform", "for the system", "solution", "approach" | Version / scope qualifiers: "Azure", "Ubuntu", "KVM", "SAML 2.0" |
 
-**Do NOT expand acronyms in queries.** XQL is a Palo Alto product name — searching `XQL (Extended Query Language)` fragments the match. Search `XQL` as-is.
+**Do NOT expand acronyms in queries.** Cortex product names (XSOAR, XSIAM, XDR) are brand identifiers — search them as-is; expanding them fragments the match.
 
 **Examples:**
 
 | User's message | ❌ Wrong query (full sentence) | ✅ Correct query |
 |---|---|---|
-| "How do I deploy Broker VM on Azure and register it to the tenant?" | `How do I deploy Broker VM on Azure and register it to the tenant` | `set up Broker VM Microsoft Azure` |
-| "Build an executive comparison of HA vs backup-based resilience options for incident platforms" | `executive comparison HA vs backup resilience incident platforms` | `high availability` + `disaster recovery live backup` |
+| "How do I close an incident in XSOAR and pick a close reason?" | `How do I close an incident in XSOAR and pick a close reason` | `close incident` + `incident close reason` |
+| "What does the severity field on an XSOAR case actually mean?" | `what does the severity field on an XSOAR case actually mean` | `incident severity field` |
 | "What governance model should we use for exceptions so risk does not silently increase?" | `governance model exceptions risk silently increase` | `policy exceptions` or `exception configuration` |
 | "List identity and access capabilities: SSO, RBAC, scoped access, and API key management" | `List identity and access capabilities SSO RBAC scoped access API key management` | `SSO SAML` + `RBAC user roles` + `API key management` |
-| "Run an XQL query via the REST API" | `execute XQL (Extended Query Language) API` | `start_xql_query XQL API` |
+| "What does this playbook task do?" | `what does this playbook task do` | `playbook task` + product=xsoar |
 
 #### 1b. Use `cortex-docs/suggest` to find the exact Palo Alto title — especially when action verbs are involved
 
@@ -143,19 +142,17 @@ Use the returned phrase **verbatim** as your next search query — it is the exa
 | delete, remove | **delete** or **manage** (check with suggest) |
 | turn on, activate | **configure** or **enable** |
 | setup wizard, installation wizard | **set up** (with platform name) |
-| wipe, factory reset, nuke, erase endpoint | **isolate** (search: `isolate endpoint` + product=xdr) |
-| disconnect endpoint, cut off network | **isolate** (search: `isolate endpoint` + product=xdr) |
-| kill process on endpoint | **terminate process** + product=xdr |
-| sandbox a file, block a file | **quarantine** (search: `manage quarantined files` + product=xdr) |
-| scheduled task, cron job, nightly job | **time triggered job** + product=xsiam/xsoar |
-| GROUP BY in XQL | **comp** stage + `by` modifier (search: `Cortex Query Language comp` + product=agentix) |
-| run XQL via API, XQL REST API, programmatic XQL | **start_xql_query** — search the exact doc title: `Start an XQL Query` or `Running XQL Query APIs` (these live in the "Cortex XDR REST API" publication, separate from the admin guide — no product filter needed) |
-| trigger playbook via API, REST API playbook run | **KB gap** — the XSOAR playbook trigger endpoint (`POST /entry/`, `POST /incident`) is documented at xsoar.pan.dev (a separate developer portal not indexed in this KB). Only XSOAR auth setup is available here (`Get Started with APIs` + product=xsoar). Acknowledge the gap and direct the user to xsoar.pan.dev. |
-| pull audit logs via API, audit log API endpoint | **audit log API** (search: `audit log API` + product=xsiam, or `API reference audit`) |
-| pause notifications, mute alerts, maintenance window, suppress notifications | **alert suppression** or **exclude alert rule** (search: `alert suppression` OR `exclude alert rule` + product=xsiam) |
-| custom data parser, new log source normalizer, create normalizer | **XQL Parsing Rules** (search: `parsing rules` + product=xsiam; the feature is called "XQL Parsing Rules" not "normalizer") |
+| case, ticket, alert-as-incident | **incident** (search: `incident management` + product=xsoar) |
+| close a case, resolve a ticket | **close incident** (search: `close incident` + product=xsoar) |
+| close codes, resolution reasons, disposition | **incident close reason** (search: `incident close reason` + product=xsoar) |
+| war room, investigation timeline, case notes | **War Room** (search: `War Room` + product=xsoar) |
+| automation, runbook, response workflow | **playbook** (search: `playbook` + product=xsoar) |
+| pin proof, mark as evidence | **Evidence Board** (search: `Evidence Board` + product=xsoar) |
+| IOC, IP/hash/domain reputation, threat intel | **indicators** (search: `indicators threat intelligence` + product=xsoar) |
 | add field to incident, custom incident field | **custom incident fields** (search: `create incident field` + product=xsoar) |
-| whitelist application, allowlist app, prevent agent from blocking | **alert exclusion** or **exception configuration** (search: `alert exclusion exception configuration` + product=xdr) |
+| scheduled task, cron job, nightly job | **time triggered job** + product=xsoar |
+| trigger playbook via API, REST API playbook run | **KB gap** — the XSOAR playbook trigger endpoint (`POST /entry/`, `POST /incident`) is documented at xsoar.pan.dev (a separate developer portal not indexed in this KB). Only XSOAR auth setup is available here (`Get Started with APIs` + product=xsoar). Acknowledge the gap and direct the user to xsoar.pan.dev. |
+| pull audit logs via API, audit log API endpoint | **audit log API** (search: `audit log API` + product=xsoar, or `API reference audit`) |
 
 #### 1c. Run the search with `product` scope
 
@@ -165,25 +162,25 @@ Use the returned phrase **verbatim** as your next search query — it is the exa
 
 | Topic area | `product` value |
 |---|---|
-| XQL stages, AgentiX queries, dashboards | `agentix` |
-| Broker VM, XDR agent, prevention profiles, EDR | `xdr` |
+| Incidents/cases, playbooks, War Room, indicators, close reasons, IR | `xsoar` |
 | Alert triage, BIOC, correlation rules, analytics | `xsiam` |
-| Playbooks, cases, automation, incident response | `xsoar` |
+| XDR agent, prevention profiles, EDR, endpoint actions | `xdr` |
+| AgentiX, agentic AI workflows, dashboards | `agentix` |
 | Cloud onboarding, DSPM, CSPM, CIEM, cloud posture | `cloud` |
 | Attack surface, exposure management | `xpanse` |
 
 ```
 # General search — 3-5 keywords from step 1a, not the user's full sentence
-cortex-docs/search(query="filter stage XQL")
+cortex-docs/search(query="incident close reason")
 
 # Scoped to a product (preferred whenever topic area is known)
-cortex-docs/search(query="alert triage automation", product="xsiam")
+cortex-docs/search(query="playbook overview", product="xsoar")
 
 # Using exact title from suggest output
-cortex-docs/search(query="Set up Broker VM on Microsoft Azure", product="xdr")
+cortex-docs/search(query="Manage Incidents", product="xsoar")
 
 # Get more results
-cortex-docs/search(query="dedup stage", per_page=10)
+cortex-docs/search(query="indicators threat intelligence", per_page=10)
 ```
 
 The search returns hits with `map_id` and `topic_id` for each result. Take these values from the live output — do not use hardcoded IDs.
@@ -192,10 +189,10 @@ The search returns hits with `map_id` and `topic_id` for each result. Take these
 > 1. FIRST — call `cortex-docs/suggest(input_text="<core term>")` (with product if known) to find the exact Palo Alto title.
 > 2. THEN — Load skill `cortex_kb_search_patterns`. Use § **Fallback Strategies** to rephrase and § **Query Shaping by Intent** for terminology mappings. Retry before proceeding.
 
-> **If the user is asking about a REST API operation** (run query via API, trigger via REST, retrieve data programmatically):
+> **If the user is asking about a REST API operation** (drive a case via API, trigger via REST, retrieve data programmatically):
 > - The KB titles API reference docs using **endpoint path names**, not natural-language descriptions.
-> - Search for the specific API method name if known: `start_xql_query`, `get_incidents`, `run investigation`, etc.
-> - Try: `cortex-docs/suggest(input_text="API", product="xdr")` (or xsoar/xsiam) to get the exact API reference titles.
+> - Search for the specific API method name if known: `get_incidents`, `update_incident`, `close_incident`, `search_indicators`, etc.
+> - Try: `cortex-docs/suggest(input_text="API", product="xsoar")` (or xsiam/xdr) to get the exact API reference titles.
 > - Try browsing the publication TOC: `cortex-docs/fetch_toc(map_id="...")` after finding an API map.
 > - Do NOT redirect users to the UI when they ask for an API endpoint — the API reference exists but may need a targeted search.
 
@@ -281,10 +278,10 @@ Use `product` to scope searches to a specific product. The connector translates 
 
 | `product` key | Scopes to |
 |---|---|
-| `agentix`, `xql` | Cortex AgentiX |
-| `xdr` | Cortex XDR, Cortex XDR Agent |
-| `xsiam` | Cortex XSIAM |
 | `xsoar` | Cortex XSOAR |
+| `xsiam` | Cortex XSIAM |
+| `xdr` | Cortex XDR, Cortex XDR Agent |
+| `agentix` | Cortex AgentiX |
 | `cloud`, `dspm`, `cspm`, `ciem` | Cortex CLOUD, Cortex Cloud Posture Management |
 | `xpanse` | Cortex XPANSE |
 
@@ -304,5 +301,5 @@ Use `product` to scope searches to a specific product. The connector translates 
 ## Cross-references
 
 - **Source skill**: ported from operator's personal workassistant `cortex-assistant/cortex-docs-search/SKILL.md` (Mar 2026 authoring; v0.5.69 port to Guardian).
-- **Related Guardian skills**: `cortex_xql_query_authoring` (pairs this skill with the operator's internal XQL example KB for query authoring); `cortex_kb_search_patterns` (lazy-loaded query shaping + fallback strategies); `cortex_kb_api_reference` (lazy-loaded raw Fluid Topics API spec for advanced filter authoring).
+- **Related Guardian skills**: `xsoar_case_investigation` (the load-first case-investigation workflow that uses this skill in its research step); `xsoar_case_triage` (case field/severity/status/close-reason reference); `cortex_kb_search_patterns` (lazy-loaded query shaping + fallback strategies); `cortex_kb_api_reference` (lazy-loaded raw Fluid Topics API spec for advanced filter authoring).
 - **Connector**: `cortex-docs` — wraps the Fluid Topics public API. See `bundles/spark/connectors/cortex-docs/`.

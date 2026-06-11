@@ -33,10 +33,10 @@ import { SparkLogo } from "@/components/sidebar";
 
 const QUICK_ACTIONS = [
   { label: "Health Check", icon: "monitor_heart", prompt: "Run a system health check across the MCP and connector instances" },
+  { label: "Open XSOAR Cases", icon: "folder_open", prompt: "Show me the open cases in XSOAR that need investigation" },
+  { label: "Investigate Case", icon: "manage_search", prompt: "Walk me through investigating the highest-severity open XSOAR case" },
+  { label: "Search Indicators", icon: "travel_explore", prompt: "Search XSOAR for the indicators attached to the most recent open case" },
   { label: "List Skills", icon: "auto_awesome", prompt: "Show me available skills" },
-  { label: "Open Cases", icon: "folder_open", prompt: "Show me the open cases and issues from the tenant" },
-  { label: "Run XQL", icon: "query_stats", prompt: "Author and run an XQL query to count agent events by host over the last 24 hours" },
-  { label: "Asset Lookup", icon: "devices", prompt: "List the assets known to the tenant and summarize what's inventoried" },
   { label: "List Connectors", icon: "cable", prompt: "Show me the active connector instances and their status" },
 ] as const;
 
@@ -853,8 +853,8 @@ function EmptyState({ onQuickAction }: { onQuickAction: (prompt: string) => void
             Talk to Guardian
           </h2>
           <p className="text-sm text-on-surface-variant/70 mt-1 font-body max-w-sm">
-            AI incident response — case triage, XQL investigation,
-            and live tool telemetry over MCP.
+            AI incident investigation for Cortex XSOAR — case triage,
+            war-room review, and live tool telemetry over MCP.
           </p>
         </div>
       </div>

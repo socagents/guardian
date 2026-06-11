@@ -235,8 +235,8 @@ def test_request_handles_non_json_serializable_args(tmp_path: Path) -> None:
         """Stand-in for FastMCP's Context — any non-JSON object works."""
 
     aid = bus.request(
-        tool="xsiam.run_xql_query",
-        namespaced="xsiam.run_xql_query",
+        tool="xsoar.list_incidents",
+        namespaced="xsoar.list_incidents",
         actor="agent",
         # Mix in a non-serializable value alongside normal scalars
         # (the real-world failure shape).
@@ -258,8 +258,8 @@ def test_needs_human_approval_bypassed_when_instance_trusted() -> None:
     """A trusted instance bypasses the gate even when the tool name
     matches `humanRequired`.
 
-    Use case: a SOC team marks their lab XSIAM tenant as trusted: true
-    so run_xql_query runs without human approval. Their
+    Use case: a SOC team marks their lab XSOAR tenant as trusted: true
+    so list_incidents runs without human approval. Their
     production tenant (same connector type, different instance)
     leaves trusted unset and still gates each call.
     """
@@ -267,27 +267,27 @@ def test_needs_human_approval_bypassed_when_instance_trusted() -> None:
 
     # Untrusted: gate fires (baseline).
     assert needs_human_approval(
-        tool_name="run_xql_query",
-        namespaced="xsiam.run_xql_query",
-        legacy_name="xsiam_run_xql_query",
-        human_required={"run_xql_query"},
+        tool_name="list_incidents",
+        namespaced="xsoar.list_incidents",
+        legacy_name="xsoar_list_incidents",
+        human_required={"list_incidents"},
     ) is True
 
     # Trusted: gate is bypassed.
     assert needs_human_approval(
-        tool_name="run_xql_query",
-        namespaced="xsiam.run_xql_query",
-        legacy_name="xsiam_run_xql_query",
-        human_required={"run_xql_query"},
+        tool_name="list_incidents",
+        namespaced="xsoar.list_incidents",
+        legacy_name="xsoar_list_incidents",
+        human_required={"list_incidents"},
         instance_trusted=True,
     ) is False
 
     # Trusted but tool isn't gated anyway: still False (no surprise).
     assert needs_human_approval(
         tool_name="some_read_tool",
-        namespaced="xsiam.some_read_tool",
+        namespaced="xsoar.some_read_tool",
         legacy_name=None,
-        human_required={"run_xql_query"},
+        human_required={"list_incidents"},
         instance_trusted=True,
     ) is False
 

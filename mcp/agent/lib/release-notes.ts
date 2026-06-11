@@ -38,14 +38,14 @@ export interface ReleaseNote {
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "0.1.0",
-    date: "2026-06-10",
-    title: "Guardian initial release — AI incident-response agent for Cortex XSIAM/XSOAR.",
+    date: "2026-06-11",
+    title: "Guardian initial release — AI incident-investigation agent for Cortex XSOAR.",
     highlights: [
-      "Guardian debuts: an AI incident-response agent for Cortex XSIAM/XSOAR, derived from the Phantom platform.",
-      "Phantom's log-generation, red-team emulation, data-source catalog, and log-destination subsystems are removed.",
-      "5 connectors: XSIAM (59 tools incl. XQL), Cortex XDR (50), Cortex docs, Cortex content, web browsing.",
-      "IR-focused agent semantics: incident-response system prompt, plan mode, and quick triage actions.",
-      "Embedded MCP ships 5 XQL-authoring skills grounded in a curated XQL-examples knowledge base.",
+      "Guardian debuts: an AI agent that monitors, investigates, documents, and closes Cortex XSOAR cases.",
+      "New XSOAR connector — 13 tools for the case lifecycle; supports XSOAR 6 and XSOAR 8 / Cortex cloud.",
+      "Focused roster: XSOAR + Cortex docs + web research. XSIAM, Cortex XDR, content catalog, and XQL removed.",
+      "IR agent semantics: an investigation system prompt driving monitor → fetch → investigate → update/close.",
+      "Two XSOAR skills — case investigation (end-to-end) and case triage — plus Cortex-docs research skills.",
       "Credential guardrail intact: the agent holds no credential tools; secret management stays REST-only.",
     ],
   },

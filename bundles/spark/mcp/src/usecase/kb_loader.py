@@ -4,9 +4,9 @@ Per `manifest.yaml:knowledge.bundled[]`, each entry declares:
 
     knowledge:
       bundled:
-        - name: "xql-examples"
-          path: "./kbs/xql-examples/"
-          schema: "./kbs/xql-examples/schema.json"
+        - name: "operator-runbooks"
+          path: "./kbs/operator-runbooks/"
+          schema: "./kbs/operator-runbooks/schema.json"
 
 The loader walks each bundled KB's directory, parses every supported
 file into a (doc_id, metadata, content) triple, and upserts it into
@@ -209,7 +209,7 @@ def load_bundled_knowledge(
 
     Counts shape:
         {
-          "xql-examples": {
+          "operator-runbooks": {
             "inserted": 3,
             "updated":  0,
             "unchanged": 0,
@@ -299,12 +299,11 @@ def load_bundled_knowledge(
                 # v0.6.53: required-field validation is enforcing, not
                 # advisory. Without this skip, the kb_loader was
                 # silently upserting docs missing `id`/`title`/
-                # `category` (the schema's required trio for
-                # xql-examples) — the doc landed in the KB with empty
-                # metadata + got embedded as searchable content.
-                # README.md sitting at the KB root + the v0.6.51
-                # operator_dataset_2026-05-20.json source file at
-                # _tools/ were the two known leaks. Reaper at the
+                # `category` (a typical schema's required trio) — the
+                # doc landed in the KB with empty metadata + got
+                # embedded as searchable content. README.md sitting at
+                # the KB root + a stray operator dataset JSON under
+                # _tools/ were two known leak patterns. Reaper at the
                 # bottom of this loop drops previously-loaded copies
                 # of now-invalid docs because they're not added to
                 # seen_doc_ids here.

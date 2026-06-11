@@ -29,10 +29,9 @@ modules inside each. Keep this current when you add or move a service.
 |------|------------|
 | `bundles/spark/manifest.yaml` | Bundle manifest — capability declarations, settings, jobs, runtime events (`rt.tool.failed`). |
 | `bundles/spark/mcp/` | The Python FastMCP server that runs as a subprocess inside `guardian-agent`. Registers built-in + connector tools, exposes REST routes for the Next.js side. |
-| `bundles/spark/connectors/` | Per-connector source: each subdir is one connector (`xsiam`, `cortex-xdr`, `cortex-docs`, `cortex-content`, `web`), plus the `_runtime` shared base and `connector.schema.json`. Each connector runs as its own image at customer release time. |
+| `bundles/spark/connectors/` | Per-connector source: each subdir is one connector (`xsoar`, `cortex-docs`, `web`), plus the `_runtime` shared base and `connector.schema.json`. Each connector runs as its own image at customer release time. |
 | `bundles/spark/mcp/skills/` | Default skills shipped with the agent (MD files with frontmatter). Volume-seeded on first boot; merged on per-release marker. |
 | `bundles/spark/plugins/` | Built-in plugins (currently empty). |
-| `bundles/spark/kbs/` | Knowledge base entries (`xql-examples` — curated XQL queries) seeded at boot. |
 | `bundles/spark/prompts/` | System-prompt fragments (`system.md`). |
 | `bundles/spark/providers/` | Provider-specific glue (`vertex`). |
 

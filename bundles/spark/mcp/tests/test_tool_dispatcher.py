@@ -92,9 +92,9 @@ def test_installed_dispatcher_is_awaitable():
     d = tool_dispatcher_module.get_tool_dispatcher()
     assert d is not None
 
-    result = asyncio.run(d("xsiam.run_query", {"q": "preset_login_failed"}))
-    assert result == {"tool": "xsiam.run_query",
-                      "args": {"q": "preset_login_failed"}}
+    result = asyncio.run(d("xsoar.list_incidents", {"q": "status:open"}))
+    assert result == {"tool": "xsoar.list_incidents",
+                      "args": {"q": "status:open"}}
 
 
 def test_set_emits_log_signal(caplog):

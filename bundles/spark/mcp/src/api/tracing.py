@@ -27,13 +27,13 @@ Auto:
   * Starlette middleware — every HTTP request is a span with
     method/path/status/duration. Uses route templates (low
     cardinality) when available.
-  * httpx — every outbound call (Vertex embeddings, XSIAM PAPI,
+  * httpx — every outbound call (Vertex embeddings, XSOAR API,
     connector containers) is a child span linked to the inbound
     request span via context propagation.
 
 Manual instrumentation hooks remain available via
 opentelemetry.trace.get_tracer("guardian") for tools that want to
-add domain-specific spans (e.g. an XQL query run with the query id
+add domain-specific spans (e.g. an XSOAR case fetch with the case id
 as a span attribute). Today no manual instrumentation is wired; the
 auto-instrumentation alone gives a useful waterfall.
 
