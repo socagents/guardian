@@ -5,15 +5,15 @@
 
 ## Counters
 
-- Cycles total: **1**
+- Cycles total: **2**
 - Fixes shipped: **0**
 - No-ops: **1**
 - Gate failures: **0**
-- Checker rejections: **0**
+- Checker rejections: **1**
 
 ## Next focus
 
-self-heal: MCP tool docstrings vs UI forms lockstep audit (docs discipline #9, self_mod_tools.py vs system-management pages); re-run repo-only audits
+Redo as ONE complete doc-sync unit: jobs_create/jobs_update docstrings chat->prompt + drop log refs (self_mod_tools.py:768,930), job_scheduler.py:119 comment, system-prompt.ts:430 jobs_create action shape, jobs/new/page.tsx:9 header comment; grep type."chat"/log across agent lib+app for remaining hits
 
 ## Open findings
 
@@ -24,3 +24,4 @@ _none_
 | # | started | focus | outcome | commit | gate | checker |
 |---|---|---|---|---|---|---|
 | 1 | 2026-06-11T09:43:08Z | self-heal scan: doc-sync + bug-family + spec-drift repo-only audits | no-op | — | — | n/a |
+| 2 | 2026-06-11T12:42:27Z | self-heal: MCP tool docstrings vs UI forms lockstep audit (docs discipline #9) | checker-rejected | — | pass | rejected |
