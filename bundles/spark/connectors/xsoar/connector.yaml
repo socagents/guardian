@@ -64,7 +64,7 @@ secretSlots:
 spec:
   tools:
     # ─── Case listing + drill-down ───────────────────────────────
-    - name: "xsoar_list_incidents"
+    - name: "list_incidents"
       method: "POST /incidents/search"
       description: |
         List Cortex XSOAR incidents (cases) matching a filter. The primary
@@ -86,7 +86,7 @@ spec:
         - { name: "page_size", type: "integer", description: "Page size (default 50, max 200).", required: false }
       returns: { type: "object", description: "{ ok, incidents: [{id, name, type, severity, status, owner, created, modified}], total }" }
 
-    - name: "xsoar_get_incident"
+    - name: "get_incident"
       method: "POST /incidents/search (filter.id)"
       description: |
         Fetch the full record for one XSOAR incident by id. XSOAR has NO
@@ -98,7 +98,7 @@ spec:
         - { name: "incident_id", type: "string", description: "The XSOAR incident id.", required: true }
       returns: { type: "object", description: "{ ok, incident: { ... full record incl. version, CustomFields, labels, investigationId ... } }" }
 
-    - name: "xsoar_get_war_room"
+    - name: "get_war_room"
       method: "POST /investigation/{id}"
       description: |
         Read the war-room (investigation) entries for one incident — the
@@ -113,7 +113,7 @@ spec:
       returns: { type: "object", description: "{ ok, entries: [{id, type, contents, format, tags, created, user}], count }" }
 
     # ─── Documenting findings ────────────────────────────────────
-    - name: "xsoar_add_entry"
+    - name: "add_entry"
       method: "POST /entry"
       description: |
         Append a war-room entry to an incident's investigation. The primary
@@ -126,7 +126,7 @@ spec:
         - { name: "markdown",    type: "boolean", description: "Render content as markdown (default true). Set false for plain text.", required: false }
       returns: { type: "object", description: "{ ok, entry_id, incident_id }" }
 
-    - name: "xsoar_add_note"
+    - name: "add_note"
       method: "POST /entry + POST /entry/note"
       description: |
         Add a pinned NOTE to an incident's war room. Two-step: create the
@@ -141,7 +141,7 @@ spec:
       returns: { type: "object", description: "{ ok, entry_id, incident_id, note: true }" }
 
     # ─── Case mutation ───────────────────────────────────────────
-    - name: "xsoar_update_incident"
+    - name: "update_incident"
       method: "POST /incident"
       description: |
         Update an XSOAR incident's metadata (upsert). Use to triage a case:
@@ -162,7 +162,7 @@ spec:
         - { name: "custom_fields", type: "object",  description: "Dict of {cliName: value} written under CustomFields (lowercase machine names from xsoar_get_incident_fields).", required: false }
       returns: { type: "object", description: "{ ok, incident_id, updated }" }
 
-    - name: "xsoar_close_incident"
+    - name: "close_incident"
       method: "POST /incident/close (per id)"
       description: |
         Close one or more XSOAR incidents in a single batch (sets each to
@@ -175,7 +175,7 @@ spec:
       returns: { type: "object", description: "{ ok, closed_count, incident_ids }" }
 
     # ─── Schema discovery (derived — no native list endpoints) ───
-    - name: "xsoar_list_incident_types"
+    - name: "list_incident_types"
       method: "POST /incidents/search (derive distinct type)"
       description: |
         List the distinct incident TYPES in use on this XSOAR tenant. XSOAR
@@ -187,7 +187,7 @@ spec:
       args: []
       returns: { type: "object", description: "{ ok, incident_types: ['Phishing','Malware',...], sampled }" }
 
-    - name: "xsoar_get_incident_fields"
+    - name: "get_incident_fields"
       method: "GET /incidentfields"
       description: |
         List incident fields — including each field's cliName (the lowercase
@@ -201,7 +201,7 @@ spec:
       returns: { type: "object", description: "{ ok, fields: [{id, name, cliName, type, required, associatedTypes}], count }" }
 
     # ─── Enrichment ──────────────────────────────────────────────
-    - name: "xsoar_search_indicators"
+    - name: "search_indicators"
       method: "POST /indicators/search"
       description: |
         Search the XSOAR threat-intel indicator store (IoCs — IPs, domains,
@@ -214,7 +214,7 @@ spec:
         - { name: "size",  type: "integer", description: "Page size (default 50, max 200).", required: false }
       returns: { type: "object", description: "{ ok, indicators: [...], total }" }
 
-    - name: "xsoar_save_evidence"
+    - name: "save_evidence"
       method: "POST /entry/tags (tag entry as evidence)"
       description: |
         Mark a war-room entry as evidence for an incident. XSOAR's evidence
@@ -229,7 +229,7 @@ spec:
         - { name: "description", type: "string", description: "Optional note describing why this is evidence.", required: false }
       returns: { type: "object", description: "{ ok, incident_id, entry_id, tagged }" }
 
-    - name: "xsoar_search_evidence"
+    - name: "search_evidence"
       method: "POST /evidence/search"
       description: |
         List the evidence collected for one incident — the entries promoted
@@ -240,7 +240,7 @@ spec:
       returns: { type: "object", description: "{ ok, evidence: [...], count }" }
 
     # ─── Server probe (connector-test path) ──────────────────────
-    - name: "xsoar_health_check"
+    - name: "health_check"
       method: "POST /incidents/search (minimal size:1 probe)"
       description: |
         Probe XSOAR server availability (the connector instance-test path).
