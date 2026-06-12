@@ -197,21 +197,22 @@ export const LoginScreen = ({ onSuccess }: { onSuccess: () => void }) => {
                 {/* Description column.
                   * "Guardian can [FlippingText]" framing — first-person
                   * capabilities on a typewriter cycle (cyan, 6-item
-                  * cycle). The cycle reads as "Guardian can investigate
-                  * incidents · Guardian can run XQL hunts · …" so the
-                  * operator sees what Guardian does rather than what
+                  * cycle). "Guardian can" is fixed; a single verb flips, so
+                  * the cycle reads as "Guardian can orchestrate · Guardian
+                  * can investigate · Guardian can hunt · …" — the operator
+                  * sees what Guardian does, in one word, rather than what
                   * it sits on top of. */}
                 <div className="md:pl-2 md:pt-1">
                   <p className="text-lg font-semibold text-slate-200">
                     Guardian can{" "}
                     <FlippingText
                       words={[
-                        "investigate incidents",
-                        "run XQL hunts",
-                        "enrich XDR cases",
-                        "scope impacted assets",
-                        "gather evidence",
-                        "orchestrate response",
+                        "orchestrate",
+                        "investigate",
+                        "hunt",
+                        "enrich",
+                        "scope",
+                        "gather",
                       ]}
                       className="text-cyan-300"
                     />
