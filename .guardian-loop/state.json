@@ -50,9 +50,19 @@
       "commit": "",
       "gate": "",
       "checker": "n/a"
+    },
+    {
+      "n": 6,
+      "started_at": "2026-06-12T08:12:56Z",
+      "focus": "Fresh self-heal scan: doc-sync + bug-family + spec-drift repo-only audits",
+      "outcome": "no-op",
+      "summary": "All repo-only audits clean: sidebar/pages unchanged since cycle 1, arch service list matches installer compose (agent/browser/updater+connectors), CHANGELOG=release-notes@v0.1.0, no usecase-imports, toolCount 6/10/13 matches yamls + live-synced, no implementation-gap bullets. Deferred jobs-chat-prompt-doc-sync resolved upstream by human: f27e4e3+256f1c0 landed, issue #3 CLOSED — keep skipping that scope. (tunnel: down)",
+      "commit": "",
+      "gate": "",
+      "checker": "n/a"
     }
   ],
-  "next_focus": "Fresh self-heal scan (doc-sync, bug-family, spec-drift repo-only audits). jobs-chat-prompt-doc-sync is DEFERRED to human via issue #3 — NEVER reopen it; skip any audit hit matching that scope (jobs action-type chat/prompt/log terminology).",
+  "next_focus": "Fresh self-heal scan (doc-sync, bug-family, spec-drift repo-only audits). jobs-chat-prompt-doc-sync remains in deferred[] but is resolved (issue #3 closed by human via f27e4e3+256f1c0) — never reopen, skip its scope.",
   "open_findings": [],
   "active_unit": null,
   "deferred": [

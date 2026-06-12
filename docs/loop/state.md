@@ -5,9 +5,9 @@
 
 ## Counters
 
-- Cycles total: **5**
+- Cycles total: **6**
 - Fixes shipped: **0**
-- No-ops: **1**
+- No-ops: **2**
 - Gate failures: **0**
 - Checker rejections: **4**
 
@@ -22,7 +22,7 @@ _none active_
 
 ## Next focus
 
-Fresh self-heal scan (doc-sync, bug-family, spec-drift repo-only audits). jobs-chat-prompt-doc-sync is DEFERRED to human via issue #3 — NEVER reopen it; skip any audit hit matching that scope (jobs action-type chat/prompt/log terminology).
+Fresh self-heal scan (doc-sync, bug-family, spec-drift repo-only audits). jobs-chat-prompt-doc-sync remains in deferred[] but is resolved (issue #3 closed by human via f27e4e3+256f1c0) — never reopen, skip its scope.
 
 ## Open findings
 
@@ -37,3 +37,4 @@ _none_
 | 3 | 2026-06-11T13:17:22Z | redo doc-sync unit: jobs chat->prompt across docstrings, scheduler comments, system-prompt.ts, jobs/new header, RunResultBody | checker-rejected | — | pass | rejected |
 | 4 | 2026-06-12T04:06:59Z | FOURTH attempt blocked: jobs chat->prompt doc-sync redo (all cycle-3 surfaces + RunRow comment block) | checker-rejected | — | pass | rejected |
 | 5 | 2026-06-12T07:07:36Z | defer-after-K handoff: jobs-chat-prompt-doc-sync (wide, 3 checker rejections in cycles 2-4) | checker-rejected | — | — | n/a |
+| 6 | 2026-06-12T08:12:56Z | Fresh self-heal scan: doc-sync + bug-family + spec-drift repo-only audits | no-op | — | — | n/a |
