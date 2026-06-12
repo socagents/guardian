@@ -401,20 +401,63 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
   },
 ];
 
+/** Title-case a snake_case field name, upper-casing known acronyms so a
+ *  generated label reads like a curated one (playground_id → "Playground ID",
+ *  api_url → "API URL"). Used only for config fields the hardcoded list
+ *  doesn't already name. */
+const _ACRONYMS = new Set(["api", "url", "id", "ssl", "cdp", "ms", "uri", "tls", "ip"]);
+function humanizeFieldName(name: string): string {
+  return name
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => (_ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(" ");
+}
+
+/** Map a connector.yaml configSchema property type onto a form-widget type. */
+function mapConfigType(t: unknown): string {
+  switch (typeof t === "string" ? t : "") {
+    case "boolean":
+      return "boolean";
+    case "array":
+      return "array";
+    case "integer":
+    case "number":
+      return "string";
+    default:
+      return "string";
+  }
+}
+
+interface LiveMeta {
+  tools: Tool[];
+  /** Config fields derived from configSchema.properties + secretSlots. */
+  config: ConfigField[];
+  version: string | null;
+}
+
 /**
- * v0.15.5 — overlay live `spec.tools[]` from each connector.yaml on top
- * of the hardcoded metadata. Pre-v0.15.5 the toolCount + tools[] arrays
- * here were hand-maintained and drifted (operator-visible counts went
- * stale whenever a connector's tool surface expanded).
+ * v0.15.5 — overlay live metadata from each connector.yaml on top of the
+ * hardcoded entries. Pre-v0.15.5 the toolCount + tools[] arrays here were
+ * hand-maintained and drifted (operator-visible counts went stale whenever a
+ * connector's tool surface expanded).
+ *
+ * v0.1.2 — the SAME drift bit config fields: a connector adding a config field
+ * (e.g. xsoar's `playground_id`) never surfaced in the UI because `config` was
+ * hardcoded here. The overlay now also derives `config` from
+ * `configSchema.properties` + `secretSlots` and reads the live `version`, so a
+ * new field appears in the instance form on the next dev/release cycle without
+ * touching this file. Caller MERGES live config fields the hardcoded list
+ * doesn't already name (preserving curated labels for existing fields).
  *
  * Resolution order for the bundle dir:
  *   1. /app/bundle/connectors/<id>/connector.yaml   (production, image-mounted)
  *   2. <repo>/bundles/spark/connectors/<id>/connector.yaml  (local dev)
  *
- * If neither exists OR the YAML parse fails, fall back to the hardcoded
- * tools[] + toolCount for that entry so the UI stays functional.
+ * If neither exists OR the YAML parse fails, returns null and the caller falls
+ * back to the hardcoded entry so the UI stays functional.
  */
-async function loadLiveTools(connectorId: string): Promise<Tool[] | null> {
+async function loadLiveMeta(connectorId: string): Promise<LiveMeta | null> {
   const fs = await import("fs/promises");
   const path = await import("path");
   const yaml = await import("js-yaml");
@@ -438,10 +481,19 @@ async function loadLiveTools(connectorId: string): Promise<Tool[] | null> {
   for (const p of candidates) {
     try {
       const text = await fs.readFile(p, "utf-8");
-      const doc = yaml.load(text) as { spec?: { tools?: Array<Record<string, unknown>> } };
+      const doc = yaml.load(text) as {
+        version?: unknown;
+        configSchema?: {
+          required?: unknown;
+          properties?: Record<string, { type?: unknown; default?: unknown }>;
+        };
+        secretSlots?: Array<{ name?: unknown; required?: unknown }>;
+        spec?: { tools?: Array<Record<string, unknown>> };
+      };
       const yamlTools = doc?.spec?.tools;
       if (!Array.isArray(yamlTools)) return null;
-      const out: Tool[] = [];
+
+      const tools: Tool[] = [];
       for (const t of yamlTools) {
         const name = typeof t.name === "string" ? t.name : null;
         if (!name) continue;
@@ -480,9 +532,40 @@ async function loadLiveTools(connectorId: string): Promise<Tool[] | null> {
             });
           }
         }
-        out.push({ name, method, description, args });
+        tools.push({ name, method, description, args });
       }
-      return out;
+
+      // Derive config fields: configSchema.properties (non-secret) + secretSlots.
+      const config: ConfigField[] = [];
+      const required = Array.isArray(doc?.configSchema?.required)
+        ? (doc.configSchema!.required as unknown[]).filter((x): x is string => typeof x === "string")
+        : [];
+      const props = doc?.configSchema?.properties ?? {};
+      for (const [key, prop] of Object.entries(props)) {
+        config.push({
+          display: humanizeFieldName(key),
+          name: key,
+          type: mapConfigType(prop?.type),
+          required: required.includes(key),
+          defaultValue:
+            prop?.default !== undefined ? String(prop.default) : undefined,
+        });
+      }
+      if (Array.isArray(doc?.secretSlots)) {
+        for (const slot of doc.secretSlots) {
+          const sname = typeof slot?.name === "string" ? slot.name : null;
+          if (!sname) continue;
+          config.push({
+            display: humanizeFieldName(sname),
+            name: sname,
+            type: "secret",
+            required: slot?.required === true,
+          });
+        }
+      }
+
+      const version = typeof doc?.version === "string" ? doc.version : null;
+      return { tools, config, version };
     } catch {
       // try next candidate
     }
@@ -492,13 +575,24 @@ async function loadLiveTools(connectorId: string): Promise<Tool[] | null> {
 
 export async function GET() {
   // Build a deep copy so concurrent requests don't see each other's overlay
-  const out = GUARDIAN_CONNECTORS.map((c) => ({ ...c, tools: [...c.tools] }));
+  const out = GUARDIAN_CONNECTORS.map((c) => ({ ...c, tools: [...c.tools], config: [...c.config] }));
   await Promise.all(
     out.map(async (c) => {
-      const live = await loadLiveTools(c.id);
-      if (live && live.length > 0) {
-        c.tools = live;
-        c.toolCount = live.length;
+      const live = await loadLiveMeta(c.id);
+      if (!live) return;
+      if (live.tools.length > 0) {
+        c.tools = live.tools;
+        c.toolCount = live.tools.length;
+      }
+      if (live.version) c.version = live.version;
+      // Append any live config field the hardcoded entry doesn't already
+      // name. This surfaces NEW config fields (e.g. xsoar.playground_id)
+      // without clobbering the curated display/type of existing fields.
+      if (live.config.length > 0) {
+        const known = new Set(c.config.map((f) => f.name));
+        for (const f of live.config) {
+          if (!known.has(f.name)) c.config.push(f);
+        }
       }
     }),
   );

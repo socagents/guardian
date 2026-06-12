@@ -2115,15 +2115,22 @@ function InstancesTab({
   const startEdit = useCallback((inst: InstanceDef) => {
     setEditingInstance(inst);
     setEditName(inst.name);
-    // Merge config + masked secret slots so the dialog surfaces every
-    // slot the operator filled out at setup time. Secret values arrive
-    // as "***" from the server (redacted); the existing isSecret
-    // detection in the form renders them with a lock icon and a
-    // password-style input. Rotation isn't supported via this dialog
-    // yet — the banner inside the dialog points to /setup for that.
-    setEditConfig({ ...inst.config, ...inst.secrets });
+    // Seed the dialog with EVERY field the connector's current schema
+    // declares — then overlay the instance's stored config + masked
+    // secrets on top. This surfaces fields ADDED to the connector AFTER
+    // this instance was created (e.g. xsoar.playground_id): they appear
+    // empty + editable instead of being invisible because the stored
+    // config predates them. Existing fields keep their stored values;
+    // secrets arrive as "***" (redacted) and render with a lock icon.
+    const def = allConnectors.find((c) => c.id === inst.connectorId);
+    const schemaSeed: Record<string, string> = {};
+    for (const f of def?.config ?? []) {
+      schemaSeed[f.name] =
+        typeof f.defaultValue === "string" ? f.defaultValue : "";
+    }
+    setEditConfig({ ...schemaSeed, ...inst.config, ...inst.secrets });
     setEditFeedback(null);
-  }, []);
+  }, [allConnectors]);
 
   const handleEditSave = useCallback(async () => {
     if (!editingInstance) return;

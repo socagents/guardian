@@ -19,7 +19,8 @@ The XSOAR connector grows from 13 to 21 tools, adding a command-execution engine
 - **Command engine** (needs `playground_id`) — `xsoar_run_command` runs any XSOAR `!command` synchronously in the playground War Room (`POST /entry/execute/sync`) and returns the war-room output plus optional context keys. `xsoar_enrich_indicator` layers the `!ip`/`!url`/`!domain`/`!file`/`!cve` map onto it for DBotScore reputation. `xsoar_complete_task` runs `!taskComplete` to advance a playbook task.
 - **XSOAR Lists** — `xsoar_get_list` / `xsoar_set_list` / `xsoar_append_to_list` read, overwrite, and append to XSOAR Lists (allow/block lists, lookups) via `GET /lists/` + `POST /lists/save`.
 - **Incident lifecycle** — `xsoar_create_incident` (`POST /incident`) opens a case; `xsoar_run_playbook` (`POST /inv-playbook/<pb>/<inv>`) assigns and starts a playbook on a case.
-- **New `playground_id` config field** — an **optional** field on the XSOAR instance (the Playground / War Room investigation id). The 13 read/lifecycle tools and existing instances work unchanged; only the three command-engine tools require it, and they return a clean "playground_id not configured" message when it is blank.
+- **New `playground_id` config field** — an **optional** field on the XSOAR instance (the Playground / War Room investigation id). The 13 read/lifecycle tools and existing instances work unchanged; only the three command-engine tools require it, and they return a clean "playground_id not configured" message when it is blank. The field is surfaced in the **instance Create + Edit forms** so operators can set it (see the marketplace-overlay fix below).
+- **Instance form surfaces newly-added config fields** — fixed a drift where the `/api/marketplace/connectors` catalogue hardcoded each connector's config-field list (and version), so a field added to a connector (like `playground_id`) never appeared in the UI. The catalogue now overlays the live `configSchema` + `version` from `connector.yaml` (the same overlay v0.15.5 added for `spec.tools[]`), and the Edit-Instance dialog seeds from the connector's full schema — so an existing instance's form shows fields added after it was created, empty + editable.
 
 ### Files
 
@@ -29,6 +30,8 @@ The XSOAR connector grows from 13 to 21 tools, adding a command-execution engine
 - `mcp/agent/app/help/architecture/page.tsx` — `#xsoar-connector` gains an "Action toolset" subsection.
 - `mcp/agent/app/help/user/page.tsx` — `#connectors` gains the command-tools + `playground_id` setup subsection.
 - `mcp/agent/lib/journeys.ts` — `xsoar-run-command` journey.
+- `mcp/agent/app/api/marketplace/connectors/route.ts` — overlay live `configSchema` + `version` from `connector.yaml` onto the catalogue (append config fields the hardcoded list doesn't name).
+- `mcp/agent/app/connectors/page.tsx` — Edit-Instance dialog seeds from the connector's full schema so newly-added fields surface.
 
 ### Change scenario
 
