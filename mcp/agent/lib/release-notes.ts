@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.5",
+    date: "2026-06-12",
+    title: "Investigation skill hardening — sharper, more complete case write-ups.",
+    highlights: [
+      "Investigation skill now teaches the full XSOAR tool surface (enrich_indicator, run_command, lists, playbooks).",
+      "Every investigation builds an IoC/principal ledger — no case resolves with indicators left un-enriched.",
+      "Resolution gate: a case isn't 'resolved' while competing root causes are undiscriminated.",
+      "Each Issue leads with an explicit VERDICT line + MITRE ATT&CK technique tags.",
+      "Fixed a frontmatter bug that silently disabled the skill's auto-load trigger in chat.",
+    ],
+  },
+  {
     version: "0.1.4",
     date: "2026-06-12",
     title: "Agent chat resilience — long investigations survive transient Vertex socket resets.",

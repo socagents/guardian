@@ -10,6 +10,35 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.5] (unreleased) — *Investigation skill hardening — IR rigor + tool-surface reconciliation*
+
+Guardian's `xsoar_case_investigation` skill — the playbook that drives every autonomous and operator-initiated investigation — was upgraded from a structured evaluation of the autonomous loop's REAL output (two completed investigations scored against a SOC IR rubric, every proposed change adversarially verified against the connector source). The skill now teaches the full v0.2.0 tool surface, enforces complete IoC coverage, and gates "resolved" on a single supported root cause.
+
+### What ships
+
+- **Tool-family reconciliation** — the tool table listed only 9 of the connector's 21 tools and omitted every v0.2.0 command-engine tool the investigations actually used (`enrich_indicator`, `run_command`, `run_playbook`, the list tools, `create_incident`, `complete_task`). It now documents the full surface, grouped by phase, with the `playground_id` requirement flagged per tool.
+- **Enrich step fixed** — `xsoar_enrich_indicator` (live DBotScore) is now the primary reputation tool; `xsoar_search_indicators` is for cross-case correlation. Previously the skill named only the store-search path.
+- **Entity ledger + principal-first** — Step 2 now requires an explicit ledger of every IoC / account / host / email; the case isn't resolvable until every row has a result or a documented skip. Identity cases (access-violation, lateral-movement) characterize the ACCOUNT first, not the source IP.
+- **Resolution gate** — don't mark an Issue `resolved` while competing root-cause hypotheses are undiscriminated; run the determinative query (e.g. recover the true client IP) FIRST rather than deferring it to next-steps.
+- **Structured verdict + MITRE ATT&CK** — every Issue leads with a one-line `VERDICT:` and tags confirmed behaviors with ATT&CK technique IDs grounded in evidence.
+- **Grounding rules** — quantitative claims (engine counts, scores) must trace to logged tool output; war-room citations quote the entry; blocklist recommendations check real list state via `get_list`.
+- **Version-handling correction** — the skill previously said `xsoar_update_incident` *requires* the case `version`; the connector actually resolves the optimistic-lock version itself (the search-returned version is unreliable on Cortex 8). The skill now says leave `version` unset, and `xsoar_close_incident` takes `incident_ids` (array). Confirmed against `connector.py`.
+- **Frontmatter parse fix** — the skill's YAML frontmatter carried a leaked shell-escape (`'\''` instead of YAML `''`) that made `yaml.safe_load` throw, so the loader silently discarded ALL frontmatter — including the `description` that auto-loads the skill when an operator asks to investigate a case. The loop masked this by binding the skill by name. Fixed; the auto-load trigger works again. Bug-family audit: no other skill carries the leak.
+
+### How it was built
+
+Evaluation → synthesis → adversarial verification ran as a multi-agent workflow; every proposed change was checked against the connector source before landing (two of eight needed correction). See [#8](https://github.com/kite-production/guardian/issues/8).
+
+### Files
+
+- `bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md`.
+
+### Change scenario
+
+**Scenario 1** — skill-only (baked into the agent image, volume-seeded on boot via the per-release marker merge); no installer change; volumes preserved. Patch bump (v0.1.5).
+
+---
+
 ## [v0.1.4] (unreleased) — *Agent chat resilience — retry transient Vertex socket resets*
 
 Long agent turns — especially **scheduled investigation jobs** that run many tool calls against a real XSOAR tenant — no longer die mid-run with `chat error event: fetch failed`. The chat route already retried Vertex/Gemini **429 / quota** throttling; this release extends the same exponential-backoff retry to **transient socket resets** (`UND_ERR_SOCKET` / `ECONNRESET` / connect + body timeouts), which Vertex returns when it drops a long `generateContent` connection under load.
