@@ -77,3 +77,69 @@ def test_periodic_reconcile_survives_a_failing_tick(monkeypatch):
 
 def test_periodic_reconcile_interval_is_positive():
     assert updater_main.PERIODIC_RECONCILE_INTERVAL_S > 0
+
+
+def test_reconcile_recreates_when_running_image_pruned(monkeypatch):
+    """Regression: the digest-drift reconcile must NOT crash when the running
+    container's image was pruned locally (common on the dev cycle once the new
+    image is pulled). `container.image` then raises ImageNotFound — the old
+    code let it bubble and 500'd the operator-callable reconcile/digests
+    endpoint. The fix treats a missing image as definitely-drifted + recreates.
+    """
+    import httpx
+    from docker.errors import ImageNotFound
+
+    class _PrunedImageContainer:
+        name = "guardian-connector-xsoar-primary-xsoar"
+        attrs = {"Config": {"Env": ["INSTANCE_ID=inst-123"]}}
+
+        @property
+        def image(self):
+            raise ImageNotFound("No such image: sha256:deadbeef")
+
+    class _FakeContainers:
+        def list(self, **kw):
+            return [_PrunedImageContainer()]
+
+    class _FakeDockerClient:
+        containers = _FakeContainers()
+
+    monkeypatch.setattr(updater_main, "_docker_client", lambda: _FakeDockerClient())
+    monkeypatch.setattr(updater_main, "_connector_digest", lambda cid: "sha256:newpinneddigest00000000")
+    monkeypatch.setattr(updater_main, "KNOWN_CONNECTORS", {"xsoar"})
+    monkeypatch.setattr(updater_main, "MCP_TOKEN", "tok")
+
+    posted: dict = {}
+
+    class _FakeResp:
+        status_code = 200
+        text = "ok"
+
+        def json(self):
+            return {"ok": True}
+
+    class _FakeAsyncClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, headers=None, json=None):
+            posted["url"] = url
+            posted["json"] = json
+            return _FakeResp()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+
+    summary = asyncio.run(updater_main._reconcile_connector_digest_drift())
+
+    # Did NOT crash; recreated the drifted (image-pruned) container.
+    assert posted.get("url", "").endswith(
+        "/api/v1/connectors/xsoar/instances/primary-xsoar/start"
+    )
+    assert posted.get("json") == {"instance_id": "inst-123"}
+    assert len(summary["recreated"]) == 1

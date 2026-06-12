@@ -50,7 +50,7 @@ from typing import AsyncGenerator
 
 import docker
 import httpx
-from docker.errors import DockerException, NotFound
+from docker.errors import DockerException, ImageNotFound, NotFound
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -2359,8 +2359,19 @@ async def _reconcile_connector_digest_drift() -> dict:
             continue
 
         # Read running container's image digest from its RepoDigests.
+        # `container.image` re-inspects the image by id; if that image was
+        # already pruned/replaced locally (common on the dev cycle once a new
+        # image is pulled), docker-py raises ImageNotFound. The old image being
+        # gone means the container is DEFINITELY drifted from the pinned digest
+        # — force a recreate instead of crashing the whole reconcile (the bug
+        # that made the operator-callable reconcile/digests endpoint 500).
         running_digest: str | None = None
-        repo_digests = container.image.attrs.get("RepoDigests") or []
+        image_missing = False
+        try:
+            repo_digests = container.image.attrs.get("RepoDigests") or []
+        except ImageNotFound:
+            image_missing = True
+            repo_digests = []
         expected_prefix = (
             f"{REGISTRY}/{OWNER}/guardian-connector-{connector_id}@"
         )
@@ -2369,7 +2380,7 @@ async def _reconcile_connector_digest_drift() -> dict:
                 running_digest = rd.split("@", 1)[1]
                 break
 
-        if running_digest is None:
+        if not image_missing and running_digest is None:
             # Locally-built image without a registry digest — can
             # happen in dev environments. Can't diff; skip.
             summary["unchanged"].append({
@@ -2378,7 +2389,7 @@ async def _reconcile_connector_digest_drift() -> dict:
             })
             continue
 
-        if running_digest == pinned:
+        if not image_missing and running_digest == pinned:
             summary["unchanged"].append({
                 "container": name,
                 "digest": running_digest[:19] + "...",
@@ -2404,19 +2415,22 @@ async def _reconcile_connector_digest_drift() -> dict:
             })
             continue
 
+        running_display = (
+            (running_digest[:19] + "...") if running_digest else "(image pruned)"
+        )
         drifted_entry = {
             "container": name,
             "connector_id": connector_id,
             "instance_name": instance_name,
             "instance_id": instance_id,
-            "running_digest": running_digest[:19] + "...",
+            "running_digest": running_display,
             "pinned_digest": pinned[:19] + "...",
         }
         summary["drifted"].append(drifted_entry)
 
         log.info(
             "digest-drift: %s running=%s pinned=%s — recreating",
-            name, running_digest[:19], pinned[:19],
+            name, running_display, pinned[:19],
         )
         try:
             async with _httpx.AsyncClient(timeout=_httpx.Timeout(60.0)) as http:
