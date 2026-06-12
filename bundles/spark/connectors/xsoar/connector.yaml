@@ -17,7 +17,7 @@
 # Logical paths + request bodies are identical across generations.
 
 id: "xsoar"
-version: "0.1.0"
+version: "0.2.0"
 description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, and enrich with indicators and evidence. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
 displayName: "Cortex XSOAR"
 tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]
@@ -327,3 +327,32 @@ spec:
         - { name: "name",  type: "string", description: "The list name.", required: true }
         - { name: "value", type: "string", description: "The value to append.", required: true }
       returns: { type: "object", description: "{ ok, name, data, type }" }
+
+    # ─── Incident lifecycle ──────────────────────────────────────
+    - name: "create_incident"
+      method: "POST /incident"
+      description: |
+        Create a new Cortex XSOAR incident (case). Use to open a case from
+        Guardian — e.g. record a finding as a tracked incident. Only `name` is
+        required; createInvestigation spins up the war room.
+      args:
+        - { name: "name",                 type: "string",  description: "The incident name/title.", required: true }
+        - { name: "incident_type",        type: "string",  description: "The XSOAR incident type (e.g. 'Phishing'). Discover via xsoar_list_incident_types.", required: false }
+        - { name: "severity",             type: "integer", description: "Severity 0-4 (0 unknown … 4 critical).", required: false }
+        - { name: "details",              type: "string",  description: "Free-text description / details.", required: false }
+        - { name: "owner",                type: "string",  description: "Owner username.", required: false }
+        - { name: "labels",               type: "array",   description: "Label strings (or [{type, value}] dicts).", required: false }
+        - { name: "custom_fields",        type: "object",  description: "Dict of {cliName: value} (lowercase machine names from xsoar_get_incident_fields).", required: false }
+        - { name: "create_investigation", type: "boolean", description: "Create the war-room investigation (default true).", required: false }
+      returns: { type: "object", description: "{ ok, incident_id, name, created }" }
+
+    - name: "run_playbook"
+      method: "POST /inv-playbook/{playbook_id}/{incident_id}"
+      description: |
+        Assign and run a playbook on an existing XSOAR incident — sets the
+        playbook on the incident's investigation and starts it. Use to kick off
+        an automated response/enrichment flow on a case.
+      args:
+        - { name: "incident_id", type: "string", description: "The XSOAR incident id (its investigation id) to run on.", required: true }
+        - { name: "playbook_id", type: "string", description: "The playbook id/name to assign and run.", required: true }
+      returns: { type: "object", description: "{ ok, incident_id, playbook_id, started }" }

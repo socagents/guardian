@@ -830,6 +830,14 @@ def test_all_exported_tools_are_callable():
         "xsoar_save_evidence",
         "xsoar_search_evidence",
         "xsoar_health_check",
+        "xsoar_run_command",
+        "xsoar_enrich_indicator",
+        "xsoar_complete_task",
+        "xsoar_get_list",
+        "xsoar_set_list",
+        "xsoar_append_to_list",
+        "xsoar_create_incident",
+        "xsoar_run_playbook",
     }
     assert set(connector.__all__) == expected
     for name in expected:

@@ -8,7 +8,7 @@ GETs) a logical XSOAR REST path. The fetcher applies the dual-
 generation base-URL + header rules (v6 vs v8) — every tool here stays
 generation-agnostic.
 
-Tool catalog (13):
+Tool catalog (21):
   xsoar_list_incidents        POST /incidents/search — filtered case list
   xsoar_get_incident          POST /incidents/search (filter.id) — one case
   xsoar_get_war_room          POST /investigation/{id} — war-room entries
@@ -22,6 +22,15 @@ Tool catalog (13):
   xsoar_save_evidence         POST /evidence — mark an entry as evidence
   xsoar_search_evidence       POST /evidence/search — list a case's evidence
   xsoar_health_check          GET /health — server-availability probe
+  ── action toolset (v0.2.0) ──
+  xsoar_run_command           POST /entry/execute/sync — run any !command (playground)
+  xsoar_enrich_indicator      POST /entry/execute/sync — ip/url/domain/file/cve reputation
+  xsoar_complete_task         POST /entry/execute/sync — !taskComplete a playbook task
+  xsoar_get_list              GET /lists/ — read an XSOAR list by name
+  xsoar_set_list              POST /lists/save — overwrite/create a list
+  xsoar_append_to_list        GET /lists/ + POST /lists/save — append to a list
+  xsoar_create_incident       POST /incident — create a case
+  xsoar_run_playbook          POST /inv-playbook/{pb}/{inv} — run a playbook on a case
 
 Auth model (see _xsoar_client.XSOARFetcher):
   XSOAR 6 — Authorization: <api_key>                       (api_id unset)
@@ -75,6 +84,8 @@ __all__ = [
     "xsoar_get_list",
     "xsoar_set_list",
     "xsoar_append_to_list",
+    "xsoar_create_incident",
+    "xsoar_run_playbook",
 ]
 
 
@@ -1426,3 +1437,105 @@ async def xsoar_append_to_list(name: str, value: str) -> dict:
 
     await fetcher.post("/lists/save", {"name": name, "data": new_data, "type": list_type})
     return {"name": name, "data": new_data, "type": list_type}
+
+
+# ─── xsoar_create_incident ───────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_create_incident(
+    name: str,
+    incident_type: Optional[str] = None,
+    severity: Optional[int] = None,
+    details: Optional[str] = None,
+    owner: Optional[str] = None,
+    labels: Optional[list] = None,
+    custom_fields: Optional[dict] = None,
+    create_investigation: bool = True,
+) -> dict:
+    """Create a new Cortex XSOAR incident (case).
+
+    Use to open a case from Guardian — e.g. to record a finding as a tracked
+    incident. Only `name` is required; createInvestigation spins up the war room.
+
+    Args:
+        name: The incident name/title (required).
+        incident_type: The XSOAR incident type (e.g. 'Phishing'). Discover types
+            via xsoar_list_incident_types. Optional.
+        severity: Severity level 0-4 (0 unknown … 4 critical). Optional.
+        details: Free-text description / details. Optional.
+        owner: Owner username. Optional.
+        labels: List of label strings (or [{type, value}] dicts). Optional.
+        custom_fields: Dict of {cliName: value} written under CustomFields
+            (lowercase machine names from xsoar_get_incident_fields). Optional.
+        create_investigation: Create the war-room investigation (default True).
+
+    Returns:
+        {ok, incident_id, name, created: true}.
+    """
+    if not name:
+        raise ValueError("name is required")
+    if custom_fields is not None and not isinstance(custom_fields, dict):
+        return _err("custom_fields must be a dict of {cliName: value}")
+
+    body: dict[str, Any] = {"name": name, "createInvestigation": bool(create_investigation)}
+    if incident_type:
+        body["type"] = incident_type
+    if severity is not None:
+        body["severity"] = _clamp_int(severity, 0, 0, 4)
+    if details:
+        body["details"] = details
+    if owner:
+        body["owner"] = owner
+    label_list = _as_list(labels)
+    if label_list is not None:
+        body["labels"] = [
+            x if isinstance(x, dict) else {"type": "Label", "value": x}
+            for x in label_list
+        ]
+    if custom_fields:
+        body["CustomFields"] = custom_fields
+
+    fetcher = _get_fetcher()
+    response = await fetcher.post("/incident", body)
+
+    incident_id = response.get("id") if isinstance(response, dict) else None
+    return {
+        "incident_id": incident_id,
+        "name": name,
+        "created": True,
+        "raw_response": {"id": incident_id, "version": response.get("version")}
+        if isinstance(response, dict) else response,
+    }
+
+
+# ─── xsoar_run_playbook ──────────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
+    """Assign + run a playbook on an existing XSOAR incident.
+
+    Sets the playbook on the incident's investigation and starts it. Use to kick
+    off an automated response/enrichment flow on a case.
+
+    Args:
+        incident_id: The XSOAR incident id (its investigation id) to run on.
+        playbook_id: The playbook id/name to assign and run.
+
+    Returns:
+        {ok, incident_id, playbook_id, started: true}.
+    """
+    if not incident_id:
+        raise ValueError("incident_id is required")
+    if not playbook_id:
+        raise ValueError("playbook_id is required")
+
+    fetcher = _get_fetcher()
+    response = await fetcher.post(f"/inv-playbook/{playbook_id}/{incident_id}", {})
+    return {
+        "incident_id": incident_id,
+        "playbook_id": playbook_id,
+        "started": True,
+        "raw_response": response,
+    }
