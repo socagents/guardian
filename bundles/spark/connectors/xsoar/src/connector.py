@@ -36,6 +36,7 @@ and exposes bare names; the agent sees them namespaced as
 from __future__ import annotations
 
 import functools
+import json
 import re
 from typing import Any, Optional
 
@@ -68,6 +69,9 @@ __all__ = [
     "xsoar_save_evidence",
     "xsoar_search_evidence",
     "xsoar_health_check",
+    "xsoar_run_command",
+    "xsoar_enrich_indicator",
+    "xsoar_complete_task",
 ]
 
 
@@ -122,6 +126,7 @@ def _get_xsoar_config() -> dict:
         "api_id": getattr(proxy, "api_id", None),
         "api_key": getattr(proxy, "api_key", None),
         "verify_ssl": getattr(proxy, "verify_ssl", True),
+        "playground_id": getattr(proxy, "playground_id", None),
     }
 
 
@@ -148,6 +153,132 @@ def _get_fetcher() -> XSOARFetcher:
         api_id=str(api_id) if api_id not in (None, "") else None,
         verify_ssl=bool(verify_ssl),
     )
+
+
+# ─── Command-engine helpers (playground war-room) ────────────────────
+
+
+# XSOAR's "investigation not found" error markers — used to give a clean
+# "bad playground_id" message instead of a raw 4xx.
+_PLAYGROUND_NOT_FOUND_MARKERS = ("noInv", "Could not find investigation")
+
+
+def _get_playground_id() -> str:
+    """Resolve the playground/war-room investigation id from instance config.
+
+    The three command-engine tools (run_command, enrich_indicator,
+    complete_task) run XSOAR `!commands` inside a playground investigation,
+    which needs an id. Raising ValueError here surfaces as the standard
+    operator-actionable error envelope via _wrap_xsoar_call.
+    """
+    cfg = _get_xsoar_config()
+    playground_id = cfg.get("playground_id")
+    if not playground_id:
+        raise ValueError(
+            "playground_id is not configured on this XSOAR instance. Set it "
+            "(the Playground / War Room investigation ID — find it in the XSOAR "
+            "UI: open your Playground and copy the id from the URL) at "
+            "/connectors to use run_command, enrich_indicator, or complete_task."
+        )
+    return str(playground_id)
+
+
+def _parse_war_room_entries(response: Any) -> str:
+    """Concatenate war-room entry `contents` from an execute/sync response.
+
+    The fetcher normalizes a bare-array body into {"data": [...]}, so entries
+    arrive under `data`; a single-entry dict is treated as one entry. type==4
+    entries are errors (prefixed "Error:"). Unlike the reference port
+    (docs/ref/trevor-mcp.py:541) we do NOT skip type==1 — in XSOAR type 1 is the
+    standard note entry, so skipping it drops legitimate output (e.g. !Print).
+    We include every entry that carries non-empty contents.
+    """
+    if isinstance(response, dict) and isinstance(response.get("data"), list):
+        entries = response["data"]
+    elif isinstance(response, list):
+        entries = response
+    elif isinstance(response, dict):
+        entries = [response]
+    else:
+        entries = []
+
+    parts: list[str] = []
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        contents = e.get("contents")
+        if contents in (None, ""):
+            continue
+        text = contents if isinstance(contents, str) else json.dumps(contents)
+        parts.append(f"Error: {text}" if e.get("type") == 4 else text)
+
+    return "\n".join(parts).strip() or "Command executed (no text output returned)."
+
+
+async def _execute_command(
+    fetcher: XSOARFetcher,
+    playground_id: str,
+    command: str,
+    return_context_keys: Optional[str] = None,
+) -> dict:
+    """Run an XSOAR `!command` synchronously in the playground war room.
+
+    Ports docs/ref/trevor-mcp.py:489-577. When return_context_keys (a
+    comma-separated string) is given, each key's context is cleared before the
+    run and retrieved after; otherwise only the war-room text is returned.
+
+    Returns {output, context?} — context is present only when keys were asked
+    for. Raises ValueError on a missing/invalid playground (→ clean envelope).
+    """
+    keys = (
+        [k.strip() for k in return_context_keys.split(",") if k.strip()]
+        if return_context_keys
+        else []
+    )
+
+    # 1. Clear context (best-effort — a clear failure must not abort the run).
+    for key in keys:
+        try:
+            await fetcher.post(
+                "/entry",
+                {"investigationId": playground_id, "data": f"!DeleteContext key={key}"},
+            )
+        except XSOARError:
+            pass
+
+    # 2. Execute synchronously.
+    try:
+        response = await fetcher.post(
+            "/entry/execute/sync",
+            {"investigationId": playground_id, "data": command},
+        )
+    except XSOARRequestError as exc:
+        if any(marker in str(exc) for marker in _PLAYGROUND_NOT_FOUND_MARKERS):
+            raise ValueError(
+                f"playground '{playground_id}' not found — check the playground_id "
+                f"on the XSOAR instance."
+            )
+        raise
+
+    output = _parse_war_room_entries(response)
+
+    # 3. Retrieve requested context keys (literal ${Key} syntax).
+    context: Optional[dict] = None
+    if keys:
+        context = {}
+        for key in keys:
+            try:
+                context[key] = await fetcher.post(
+                    f"/investigation/{playground_id}/context",
+                    {"query": f"${{{key}}}"},
+                )
+            except XSOARError as exc:
+                context[key] = {"error": str(exc)}
+
+    result: dict[str, Any] = {"output": output}
+    if context is not None:
+        result["context"] = context
+    return result
 
 
 def _wrap_xsoar_call(fn):
@@ -1043,3 +1174,125 @@ async def xsoar_health_check() -> dict:
         "total_incidents": total,
         "generation": "v8" if fetcher.is_v8 else "v6",
     }
+
+
+# ─── xsoar_run_command ───────────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_run_command(
+    command: str,
+    return_context_keys: Optional[str] = None,
+) -> dict:
+    """Run an arbitrary Cortex XSOAR command in the playground war room.
+
+    The escape hatch onto XSOAR's full command surface — run any `!command`
+    (e.g. '!ip ip=8.8.8.8', '!Print value=hi', '!setIncident ...') synchronously
+    and get the war-room output back. For indicator reputation specifically,
+    prefer xsoar_enrich_indicator (it picks the right command + context keys).
+
+    Requires the instance's playground_id to be set (the War Room the command
+    runs in). Returns a clean error if it isn't.
+
+    Args:
+        command: The full XSOAR command including the leading '!'
+            (e.g. '!ip ip=8.8.8.8'). Quote values with spaces.
+        return_context_keys: Optional comma-separated XSOAR context keys to
+            return as structured data after the run (e.g. 'IP,DBotScore'). Each
+            key is cleared before the run and read back after. Omit to get only
+            the war-room text output.
+
+    Returns:
+        {ok, output: <war-room text>, context?: {<key>: <value>, ...}}.
+    """
+    if not command:
+        raise ValueError("command is required (e.g. '!ip ip=8.8.8.8')")
+    playground_id = _get_playground_id()
+    fetcher = _get_fetcher()
+    return await _execute_command(fetcher, playground_id, command, return_context_keys)
+
+
+# ─── xsoar_enrich_indicator ──────────────────────────────────────────
+
+
+# Indicator-type → (command template, comma-separated context keys to return).
+# Ported from docs/ref/trevor-mcp.py:580. The value is double-quoted into the
+# command (e.g. !ip ip="8.8.8.8").
+_ENRICH_CMD_MAP: dict[str, tuple[str, str]] = {
+    "ip": ("!ip ip={}", "IP,DBotScore,IPinfo,AutoFocus"),
+    "url": ("!url url={}", "URL,DBotScore,AutoFocus"),
+    "domain": ("!domain domain={}", "Domain,DBotScore,Whois,AutoFocus"),
+    "file": ("!file file={}", "File,DBotScore"),
+    "cve": ("!cve cve_id={}", "CVE"),
+}
+
+
+@_wrap_xsoar_call
+async def xsoar_enrich_indicator(indicator_type: str, value: str) -> dict:
+    """Enrich an indicator (IoC) with reputation + threat context.
+
+    Runs the matching XSOAR enrichment command in the playground and returns the
+    structured DBotScore + reputation context. The investigation workhorse: "is
+    this IP/domain/hash malicious?". Requires the instance's playground_id.
+
+    Args:
+        indicator_type: One of ip, url, domain, file, cve (case-insensitive).
+        value: The indicator value (e.g. '8.8.8.8', 'evil.com', a SHA256, a
+            CVE id like 'CVE-2024-1234').
+
+    Returns:
+        {ok, indicator_type, value, output, context: {<key>: <value>, ...}}
+        where context carries the enrichment keys (e.g. IP, DBotScore).
+    """
+    if not value:
+        raise ValueError("value is required")
+    normalized = (indicator_type or "").lower()
+    if normalized not in _ENRICH_CMD_MAP:
+        return _err(
+            f"unsupported indicator_type '{indicator_type}' "
+            f"(expected one of: ip, url, domain, file, cve)"
+        )
+    template, context_keys = _ENRICH_CMD_MAP[normalized]
+    command = template.format(f'"{value}"')
+
+    playground_id = _get_playground_id()
+    fetcher = _get_fetcher()
+    result = await _execute_command(fetcher, playground_id, command, context_keys)
+    return {"indicator_type": normalized, "value": value, **result}
+
+
+# ─── xsoar_complete_task ─────────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_complete_task(
+    incident_id: str,
+    task_id: str,
+    comment: Optional[str] = None,
+) -> dict:
+    """Complete a playbook / war-room task on an incident.
+
+    Runs XSOAR's `!taskComplete` command (a war-room automation command, not a
+    REST endpoint) in the playground, targeting the given incident's task. Use
+    to advance a stuck playbook task. Requires the instance's playground_id.
+
+    Args:
+        incident_id: The XSOAR incident id that owns the task.
+        task_id: The playbook task id (or tag) to complete.
+        comment: Optional completion note recorded on the task.
+
+    Returns:
+        {ok, incident_id, task_id, output}.
+    """
+    if not incident_id:
+        raise ValueError("incident_id is required")
+    if not task_id:
+        raise ValueError("task_id is required")
+    command = f"!taskComplete id={task_id} incidentId={incident_id}"
+    if comment:
+        command += f' comment="{comment}"'
+
+    playground_id = _get_playground_id()
+    fetcher = _get_fetcher()
+    result = await _execute_command(fetcher, playground_id, command)
+    return {"incident_id": incident_id, "task_id": task_id, **result}

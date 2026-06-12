@@ -55,6 +55,9 @@ configSchema:
       type: "boolean"
       description: "Verify the XSOAR server's TLS certificate. Default true. Set false only for on-prem XSOAR 6 servers with self-signed certs."
       default: true
+    playground_id:
+      type: "string"
+      description: "Playground / War Room investigation ID, used to run XSOAR commands (REQUIRED for run_command, enrich_indicator, complete_task; the other tools work without it). Find it in XSOAR: open your Playground and copy the investigation ID from the URL. Leave blank if you don't use the command tools."
 
 secretSlots:
   - name: "api_key"
@@ -249,3 +252,43 @@ spec:
         credentials bad).
       args: []
       returns: { type: "object", description: "{ ok, reachable, detail, generation: 'v6' | 'v8' }" }
+
+    # ─── Command engine (needs playground_id) ────────────────────
+    - name: "run_command"
+      method: "POST /entry/execute/sync"
+      description: |
+        Run an arbitrary Cortex XSOAR command in the playground war room — the
+        escape hatch onto XSOAR's full command surface. Run any `!command`
+        (e.g. '!Print value=hi', '!setIncident ...') and get the war-room output
+        back. For indicator reputation, prefer xsoar_enrich_indicator. REQUIRES
+        the instance's playground_id to be configured.
+      args:
+        - { name: "command",             type: "string", description: "Full XSOAR command including the leading '!' (e.g. '!ip ip=8.8.8.8'). Quote values containing spaces.", required: true }
+        - { name: "return_context_keys", type: "string", description: "Optional comma-separated XSOAR context keys to return as structured data (e.g. 'IP,DBotScore'). Omit for war-room text only.", required: false }
+      returns: { type: "object", description: "{ ok, output, context? }" }
+
+    - name: "enrich_indicator"
+      method: "POST /entry/execute/sync (!ip/!url/!domain/!file/!cve)"
+      description: |
+        Enrich an indicator (IoC) with reputation + threat context — runs the
+        matching XSOAR enrichment command (!ip/!url/!domain/!file/!cve) in the
+        playground and returns the structured DBotScore + reputation. The
+        investigation workhorse: "is this IP/domain/hash malicious?". REQUIRES
+        the instance's playground_id.
+      args:
+        - { name: "indicator_type", type: "string", description: "One of ip, url, domain, file, cve (case-insensitive).", required: true }
+        - { name: "value",          type: "string", description: "The indicator value (e.g. '8.8.8.8', 'evil.com', a SHA256, 'CVE-2024-1234').", required: true }
+      returns: { type: "object", description: "{ ok, indicator_type, value, output, context }" }
+
+    - name: "complete_task"
+      method: "POST /entry/execute/sync (!taskComplete)"
+      description: |
+        Complete a playbook / war-room task on an incident. Runs XSOAR's
+        `!taskComplete` command in the playground, targeting the incident's task
+        — use to advance a stuck playbook task. REQUIRES the instance's
+        playground_id.
+      args:
+        - { name: "incident_id", type: "string", description: "The XSOAR incident id that owns the task.", required: true }
+        - { name: "task_id",     type: "string", description: "The playbook task id (or tag) to complete.", required: true }
+        - { name: "comment",     type: "string", description: "Optional completion note recorded on the task.", required: false }
+      returns: { type: "object", description: "{ ok, incident_id, task_id, output }" }
