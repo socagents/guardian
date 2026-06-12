@@ -66,6 +66,8 @@ export default function ModelDetailPage() {
   const [model, setModel] = useState<ModelInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [defaultModel, setDefaultModel] = useState<{ provider?: string; model?: string } | null>(null);
+  const [savingDefault, setSavingDefault] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +94,37 @@ export default function ModelDetailPage() {
       cancelled = true;
     };
   }, [requestedModel, requestedProvider]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/agent/operator-state/default_model")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled)
+          setDefaultModel((d?.value as { provider?: string; model?: string }) ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isDefault = defaultModel?.model === model?.model;
+
+  async function makeDefault() {
+    if (!model) return;
+    setSavingDefault(true);
+    try {
+      const res = await fetch("/api/agent/operator-state/default_model", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: { provider: model.provider, model: model.model } }),
+      });
+      if (res.ok) setDefaultModel({ provider: model.provider, model: model.model });
+    } finally {
+      setSavingDefault(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -179,6 +212,18 @@ export default function ModelDetailPage() {
                 {model.kind || "chat"}
               </span>
             </div>
+            <button
+              type="button"
+              onClick={makeDefault}
+              disabled={savingDefault || isDefault || model.wip}
+              aria-pressed={isDefault}
+              className="mt-2 inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-label border border-outline-variant text-on-surface disabled:opacity-60"
+            >
+              <span className="material-symbols-outlined text-base">
+                {isDefault ? "radio_button_checked" : "radio_button_unchecked"}
+              </span>
+              {isDefault ? "Default model" : savingDefault ? "Saving…" : "Set as default"}
+            </button>
           </div>
         </div>
       </header>
