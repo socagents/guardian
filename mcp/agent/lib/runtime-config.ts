@@ -55,6 +55,10 @@ export type RuntimeConfigValues = {
 export type EffectiveRuntimeConfig = RuntimeConfigValues & {
   MCP_URL: string;
   MCP_TOOL_CACHE_TTL_MS: string;
+  /** Operator-chosen default model (operator_state.db key `default_model`),
+   *  populated per chat request by route.ts. Undefined = no default set →
+   *  fall back to GEMINI_MODEL. */
+  defaultModel?: string;
 };
 
 /* ─── Constants ────────────────────────────────────────────── */

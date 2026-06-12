@@ -1827,6 +1827,29 @@ async function readSubagentsEnabled(): Promise<boolean> {
   }
 }
 
+/**
+ * Read the operator's default model from operator-state (`default_model`).
+ * Mirrors readSubagentsEnabled. The model detail page sets this via
+ * PUT /api/v1/operator-state/default_model {value: {provider, model}}.
+ * Returns the model id string, or undefined if unset/unreadable (→ caller
+ * falls back to GEMINI_MODEL). Never throws.
+ */
+async function readDefaultModel(): Promise<string | undefined> {
+  try {
+    const result = await callMcpServer<{ value?: unknown }>(
+      `/api/v1/operator-state/${encodeURIComponent('default_model')}`,
+    );
+    const raw = result?.value;
+    if (raw && typeof raw === 'object' && 'model' in (raw as Record<string, unknown>)) {
+      const m = (raw as Record<string, unknown>).model;
+      return typeof m === 'string' && m.length > 0 ? m : undefined;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── Empty-response fallback ──────────────────────────────────────────
 //
 // Build a context-aware message when the model finishes a turn without
@@ -2722,7 +2745,10 @@ function resolveModelName(
   modelOverride: string | undefined,
   runtimeConfig: EffectiveRuntimeConfig,
 ): string {
-  return modelOverride || runtimeConfig.GEMINI_MODEL || 'gemini-3.1-pro-preview';
+  return modelOverride
+    || runtimeConfig.defaultModel
+    || runtimeConfig.GEMINI_MODEL
+    || 'gemini-3.1-pro-preview';
 }
 
 /**
@@ -3921,7 +3947,11 @@ export async function POST(request: NextRequest) {
         // command IS the turn.
         const parsed = parseSlashCommand(message);
         if (parsed) {
-          const runtimeConfig = await getEffectiveRuntimeConfig();
+          const [_slashBaseConfig, slashDefaultModel] = await Promise.all([
+            getEffectiveRuntimeConfig(),
+            readDefaultModel(),
+          ]);
+          const runtimeConfig = { ..._slashBaseConfig, defaultModel: slashDefaultModel };
           await dispatchSlashCommand(parsed, SLASH_COMMANDS, {
             args: parsed.args,
             sessionId,
@@ -3943,17 +3973,19 @@ export async function POST(request: NextRequest) {
           // these for now rather than emit them as malformed Spark events.
         };
 
-        const runtimeConfig = await getEffectiveRuntimeConfig();
-
-        // v0.6.6 — read the operator's `chat_subagents_enabled`
-        // preference for this turn. Defaults to true. When false:
-        //   - SUBAGENT_CREATE_TOOL_SPEC is omitted from the catalog
-        //     the model sees, so it shouldn't even try to spawn.
-        //   - As defense in depth, the dispatcher intercepts any
-        //     `subagent_create` call (in case the model somehow still
-        //     issues it from training) and synthesizes a denied
-        //     response explaining the policy.
-        const subagentsEnabled = await readSubagentsEnabled();
+        // Operator's default model (operator_state.db) and subagents
+        // preference are read in parallel to avoid two sequential round-trips.
+        const [_baseRuntimeConfig, defaultModel, subagentsEnabled] = await Promise.all([
+          getEffectiveRuntimeConfig(),
+          readDefaultModel(),
+          readSubagentsEnabled(),
+        ]);
+        // Shallow-copy so we can attach defaultModel without mutating the
+        // cached/shared config object. Every resolveModelName() call in
+        // this request receives the same runtimeConfig, so one population
+        // covers all four call sites (callGeminiRaw, summarizeViaGemini,
+        // callGemini, and the main-loop effectiveModel).
+        const runtimeConfig = { ..._baseRuntimeConfig, defaultModel };
 
         // v0.1.27 — resolve approval bypass for this turn. Two sources:
         //   (a) the inbound request already carries
