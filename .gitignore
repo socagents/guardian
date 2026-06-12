@@ -257,5 +257,7 @@ scripts/loop/loop.env
 .guardian-loop/.lock/
 .guardian-loop/IS_LOOP_CLONE
 .guardian-loop/deps.hash
+# Phase 1.5 carry-forward patches (a wide unit's rejected diff, applied next cycle)
+.guardian-loop/carry/
 # Tunnel state dir created in the loop clone by scripts/guardian_tunnels.sh
 .guardian-tunnels/

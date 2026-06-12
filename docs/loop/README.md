@@ -12,6 +12,16 @@ and — when a best-effort IAP tunnel is up — live-stack observe), runs the fu
 gate + an adversarial checker, and pushes to `main` (which triggers the normal
 CI build + auto-deploy on the VM runner). No XSOAR seeding yet (Phase 2).
 
+## Convergence + spin-safety (Phase 1.5)
+The loop tracks an **active unit** (`state.json.active_unit`) — what it's working on across
+cycles, shown in `state.md`:
+- **Narrow by default:** each cycle ships the smallest coherent slice; a wide bug-family is
+  split and cleared over several cycles (each a clean push).
+- **Carry-forward (wide units):** an atomic-but-wide unit that the checker rejects saves its diff
+  to `.guardian-loop/carry/<id>.patch` (gitignored); the next cycle `git apply`s it and extends it.
+- **Defer-after-K:** after K rejections (2 narrow / 3 wide) the loop files a GitHub issue, lists
+  the unit under **"Deferred — needs human"** in `state.md`, and moves on — it never spins.
+
 ## Where things live
 | Thing | Path |
 |---|---|
