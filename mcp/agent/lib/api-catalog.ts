@@ -969,7 +969,7 @@ const OPERATIONS: ApiEndpoint[] = [
           name: { type: "string", description: "Filesystem-safe name (no slashes, dots)." },
           cron: { type: "string", description: "5-field POSIX cron." },
           timezone: { type: "string", description: "IANA TZ name. Default UTC." },
-          action: { type: "object", description: "{type: chat|tool_call|log, ...}" },
+          action: { type: "object", description: "{type: prompt|tool_call, ...} (legacy `chat` migrates to `prompt`)" },
           enabled: { type: "boolean" },
           run_once: { type: "boolean", description: "Auto-disable after first fire." },
         },

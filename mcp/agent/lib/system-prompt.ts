@@ -427,10 +427,11 @@ shows up in \`jobs_list\` as an enabled job, but the first fire
 records \`last_status: "failure"\` with a \`last_error\` like
 "tool_call action requires a \`name\` field". To avoid that:
 
-  • \`type: "chat"\` — { type, message, session_id? }
-    Drives a chat turn against this agent. \`message\` is the prompt
-    the scheduler will send. Use for recurring investigations
-    ("triage the new high-severity XSOAR cases each morning").
+  • \`type: "prompt"\` — { type, message, session_id? }
+    Drives an agent turn against this agent (\`chat\` is an accepted
+    legacy alias, migrated to \`prompt\` at boot — use \`prompt\`).
+    \`message\` is the prompt the scheduler will send. Use for recurring
+    investigations ("triage the new high-severity XSOAR cases each morning").
 
   • \`type: "tool_call"\` — { type, name, args }
     Invokes the named MCP tool with \`args\` as the request body.

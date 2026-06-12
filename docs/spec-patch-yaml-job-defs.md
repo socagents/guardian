@@ -84,7 +84,7 @@ timezone: UTC
 enabled: true
 run_once: false
 action:
-  type: chat
+  type: prompt
   message: Generate a coverage report for the last 7 days
 ```
 

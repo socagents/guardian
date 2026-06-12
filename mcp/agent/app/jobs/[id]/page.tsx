@@ -67,18 +67,20 @@ function formatDuration(ms: number | undefined): string {
 
 /** Best-effort label for the job's action — what will it actually do
  *  when it fires? The list-view "Agent" cell was empty for tool_call
- *  + log jobs because action.agent_id is only set on type=chat. Now
+ *  + log jobs because action.agent_id is only set on type=chat/prompt. Now
  *  we describe each shape concretely. */
 function describeAction(action: Job["action"] | undefined): string {
   if (!action) return "—";
   const t = action.type ?? "(unknown)";
-  if (t === "chat") {
+  // `prompt` is canonical (boot migration rewrites legacy `chat` → `prompt`);
+  // accept both so migrated and in-flight rows describe identically.
+  if (t === "chat" || t === "prompt") {
     const aid = action.agent_id ?? "(this agent)";
     const msg =
       typeof action.message === "string" && action.message.length > 0
         ? `: "${action.message.slice(0, 60)}${action.message.length > 60 ? "…" : ""}"`
         : "";
-    return `chat → ${aid}${msg}`;
+    return `${t} → ${aid}${msg}`;
   }
   if (t === "tool_call") {
     return `tool_call → ${action.name ?? "(unnamed)"}`;
@@ -319,11 +321,11 @@ export default async function JobDetailPage({ params }: PageProps) {
 // hydration cost. The most-recent run defaults to open so the operator sees
 // the latest output without an extra click; older ones stay collapsed.
 //
-// The body content is dispatched on `actionType` because chat / tool_call /
-// log runs each carry meaningfully different result shapes:
+// The body content is dispatched on `actionType` because prompt / tool_call /
+// (legacy) log runs each carry meaningfully different result shapes:
 //
-//   chat       → {session_id, run_id, response, tool_calls[], tool_call_count}
-//                Render the model's reply prominently, list tool calls, and
+//   prompt     → {session_id, run_id, response, tool_calls[], tool_call_count}
+//   (or chat)    Render the model's reply prominently, list tool calls, and
 //                deep-link to /chat?session=<id> so the operator can open the
 //                full conversation.
 //   tool_call  → arbitrary JSON returned by the dispatched tool. Pretty-print
@@ -473,7 +475,7 @@ function RunResultBody({
     );
   }
 
-  if (actionType === "chat" && typeof result === "object") {
+  if ((actionType === "chat" || actionType === "prompt") && typeof result === "object") {
     return <ChatResultBody result={result as Record<string, unknown>} />;
   }
   if (actionType === "log" && typeof result === "object") {

@@ -765,13 +765,17 @@ async def jobs_create(
         cron: 5-field expression (POSIX cron).
         action: discriminated by `type` — one of:
 
-            type="chat" — fire a chat turn against this agent:
-              {"type": "chat",
+            type="prompt" — fire an agent turn against this agent:
+              {"type": "prompt",
                "message": "...",
                "skill"?: "<canonical_skill_name>",
                "session_id"?: "..."}
 
-              `skill` (optional) pins which skill the chat turn loads
+              (`chat` is an accepted legacy alias — the scheduler
+              migrates stored `chat` actions to `prompt` at boot;
+              new jobs should use `prompt`.)
+
+              `skill` (optional) pins which skill the prompt turn loads
               into its system prompt. The scheduler injects the
               skill's MD content into the dispatched turn as
               <skill name="..."> ... </skill>, so the agent enters the
@@ -927,10 +931,10 @@ async def jobs_update(
             omit to keep the current schedule.
         timezone: IANA TZ name. Omit to keep current.
         action: discriminated-union job action — same shape as
-            jobs_create's action arg (type=chat / tool_call / log).
+            jobs_create's action arg (type=prompt / tool_call).
             See jobs_create docstring for the full action shape
-            including the `skill` field on the chat action and the
-            `format`-vs-`log_type` gotcha on the log action.
+            including the `skill` field on the prompt action and the
+            `format`-vs-`log_type` gotcha on the (legacy) log action.
         enabled: false to pause the cron, true to resume. Omit to
             keep current state.
         bypass_approvals: toggle the per-job auto-approval flag.

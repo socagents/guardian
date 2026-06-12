@@ -208,9 +208,11 @@ function actionLabel(
 ): string {
   if (!action) return "—";
   const t = action.type ?? "";
-  if (t === "chat") {
+  if (t === "chat" || t === "prompt") {
+    // `prompt` is canonical (boot migration rewrites legacy `chat` → `prompt`);
+    // accept both so migrated and in-flight rows label identically.
     const aid = action.agent_id ?? "";
-    return (aid && agentNameMap[aid]) || aid || "chat";
+    return (aid && agentNameMap[aid]) || aid || t;
   }
   if (t === "tool_call") {
     return action.name ?? "tool_call";
