@@ -5,15 +5,24 @@
 
 ## Counters
 
-- Cycles total: **4**
+- Cycles total: **5**
 - Fixes shipped: **0**
 - No-ops: **1**
 - Gate failures: **0**
-- Checker rejections: **3**
+- Checker rejections: **4**
+
+## Active unit
+
+_none active_
+
+## Deferred — needs human
+
+- **jobs-chat-prompt-doc-sync** — Jobs action-type doc-sync: chat->prompt terminology drift across docstrings, system-prompt, UI renderers, help-page prose → https://github.com/kite-production/guardian/issues/3
+  - blocked on: Accumulated over cycles 2-4 (pre-Phase-1.5, backfilled): (c2) system-prompt.ts:430 type:'chat' + jobs/new:9 header stale; (c3) comparison branches describeAction jobs/[id]:72 + actionLabel jobs-list-client:205 + api-catalog.ts:972 + spec-patch-yaml-job-defs.md:87; (c4) prose evades literal greps — help/user/page.tsx:420-422,2015,4455 + help/architecture/page.tsx:1396 'chat-action job' + jobs/new:545-547 FALSE claim log rows migrate to tool_call (validator rejects log; only chat->prompt migrates). Each attempt fixed all enumerated surfaces and the gate passed 7/7, but the checker found a new same-family stratum every time (literal shapes -> comparison branches -> prose). Completeness needs case-insensitive 'action.{0,40}(chat|log)' + '(chat|log).{0,20}action' over mcp/agent/app/help + all prior greps, with every hit justified.
 
 ## Next focus
 
-FIFTH attempt jobs chat->prompt doc-sync — redo the full cycle-4 diff (self_mod_tools.py jobs_create+jobs_update docstrings; job_scheduler.py:119,126 comments; system-prompt.ts:430 shape+skill?+alias note; jobs/new:9 header; jobs/[id] describeAction:72-93 + RunRow comment:326-338 + RunResultBody:483; jobs-list-client actionLabel:205-224; api-catalog.ts:972; spec-patch-yaml-job-defs.md:87) PLUS checker-found hits: help/user/page.tsx:420-422,2015,4455 prose 'chat actions'/'(chat / tool_call / log)'; help/architecture/page.tsx:1396 'chat-action job'; jobs/new:545-547 false claim that log rows migrate to tool_call (they are rejected, only chat->prompt migrates). Completeness grep MUST include case-insensitive 'action.{0,40}(chat|log)' + '(chat|log).{0,20}action' over mcp/agent/app/help + all prior literal-shape greps. Keeps: migration/alias code, legacy renderer branches, journeys.ts:916, jobs/new:264, job_scheduler.py:498, tests, model kind==chat, audit event names.
+Fresh self-heal scan (doc-sync, bug-family, spec-drift repo-only audits). jobs-chat-prompt-doc-sync is DEFERRED to human via issue #3 — NEVER reopen it; skip any audit hit matching that scope (jobs action-type chat/prompt/log terminology).
 
 ## Open findings
 
@@ -27,3 +36,4 @@ _none_
 | 2 | 2026-06-11T12:42:27Z | self-heal: MCP tool docstrings vs UI forms lockstep audit (docs discipline #9) | checker-rejected | — | pass | rejected |
 | 3 | 2026-06-11T13:17:22Z | redo doc-sync unit: jobs chat->prompt across docstrings, scheduler comments, system-prompt.ts, jobs/new header, RunResultBody | checker-rejected | — | pass | rejected |
 | 4 | 2026-06-12T04:06:59Z | FOURTH attempt blocked: jobs chat->prompt doc-sync redo (all cycle-3 surfaces + RunRow comment block) | checker-rejected | — | pass | rejected |
+| 5 | 2026-06-12T07:07:36Z | defer-after-K handoff: jobs-chat-prompt-doc-sync (wide, 3 checker rejections in cycles 2-4) | checker-rejected | — | — | n/a |

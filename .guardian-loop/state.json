@@ -40,8 +40,28 @@
       "commit": "",
       "gate": "pass",
       "checker": "rejected"
+    },
+    {
+      "n": 5,
+      "started_at": "2026-06-12T07:07:36Z",
+      "focus": "defer-after-K handoff: jobs-chat-prompt-doc-sync (wide, 3 checker rejections in cycles 2-4)",
+      "outcome": "checker-rejected",
+      "summary": "No fifth attempt — applied Phase 1.5 convergence: opened the unit as wide, backfilled the 3 pre-machinery rejections, show-defer=DEFER (K_WIDE=3), filed handoff issue kite-production/guardian#3 with full scope + accumulated checker reasons + keeps list, defer-unit moved it to deferred[]. No code changed; no gate/checker run this pass. (tunnel: down)",
+      "commit": "",
+      "gate": "",
+      "checker": "n/a"
     }
   ],
-  "next_focus": "FIFTH attempt jobs chat->prompt doc-sync — redo the full cycle-4 diff (self_mod_tools.py jobs_create+jobs_update docstrings; job_scheduler.py:119,126 comments; system-prompt.ts:430 shape+skill?+alias note; jobs/new:9 header; jobs/[id] describeAction:72-93 + RunRow comment:326-338 + RunResultBody:483; jobs-list-client actionLabel:205-224; api-catalog.ts:972; spec-patch-yaml-job-defs.md:87) PLUS checker-found hits: help/user/page.tsx:420-422,2015,4455 prose 'chat actions'/'(chat / tool_call / log)'; help/architecture/page.tsx:1396 'chat-action job'; jobs/new:545-547 false claim that log rows migrate to tool_call (they are rejected, only chat->prompt migrates). Completeness grep MUST include case-insensitive 'action.{0,40}(chat|log)' + '(chat|log).{0,20}action' over mcp/agent/app/help + all prior literal-shape greps. Keeps: migration/alias code, legacy renderer branches, journeys.ts:916, jobs/new:264, job_scheduler.py:498, tests, model kind==chat, audit event names.",
-  "open_findings": []
+  "next_focus": "Fresh self-heal scan (doc-sync, bug-family, spec-drift repo-only audits). jobs-chat-prompt-doc-sync is DEFERRED to human via issue #3 — NEVER reopen it; skip any audit hit matching that scope (jobs action-type chat/prompt/log terminology).",
+  "open_findings": [],
+  "active_unit": null,
+  "deferred": [
+    {
+      "id": "jobs-chat-prompt-doc-sync",
+      "title": "Jobs action-type doc-sync: chat->prompt terminology drift across docstrings, system-prompt, UI renderers, help-page prose",
+      "scope": "self_mod_tools.py jobs_create+jobs_update docstrings; job_scheduler.py:119,126 comments; system-prompt.ts:430 shape+skill?+alias note; jobs/new:9 header + :545-547 false log-migration claim; jobs/[id] describeAction:72-93 + RunRow comment:326-338 + RunResultBody:483; jobs-list-client actionLabel:205-224; api-catalog.ts:972; docs/spec-patch-yaml-job-defs.md:87; help/user/page.tsx:420-422,2015,4455 prose; help/architecture/page.tsx:1396. Keeps: migration/alias code, legacy renderer branches, journeys.ts:916, jobs/new:264, job_scheduler.py:498, tests, model kind==chat, audit event names.",
+      "reasons": "Accumulated over cycles 2-4 (pre-Phase-1.5, backfilled): (c2) system-prompt.ts:430 type:'chat' + jobs/new:9 header stale; (c3) comparison branches describeAction jobs/[id]:72 + actionLabel jobs-list-client:205 + api-catalog.ts:972 + spec-patch-yaml-job-defs.md:87; (c4) prose evades literal greps — help/user/page.tsx:420-422,2015,4455 + help/architecture/page.tsx:1396 'chat-action job' + jobs/new:545-547 FALSE claim log rows migrate to tool_call (validator rejects log; only chat->prompt migrates). Each attempt fixed all enumerated surfaces and the gate passed 7/7, but the checker found a new same-family stratum every time (literal shapes -> comparison branches -> prose). Completeness needs case-insensitive 'action.{0,40}(chat|log)' + '(chat|log).{0,20}action' over mcp/agent/app/help + all prior greps, with every hit justified.",
+      "issue": "https://github.com/kite-production/guardian/issues/3"
+    }
+  ]
 }
