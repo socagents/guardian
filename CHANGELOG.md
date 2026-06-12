@@ -10,6 +10,26 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.6] (unreleased) — *Investigation skill — blast-radius scoping gate*
+
+A focused, evidence-driven increment on top of v0.1.5. A second structured evaluation of the autonomous loop's output (four investigations across lateral-movement, malware, data-exfiltration, and DNS-tunnel C2 — every proposed change adversarially verified and biased to reject churn) confirmed v0.1.5 is solid and surfaced exactly **one** recurring gap: investigations resolve the immediate finding but **defer blast-radius scoping to next-steps** instead of executing it.
+
+### What ships
+
+- **Blast-radius gate (Step 6)** — before an Issue can be marked `resolved`, the agent must enumerate the blast radius of every confirmed-malicious indicator and compromised principal *in-investigation*, not defer it: (1) follow every relationship enrichment already surfaced (a related hash, linked IP/domain, or co-sighting incident id) — enrich it or pull the named co-sighting and fold its hosts/accounts into scope; (2) pivot each confirmed-bad value outward via `xsoar_search_indicators` + `xsoar_list_incidents` (and the auth log via `xsoar_run_command` where `playground_id` exists) to find other affected hosts/cases; (3) state the scope as a one-line "N hosts / M cases" count or an explicit "contained to this host."
+- **Matching constraint** — "Scope is part of resolution, not a next-step." A surfaced relationship left in prose is incomplete work.
+- One general rule (no per-attack-type branches); complements — does not duplicate — the v0.1.5 resolution gate, which fires only on *competing root causes*.
+
+### Files
+
+- `bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md`. See [#9](https://github.com/kite-production/guardian/issues/9).
+
+### Change scenario
+
+**Scenario 1** — skill-only (baked into the agent image, volume-seeded on boot); no installer change; volumes preserved. Patch bump (v0.1.6).
+
+---
+
 ## [v0.1.5] (unreleased) — *Investigation skill hardening — IR rigor + tool-surface reconciliation*
 
 Guardian's `xsoar_case_investigation` skill — the playbook that drives every autonomous and operator-initiated investigation — was upgraded from a structured evaluation of the autonomous loop's REAL output (two completed investigations scored against a SOC IR rubric, every proposed change adversarially verified against the connector source). The skill now teaches the full v0.2.0 tool surface, enforces complete IoC coverage, and gates "resolved" on a single supported root cause.

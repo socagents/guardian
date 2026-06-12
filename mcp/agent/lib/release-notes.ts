@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.6",
+    date: "2026-06-13",
+    title: "Investigation skill — scope the blast radius before resolving.",
+    highlights: [
+      "Investigations now enumerate blast radius in-investigation instead of deferring it to next-steps.",
+      "Every confirmed-bad indicator/principal is pivoted outward (other affected hosts + co-sighting cases).",
+      "Each Issue states scope as a one-line count ('seen on N hosts / M cases') or 'contained to this host'.",
+    ],
+  },
+  {
     version: "0.1.5",
     date: "2026-06-12",
     title: "Investigation skill hardening — sharper, more complete case write-ups.",
