@@ -687,73 +687,71 @@ def test_complete_task_requires_ids(monkeypatch):
 # ─── get_list / set_list / append_to_list ────────────────────────────
 
 
-def test_get_list_filters_by_name(monkeypatch):
-    rf = _RecordingFetcher(get_reply={"data": [
-        {"id": "a", "name": "allowlist", "data": "1.1.1.1", "type": "plain_text"},
-        {"id": "b", "name": "blocklist", "data": "2.2.2.2", "type": "plain_text"},
-    ]})
-    _install_fetcher(monkeypatch, rf)
+# Lists route through the command engine (!getList / !setList) on Cortex 8 —
+# the v6 GET /lists/ REST endpoint 500s there. They need playground_id.
+
+_GETLIST_OK = "Done: list bl was succesfully loaded:\n\n1.1.1.1"
+
+
+def test_get_list_via_command(monkeypatch):
+    monkeypatch.setattr(connector, "_get_playground_id", lambda: "PG-1")
+    f = _ScriptedFetcher(replies={
+        "/entry/execute/sync": {
+            "data": [{"type": 1, "contents": "Done: list blocklist was succesfully loaded:\n\n2.2.2.2"}]
+        },
+    })
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
     out = run(connector.xsoar_get_list("blocklist"))
-    assert out["ok"] is True
-    assert out["name"] == "blocklist" and out["data"] == "2.2.2.2"
-    assert rf.calls[0][0:2] == ("GET", "/lists/")
+    assert out["ok"] is True and out["name"] == "blocklist" and out["data"] == "2.2.2.2"
+    # ran !getList in the playground
+    exec_call = [b for (_m, p, b) in f.calls if p == "/entry/execute/sync"][0]
+    assert exec_call == {"investigationId": "PG-1", "data": '!getList listName="blocklist"'}
 
 
 def test_get_list_not_found(monkeypatch):
-    rf = _RecordingFetcher(get_reply={"data": []})
-    _install_fetcher(monkeypatch, rf)
+    monkeypatch.setattr(connector, "_get_playground_id", lambda: "PG-1")
+    f = _ScriptedFetcher(replies={
+        "/entry/execute/sync": {"data": [{"type": 4, "contents": "list nope does not exist"}]},
+    })
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
     out = run(connector.xsoar_get_list("nope"))
     assert out["ok"] is False and "not found" in out["error"]
 
 
-def test_set_list_saves(monkeypatch):
-    rf = _RecordingFetcher(post_reply={"id": "x"})
-    _install_fetcher(monkeypatch, rf)
+def test_set_list_via_command(monkeypatch):
+    monkeypatch.setattr(connector, "_get_playground_id", lambda: "PG-1")
+    f = _ScriptedFetcher(replies={
+        "/entry/execute/sync": {"data": [{"type": 1, "contents": "Done: list blocklist was updated"}]},
+    })
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
     out = run(connector.xsoar_set_list("blocklist", "1.1.1.1\n2.2.2.2"))
-    assert out["ok"] is True and out["name"] == "blocklist" and out["type"] == "plain_text"
-    method, path, body = rf.calls[0]
-    assert (method, path) == ("POST", "/lists/save")
-    assert body == {"name": "blocklist", "data": "1.1.1.1\n2.2.2.2", "type": "plain_text"}
+    assert out["ok"] is True and out["name"] == "blocklist"
+    exec_call = [b for (_m, p, b) in f.calls if p == "/entry/execute/sync"][0]
+    assert exec_call["data"] == '!setList listName="blocklist" listData="1.1.1.1\n2.2.2.2"'
 
 
-def test_set_list_json_type(monkeypatch):
-    rf = _RecordingFetcher(post_reply={})
-    _install_fetcher(monkeypatch, rf)
-    run(connector.xsoar_set_list("cfg", '{"a":1}', list_type="json"))
-    assert rf.calls[0][2]["type"] == "json"
-
-
-def test_append_to_list_plain_text(monkeypatch):
-    rf = _RecordingFetcher(
-        get_reply={"data": [{"name": "bl", "data": "1.1.1.1", "type": "plain_text"}]},
-        post_reply={},
-    )
-    _install_fetcher(monkeypatch, rf)
+def test_append_to_list_via_command(monkeypatch):
+    monkeypatch.setattr(connector, "_get_playground_id", lambda: "PG-1")
+    f = _ScriptedFetcher(replies={
+        "/entry/execute/sync": {"data": [{"type": 1, "contents": _GETLIST_OK}]},
+    })
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
     out = run(connector.xsoar_append_to_list("bl", "2.2.2.2"))
     assert out["ok"] is True and out["data"] == "1.1.1.1\n2.2.2.2"
-    # last call is the save with the merged data
-    method, path, body = rf.calls[-1]
-    assert (method, path) == ("POST", "/lists/save")
-    assert body["data"] == "1.1.1.1\n2.2.2.2"
+    # two execute calls: !getList then !setList with the merged data
+    datas = [b["data"] for (_m, p, b) in f.calls if p == "/entry/execute/sync"]
+    assert datas[0] == '!getList listName="bl"'
+    assert datas[1] == '!setList listName="bl" listData="1.1.1.1\n2.2.2.2"'
 
 
 def test_append_to_list_creates_when_absent(monkeypatch):
-    rf = _RecordingFetcher(get_reply={"data": []}, post_reply={})
-    _install_fetcher(monkeypatch, rf)
+    monkeypatch.setattr(connector, "_get_playground_id", lambda: "PG-1")
+    f = _ScriptedFetcher(replies={
+        "/entry/execute/sync": {"data": [{"type": 4, "contents": "list new does not exist"}]},
+    })
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
     out = run(connector.xsoar_append_to_list("new", "first"))
-    assert out["ok"] is True and out["data"] == "first" and out["type"] == "plain_text"
-
-
-def test_append_to_list_json(monkeypatch):
-    rf = _RecordingFetcher(
-        get_reply={"data": [{"name": "j", "data": "[\"a\"]", "type": "json"}]},
-        post_reply={},
-    )
-    _install_fetcher(monkeypatch, rf)
-    out = run(connector.xsoar_append_to_list("j", "b"))
-    assert out["ok"] is True
-    import json as _j
-    assert _j.loads(out["data"]) == ["a", "b"]
+    assert out["ok"] is True and out["data"] == "first"
 
 
 # ─── create_incident / run_playbook ──────────────────────────────────
@@ -794,20 +792,31 @@ def test_create_incident_omits_unset_fields(monkeypatch):
     assert body == {"name": "bare", "createInvestigation": True}
 
 
-def test_run_playbook_posts_inv_playbook(monkeypatch):
-    rf = _RecordingFetcher(post_reply={"investigationId": "42"})
-    _install_fetcher(monkeypatch, rf)
+def test_run_playbook_setplaybook_in_incident_warroom(monkeypatch):
+    # !setPlaybook runs in the INCIDENT's own war room (investigationId=incident_id),
+    # NOT the playground — so no playground_id needed.
+    f = _ScriptedFetcher(replies={
+        "/entry/execute/sync": {"data": [{"type": 1, "contents": "done"}]},
+    })
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
     out = run(connector.xsoar_run_playbook(incident_id="42", playbook_id="Phishing Investigation"))
     assert out["ok"] is True
     assert out["incident_id"] == "42" and out["playbook_id"] == "Phishing Investigation"
-    method, path, body = rf.calls[0]
-    assert method == "POST"
-    assert path == "/inv-playbook/Phishing Investigation/42"
+    exec_call = [b for (_m, p, b) in f.calls if p == "/entry/execute/sync"][0]
+    assert exec_call == {"investigationId": "42", "data": '!setPlaybook name="Phishing Investigation"'}
+
+
+def test_run_playbook_not_found_surfaces_error(monkeypatch):
+    f = _ScriptedFetcher(replies={
+        "/entry/execute/sync": {"data": [{"type": 4, "contents": "Playbook named bogus was not found (53)"}]},
+    })
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
+    out = run(connector.xsoar_run_playbook(incident_id="42", playbook_id="bogus"))
+    assert out["ok"] is False and "not found" in out["error"]
 
 
 def test_run_playbook_requires_ids(monkeypatch):
-    rf = _RecordingFetcher(post_reply={})
-    _install_fetcher(monkeypatch, rf)
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: _ScriptedFetcher(replies={}))
     out = run(connector.xsoar_run_playbook(incident_id="42", playbook_id=""))
     assert out["ok"] is False and "playbook_id" in out["error"]
 

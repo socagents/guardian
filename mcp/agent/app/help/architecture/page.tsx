@@ -6295,19 +6295,25 @@ function XsoarConnector() {
  <Code>!taskComplete</Code> to advance a playbook task.
  </li>
  <li>
- <strong>XSOAR Lists</strong> —{" "}
+ <strong>XSOAR Lists</strong> (also need{" "}
+ <Code>playground_id</Code>) —{" "}
  <Code>xsoar_get_list</Code> /{" "}
  <Code>xsoar_set_list</Code> /{" "}
  <Code>xsoar_append_to_list</Code> read, overwrite, and
- append to XSOAR Lists (allow/block lists, lookups) via{" "}
- <Code>GET /lists/</Code> + <Code>POST /lists/save</Code>.
+ append to XSOAR Lists (allow/block lists, lookups) via the{" "}
+ <Code>!getList</Code> / <Code>!setList</Code> war-room
+ commands — the v6 <Code>GET /lists/</Code> REST endpoint
+ returns HTTP 500 on Cortex 8.
  </li>
  <li>
  <strong>Lifecycle</strong> —{" "}
  <Code>xsoar_create_incident</Code> (<Code>POST /incident</Code>)
- opens a case; <Code>xsoar_run_playbook</Code>{" "}
- (<Code>POST /inv-playbook/&lt;pb&gt;/&lt;inv&gt;</Code>)
- assigns + starts a playbook on a case.
+ opens a case; <Code>xsoar_run_playbook</Code> runs{" "}
+ <Code>!setPlaybook</Code> in the incident&apos;s{" "}
+ <em>own</em> war room (no <Code>playground_id</Code> needed —
+ an incident id is its investigation id) to assign + start a
+ playbook. The v6 <Code>/inv-playbook</Code> REST endpoint
+ 303-redirects on Cortex 8.
  </li>
  </ul>
  <p className="text-sm leading-relaxed mt-2">

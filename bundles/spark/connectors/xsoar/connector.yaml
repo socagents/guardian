@@ -293,40 +293,41 @@ spec:
         - { name: "comment",     type: "string", description: "Optional completion note recorded on the task.", required: false }
       returns: { type: "object", description: "{ ok, incident_id, task_id, output }" }
 
-    # ─── XSOAR Lists ─────────────────────────────────────────────
+    # ─── XSOAR Lists (command engine — needs playground_id) ──────
     - name: "get_list"
-      method: "GET /lists/ (filter by name)"
+      method: "POST /entry/execute/sync (!getList)"
       description: |
         Read a Cortex XSOAR list by name — XSOAR Lists hold reusable data like
-        allow/block lists, lookup tables, and config. Use to read one during an
-        investigation or before appending to it.
+        allow/block lists, lookup tables, and config. Reads via the `!getList`
+        war-room command (the v6 GET /lists/ REST endpoint 500s on Cortex 8), so
+        it REQUIRES the instance's playground_id.
       args:
-        - { name: "name", type: "string", description: "The list name (or id).", required: true }
-      returns: { type: "object", description: "{ ok, name, data, type }" }
+        - { name: "name", type: "string", description: "The list name.", required: true }
+      returns: { type: "object", description: "{ ok, name, data }" }
 
     - name: "set_list"
-      method: "POST /lists/save (overwrite)"
+      method: "POST /entry/execute/sync (!setList)"
       description: |
         Create or overwrite a Cortex XSOAR list — writes the full contents
-        (creating the list if absent). To add a single value without clobbering
-        the rest, use xsoar_append_to_list.
+        (creating the list if absent) via the `!setList` war-room command. To
+        add a single value without clobbering the rest, use xsoar_append_to_list.
+        REQUIRES the instance's playground_id.
       args:
-        - { name: "name",      type: "string", description: "The list name.", required: true }
-        - { name: "data",      type: "string", description: "Full list contents. plain_text: raw text (often newline-separated). json: a JSON string.", required: true }
-        - { name: "list_type", type: "string", description: "'plain_text' (default) or 'json'.", required: false }
-      returns: { type: "object", description: "{ ok, name, type }" }
+        - { name: "name", type: "string", description: "The list name.", required: true }
+        - { name: "data", type: "string", description: "Full list contents (often newline-separated lines).", required: true }
+      returns: { type: "object", description: "{ ok, name, output }" }
 
     - name: "append_to_list"
-      method: "GET /lists/ + POST /lists/save"
+      method: "POST /entry/execute/sync (!getList + !setList)"
       description: |
-        Append a value to a Cortex XSOAR list (read-modify-write) — a newline for
-        plain_text lists, an array push for json lists. Creates a new plain_text
-        list if it doesn't exist. Use to add an IoC to a block/allow list during
-        response without overwriting the rest.
+        Append a value as a new line to a Cortex XSOAR list (read-modify-write
+        via `!getList` + `!setList`). Creates the list with the value if it
+        doesn't exist. Use to add an IoC to a block/allow list during response
+        without overwriting the rest. REQUIRES the instance's playground_id.
       args:
         - { name: "name",  type: "string", description: "The list name.", required: true }
-        - { name: "value", type: "string", description: "The value to append.", required: true }
-      returns: { type: "object", description: "{ ok, name, data, type }" }
+        - { name: "value", type: "string", description: "The value to append (added on its own line).", required: true }
+      returns: { type: "object", description: "{ ok, name, data }" }
 
     # ─── Incident lifecycle ──────────────────────────────────────
     - name: "create_incident"
@@ -347,12 +348,15 @@ spec:
       returns: { type: "object", description: "{ ok, incident_id, name, created }" }
 
     - name: "run_playbook"
-      method: "POST /inv-playbook/{playbook_id}/{incident_id}"
+      method: "POST /entry/execute/sync (!setPlaybook, in the incident's war room)"
       description: |
-        Assign and run a playbook on an existing XSOAR incident — sets the
-        playbook on the incident's investigation and starts it. Use to kick off
-        an automated response/enrichment flow on a case.
+        Assign and run a playbook on an existing XSOAR incident — runs
+        `!setPlaybook` in the incident's OWN war room (an incident id is its
+        investigation id) to assign + start it. Does NOT need playground_id (it
+        runs in the incident's investigation), but the incident must have one
+        (created with createInvestigation). The v6 /inv-playbook REST endpoint
+        303-redirects on Cortex 8; the war-room command works on both.
       args:
         - { name: "incident_id", type: "string", description: "The XSOAR incident id (its investigation id) to run on.", required: true }
-        - { name: "playbook_id", type: "string", description: "The playbook id/name to assign and run.", required: true }
-      returns: { type: "object", description: "{ ok, incident_id, playbook_id, started }" }
+        - { name: "playbook_id", type: "string", description: "The playbook NAME to assign and run.", required: true }
+      returns: { type: "object", description: "{ ok, incident_id, playbook_id, output }" }

@@ -229,20 +229,49 @@ def _parse_war_room_entries(response: Any) -> str:
     return "\n".join(parts).strip() or "Command executed (no text output returned)."
 
 
+def _quote_arg(value: object) -> str:
+    """Double-quote a war-room command argument value.
+
+    XSOAR `!command arg="value"` syntax. Embedded double-quotes are escaped;
+    newlines pass through verbatim (verified — `!setList` stores multi-line
+    listData correctly). Used to build !getList/!setList/!setPlaybook etc.
+    """
+    return '"' + str(value).replace('"', '\\"') + '"'
+
+
+def _parse_getlist_output(output: str) -> Optional[str]:
+    """Extract list data from a `!getList` war-room output.
+
+    XSOAR returns `Done: list <name> was succesfully loaded:\\n\\n<DATA>` on
+    success (note the upstream typo "succesfully"). Returns <DATA>, or None
+    when the success marker is absent (list missing / command error) so the
+    caller can surface a clean not-found.
+    """
+    marker = "loaded:"
+    idx = output.find(marker)
+    if idx == -1:
+        return None
+    return output[idx + len(marker):].strip()
+
+
 async def _execute_command(
     fetcher: XSOARFetcher,
-    playground_id: str,
+    investigation_id: str,
     command: str,
     return_context_keys: Optional[str] = None,
 ) -> dict:
-    """Run an XSOAR `!command` synchronously in the playground war room.
+    """Run an XSOAR `!command` synchronously in an investigation's war room.
 
-    Ports docs/ref/trevor-mcp.py:489-577. When return_context_keys (a
-    comma-separated string) is given, each key's context is cleared before the
-    run and retrieved after; otherwise only the war-room text is returned.
+    Ports docs/ref/trevor-mcp.py:489-577. `investigation_id` is the war room to
+    run in — the playground (run_command/enrich/complete_task/list tools) OR a
+    specific incident's investigation (run_playbook targets the incident's own
+    war room, since an incident id IS its investigation id). When
+    return_context_keys (a comma-separated string) is given, each key's context
+    is cleared before the run and retrieved after; otherwise only the war-room
+    text is returned.
 
     Returns {output, context?} — context is present only when keys were asked
-    for. Raises ValueError on a missing/invalid playground (→ clean envelope).
+    for. Raises ValueError on a missing/invalid investigation (→ clean envelope).
     """
     keys = (
         [k.strip() for k in return_context_keys.split(",") if k.strip()]
@@ -255,7 +284,7 @@ async def _execute_command(
         try:
             await fetcher.post(
                 "/entry",
-                {"investigationId": playground_id, "data": f"!DeleteContext key={key}"},
+                {"investigationId": investigation_id, "data": f"!DeleteContext key={key}"},
             )
         except XSOARError:
             pass
@@ -264,13 +293,13 @@ async def _execute_command(
     try:
         response = await fetcher.post(
             "/entry/execute/sync",
-            {"investigationId": playground_id, "data": command},
+            {"investigationId": investigation_id, "data": command},
         )
     except XSOARRequestError as exc:
         if any(marker in str(exc) for marker in _PLAYGROUND_NOT_FOUND_MARKERS):
             raise ValueError(
-                f"playground '{playground_id}' not found — check the playground_id "
-                f"on the XSOAR instance."
+                f"investigation '{investigation_id}' not found — check the id "
+                f"(the instance's playground_id, or the incident id for run_playbook)."
             )
         raise
 
@@ -283,7 +312,7 @@ async def _execute_command(
         for key in keys:
             try:
                 context[key] = await fetcher.post(
-                    f"/investigation/{playground_id}/context",
+                    f"/investigation/{investigation_id}/context",
                     {"query": f"${{{key}}}"},
                 )
             except XSOARError as exc:
@@ -1312,131 +1341,102 @@ async def xsoar_complete_task(
     return {"incident_id": incident_id, "task_id": task_id, **result}
 
 
-# ─── xsoar_get_list ──────────────────────────────────────────────────
-
-
-def _find_list(lists: Any, name: str) -> Optional[dict]:
-    """Find a list object by name (or id) in a GET /lists/ response array."""
-    if isinstance(lists, dict) and "data" in lists:
-        lists = lists.get("data")
-    if not isinstance(lists, list):
-        return None
-    for lst in lists:
-        if isinstance(lst, dict) and (lst.get("name") == name or lst.get("id") == name):
-            return lst
-    return None
+# ─── xsoar_get_list / set_list / append_to_list (command engine) ─────
+#
+# Cortex XSOAR 8 / Cortex cloud does NOT serve the v6 `GET /lists/` REST
+# endpoint (it returns HTTP 500). The reliable cross-generation path is the
+# war-room list commands run via the playground: `!getList` / `!setList`
+# (verified on a live Cortex 8 tenant, multi-line data round-trips). So the
+# three list tools route through the command engine and require the
+# instance's playground_id — same as run_command / enrich_indicator.
 
 
 @_wrap_xsoar_call
 async def xsoar_get_list(name: str) -> dict:
-    """Read a Cortex XSOAR list (a named key/value or line list) by name.
+    """Read a Cortex XSOAR list (a named line/key list) by name.
 
     XSOAR Lists hold reusable data — allow/block lists, lookup tables, config.
-    Use to read one during an investigation or before appending to it.
-
-    Args:
-        name: The list name (or id).
-
-    Returns:
-        {ok, name, data, type} where type is 'plain_text' or 'json', or
-        {ok: false, error} when no list matched.
-    """
-    if not name:
-        raise ValueError("name is required")
-    fetcher = _get_fetcher()
-    response = await fetcher.get("/lists/")
-    lst = _find_list(response, name)
-    if lst is None:
-        return _err(f"list '{name}' not found", name=name)
-    return {"name": lst.get("name"), "data": lst.get("data"), "type": lst.get("type")}
-
-
-# ─── xsoar_set_list ──────────────────────────────────────────────────
-
-
-@_wrap_xsoar_call
-async def xsoar_set_list(name: str, data: str, list_type: str = "plain_text") -> dict:
-    """Create or overwrite a Cortex XSOAR list.
-
-    Writes the full contents (creating the list if it doesn't exist). To add a
-    single value without clobbering the rest, use xsoar_append_to_list.
+    Reads via the `!getList` war-room command, so the instance's playground_id
+    must be configured.
 
     Args:
         name: The list name.
-        data: The full list contents. For list_type 'plain_text' this is the raw
-            text (often newline-separated); for 'json' a JSON string.
-        list_type: 'plain_text' (default) or 'json'.
 
     Returns:
-        {ok, name, type}.
+        {ok, name, data} where data is the list's raw contents, or
+        {ok: false, error} when the list doesn't exist / can't be read.
     """
     if not name:
         raise ValueError("name is required")
-    body = {
-        "name": name,
-        "data": data if data is not None else "",
-        "type": list_type or "plain_text",
-    }
+    playground_id = _get_playground_id()
     fetcher = _get_fetcher()
-    response = await fetcher.post("/lists/save", body)
-    return {
-        "name": name,
-        "type": body["type"],
-        "raw_response": {"id": response.get("id")} if isinstance(response, dict) else response,
-    }
+    result = await _execute_command(fetcher, playground_id, f"!getList listName={_quote_arg(name)}")
+    data = _parse_getlist_output(result.get("output", ""))
+    if data is None:
+        return _err(
+            f"list '{name}' not found or unreadable",
+            name=name,
+            detail=result.get("output"),
+        )
+    return {"name": name, "data": data}
 
 
-# ─── xsoar_append_to_list ────────────────────────────────────────────
+@_wrap_xsoar_call
+async def xsoar_set_list(name: str, data: str) -> dict:
+    """Create or overwrite a Cortex XSOAR list.
+
+    Writes the full contents (creating the list if it doesn't exist) via the
+    `!setList` war-room command, so the instance's playground_id must be
+    configured. To add a single value without clobbering the rest, use
+    xsoar_append_to_list.
+
+    Args:
+        name: The list name.
+        data: The full list contents (often newline-separated lines).
+
+    Returns:
+        {ok, name, output}.
+    """
+    if not name:
+        raise ValueError("name is required")
+    playground_id = _get_playground_id()
+    fetcher = _get_fetcher()
+    command = f"!setList listName={_quote_arg(name)} listData={_quote_arg(data if data is not None else '')}"
+    result = await _execute_command(fetcher, playground_id, command)
+    return {"name": name, "output": result.get("output")}
 
 
 @_wrap_xsoar_call
 async def xsoar_append_to_list(name: str, value: str) -> dict:
-    """Append a value to a Cortex XSOAR list (read-modify-write).
+    """Append a value (as a new line) to a Cortex XSOAR list.
 
-    Reads the current list, adds `value` (a newline for plain_text lists, an
-    array push for json lists), and saves. Creates a new plain_text list with
-    the value if the list doesn't exist yet. Use to add an IoC to a block/allow
-    list during response without overwriting the rest.
+    Read-modify-write via the `!getList` + `!setList` war-room commands, so the
+    instance's playground_id must be configured. Creates the list with `value`
+    if it doesn't exist yet. Use to add an IoC to a block/allow list during
+    response without overwriting the rest.
 
     Args:
         name: The list name.
-        value: The value to append.
+        value: The value to append (added on its own line).
 
     Returns:
-        {ok, name, data, type} with the post-append contents.
+        {ok, name, data} with the post-append contents.
     """
     if not name:
         raise ValueError("name is required")
     if value is None:
         raise ValueError("value is required")
-
+    playground_id = _get_playground_id()
     fetcher = _get_fetcher()
-    existing = _find_list(await fetcher.get("/lists/"), name)
 
-    if existing is None:
-        new_data, list_type = str(value), "plain_text"
-    else:
-        list_type = existing.get("type") or "plain_text"
-        current = existing.get("data")
-        if list_type == "json":
-            try:
-                arr = json.loads(current) if isinstance(current, str) else (current or [])
-            except (json.JSONDecodeError, TypeError):
-                return _err(
-                    f"list '{name}' is type json but its data isn't valid JSON; "
-                    f"refusing to overwrite",
-                    name=name,
-                )
-            if not isinstance(arr, list):
-                return _err(f"list '{name}' json data isn't an array; refusing to append", name=name)
-            arr.append(value)
-            new_data = json.dumps(arr)
-        else:
-            current_str = current if isinstance(current, str) else ("" if current is None else str(current))
-            new_data = f"{current_str}\n{value}" if current_str else str(value)
-
-    await fetcher.post("/lists/save", {"name": name, "data": new_data, "type": list_type})
-    return {"name": name, "data": new_data, "type": list_type}
+    current = _parse_getlist_output(
+        (await _execute_command(fetcher, playground_id, f"!getList listName={_quote_arg(name)}")).get("output", "")
+    )
+    new_data = f"{current}\n{value}" if current else str(value)
+    await _execute_command(
+        fetcher, playground_id, f"!setList listName={_quote_arg(name)} listData={_quote_arg(new_data)}"
+    )
+    return {"name": name, "data": new_data}
 
 
 # ─── xsoar_create_incident ───────────────────────────────────────────
@@ -1516,15 +1516,23 @@ async def xsoar_create_incident(
 async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
     """Assign + run a playbook on an existing XSOAR incident.
 
-    Sets the playbook on the incident's investigation and starts it. Use to kick
-    off an automated response/enrichment flow on a case.
+    Runs the `!setPlaybook` war-room command IN the target incident's own war
+    room (an incident id IS its investigation id), which assigns the playbook
+    and starts it. This does NOT use the playground — it runs in the incident's
+    investigation directly — so it does NOT require playground_id (but the
+    incident must have an investigation: created with createInvestigation).
+
+    Cortex 8 note: the v6 `POST /inv-playbook/{pb}/{inv}` REST endpoint is not
+    served on Cortex cloud (it 303-redirects); the war-room command path works
+    on both generations.
 
     Args:
         incident_id: The XSOAR incident id (its investigation id) to run on.
-        playbook_id: The playbook id/name to assign and run.
+        playbook_id: The playbook name to assign and run.
 
     Returns:
-        {ok, incident_id, playbook_id, started: true}.
+        {ok, incident_id, playbook_id, output}, or {ok:false, error} when the
+        playbook isn't found / the incident has no investigation.
     """
     if not incident_id:
         raise ValueError("incident_id is required")
@@ -1532,10 +1540,19 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
         raise ValueError("playbook_id is required")
 
     fetcher = _get_fetcher()
-    response = await fetcher.post(f"/inv-playbook/{playbook_id}/{incident_id}", {})
+    # Run in the incident's OWN investigation (not the playground).
+    result = await _execute_command(
+        fetcher, str(incident_id), f"!setPlaybook name={_quote_arg(playbook_id)}"
+    )
+    output = result.get("output", "")
+    if "was not found" in output or output.lower().startswith("error"):
+        return _err(
+            f"run_playbook failed: {output}",
+            incident_id=incident_id,
+            playbook_id=playbook_id,
+        )
     return {
         "incident_id": incident_id,
         "playbook_id": playbook_id,
-        "started": True,
-        "raw_response": response,
+        "output": output,
     }
