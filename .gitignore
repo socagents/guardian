@@ -261,3 +261,7 @@ scripts/loop/loop.env
 .guardian-loop/carry/
 # Tunnel state dir created in the loop clone by scripts/guardian_tunnels.sh
 .guardian-tunnels/
+
+# External reference implementations pulled in during connector/agent design
+# (scratch only — NOT Guardian source; may carry creds from their origin).
+docs/ref/
