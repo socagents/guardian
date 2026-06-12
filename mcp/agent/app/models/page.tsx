@@ -172,14 +172,20 @@ export default function ModelsPage() {
     };
   }, []);
 
-  // Guardian doesn't yet expose a "default model" config; the badge is
-  // never rendered until the concept lands. Keep the prop on ModelRow
-  // so the rest of the rendering tree compiles unchanged. Typed via
-  // useState (not a literal null) so TS doesn't narrow the comparison
-  // branch to `never`.
-  const [defaultModel] = useState<{ model: string; provider: string } | null>(
-    null,
-  );
+  // Default model = operator_state.db key 'default_model' (set on a model's
+  // detail page). The badge highlights the matching card.
+  const [defaultModel, setDefaultModel] = useState<{ model: string; provider: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/agent/operator-state/default_model")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const v = d?.value as { provider?: string; model?: string } | undefined;
+        if (!cancelled && v?.model) setDefaultModel({ model: v.model, provider: v.provider ?? "" });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Pre-compute tab counts once — shown as little badges on each tab
   // button. Cheaper than filtering the list 5 times.
