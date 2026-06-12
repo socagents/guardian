@@ -417,9 +417,9 @@ export default function HelpPage() {
 
             <SubSection icon="schedule" title="Jobs — for scheduled work">
               <p>
-                A job has a name, a cron, an action (chat / tool_call /
-                log), and persists across restarts. Click a card to see its
-                run history with the model&apos;s reply for chat actions or
+                A job has a name, a cron, an action (prompt / tool_call),
+                and persists across restarts. Click a card to see its
+                run history with the model&apos;s reply for prompt actions or
                 the tool result for tool_call. Two creation paths: declared
                 in <Code>manifest.yaml:jobs[]</Code> (reconciled at boot,
                 manifest is source of truth) or via the{" "}
@@ -2012,7 +2012,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 fire, with status (succeeded / failed / running), trigger
                 source (cron / manual), duration, and a link to the run
                 detail page. The detail page renders the model&apos;s
-                full reply (for chat actions) or the tool result (for
+                full reply (for prompt actions) or the tool result (for
                 tool_call actions). Telemetry from the run is preserved
                 so you can replay what happened minutes or weeks later.
               </p>
@@ -4452,7 +4452,7 @@ POST   /api/agent/restore                 -- apply (with ?force=1 to overwrite)`
                 the row. Filter by &quot;Failed&quot; or &quot;Never
                 run.&quot; Click the card → the &quot;Last error&quot;
                 banner tells you why; the run history table shows trigger
-                source and duration. For chat actions that return empty,
+                source and duration. For prompt actions that return empty,
                 expand the row — the model&apos;s reply is rendered
                 inline; an empty reply means Gemini hit MAX_TOKENS or
                 returned only function calls.

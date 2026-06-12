@@ -1393,7 +1393,7 @@ function ChatLifecycle() {
  </p>
  <p style={{ marginTop: 8 }}>
  <strong>Per-job model override.</strong> When the scheduler
- dispatches a chat-action job, the request body includes{" "}
+ dispatches a prompt-action job, the request body includes{" "}
  <Code>body.model = job.model_id</Code> if the job has an
  override set. The chat route reads that field exactly the
  same way it reads the header-dropdown override — it shows up

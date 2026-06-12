@@ -538,16 +538,15 @@ function CreateJobPage() {
       // Schedule → custom mode with raw cron. See note above.
       setMode("custom");
       setCustomCron(job.schedule || "0 9 * * *");
-      // Action — discriminate by job.action.type. v0.1.32 only knows
+      // Action — discriminate by job.action.type. v0.1.32 knows only
       // {prompt, tool_call}. Legacy `chat` is treated as `prompt` (the
-      // backend's boot migration normalizes existing rows on the
-      // server side; this client-side aliasing is for in-flight rows
-      // that haven't been re-fetched after migration). Legacy `log`
-      // rows were converted at boot to tool_call shapes by the same
-      // migration, so by the time the operator hits Edit, the row's
-      // type is already `tool_call`. Anything unfamiliar falls
-      // through to `prompt` with the message body so the operator
-      // sees something sensible to edit rather than a blank form.
+      // backend's boot migration normalizes existing rows server-side;
+      // this client-side aliasing covers in-flight rows not yet
+      // re-fetched after migration). `log` is a dead legacy type (from
+      // the removed log-simulation feature) — the boot migration does
+      // NOT touch it, so a stray `log` row, like anything unfamiliar,
+      // falls through to `prompt` below with the message body so the
+      // operator sees something sensible to edit rather than a blank form.
       const action = job.action ?? {};
       const incomingType = (action.type as string | undefined) ?? "prompt";
       if (incomingType === "tool_call") {
