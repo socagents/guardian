@@ -3767,6 +3767,58 @@ export const JOURNEYS: Journey[] = [
     components: ["connectors", "settings", "audit"],
   },
 
+  {
+    id: "xsoar-run-command",
+    category: "connectors",
+    title: "Run an XSOAR command + enrich an indicator",
+    summary:
+      "Set the XSOAR instance's playground_id, then ask Guardian to run an XSOAR command and enrich an IoC. The command tools execute inside the playground War Room via /entry/execute/sync.",
+    difficulty: "intermediate",
+    durationMin: 5,
+    icon: "bolt",
+    prompts: [
+      {
+        text: "Run !Print value=hello in XSOAR.",
+        note: "Exercises xsoar_run_command — the agent runs the command in the playground and returns the war-room output (you should see 'hello').",
+      },
+      {
+        text: "Enrich the IP 8.8.8.8 in XSOAR.",
+        note: "Exercises xsoar_enrich_indicator — runs !ip and returns the DBotScore + reputation context.",
+      },
+    ],
+    toolsExercised: ["xsoar_run_command", "xsoar_enrich_indicator"],
+    apis: [
+      {
+        method: "PATCH",
+        path: "/api/agent/instances/{id}",
+        description:
+          "Set the playground_id config field on the XSOAR instance (the Playground / War Room investigation id). Required for the command tools; the other 18 tools work without it.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/instances/{id}/test",
+        description:
+          "Probe the instance after setting playground_id — confirms the connector is reachable before exercising the command tools.",
+      },
+    ],
+    howToTest: [
+      "Open /connectors → xsoar → Instances → your instance → Edit.",
+      "Find your Playground investigation id in XSOAR (open the Playground, copy the id from the URL) and paste it into the playground_id field. Save.",
+      "Open a chat. Paste: 'Run !Print value=hello in XSOAR.' The reply's output contains 'hello'.",
+      "Paste: 'Enrich the IP 8.8.8.8 in XSOAR.' The reply includes a DBotScore for the IP.",
+      "(Negative) On a second XSOAR instance with no playground_id, ask to run a command → Guardian returns a clear 'playground_id not configured' message.",
+    ],
+    expectedResult:
+      "The command tools run !commands synchronously in the playground War Room and return the output / DBotScore. A blank playground_id yields an operator-actionable error, not a crash.",
+    verifyVia: [
+      "GET /api/agent/instances/primary-xsoar → playground_id is set (non-secret, shown in clear text)",
+      "Chat reply for !Print contains 'hello'",
+      "Chat reply for the IP includes a DBotScore / reputation block",
+    ],
+    related: ["ops-recover-connector-needs-auth"],
+    components: ["connectors", "xsoar"],
+  },
+
   // [guardian v0.1.0] Retired: ops-list-stop-*-workers — the synthetic
   // log-worker registry shipped with the removed log-generation engine.
 

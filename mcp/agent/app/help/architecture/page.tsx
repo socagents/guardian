@@ -6272,6 +6272,59 @@ function XsoarConnector() {
  </p>
  </SubSection>
 
+ <SubSection icon="bolt" title="Action toolset (v0.2.0) — command engine, Lists, lifecycle">
+ <p>
+ Beyond the 13 read/lifecycle tools above, the connector
+ exposes 8 action tools (21 total). Most use direct XSOAR REST
+ paths; three run inside a <strong>playground / War Room</strong>{" "}
+ because XSOAR only exposes those capabilities as war-room{" "}
+ <Code>!commands</Code>.
+ </p>
+ <ul className="list-disc pl-5 space-y-1 text-sm">
+ <li>
+ <strong>Command engine</strong> (needs{" "}
+ <Code>playground_id</Code>) —{" "}
+ <Code>xsoar_run_command</Code> runs any{" "}
+ <Code>!command</Code> synchronously via{" "}
+ <Code>POST /entry/execute/sync</Code> and returns the
+ war-room output (+ optional context keys);{" "}
+ <Code>xsoar_enrich_indicator</Code> layers the{" "}
+ <Code>!ip</Code>/<Code>!url</Code>/<Code>!domain</Code>/
+ <Code>!file</Code>/<Code>!cve</Code> map onto it for
+ DBotScore reputation; <Code>xsoar_complete_task</Code> runs{" "}
+ <Code>!taskComplete</Code> to advance a playbook task.
+ </li>
+ <li>
+ <strong>XSOAR Lists</strong> —{" "}
+ <Code>xsoar_get_list</Code> /{" "}
+ <Code>xsoar_set_list</Code> /{" "}
+ <Code>xsoar_append_to_list</Code> read, overwrite, and
+ append to XSOAR Lists (allow/block lists, lookups) via{" "}
+ <Code>GET /lists/</Code> + <Code>POST /lists/save</Code>.
+ </li>
+ <li>
+ <strong>Lifecycle</strong> —{" "}
+ <Code>xsoar_create_incident</Code> (<Code>POST /incident</Code>)
+ opens a case; <Code>xsoar_run_playbook</Code>{" "}
+ (<Code>POST /inv-playbook/&lt;pb&gt;/&lt;inv&gt;</Code>)
+ assigns + starts a playbook on a case.
+ </li>
+ </ul>
+ <p className="text-sm leading-relaxed mt-2">
+ The <Code>playground_id</Code> is an{" "}
+ <strong>optional</strong> instance config field (the
+ Playground / War Room investigation id). The 13 read/lifecycle
+ tools work without it; the three command-engine tools return a
+ clean &quot;playground_id not configured&quot; error when it is
+ blank. The full call path is unchanged:{" "}
+ <Code>guardian-agent</Code> → embedded MCP (bearer{" "}
+ <Code>MCP_TOKEN</Code>) →{" "}
+ <Code>guardian-connector-xsoar-&lt;instance&gt;:9000</Code> →
+ Cortex XSOAR REST, with the dual v6/v8 prefix +{" "}
+ <Code>x-xdr-auth-id</Code> rules applied per call.
+ </p>
+ </SubSection>
+
  <SubSection icon="lock" title="Authentication (XSOAR 6 + XSOAR 8 / Cortex cloud)">
  <p>
  The connector supports <strong>both</strong> deployment

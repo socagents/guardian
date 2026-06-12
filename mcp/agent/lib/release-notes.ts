@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.2",
+    date: "2026-06-12",
+    title: "XSOAR action toolset — run commands, enrich indicators, manage lists, create cases.",
+    highlights: [
+      "XSOAR connector grows to 21 tools: run any !command in a configured playground War Room.",
+      "Enrich IPs/URLs/domains/files/CVEs → DBotScore reputation, inline in chat.",
+      "Manage XSOAR Lists (allow/block) — read, overwrite, append.",
+      "Create incidents and run playbooks on cases directly from Guardian.",
+      "New optional playground_id field on the XSOAR instance powers the command tools.",
+    ],
+  },
+  {
     version: "0.1.1",
     date: "2026-06-12",
     title: "Default chat-model picker — set a default model on Settings → Models.",

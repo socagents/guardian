@@ -2461,15 +2461,21 @@ Networks documentation and returning evidence-backed, cited answers.
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
                   <Term>xsoar</Term> — Cortex XSOAR gateway, the
-                  investigation surface. Tools include{" "}
+                  investigation surface (21 tools). Read/lifecycle:{" "}
                   <Code>list_incidents</Code>, <Code>get_incident</Code>,{" "}
                   <Code>get_war_room</Code>,{" "}
                   <Code>search_indicators</Code>, <Code>add_note</Code>,{" "}
                   <Code>add_entry</Code>, <Code>save_evidence</Code>,{" "}
                   <Code>update_incident</Code>, <Code>close_incident</Code>.
+                  Action toolset (v0.2.0):{" "}
+                  <Code>run_command</Code>, <Code>enrich_indicator</Code>,{" "}
+                  <Code>complete_task</Code>, <Code>get_list</Code> /{" "}
+                  <Code>set_list</Code> / <Code>append_to_list</Code>,{" "}
+                  <Code>create_incident</Code>, <Code>run_playbook</Code>.
                   Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud —
                   the connector auto-detects the version from the instance
-                  config.
+                  config. See <a href="#connectors" className="link">the
+                  playground_id note below</a> for the command tools.
                 </li>
                 <li>
                   <Term>cortex-docs</Term> — official Palo Alto Networks
@@ -2485,6 +2491,50 @@ Networks documentation and returning evidence-backed, cited answers.
                   <Code>screenshot</Code>, <Code>extract_links</Code>.
                 </li>
               </ul>
+            </SubSection>
+
+            <SubSection icon="bolt" title="XSOAR command tools & the playground_id (v0.2.0)">
+              <p>
+                The XSOAR connector&apos;s action toolset lets you ask
+                Guardian to <em>do</em> things, not just read. For example:
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm">
+                <li>
+                  <em>&ldquo;run <Code>!Print value=hi</Code> in
+                  XSOAR&rdquo;</em> — any XSOAR command, via{" "}
+                  <Code>run_command</Code>.
+                </li>
+                <li>
+                  <em>&ldquo;enrich 8.8.8.8&rdquo;</em> — IP / URL / domain /
+                  file / CVE reputation (DBotScore), via{" "}
+                  <Code>enrich_indicator</Code>.
+                </li>
+                <li>
+                  <em>&ldquo;add 1.2.3.4 to the blocklist&rdquo;</em> — manage
+                  XSOAR Lists via <Code>get_list</Code> /{" "}
+                  <Code>set_list</Code> / <Code>append_to_list</Code>.
+                </li>
+                <li>
+                  <em>&ldquo;open an incident for this finding&rdquo;</em> /{" "}
+                  <em>&ldquo;run the Phishing playbook on case 42&rdquo;</em> /{" "}
+                  <em>&ldquo;complete task 7 on case 42&rdquo;</em> —{" "}
+                  <Code>create_incident</Code>, <Code>run_playbook</Code>,{" "}
+                  <Code>complete_task</Code>.
+                </li>
+              </ul>
+              <p className="text-sm leading-relaxed mt-2">
+                <strong>Setup:</strong> the three command tools
+                (<Code>run_command</Code>, <Code>enrich_indicator</Code>,{" "}
+                <Code>complete_task</Code>) run inside an XSOAR{" "}
+                <strong>Playground / War Room</strong>, so they need a{" "}
+                <Code>playground_id</Code> set on the XSOAR instance
+                (Settings → Connectors → your XSOAR instance →{" "}
+                <Code>playground_id</Code> field). To find it: open your
+                Playground in XSOAR and copy the investigation id from the
+                URL. The field is <strong>optional</strong> — the other 18
+                tools work without it; if it&apos;s blank, the command tools
+                return a clear &quot;playground_id not configured&quot; message.
+              </p>
             </SubSection>
 
             <SubSection icon="lock" title="Secret storage">

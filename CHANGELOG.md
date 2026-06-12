@@ -10,6 +10,38 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.2] (unreleased) — *XSOAR action toolset*
+
+The XSOAR connector grows from 13 to 21 tools, adding a command-execution engine, indicator enrichment, XSOAR Lists management, incident creation, and playbook execution. Previously Guardian could read and triage cases but could not run an XSOAR command, enrich an IoC, manage allow/block lists, open a case, or run a playbook.
+
+### What ships
+
+- **Command engine** (needs `playground_id`) — `xsoar_run_command` runs any XSOAR `!command` synchronously in the playground War Room (`POST /entry/execute/sync`) and returns the war-room output plus optional context keys. `xsoar_enrich_indicator` layers the `!ip`/`!url`/`!domain`/`!file`/`!cve` map onto it for DBotScore reputation. `xsoar_complete_task` runs `!taskComplete` to advance a playbook task.
+- **XSOAR Lists** — `xsoar_get_list` / `xsoar_set_list` / `xsoar_append_to_list` read, overwrite, and append to XSOAR Lists (allow/block lists, lookups) via `GET /lists/` + `POST /lists/save`.
+- **Incident lifecycle** — `xsoar_create_incident` (`POST /incident`) opens a case; `xsoar_run_playbook` (`POST /inv-playbook/<pb>/<inv>`) assigns and starts a playbook on a case.
+- **New `playground_id` config field** — an **optional** field on the XSOAR instance (the Playground / War Room investigation id). The 13 read/lifecycle tools and existing instances work unchanged; only the three command-engine tools require it, and they return a clean "playground_id not configured" message when it is blank.
+
+### Files
+
+- `bundles/spark/connectors/xsoar/src/connector.py` — 8 new `xsoar_*` tools + the `_execute_command` / `_parse_war_room_entries` / `_get_playground_id` / `_find_list` helpers; connector version 0.1.0 → 0.2.0.
+- `bundles/spark/connectors/xsoar/connector.yaml` — `playground_id` config field + 8 `spec.tools[]` entries.
+- `bundles/spark/connectors/xsoar/tests/test_connector.py` — per-tool request-shape + envelope tests (v6 + v8).
+- `mcp/agent/app/help/architecture/page.tsx` — `#xsoar-connector` gains an "Action toolset" subsection.
+- `mcp/agent/app/help/user/page.tsx` — `#connectors` gains the command-tools + `playground_id` setup subsection.
+- `mcp/agent/lib/journeys.ts` — `xsoar-run-command` journey.
+
+### Change scenario
+
+**Scenario 1** — code-only, installer unchanged. `playground_id` is a backwards-compatible optional config field; volumes preserved; customers re-run the existing installer.
+
+### Forbidden post-v0.1.2
+
+- No XSIAM-side tools smuggled in under "XSOAR" (XQL / datasets / issues / assets / vendor lookups) — Guardian is XSOAR-only.
+- No credential / SecretStore reads added to these tools — they stay on the catalog/connector side of the guardrail.
+- No `close_investigation` tool — `close_incident` already closes the investigation.
+
+---
+
 ## [v0.1.1] (unreleased) — *Default chat-model picker*
 
 Operators can now pin a default model for all new chats. Previously every chat opened on the runtime default (`GEMINI_MODEL` env or the hardcoded `gemini-3.1-pro-preview` fallback) and operators had to run `/model <name>` in every session to override it.
