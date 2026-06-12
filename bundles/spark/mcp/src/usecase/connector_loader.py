@@ -46,6 +46,7 @@ from config.config import (
 )
 from usecase.builtin_components import (
     cognitive_tools,
+    investigation_tools,
     self_mod_tools,
     skills_crud,
 )
@@ -260,6 +261,19 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("marketplace_install", self_mod_tools.marketplace_install),
     ("marketplace_uninstall", self_mod_tools.marketplace_uninstall),
     ("connector_upload", self_mod_tools.connector_upload),
+    # v0.1.3 — Investigation tools. The agent records investigations
+    # locally: opens an Issue, logs activity, fills findings, groups Issues
+    # into Cases. Catalog side of the guardrail (investigation metadata, no
+    # SecretStore access) — safe to expose to the agent.
+    ("issue_create", investigation_tools.issue_create),
+    ("issue_update", investigation_tools.issue_update),
+    ("issue_add_event", investigation_tools.issue_add_event),
+    ("issue_get", investigation_tools.issue_get),
+    ("issues_list", investigation_tools.issues_list),
+    ("case_create", investigation_tools.case_create),
+    ("case_add_issue", investigation_tools.case_add_issue),
+    ("cases_list", investigation_tools.cases_list),
+    ("case_get", investigation_tools.case_get),
 ]
 
 

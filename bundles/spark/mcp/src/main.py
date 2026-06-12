@@ -255,6 +255,17 @@ async def async_main(transport: str):
     operator_state_store = OperatorStateStore()
     set_operator_state_store(operator_state_store)
 
+    # v0.1.3 — investigation store (local Issues + Cases the agent + operator
+    # create during investigations; distinct from upstream XSOAR incidents).
+    # Catalog domain: the issue_*/case_* MCP tools + the /api/v1/issues|cases
+    # routes read it via the singleton accessor.
+    from usecase.investigation_store import (
+        InvestigationStore,
+        set_investigation_store,
+    )
+    investigation_store_inst = InvestigationStore()
+    set_investigation_store(investigation_store_inst)
+
     # v0.5.0 upgrade migration — for v0.4.x customers carrying
     # instances in the persisted guardian_data volume: every connector
     # that already has an instance gets auto-installed. Otherwise
@@ -834,6 +845,11 @@ async def async_main(transport: str):
     # hooks (use-tested-journeys, metrics-bookmarks) proxy to these.
     from api.operator_state import register_operator_state_routes
     register_operator_state_routes(mcp, operator_state_store)
+
+    # v0.1.3 — Investigation surface. Routes at /api/v1/issues|cases* —
+    # see api/investigation.py. The Next.js Investigation UI proxies to these.
+    from api.investigation import register_investigation_routes
+    register_investigation_routes(mcp, investigation_store_inst)
     # Round-15 / Phase X — plugin inventory + reload API. Phase S
     # extends this with agent_definition_store so a Reload click
     # also re-applies plugin-contributed agents.
