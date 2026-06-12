@@ -110,3 +110,59 @@ def test_complete_unit_clears_active():
     ls.open_unit(s, id="x", title="t", scope="s", mode="narrow")
     ls.complete_unit(s)
     assert ls.active_unit(s) is None
+
+
+def test_set_remaining():
+    s = ls.default_state()
+    ls.open_unit(s, id="x", title="t", scope="s", mode="narrow")
+    ls.set_remaining(s, ["slice-b", "slice-c"])
+    assert ls.active_unit(s)["remaining_scope"] == ["slice-b", "slice-c"]
+
+
+def test_record_rejection_increments_and_stores_reasons():
+    s = ls.default_state()
+    ls.open_unit(s, id="x", title="t", scope="s", mode="narrow")
+    ls.record_rejection(s, "missed file A")
+    ls.record_rejection(s, "missed file A and B")
+    u = ls.active_unit(s)
+    assert u["rejections"] == 2
+    assert u["reasons"] == "missed file A and B"
+
+
+def test_should_defer_narrow_after_2():
+    s = ls.default_state()
+    ls.open_unit(s, id="x", title="t", scope="s", mode="narrow")
+    ls.record_rejection(s, "r1")
+    assert ls.should_defer(s) is False
+    ls.record_rejection(s, "r2")
+    assert ls.should_defer(s) is True
+
+
+def test_should_defer_wide_after_3():
+    s = ls.default_state()
+    ls.open_unit(s, id="x", title="t", scope="s", mode="wide")
+    ls.record_rejection(s, "r1")
+    ls.record_rejection(s, "r2")
+    assert ls.should_defer(s) is False
+    ls.record_rejection(s, "r3")
+    assert ls.should_defer(s) is True
+
+
+def test_should_defer_no_active_unit_is_false():
+    s = ls.default_state()
+    assert ls.should_defer(s) is False
+
+
+def test_defer_unit_moves_to_deferred_and_clears_active():
+    s = ls.default_state()
+    ls.open_unit(s, id="hard", title="t", scope="files X,Y,Z", mode="wide")
+    ls.record_rejection(s, "still missing Z")
+    ls.defer_unit(s, issue="https://example/issues/9")
+    assert ls.active_unit(s) is None
+    assert len(s["deferred"]) == 1
+    d = s["deferred"][0]
+    assert d["id"] == "hard"
+    assert d["reasons"] == "still missing Z"
+    assert d["issue"] == "https://example/issues/9"
+    assert ls.is_deferred(s, "hard") is True
+    assert ls.is_deferred(s, "other") is False

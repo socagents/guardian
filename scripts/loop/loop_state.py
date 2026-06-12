@@ -101,6 +101,51 @@ def complete_unit(state: dict) -> dict:
     return state
 
 
+def set_remaining(state: dict, slices: list) -> dict:
+    u = state.get("active_unit")
+    if not u:
+        raise ValueError("no active unit")
+    u["remaining_scope"] = list(slices)
+    return state
+
+
+def record_rejection(state: dict, reasons: str) -> dict:
+    u = state.get("active_unit")
+    if not u:
+        raise ValueError("no active unit")
+    u["rejections"] += 1
+    u["reasons"] = reasons  # latest accumulated checker reasons
+    return state
+
+
+def _defer_threshold(mode: str) -> int:
+    return K_WIDE if mode == "wide" else K_NARROW
+
+
+def should_defer(state: dict) -> bool:
+    u = state.get("active_unit")
+    return bool(u) and u["rejections"] >= _defer_threshold(u.get("mode", "narrow"))
+
+
+def defer_unit(state: dict, *, issue: str | None = None) -> dict:
+    u = state.get("active_unit")
+    if not u:
+        raise ValueError("no active unit")
+    state["deferred"].append({
+        "id": u["id"],
+        "title": u["title"],
+        "scope": u["scope"],
+        "reasons": u.get("reasons", ""),
+        "issue": issue,
+    })
+    state["active_unit"] = None
+    return state
+
+
+def is_deferred(state: dict, unit_id: str) -> bool:
+    return any(d.get("id") == unit_id for d in state.get("deferred", []))
+
+
 def compute_counters(state: dict) -> dict:
     cycles = state["cycles"]
     return {
