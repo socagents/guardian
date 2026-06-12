@@ -67,6 +67,19 @@ const navEntries: NavEntry[] = [
     ],
   },
   {
+    // v0.1.3 — Investigation: local Issues + Cases Guardian (and the
+    // operator) open during investigations. Distinct from upstream XSOAR
+    // incidents; this is Guardian's own investigation record.
+    id: "investigation",
+    label: "Investigation",
+    icon: "frame_inspect",
+    defaultHref: "/investigation/issues",
+    children: [
+      { href: "/investigation/issues", label: "Issues", icon: "report" },
+      { href: "/investigation/cases", label: "Cases", icon: "cases" },
+    ],
+  },
+  {
     id: "integration",
     label: "Integration",
     icon: "hub",
