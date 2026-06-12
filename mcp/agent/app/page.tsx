@@ -139,6 +139,28 @@ export default function ChatPage() {
   // Available models
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
 
+  // Operator-configured default model (from operator_state.db key
+  // `default_model`). Fetched once on mount; used only for the
+  // "Default — <model>" label in the picker chip — NOT passed into
+  // useChat's defaultModel option (which would send it as body.model and
+  // bypass the server's own default resolution, contradicting Task 1).
+  const [opDefaultModel, setOpDefaultModel] = useState<string | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/agent/operator-state/default_model")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const m = (d?.value as { model?: string } | undefined)?.model;
+        if (!cancelled && typeof m === "string" && m) setOpDefaultModel(m);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Chat hook — guardian is single-tenant, so no workspace defaults; the
   // chat handler picks the model from the runtime config (Vertex/Gemini).
   const {
@@ -432,9 +454,17 @@ export default function ChatPage() {
   }, [sessionId, messages, refreshSessions]);
 
   // Derived values
+  //
+  // When the operator hasn't selected a model override, `currentModel` is
+  // undefined and the server picks the operator default (Task 1). Display
+  // "Default — <model>" so the chip is self-explanatory. Fall back to
+  // plain "Default" if we haven't received the operator default from the
+  // API yet (fresh page load before the fetch resolves).
   const modelLabel = currentModel
     ? `${currentProvider ?? "auto"}/${currentModel}`
-    : "auto";
+    : opDefaultModel
+      ? `Default — ${opDefaultModel}`
+      : "Default";
 
   const firstUserMessage = messages.find((m) => m.role === "user");
   const sessionTitle = firstUserMessage
