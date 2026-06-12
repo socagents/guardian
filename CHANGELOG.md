@@ -10,6 +10,25 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.4] (unreleased) — *Agent chat resilience — retry transient Vertex socket resets*
+
+Long agent turns — especially **scheduled investigation jobs** that run many tool calls against a real XSOAR tenant — no longer die mid-run with `chat error event: fetch failed`. The chat route already retried Vertex/Gemini **429 / quota** throttling; this release extends the same exponential-backoff retry to **transient socket resets** (`UND_ERR_SOCKET` / `ECONNRESET` / connect + body timeouts), which Vertex returns when it drops a long `generateContent` connection under load.
+
+### What ships
+
+- **Wider model-call retry** — the chat route's retry wrapper (renamed `withRateLimitRetry` → `withModelCallRetry`) now retries transient network failures in addition to 429s. A new `transientNetworkCode()` helper walks the `err.cause` chain (Node's fetch reports the real socket code on `cause`, not the top-level `fetch failed` message) and matches a set of retryable codes; a bare `fetch failed` / `socket hang up` / `other side closed` is treated as transient because undici only throws those for network-level errors (HTTP error statuses return a non-ok response, still handled by the 429 path).
+- **Why it mattered** — the v0.1.3 autonomous investigation loop proved the Investigation module + skill work end-to-end (the agent opened a local Issue, `origin=agent`, the moment it began investigating) but every run then failed on a mid-investigation socket reset the retry predicate didn't cover. This is the fix that lets the loop *complete* an investigation. See [#7](https://github.com/kite-production/guardian/issues/7).
+
+### Files
+
+- `mcp/agent/app/api/chat/route.ts` — `transientNetworkCode()` + `TRANSIENT_NETWORK_CODES` + broadened `withModelCallRetry` (both Gemini-API-key and Vertex call sites).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); no installer change; volumes preserved. Patch bump (v0.1.4).
+
+---
+
 ## [v0.1.3] (unreleased) — *Investigation module — local Issues & Cases*
 
 A new first-class **Investigation** area: Guardian (and the operator) open local **Issues** during investigations and group related ones into **Cases**. Distinct from upstream XSOAR incidents — an Issue is *Guardian's own* investigation record (what's being investigated, the activity timeline, recommendations, conclusions, summary, next steps), shown in the UI.

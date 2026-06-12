@@ -2448,23 +2448,88 @@ function parseCredentialsInput(input: string) {
 }
 
 /**
- * v0.1.25 — Vertex/Gemini quota retry wrapper.
+ * Transient network-failure codes that are safe to retry on a model call.
  *
- * Vertex projects hit per-minute quota under bursty agent load
- * (multiple 5-min-cron jobs overlapping with chat traffic). Pre-v0.1.25,
- * a 429 / RESOURCE_EXHAUSTED bubbled straight to the operator as
- * `Gemini API error: 429 ...` and to scheduled jobs as
- * `RuntimeError: chat error event: Vertex AI error: 429`. Customer's
- * `scheduled-xql-hunt` job last_error showed exactly that.
- *
- * This wrapper retries 429-class errors with exponential backoff +
- * jitter. Other errors propagate immediately so real bugs aren't masked.
- *
- * Pattern ported from our blackhat-noc Slack bot's
- * `send_message_with_backoff` — same shape, same numbers (initial 2s,
- * x2 each retry, 0–1s jitter, max 5 retries).
+ * Node's fetch (undici) throws `TypeError: fetch failed` for socket-level
+ * failures — the real code lives on `err.cause`, NOT the top-level
+ * message. The loop-killer in the autonomous investigation runs was
+ * `UND_ERR_SOCKET` ("other side closed"): Vertex drops the long
+ * `generateContent` connection under bursty/throttled load, undici
+ * surfaces it as a bare `fetch failed`, and the old rate-limit-only
+ * predicate let it fall straight through to a fatal
+ * `chat error event: fetch failed`.
  */
-async function withRateLimitRetry<T>(
+const TRANSIENT_NETWORK_CODES = new Set([
+  'UND_ERR_SOCKET', // socket closed mid-request — the loop-killer
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EPIPE',
+  'EAI_AGAIN', // transient DNS failure
+]);
+
+/**
+ * Returns the transient network code if `err` (or anything in its
+ * `cause` chain) is a retryable socket-level failure, else null.
+ *
+ * We walk the whole cause chain so a code buried two levels deep still
+ * matches, and treat a bare `fetch failed` / `socket hang up` /
+ * `other side closed` as transient because undici only throws those for
+ * network errors — HTTP error statuses don't throw, they return a
+ * non-ok response (handled separately by the 429 string predicate).
+ */
+function transientNetworkCode(err: unknown): string | null {
+  const seen = new Set<unknown>();
+  let cur: unknown = err;
+  while (cur instanceof Error && !seen.has(cur)) {
+    seen.add(cur);
+    const rawCode = (cur as { code?: unknown }).code;
+    const code = typeof rawCode === 'string' ? rawCode : null;
+    if (code && TRANSIENT_NETWORK_CODES.has(code)) {
+      return code;
+    }
+    const m = cur.message.toLowerCase();
+    if (
+      m.includes('fetch failed') ||
+      m.includes('socket hang up') ||
+      m.includes('other side closed') ||
+      m.includes('econnreset')
+    ) {
+      return code ?? 'fetch failed';
+    }
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return null;
+}
+
+/**
+ * v0.1.25 / v0.1.4-hardening — Vertex/Gemini model-call retry wrapper.
+ *
+ * Retries two classes of transient failure with exponential backoff +
+ * jitter:
+ *   1. 429 / RESOURCE_EXHAUSTED — Vertex per-minute quota under bursty
+ *      agent load (overlapping cron jobs + chat traffic). Pre-v0.1.25 a
+ *      429 bubbled straight to the operator / scheduled jobs as
+ *      `chat error event: Vertex AI error: 429`. [v0.1.25]
+ *   2. Transient socket resets — UND_ERR_SOCKET / ECONNRESET / connect
+ *      + body timeouts that undici surfaces as a bare `fetch failed`.
+ *      These killed EVERY autonomous investigation run pre-v0.1.4: the
+ *      agent opened a Guardian Issue, then a mid-investigation model
+ *      call hit a socket reset that the rate-limit-only predicate didn't
+ *      cover, so the whole turn died with `fetch failed`. [v0.1.4]
+ *
+ * Any other error propagates immediately so real bugs aren't masked.
+ * `generateContent` has no Vertex-side side effects, so retrying a POST
+ * is safe (worst case re-bills one generation on a rare mid-body reset).
+ *
+ * Backoff pattern ported from the blackhat-noc Slack bot's
+ * `send_message_with_backoff` (initial 2s, x2 each retry, 0–1s jitter,
+ * max 5 retries).
+ */
+async function withModelCallRetry<T>(
   fn: () => Promise<T>,
   opts: { maxRetries?: number; initialDelayMs?: number; label?: string } = {},
 ): Promise<T> {
@@ -2481,15 +2546,17 @@ async function withRateLimitRetry<T>(
         msg.includes('RESOURCE_EXHAUSTED') ||
         msg.includes('Resource exhausted') ||
         msg.toLowerCase().includes('rate limit');
-      if (!isRateLimit || attempt >= maxRetries) {
+      const netCode = isRateLimit ? null : transientNetworkCode(err);
+      if ((!isRateLimit && !netCode) || attempt >= maxRetries) {
         throw err;
       }
       attempt += 1;
       const jitterMs = Math.floor(Math.random() * 1000);
       const sleepMs = delayMs + jitterMs;
+      const reason = isRateLimit ? '429/quota' : `transient network (${netCode})`;
       // eslint-disable-next-line no-console
       console.warn(
-        `[chat] ${opts.label ?? 'gemini'} hit 429; retry ${attempt}/${maxRetries} in ${sleepMs}ms`,
+        `[chat] ${opts.label ?? 'gemini'} hit ${reason}; retry ${attempt}/${maxRetries} in ${sleepMs}ms`,
       );
       await new Promise((r) => setTimeout(r, sleepMs));
       delayMs *= 2; // exponential
@@ -2506,7 +2573,7 @@ async function callGeminiWithApiKey(
     throw new Error('GEMINI_API_KEY is required for the Gemini API call.');
   }
 
-  return withRateLimitRetry(
+  return withModelCallRetry(
     async () => {
       const response = await fetch(
         `${GEMINI_API_BASE}/models/${encodeURIComponent(modelName)}:generateContent?key=${runtimeConfig.GEMINI_API_KEY}`,
@@ -2613,7 +2680,7 @@ async function callGeminiWithVertex(
     }
   }
 
-  return withRateLimitRetry(
+  return withModelCallRetry(
     async () => {
       const response = await fetch(
         `${VERTEX_API_BASE}/projects/${encodeURIComponent(projectId)}/locations/${location}` +

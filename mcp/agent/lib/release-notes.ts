@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.4",
+    date: "2026-06-12",
+    title: "Agent chat resilience — long investigations survive transient Vertex socket resets.",
+    highlights: [
+      "Scheduled investigation jobs no longer die mid-run with 'chat error event: fetch failed'.",
+      "Model-call retry now covers transient socket resets (UND_ERR_SOCKET / ECONNRESET / timeouts), not just 429 quota.",
+      "Same exponential backoff + jitter as the existing 429 retry; real errors still surface immediately.",
+    ],
+  },
+  {
     version: "0.1.3",
     date: "2026-06-12",
     title: "Investigation module — local Issues & Cases for every investigation.",
