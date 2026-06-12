@@ -277,6 +277,41 @@ def cmd_render(args):
     print(f"rendered {md_path}")
 
 
+def _save_and_render(args, mutate):
+    json_path, md_path = _paths(args.repo)
+    state = load_state(json_path)
+    mutate(state)
+    save_state(json_path, state)
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    md_path.write_text(render_markdown(state))
+
+
+def cmd_open_unit(args):
+    _save_and_render(args, lambda s: open_unit(
+        s, id=args.id, title=args.title, scope=args.scope, mode=args.mode))
+    print(f"opened unit {args.id} ({args.mode})")
+
+
+def cmd_set_remaining(args):
+    _save_and_render(args, lambda s: set_remaining(s, args.slices or []))
+    print(f"remaining slices: {len(args.slices or [])}")
+
+
+def cmd_record_rejection(args):
+    _save_and_render(args, lambda s: record_rejection(s, args.reasons))
+    print("recorded rejection")
+
+
+def cmd_defer_unit(args):
+    _save_and_render(args, lambda s: defer_unit(s, issue=args.issue or None))
+    print("deferred active unit")
+
+
+def cmd_complete_unit(args):
+    _save_and_render(args, lambda s: complete_unit(s))
+    print("completed active unit")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Guardian self-learning loop state")
     p.add_argument("--repo", default=".", help="repo root (default: cwd)")
@@ -293,6 +328,24 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--checker", default="", choices=["", "approved", "rejected", "n/a"])
     r.add_argument("--next-focus", default="", dest="next_focus")
     sub.add_parser("render").set_defaults(func=cmd_render)
+
+    o = sub.add_parser("open-unit"); o.set_defaults(func=cmd_open_unit)
+    o.add_argument("--id", required=True)
+    o.add_argument("--title", required=True)
+    o.add_argument("--scope", required=True)
+    o.add_argument("--mode", default="narrow", choices=list(VALID_MODES))
+
+    sr = sub.add_parser("set-remaining"); sr.set_defaults(func=cmd_set_remaining)
+    sr.add_argument("--slices", nargs="*", default=[])
+
+    rr = sub.add_parser("record-rejection"); rr.set_defaults(func=cmd_record_rejection)
+    rr.add_argument("--reasons", required=True)
+
+    du = sub.add_parser("defer-unit"); du.set_defaults(func=cmd_defer_unit)
+    du.add_argument("--issue", default="")
+
+    sub.add_parser("complete-unit").set_defaults(func=cmd_complete_unit)
+
     return p
 
 

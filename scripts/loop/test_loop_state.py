@@ -1,6 +1,11 @@
 """Tests for the Guardian loop state module. Run from scripts/loop/:
     python3 -m pytest test_loop_state.py -v
 """
+import json
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 import loop_state as ls
 
@@ -195,3 +200,20 @@ def test_render_no_active_unit_says_none():
     md = ls.render_markdown(ls.default_state())
     assert "Active unit" in md  # heading present
     assert "_none active_" in md
+
+
+def test_cli_unit_lifecycle(tmp_path):
+    mod = str(Path(__file__).with_name("loop_state.py"))
+    def run(*args):
+        subprocess.run([sys.executable, mod, "--repo", str(tmp_path), *args], check=True)
+    run("init")
+    run("open-unit", "--id", "u1", "--title", "t", "--scope", "s", "--mode", "narrow")
+    run("record-rejection", "--reasons", "missed A")
+    run("record-rejection", "--reasons", "missed A,B")
+    run("defer-unit", "--issue", "https://x/1")
+    state = json.loads((tmp_path / ".guardian-loop" / "state.json").read_text())
+    assert state["active_unit"] is None
+    assert state["deferred"][0]["id"] == "u1"
+    assert state["deferred"][0]["issue"] == "https://x/1"
+    md = (tmp_path / "docs" / "loop" / "state.md").read_text()
+    assert "Deferred — needs human" in md and "u1" in md
