@@ -72,6 +72,9 @@ __all__ = [
     "xsoar_run_command",
     "xsoar_enrich_indicator",
     "xsoar_complete_task",
+    "xsoar_get_list",
+    "xsoar_set_list",
+    "xsoar_append_to_list",
 ]
 
 
@@ -1296,3 +1299,130 @@ async def xsoar_complete_task(
     fetcher = _get_fetcher()
     result = await _execute_command(fetcher, playground_id, command)
     return {"incident_id": incident_id, "task_id": task_id, **result}
+
+
+# ─── xsoar_get_list ──────────────────────────────────────────────────
+
+
+def _find_list(lists: Any, name: str) -> Optional[dict]:
+    """Find a list object by name (or id) in a GET /lists/ response array."""
+    if isinstance(lists, dict) and "data" in lists:
+        lists = lists.get("data")
+    if not isinstance(lists, list):
+        return None
+    for lst in lists:
+        if isinstance(lst, dict) and (lst.get("name") == name or lst.get("id") == name):
+            return lst
+    return None
+
+
+@_wrap_xsoar_call
+async def xsoar_get_list(name: str) -> dict:
+    """Read a Cortex XSOAR list (a named key/value or line list) by name.
+
+    XSOAR Lists hold reusable data — allow/block lists, lookup tables, config.
+    Use to read one during an investigation or before appending to it.
+
+    Args:
+        name: The list name (or id).
+
+    Returns:
+        {ok, name, data, type} where type is 'plain_text' or 'json', or
+        {ok: false, error} when no list matched.
+    """
+    if not name:
+        raise ValueError("name is required")
+    fetcher = _get_fetcher()
+    response = await fetcher.get("/lists/")
+    lst = _find_list(response, name)
+    if lst is None:
+        return _err(f"list '{name}' not found", name=name)
+    return {"name": lst.get("name"), "data": lst.get("data"), "type": lst.get("type")}
+
+
+# ─── xsoar_set_list ──────────────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_set_list(name: str, data: str, list_type: str = "plain_text") -> dict:
+    """Create or overwrite a Cortex XSOAR list.
+
+    Writes the full contents (creating the list if it doesn't exist). To add a
+    single value without clobbering the rest, use xsoar_append_to_list.
+
+    Args:
+        name: The list name.
+        data: The full list contents. For list_type 'plain_text' this is the raw
+            text (often newline-separated); for 'json' a JSON string.
+        list_type: 'plain_text' (default) or 'json'.
+
+    Returns:
+        {ok, name, type}.
+    """
+    if not name:
+        raise ValueError("name is required")
+    body = {
+        "name": name,
+        "data": data if data is not None else "",
+        "type": list_type or "plain_text",
+    }
+    fetcher = _get_fetcher()
+    response = await fetcher.post("/lists/save", body)
+    return {
+        "name": name,
+        "type": body["type"],
+        "raw_response": {"id": response.get("id")} if isinstance(response, dict) else response,
+    }
+
+
+# ─── xsoar_append_to_list ────────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_append_to_list(name: str, value: str) -> dict:
+    """Append a value to a Cortex XSOAR list (read-modify-write).
+
+    Reads the current list, adds `value` (a newline for plain_text lists, an
+    array push for json lists), and saves. Creates a new plain_text list with
+    the value if the list doesn't exist yet. Use to add an IoC to a block/allow
+    list during response without overwriting the rest.
+
+    Args:
+        name: The list name.
+        value: The value to append.
+
+    Returns:
+        {ok, name, data, type} with the post-append contents.
+    """
+    if not name:
+        raise ValueError("name is required")
+    if value is None:
+        raise ValueError("value is required")
+
+    fetcher = _get_fetcher()
+    existing = _find_list(await fetcher.get("/lists/"), name)
+
+    if existing is None:
+        new_data, list_type = str(value), "plain_text"
+    else:
+        list_type = existing.get("type") or "plain_text"
+        current = existing.get("data")
+        if list_type == "json":
+            try:
+                arr = json.loads(current) if isinstance(current, str) else (current or [])
+            except (json.JSONDecodeError, TypeError):
+                return _err(
+                    f"list '{name}' is type json but its data isn't valid JSON; "
+                    f"refusing to overwrite",
+                    name=name,
+                )
+            if not isinstance(arr, list):
+                return _err(f"list '{name}' json data isn't an array; refusing to append", name=name)
+            arr.append(value)
+            new_data = json.dumps(arr)
+        else:
+            current_str = current if isinstance(current, str) else ("" if current is None else str(current))
+            new_data = f"{current_str}\n{value}" if current_str else str(value)
+
+    await fetcher.post("/lists/save", {"name": name, "data": new_data, "type": list_type})
+    return {"name": name, "data": new_data, "type": list_type}

@@ -292,3 +292,38 @@ spec:
         - { name: "task_id",     type: "string", description: "The playbook task id (or tag) to complete.", required: true }
         - { name: "comment",     type: "string", description: "Optional completion note recorded on the task.", required: false }
       returns: { type: "object", description: "{ ok, incident_id, task_id, output }" }
+
+    # ─── XSOAR Lists ─────────────────────────────────────────────
+    - name: "get_list"
+      method: "GET /lists/ (filter by name)"
+      description: |
+        Read a Cortex XSOAR list by name — XSOAR Lists hold reusable data like
+        allow/block lists, lookup tables, and config. Use to read one during an
+        investigation or before appending to it.
+      args:
+        - { name: "name", type: "string", description: "The list name (or id).", required: true }
+      returns: { type: "object", description: "{ ok, name, data, type }" }
+
+    - name: "set_list"
+      method: "POST /lists/save (overwrite)"
+      description: |
+        Create or overwrite a Cortex XSOAR list — writes the full contents
+        (creating the list if absent). To add a single value without clobbering
+        the rest, use xsoar_append_to_list.
+      args:
+        - { name: "name",      type: "string", description: "The list name.", required: true }
+        - { name: "data",      type: "string", description: "Full list contents. plain_text: raw text (often newline-separated). json: a JSON string.", required: true }
+        - { name: "list_type", type: "string", description: "'plain_text' (default) or 'json'.", required: false }
+      returns: { type: "object", description: "{ ok, name, type }" }
+
+    - name: "append_to_list"
+      method: "GET /lists/ + POST /lists/save"
+      description: |
+        Append a value to a Cortex XSOAR list (read-modify-write) — a newline for
+        plain_text lists, an array push for json lists. Creates a new plain_text
+        list if it doesn't exist. Use to add an IoC to a block/allow list during
+        response without overwriting the rest.
+      args:
+        - { name: "name",  type: "string", description: "The list name.", required: true }
+        - { name: "value", type: "string", description: "The value to append.", required: true }
+      returns: { type: "object", description: "{ ok, name, data, type }" }
