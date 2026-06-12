@@ -166,3 +166,32 @@ def test_defer_unit_moves_to_deferred_and_clears_active():
     assert d["issue"] == "https://example/issues/9"
     assert ls.is_deferred(s, "hard") is True
     assert ls.is_deferred(s, "other") is False
+
+
+def test_render_shows_active_unit():
+    s = ls.default_state()
+    ls.open_unit(s, id="UNIT-MARK", title="TITLE-MARK", scope="s", mode="wide")
+    ls.record_rejection(s, "r1")
+    md = ls.render_markdown(s)
+    assert "Active unit" in md
+    assert "UNIT-MARK" in md
+    assert "TITLE-MARK" in md
+    assert "wide" in md
+
+
+def test_render_shows_deferred_with_issue_link():
+    s = ls.default_state()
+    ls.open_unit(s, id="HARD-MARK", title="hard", scope="s", mode="narrow")
+    ls.record_rejection(s, "r1")
+    ls.record_rejection(s, "r2")
+    ls.defer_unit(s, issue="https://example/issues/42")
+    md = ls.render_markdown(s)
+    assert "Deferred — needs human" in md
+    assert "HARD-MARK" in md
+    assert "https://example/issues/42" in md
+
+
+def test_render_no_active_unit_says_none():
+    md = ls.render_markdown(ls.default_state())
+    assert "Active unit" in md  # heading present
+    assert "_none active_" in md

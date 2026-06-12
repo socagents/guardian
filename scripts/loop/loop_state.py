@@ -177,6 +177,36 @@ def render_markdown(state: dict) -> str:
         f"- Gate failures: **{c['gate_failures']}**",
         f"- Checker rejections: **{c['checker_rejections']}**",
         "",
+    ]
+
+    # --- Active unit (Phase 1.5) ---
+    lines += ["## Active unit", ""]
+    u = state.get("active_unit")
+    if u:
+        lines += [
+            f"- **{u.get('id', '')}** — {u.get('title', '')}",
+            f"  - mode: `{u.get('mode', '')}` · rejections: {u.get('rejections', 0)}"
+            f" · remaining slices: {len(u.get('remaining_scope', []))}",
+            f"  - scope: {u.get('scope', '')}",
+            "",
+        ]
+    else:
+        lines += ["_none active_", ""]
+
+    # --- Deferred — needs human (Phase 1.5) ---
+    lines += ["## Deferred — needs human", ""]
+    deferred = state.get("deferred", [])
+    if deferred:
+        for d in deferred:
+            issue = d.get("issue") or "(no issue)"
+            lines.append(f"- **{d.get('id', '')}** — {d.get('title', '')} → {issue}")
+            if d.get("reasons"):
+                lines.append(f"  - blocked on: {d['reasons']}")
+    else:
+        lines.append("_none_")
+    lines.append("")
+
+    lines += [
         "## Next focus",
         "",
         state["next_focus"],
