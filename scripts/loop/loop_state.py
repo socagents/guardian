@@ -15,8 +15,11 @@ import argparse
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2 adds active_unit + deferred (Phase 1.5)
 VALID_OUTCOMES = ("fixed", "no-op", "gate-failed", "checker-rejected")
+VALID_MODES = ("narrow", "wide")
+K_NARROW = 2  # defer a narrow unit after this many checker rejections
+K_WIDE = 3    # wide (atomic) units get one more attempt
 
 
 def default_state() -> dict:
@@ -28,6 +31,8 @@ def default_state() -> dict:
             "(sidebar nav vs pages; architecture page service list vs docker compose)"
         ),
         "open_findings": [],
+        "active_unit": None,
+        "deferred": [],
     }
 
 
@@ -45,6 +50,8 @@ def load_state(path: Path) -> dict:
     data.setdefault("cycles", [])
     data.setdefault("next_focus", "")
     data.setdefault("open_findings", [])
+    data.setdefault("active_unit", None)
+    data.setdefault("deferred", [])
     return data
 
 
@@ -66,6 +73,31 @@ def record_cycle(state: dict, cycle: dict) -> dict:
 
 def set_next_focus(state: dict, focus: str) -> dict:
     state["next_focus"] = focus
+    return state
+
+
+def active_unit(state: dict) -> dict | None:
+    return state.get("active_unit")
+
+
+def open_unit(state: dict, *, id: str, title: str, scope: str, mode: str = "narrow") -> dict:
+    if mode not in VALID_MODES:
+        raise ValueError(f"unknown mode {mode!r}; expected one of {VALID_MODES}")
+    state["active_unit"] = {
+        "id": id,
+        "title": title,
+        "scope": scope,
+        "mode": mode,
+        "remaining_scope": [],
+        "rejections": 0,
+        "reasons": "",
+        "status": "active",
+    }
+    return state
+
+
+def complete_unit(state: dict) -> dict:
+    state["active_unit"] = None
     return state
 
 

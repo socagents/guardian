@@ -69,3 +69,44 @@ def test_load_state_rejects_non_dict(tmp_path):
     p.write_text("[1, 2, 3]")
     with pytest.raises(ValueError, match="JSON object"):
         ls.load_state(p)
+
+
+def test_default_state_has_active_unit_and_deferred():
+    s = ls.default_state()
+    assert s["active_unit"] is None
+    assert s["deferred"] == []
+    assert s["schema_version"] == ls.SCHEMA_VERSION
+
+
+def test_load_state_backfills_new_keys_for_old_schema(tmp_path):
+    # An old (Phase-1) state.json with no active_unit/deferred must load cleanly.
+    p = tmp_path / "state.json"
+    p.write_text('{"schema_version": 1, "cycles": [], "next_focus": "x", "open_findings": []}')
+    s = ls.load_state(p)
+    assert s["active_unit"] is None
+    assert s["deferred"] == []
+
+
+def test_open_unit_sets_active():
+    s = ls.default_state()
+    ls.open_unit(s, id="jobs-chat-prompt", title="chat→prompt", scope="renderers + docs", mode="narrow")
+    u = ls.active_unit(s)
+    assert u["id"] == "jobs-chat-prompt"
+    assert u["mode"] == "narrow"
+    assert u["rejections"] == 0
+    assert u["status"] == "active"
+    assert u["remaining_scope"] == []
+
+
+def test_open_unit_rejects_bad_mode():
+    s = ls.default_state()
+    import pytest
+    with pytest.raises(ValueError, match="mode"):
+        ls.open_unit(s, id="x", title="t", scope="s", mode="banana")
+
+
+def test_complete_unit_clears_active():
+    s = ls.default_state()
+    ls.open_unit(s, id="x", title="t", scope="s", mode="narrow")
+    ls.complete_unit(s)
+    assert ls.active_unit(s) is None
