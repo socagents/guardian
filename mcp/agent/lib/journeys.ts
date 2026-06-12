@@ -84,6 +84,10 @@ export type JourneyComponent =
   // were removed in the XSOAR pivot; `xsoar` is the surviving
   // incident-investigation connector component.
   | "xsoar"
+  // [guardian v0.1.3] Investigation: Guardian's OWN local investigation
+  // records — Issues + Cases stored in investigations.db, distinct from
+  // upstream XSOAR incidents. Catalog domain (no SecretStore access).
+  | "investigation"
   | "mcp"
   | "auth"
   | "secrets";
@@ -391,6 +395,12 @@ export const COMPONENT_META: Record<JourneyComponent, ComponentMeta> = {
     icon: "security",
     guide: "architecture",
     anchor: "xsoar-connector",
+  },
+  investigation: {
+    label: "Investigation",
+    icon: "cases",
+    guide: "architecture",
+    anchor: "investigation",
   },
   mcp: {
     label: "MCP server",
@@ -3817,6 +3827,90 @@ export const JOURNEYS: Journey[] = [
     ],
     related: ["ops-recover-connector-needs-auth"],
     components: ["connectors", "xsoar"],
+  },
+
+  {
+    id: "investigate-to-issue",
+    category: "connectors",
+    title: "Investigate an XSOAR incident → open a Guardian Issue",
+    summary:
+      "Ask Guardian to investigate an XSOAR incident. Guardian opens its OWN local Issue (issue_create, source_ref = the XSOAR incident id), logs each step + finding to the activity timeline (issue_add_event), records the verdict (issue_update), and can group related Issues into a Case. You review the result under Investigation → Issues. An Issue is Guardian's investigation record — distinct from the upstream XSOAR incident.",
+    difficulty: "intermediate",
+    durationMin: 8,
+    icon: "cases",
+    prompts: [
+      {
+        text: "Investigate XSOAR incident 4521 and open a Guardian issue to track it.",
+        note: "Exercises issue_create — the agent opens a local Issue with source_ref pointing at the XSOAR incident id, then pulls case context to start the timeline. The xsoar_case_investigation skill drives the open + maintain loop.",
+      },
+      {
+        text: "Log what you've found so far on that issue, then record your verdict.",
+        note: "Exercises issue_add_event (one timeline entry per finding/step) and issue_update (sets status + severity + the verdict in Conclusions). Watch the agent fill Summary / Scope / Recommendations / Conclusions / Next-steps.",
+      },
+      {
+        text: "Group this issue with any related issues into a single case.",
+        note: "Exercises case_create + case_add_issue — Guardian collects one-to-many Issues under a Case (issues.case_id). Optional; skip if there's only one issue.",
+      },
+    ],
+    toolsExercised: [
+      "issue_create",
+      "issue_add_event",
+      "issue_update",
+      "case_create",
+      "case_add_issue",
+      "issues_list",
+    ],
+    apis: [
+      {
+        method: "POST",
+        path: "/api/agent/issues",
+        description:
+          "Creates a Guardian Issue (investigations.db → issues table). Body carries title, severity, status, and source_ref (the upstream XSOAR incident id). Returns the issue id used by the timeline + verdict calls. MCP_TOKEN bearer; catalog domain — no SecretStore access.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/issues/{id}/events",
+        description:
+          "Appends an activity-timeline entry (investigations.db → issue_events). One row per investigation step / finding the agent logs while working the case.",
+      },
+      {
+        method: "PATCH",
+        path: "/api/agent/issues/{id}",
+        description:
+          "Updates the Issue's status / severity and the editable narrative fields (Summary, Scope, Recommendations, Conclusions, Next-steps). The verdict lands here at the end of the investigation.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/cases",
+        description:
+          "Creates a Case (investigations.db → cases table). One-to-many Issue→Case via issues.case_id; case_add_issue assigns an Issue to the Case.",
+      },
+      {
+        method: "GET",
+        path: "/api/agent/issues",
+        description:
+          "Lists Issues for the Investigation → Issues UI page. Confirms the Issue, its timeline, and its case assignment persisted.",
+      },
+    ],
+    howToTest: [
+      "Open a chat. Paste: 'Investigate XSOAR incident 4521 and open a Guardian issue to track it.' The agent calls issue_create and replies with the new Issue id + a starting summary.",
+      "Paste: 'Log what you've found so far on that issue, then record your verdict.' The agent appends timeline entries (issue_add_event) and sets status/severity + the verdict (issue_update).",
+      "(Optional) Paste: 'Group this issue with any related issues into a single case.' The agent creates a Case (case_create) and assigns the Issue (case_add_issue).",
+      "Open /investigation/issues. The Issue appears with its title, status, severity, and source_ref (the XSOAR incident id).",
+      "Open the Issue detail. The activity timeline shows the logged events; the Summary / Scope / Recommendations / Conclusions / Next-steps fields carry the agent's narrative + verdict; the case-assignment control shows the Case if one was created.",
+      "Open /investigation/cases. The Case lists its grouped Issues.",
+    ],
+    expectedResult:
+      "Guardian opens a local Issue keyed to the XSOAR incident, builds an activity timeline as it investigates, records a verdict in the Issue's editable fields, and (optionally) groups related Issues into a Case. The Issue + timeline + verdict + case assignment are all visible under Investigation → Issues / Cases — Guardian's own investigation record, separate from the upstream XSOAR incident.",
+    verifyVia: [
+      "GET /api/agent/issues → the new Issue with source_ref = the XSOAR incident id, plus status + severity",
+      "GET /api/agent/issues/<id> → editable narrative fields (Summary/Scope/Recommendations/Conclusions/Next-steps) carry the verdict; activity timeline lists the logged events",
+      "GET /api/agent/cases → the Case (if created) lists the grouped Issue id(s)",
+      "/investigation/issues + /investigation/cases render the Issue, its timeline, and the Case",
+      "docker exec guardian_agent sqlite3 /app/data/investigations.db 'SELECT id, source_ref, status FROM issues' → the persisted Issue row",
+    ],
+    related: ["xsoar-run-command"],
+    components: ["investigation", "xsoar", "connectors"],
   },
 
   // [guardian v0.1.0] Retired: ops-list-stop-*-workers — the synthetic

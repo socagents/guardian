@@ -2,7 +2,7 @@
 name: xsoar_case_investigation
 displayName: Investigate an XSOAR case end-to-end
 category: workflows
-description: '**LOAD-FIRST FOR ANY XSOAR CASE / INCIDENT INVESTIGATION REQUEST.** Whenever the operator asks to investigate, triage, summarize, enrich, document, work, or close a Cortex XSOAR case (incident) — call `skills_read({file_path: "workflows/xsoar_case_investigation.md"})` IMMEDIATELY as your first tool call, BEFORE invoking any `xsoar_*` tool. The skill body contains the mandatory investigation lifecycle: monitor (`xsoar_list_incidents`) → fetch (`xsoar_get_incident` + `xsoar_get_war_room`) → research (cortex-docs `cortex_*` + web `guardian_web_*`) → enrich (`xsoar_search_indicators`) → document (`xsoar_add_note` / `xsoar_add_entry`, `xsoar_save_evidence`) → resolve (`xsoar_update_incident` with the case version, `xsoar_close_incident` with reason + notes). Carries the status / severity code reference and the never-invent-IDs rule. The XSOAR connector talks to BOTH XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud — the tools auto-detect; you do not. Read-then-write — read the case fully before mutating it.'
+description: '**LOAD-FIRST FOR ANY XSOAR CASE / INCIDENT INVESTIGATION REQUEST.** Whenever the operator asks to investigate, triage, summarize, enrich, document, work, or close a Cortex XSOAR case (incident) — call `skills_read({file_path: "workflows/xsoar_case_investigation.md"})` IMMEDIATELY as your first tool call, BEFORE invoking any `xsoar_*` tool. The skill body contains the mandatory investigation lifecycle: monitor (`xsoar_list_incidents`) → fetch (`xsoar_get_incident` + `xsoar_get_war_room`) → research (cortex-docs `cortex_*` + web `guardian_web_*`) → enrich (`xsoar_search_indicators`) → document (`xsoar_add_note` / `xsoar_add_entry`, `xsoar_save_evidence`) → resolve (`xsoar_update_incident` with the case version, `xsoar_close_incident` with reason + notes). Carries the status / severity code reference and the never-invent-IDs rule. The XSOAR connector talks to BOTH XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud — the tools auto-detect; you do not. Read-then-write — read the case fully before mutating it. THROUGHOUT the investigation, also keep a local Guardian Issue (`issue_create` right after fetch with `source_ref`=the XSOAR id, `issue_add_event` per step, `issue_update` for the verdict) and group related Issues into Cases (`case_create` / `case_add_issue`) — this is Guardian'\''s own investigation record shown in the Investigation UI.'
 icon: cases
 source: platform
 loadingMode: on-demand
@@ -122,6 +122,53 @@ xsoar_close_incident(incident_id="<id>", close_reason="Resolved", close_notes="T
 - `xsoar_update_incident` is optimistic-concurrency: pass the **exact `version`** you read; if it's stale, re-`xsoar_get_incident` and retry with the fresh version.
 - Pick a close reason that exists in the tenant (see § Common close reasons). When unsure which the tenant uses, look it up in `cortex-docs` rather than guessing a label.
 - Never close a case you couldn't document. If you can't reach a conclusion, leave it open, add a note explaining the gap, and tell the operator what's blocking.
+
+---
+
+## Record the investigation as a local Guardian Issue (do this throughout)
+
+Alongside the XSOAR case, keep a **local Guardian Issue** — Guardian's own record of the investigation, shown to the operator in the Investigation UI (sidebar → Issues). It's separate from the XSOAR war room: the XSOAR case is the system of record on the tenant; the **Issue is Guardian's investigation write-up + deliverable**. Maintaining it is mandatory for any investigation, and it's what lets related findings be grouped into **Cases**.
+
+1. **Open the Issue right after Step 2 (fetch).** As soon as you've read the case:
+
+   ```
+   issue_create(title="<concise>", kind="phishing|lateral_movement|access_violation|malware|other",
+                severity="low|medium|high|critical", source_ref="<the XSOAR incident id>",
+                scope="<what you're investigating>")
+   ```
+
+   Keep the returned issue `id`. (For a standalone finding not tied to an XSOAR case, omit `source_ref`.)
+
+2. **Log each meaningful step as you go** (Steps 3-5) so the operator sees your work:
+
+   ```
+   issue_add_event(issue_id="<id>", type="action",  content="Ran xsoar_search_indicators on 1.2.3.4 → verdict Bad (DBotScore 3)")
+   issue_add_event(issue_id="<id>", type="finding", content="Attachment hash matches known Emotet")
+   ```
+
+3. **Fill the structured findings at Step 6** (when you reach a verdict):
+
+   ```
+   issue_update(issue_id="<id>", status="resolved",
+                summary="<one-paragraph what happened>",
+                recommendations="<actions to take>",
+                conclusions="<verdict + why>",
+                next_steps="<follow-ups / hunts>")
+   ```
+
+   Move status `open → investigating → resolved`/`closed` as the work progresses (set `investigating` at Step 3).
+
+4. **Group related Issues into a Case** when you notice two or more Issues share a campaign, actor, or root cause:
+
+   ```
+   issues_list(status="open")                      # check for related existing Issues first
+   case_create(title="<campaign>", description="<why these group>")   # once
+   case_add_issue(case_id="<case id>", issue_id="<each related issue>")
+   ```
+
+   Use `issues_list` / `cases_list` before creating to avoid duplicates.
+
+These `issue_*` / `case_*` tools are local Guardian metadata (no tenant credentials) — call them freely; they are not approval-gated. The finished Issue should read as a complete investigation record on its own.
 
 ---
 

@@ -124,6 +124,7 @@ const SECTIONS: SectionDef[] = [
  // [guardian v0.1.0] Retired: data-sources — simulation subsystem removed.
  // [guardian v0.1.0] Retired: log-destinations — simulation subsystem removed.
  { id: "operator-state", label: "Operator Workflow State", group: "Connectors & Extensions", icon: "savings" },
+ { id: "investigation", label: "Investigation Module", group: "Connectors & Extensions", icon: "frame_inspect" },
 
  // ── External Connectors ────────────────────────────────────────
  // [guardian v0.1.0] Retired: xlog-connector — simulation subsystem removed.
@@ -394,6 +395,7 @@ export default function ArchitectureGuide() {
  <MarketplaceLogic />
  {/* [guardian v0.1.0] Retired: DataSourcesMarketplace — simulation subsystem removed */}
  <OperatorState />
+ <Investigation />
  {/* External Connectors */}
  {/* [guardian v0.1.0] Retired: XlogConnector + CalderaConnector — simulation subsystem removed */}
  {/* [guardian XSOAR pivot] Retired: XsiamConnector + CortexXdrConnector + CortexContentConnector
@@ -6184,6 +6186,132 @@ Next.js proxy: /api/agent/operator-state/{key} (session-gated).
  <li><strong>Hook: tested journeys</strong>: <Code>mcp/agent/lib/use-tested-journeys.ts</Code> — server-backed.</li>
  <li><strong>Hook: metrics bookmarks</strong>: <Code>mcp/agent/components/observability/metrics-bookmarks.tsx</Code> — same shape.</li>
  </ul>
+ </SubSection>
+ </Section>
+);
+}
+
+function Investigation() {
+ return (
+ <Section
+ id="investigation"
+ icon="frame_inspect"
+ title="Investigation Module — Issues & Cases"
+ >
+ <p>
+ The v0.1.3 Investigation module adds a first-class{" "}
+ <Term>Investigation</Term> area to Guardian: local{" "}
+ <strong>Issues</strong> and <strong>Cases</strong> that the agent and
+ operator create as they work an investigation. An Issue is{" "}
+ <em>Guardian&apos;s own</em> investigation record — distinct from the
+ upstream XSOAR incident it tracks (an XSOAR incident is something the
+ agent reads/writes through the{" "}
+ <Code>xsoar_</Code> connector; an Issue is the local analysis Guardian
+ keeps about it). Issues group one-to-many into Cases, and every Issue
+ carries an activity timeline.
+ </p>
+
+ <SubSection icon="storage" title="Store — investigations.db (catalog domain)">
+ <p>
+ The store lives in{" "}
+ <Code>bundles/spark/mcp/src/usecase/investigation_store.py</Code> and
+ persists to <Code>investigations.db</Code> in the data root. It is{" "}
+ <Term>catalog-domain</Term> state — no SecretStore values, no
+ credentials — which is why the agent is permitted to read and mutate
+ it (see the credential-guardrail subsection below). Three tables:
+ </p>
+ <Pre>{`investigations.db  (DATA_ROOT/ — SQLite, catalog domain)
+ ├── issues         Guardian's own investigation records
+ │     id, title, status, severity,
+ │     summary, scope, recommendations,
+ │     conclusions, next_steps,
+ │     source_ref   -- the XSOAR incident id this Issue tracks
+ │     case_id      -- FK → cases.id (one-to-many issue→case)
+ ├── cases          named groupings of related issues
+ │     id, title, status, ...
+ └── issue_events   the per-issue activity timeline
+       id, issue_id, kind, body, created_at`}</Pre>
+ <p>
+ The <Code>issues.case_id</Code> foreign key encodes the one-to-many
+ issue→case relationship; <Code>issue_events</Code> is the append-only
+ activity log that backs an Issue&apos;s timeline.
+ </p>
+ </SubSection>
+
+ <SubSection icon="api" title="Agent MCP tools — catalog side of the credential guardrail">
+ <p>
+ The agent reaches the module through nine MCP tools. They are on the{" "}
+ <Term>catalog</Term> side of the credential guardrail, NOT the
+ credential side: they touch only investigation metadata in{" "}
+ <Code>investigations.db</Code> and never read, write, mint, or rotate
+ a SecretStore value. That is precisely why the agent <em>may</em> call
+ them — the worst case of a mistaken call is a stray Issue the operator
+ deletes in the UI, not a leaked or destroyed secret.
+ </p>
+ <ul className="list-disc pl-6 space-y-1">
+ <li>
+ <strong>Issues</strong> — <Code>issue_create</Code>,{" "}
+ <Code>issue_update</Code>, <Code>issue_add_event</Code>,{" "}
+ <Code>issue_get</Code>, <Code>issues_list</Code>.
+ </li>
+ <li>
+ <strong>Cases</strong> — <Code>case_create</Code>,{" "}
+ <Code>case_add_issue</Code>, <Code>cases_list</Code>,{" "}
+ <Code>case_get</Code>.
+ </li>
+ </ul>
+ <p>
+ Typical flow during a chat or job: the agent opens an Issue when it
+ starts working a case (<Code>issue_create</Code> with{" "}
+ <Code>source_ref</Code> = the XSOAR incident id), logs each step and
+ finding via <Code>issue_add_event</Code>, records the verdict via{" "}
+ <Code>issue_update</Code>, and groups related Issues into a Case. The{" "}
+ <Code>bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md</Code>{" "}
+ skill drives opening and maintaining the Issue throughout the
+ investigation.
+ </p>
+ </SubSection>
+
+ <SubSection icon="hub" title="REST, proxy, UI — and the inter-service path">
+ <p>
+ The same store is exposed to the operator UI through a REST surface, a
+ Next.js proxy, and two pages:
+ </p>
+ <ul className="list-disc pl-6 space-y-1">
+ <li>
+ <strong>REST API</strong>:{" "}
+ <Code>bundles/spark/mcp/src/api/investigation.py</Code> serves{" "}
+ <Code>/api/v1/issues*</Code> and <Code>/api/v1/cases*</Code> under
+ bearer <Code>MCP_TOKEN</Code> auth.
+ </li>
+ <li>
+ <strong>Next.js proxies</strong>:{" "}
+ <Code>mcp/agent/app/api/agent/issues*</Code> and{" "}
+ <Code>mcp/agent/app/api/agent/cases*</Code> forward (session-gated)
+ to the embedded MCP.
+ </li>
+ <li>
+ <strong>UI</strong>: the sidebar <Term>Investigation</Term> group
+ links <Code>/investigation/issues</Code> and{" "}
+ <Code>/investigation/cases</Code>. The Issue detail is a rich layout
+ — status/severity controls; editable Summary, Scope,
+ Recommendations, Conclusions, and Next-steps fields; the activity
+ timeline; and case assignment. The Case detail shows its grouped
+ Issues.
+ </li>
+ </ul>
+ <p>
+ <strong>Inter-service path.</strong> The operator UI request travels{" "}
+ <Code>guardian-agent</Code> (Next.js) →{" "}
+ <Code>/api/agent/issues|cases</Code> →{" "}
+ embedded MCP (bearer <Code>MCP_TOKEN</Code>, loopback HTTPS) →{" "}
+ <Code>/api/v1/issues|cases</Code> →{" "}
+ <Code>investigation_store</Code> (<Code>investigations.db</Code>). The
+ agent reaches the very same store on the other side during chat and
+ jobs, via the <Code>issue_*</Code> / <Code>case_*</Code> MCP tools —
+ one canonical store, two front doors (operator REST/proxy/UI and agent
+ MCP tools), no SecretStore in either path.
+ </p>
  </SubSection>
  </Section>
 );

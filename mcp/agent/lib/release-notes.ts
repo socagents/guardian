@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.3",
+    date: "2026-06-12",
+    title: "Investigation module — local Issues & Cases for every investigation.",
+    highlights: [
+      "New Investigation area (sidebar): Issues + Cases — Guardian's own record of its investigations.",
+      "Guardian opens a local Issue when it works a case, logs each step + finding, and records the verdict.",
+      "Rich issue layout: summary, scope, recommendations, conclusions, next steps + an activity timeline.",
+      "Group related Issues into Cases; create Issues + Cases yourself too.",
+      "guardian-updater reconcile/digests no longer crashes when a connector image was pruned.",
+    ],
+  },
+  {
     version: "0.1.2",
     date: "2026-06-12",
     title: "XSOAR action toolset — run commands, enrich indicators, manage lists, create cases.",

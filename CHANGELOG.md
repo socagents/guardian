@@ -10,6 +10,37 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.3] (unreleased) — *Investigation module — local Issues & Cases*
+
+A new first-class **Investigation** area: Guardian (and the operator) open local **Issues** during investigations and group related ones into **Cases**. Distinct from upstream XSOAR incidents — an Issue is *Guardian's own* investigation record (what's being investigated, the activity timeline, recommendations, conclusions, summary, next steps), shown in the UI.
+
+### What ships
+
+- **Investigation store** (`investigations.db`) — issues + cases + per-issue activity timeline (`issue_events`). One-to-many issue→case. Catalog domain (not credentials).
+- **Agent MCP tools** (catalog side of the credential guardrail — no SecretStore access): `issue_create` / `issue_update` / `issue_add_event` / `issue_get` / `issues_list` / `case_create` / `case_add_issue` / `cases_list` / `case_get`. The agent opens an Issue when it starts working a case (with `source_ref` = the XSOAR incident id), logs each step/finding, records the verdict, and groups related Issues into Cases.
+- **REST API** (`/api/v1/issues|cases*`) + **Next.js proxies** (`/api/agent/issues|cases*`).
+- **UI** — new sidebar **Investigation** group → **Issues** + **Cases**. Issues list (+ New Issue), rich issue detail (status/severity controls, editable Summary/Scope/Recommendations/Conclusions/Next-steps, activity timeline of what Guardian did, case assignment), cases list (+ New Case), case detail (grouped issues).
+- **Skill + system prompt** — the `xsoar_case_investigation` skill + the agent's job description now drive opening + maintaining the local Issue + grouping Cases throughout every investigation.
+- **Also in this release:** guardian-updater no longer crashes the `reconcile/digests` endpoint when a connector's running image was pruned (ImageNotFound → recreate). See [#6](https://github.com/kite-production/guardian/issues/6).
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/investigation_store.py`, `src/api/investigation.py`, `src/usecase/builtin_components/investigation_tools.py` (+ `connector_loader.py`, `main.py` wiring) + tests.
+- `mcp/agent/app/api/agent/{issues,cases}/**`, `lib/api/investigation.ts`, `app/investigation/{issues,cases}/**`, `components/sidebar.tsx`.
+- `bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md`, `mcp/agent/lib/system-prompt.ts`.
+- `updater/src/main.py` (reconcile ImageNotFound fix).
+
+### Change scenario
+
+**Scenario 1** — code-only; `investigations.db` is created fresh on first boot (additive, no migration); no installer change; volumes preserved. Minor bump (v0.1.3).
+
+### Forbidden going forward
+
+- No SecretStore reads in the `issue_*` / `case_*` tools — they stay on the catalog side of the guardrail (that's why the agent may call them).
+- Don't conflate a Guardian **Issue** with an upstream XSOAR **incident** — the Issue is Guardian's local record; `source_ref` links them.
+
+---
+
 ## [v0.1.2] — 2026-06-12 — *XSOAR action toolset + default chat-model picker*
 
 This release ships two concepts together (the default-model picker below was merged but never separately tagged, so it rides along here). The XSOAR connector grows from 13 to 21 tools, adding a command-execution engine, indicator enrichment, XSOAR Lists management, incident creation, and playbook execution. Previously Guardian could read and triage cases but could not run an XSOAR command, enrich an IoC, manage allow/block lists, open a case, or run a playbook.

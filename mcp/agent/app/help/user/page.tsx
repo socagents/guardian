@@ -64,6 +64,7 @@ const SECTIONS: SectionDef[] = [
   { id: "jobs", label: "Jobs", group: "Command", icon: "schedule" },
   { id: "models-providers", label: "Models & Providers", group: "Command", icon: "psychology" },
 
+  { id: "investigation", label: "Investigation — Issues & Cases", group: "Integration", icon: "frame_inspect" },
   { id: "connectors", label: "Connectors & Instances", group: "Integration", icon: "cable" },
   { id: "connector-health-ux", label: "Connector Health", group: "Integration", icon: "monitor_heart" },
   { id: "marketplace", label: "Marketplace", group: "Integration", icon: "storefront" },
@@ -2391,6 +2392,96 @@ Networks documentation and returning evidence-backed, cited answers.
           {/* ============================================================
                                INTEGRATION
               ============================================================ */}
+
+          <Section
+            id="investigation"
+            icon="frame_inspect"
+            title="Investigation — Issues & Cases"
+          >
+            <p>
+              The <Link href="/investigation/issues" className="link">Investigation</Link>{" "}
+              area (v0.1.3) is where Guardian keeps its own record of the
+              work it does on an alert. It holds two object types:{" "}
+              <Term>Issues</Term> and <Term>Cases</Term>.
+            </p>
+
+            <SubSection icon="bug_report" title="What an Issue is">
+              <p>
+                An <Term>Issue</Term> is Guardian&apos;s local investigation
+                record — its own write-up of one thing it looked into. It is
+                deliberately distinct from an upstream{" "}
+                <Term>XSOAR incident</Term>: the XSOAR incident lives on the
+                Cortex platform and is owned by your SOAR; the Issue lives
+                inside Guardian and is owned by you and the agent. When the
+                agent works an incident it opens an Issue and stores the
+                originating incident id as the Issue&apos;s{" "}
+                <Code>source_ref</Code>, so you always have a back-link to
+                the platform record without conflating the two.
+              </p>
+            </SubSection>
+
+            <SubSection icon="folder_special" title="What a Case is">
+              <p>
+                A <Term>Case</Term> is a group of related Issues. When several
+                Issues turn out to be the same campaign, the same actor, or
+                otherwise belong together, you (or the agent) collect them
+                under one Case so the bigger picture is visible in one place.
+                An Issue belongs to at most one Case; a Case can hold many
+                Issues.
+              </p>
+            </SubSection>
+
+            <SubSection icon="auto_awesome" title="Who creates them">
+              <p>
+                Guardian opens and maintains Issues{" "}
+                <Term>automatically</Term> during investigations. When the
+                agent starts working a case it opens an Issue, logs each
+                step and finding to the Issue&apos;s timeline as it goes, and
+                records the final verdict when it concludes — you don&apos;t
+                have to ask it to. It also groups related Issues into Cases
+                on its own.
+              </p>
+              <p>
+                You can create them yourself too. The sidebar{" "}
+                <Term>Investigation</Term> group has{" "}
+                <strong>New Issue</strong> and <strong>New Case</strong>{" "}
+                actions for opening a record by hand — useful when you want
+                to track something you noticed that didn&apos;t arrive as an
+                alert.
+              </p>
+            </SubSection>
+
+            <SubSection icon="description" title="The Issue layout">
+              <p>
+                Opening an Issue shows a rich, editable layout built for an
+                analyst write-up:
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm">
+                <li>
+                  <Term>Status &amp; severity</Term> controls at the top, so
+                  the Issue&apos;s state and priority are visible at a glance.
+                </li>
+                <li>
+                  Editable narrative sections — <Term>Summary</Term>,{" "}
+                  <Term>Scope</Term>, <Term>Recommendations</Term>,{" "}
+                  <Term>Conclusions</Term>, and <Term>Next steps</Term> —
+                  that the agent fills in as it works and that you can refine.
+                </li>
+                <li>
+                  An <Term>activity timeline</Term> recording every step and
+                  finding logged against the Issue, in order.
+                </li>
+                <li>
+                  A <Term>case assignment</Term> control for attaching the
+                  Issue to a Case (or moving it).
+                </li>
+              </ul>
+              <p>
+                Opening a Case shows its grouped Issues together, so a
+                multi-Issue campaign reads as one investigation.
+              </p>
+            </SubSection>
+          </Section>
 
           <Section id="connectors" icon="cable" title="Connectors & Instances">
             <p>
