@@ -31,7 +31,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
 from usecase.investigation_store import InvestigationStore
@@ -117,11 +117,11 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
         return JSONResponse(_issue_dict(updated))
 
     @mcp.custom_route("/api/v1/issues/{id}", methods=["DELETE"], include_in_schema=False)
-    async def delete_issue(request: Request) -> Response:
+    async def delete_issue(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        store.delete_issue(request.path_params["id"])
-        return Response(status_code=204)
+        deleted = store.delete_issue(request.path_params["id"])
+        return JSONResponse({"deleted": deleted})
 
     @mcp.custom_route("/api/v1/issues/{id}/events", methods=["GET"], include_in_schema=False)
     async def list_events(request: Request) -> JSONResponse:
@@ -197,11 +197,11 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
         return JSONResponse(dataclasses.asdict(updated))
 
     @mcp.custom_route("/api/v1/cases/{id}", methods=["DELETE"], include_in_schema=False)
-    async def delete_case(request: Request) -> Response:
+    async def delete_case(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        store.delete_case(request.path_params["id"])
-        return Response(status_code=204)
+        deleted = store.delete_case(request.path_params["id"])
+        return JSONResponse({"deleted": deleted})
 
     @mcp.custom_route("/api/v1/cases/{id}/issues", methods=["GET"], include_in_schema=False)
     async def list_case_issues(request: Request) -> JSONResponse:
