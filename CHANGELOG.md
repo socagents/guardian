@@ -10,9 +10,9 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
-## [v0.1.2] (unreleased) — *XSOAR action toolset*
+## [v0.1.2] — 2026-06-12 — *XSOAR action toolset + default chat-model picker*
 
-The XSOAR connector grows from 13 to 21 tools, adding a command-execution engine, indicator enrichment, XSOAR Lists management, incident creation, and playbook execution. Previously Guardian could read and triage cases but could not run an XSOAR command, enrich an IoC, manage allow/block lists, open a case, or run a playbook.
+This release ships two concepts together (the default-model picker below was merged but never separately tagged, so it rides along here). The XSOAR connector grows from 13 to 21 tools, adding a command-execution engine, indicator enrichment, XSOAR Lists management, incident creation, and playbook execution. Previously Guardian could read and triage cases but could not run an XSOAR command, enrich an IoC, manage allow/block lists, open a case, or run a playbook.
 
 ### What ships
 
@@ -45,7 +45,7 @@ The XSOAR connector grows from 13 to 21 tools, adding a command-execution engine
 
 ---
 
-## [v0.1.1] (unreleased) — *Default chat-model picker*
+## [v0.1.1] (shipped within v0.1.2) — *Default chat-model picker*
 
 Operators can now pin a default model for all new chats. Previously every chat opened on the runtime default (`GEMINI_MODEL` env or the hardcoded `gemini-3.1-pro-preview` fallback) and operators had to run `/model <name>` in every session to override it.
 
