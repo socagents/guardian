@@ -312,6 +312,12 @@ def cmd_complete_unit(args):
     print("completed active unit")
 
 
+def cmd_show_defer(args):
+    json_path, _ = _paths(args.repo)
+    state = load_state(json_path)
+    print("DEFER" if should_defer(state) else "OK")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Guardian self-learning loop state")
     p.add_argument("--repo", default=".", help="repo root (default: cwd)")
@@ -345,6 +351,8 @@ def build_parser() -> argparse.ArgumentParser:
     du.add_argument("--issue", default="")
 
     sub.add_parser("complete-unit").set_defaults(func=cmd_complete_unit)
+
+    sub.add_parser("show-defer").set_defaults(func=cmd_show_defer)
 
     return p
 

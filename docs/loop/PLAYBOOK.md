@@ -28,18 +28,35 @@ Guardian and keep it consistent*. (Seeding + judging investigations is Phase 2.)
    Note `next_focus` and any `open_findings`.
 3. Record the start time (UTC ISO-8601) for the state entry at the end.
 
-## 1. ORIENT — pick ONE focus (first match wins)
-a. **An open finding** in `state.json.open_findings` not yet resolved.
-b. **`next_focus`** from state, if still valid.
-c. **A self-heal scan** — run these audits and take the FIRST real issue found.
+## 1. ORIENT — continue or open ONE unit (narrow by default)
+First check the loop's memory: `python3 scripts/loop/loop_state.py --repo . render` already
+refreshed `state.md` from `state.json`. Read `.guardian-loop/state.json`.
+
+a. **If an `active_unit` exists** (status `active`): CONTINUE it.
+   - `mode: narrow` → take the NEXT slice from its `remaining_scope` (one file / small group).
+   - `mode: wide` → if a carry patch exists at `.guardian-loop/carry/<active_unit.id>.patch`,
+     `git apply` it first, then extend it (see CHECK / the carry-forward note).
+b. **Else open a NEW unit** from the first real issue an audit finds (the §1c audits below).
+   - Give it a stable `id` (kebab slug), a `title`, and a `scope` (the mapped files/hits).
+   - **Scope it NARROW:** the smallest coherent slice that passes the gate on its own. If the
+     issue is a WIDE bug-family across many files, decide:
+       - **Splittable** (slices ship independently) → `mode: narrow`; fix ONE slice this cycle;
+         record the rest as `remaining_scope`.
+       - **Atomic-but-wide** (all-or-nothing for the gate, e.g. a rename) → `mode: wide`.
+     Open it: `python3 scripts/loop/loop_state.py --repo . open-unit --id <slug> --title "..." --scope "..." --mode <narrow|wide>`
+     and, when splitting, `... set-remaining --slices "<slice2>" "<slice3>" ...`.
+   - **NEVER open a unit whose id is already in `state.json.deferred[]`** — those are human-owned.
+c. **Self-heal audits** (run to FIND a new unit only when there is no active unit) — unchanged
+   from Phase 1: doc-sync, bug-family, spec-drift; live-stack audits if the tunnel is up. When an
+   audit re-surfaces an already-`deferred` issue, SKIP it.
    **Repo-only audits (ALWAYS available):**
    - **Doc-sync:** sidebar nav vs pages — `find mcp/agent/app -maxdepth 3 -name page.tsx | xargs dirname | sort` vs `href:` entries in `mcp/agent/components/sidebar.tsx`. Architecture-page service list vs the `services:` block in `docker-compose.yml`. CHANGELOG.md newest entry vs `mcp/agent/lib/release-notes.ts` newest entry.
    - **Bug-family audit:** `grep -rn "from usecase\." bundles/spark/connectors */src 2>/dev/null` (import-style regression, see connectors/CLAUDE.md); connector.yaml `spec.tools[].name` bare vs prefixed Python functions; hardcoded-data drift in `mcp/agent/app/api/` (e.g. marketplace `toolCount`).
    - **Spec-drift:** "Implementation gap" bullets in `mcp/agent/app/help/architecture/page.tsx`.
    **Live-stack audits (ONLY if the launch prompt said a tunnel is up):**
    - **Observe:** `curl -sk -H "Authorization: Bearer $GUARDIAN_API_KEY" $GUARDIAN_BASE/api/agent/jobs`; scan the `/observability` surfaces for errors. If no tunnel this pass, SKIP — do not block on stack access.
-d. **Nothing to do** → skip to step 6 and record a clean `no-op` cycle, set a
-   sensible `next_focus`, do NOT push, exit.
+d. **Nothing to do** → record a clean `no-op` cycle and exit (no active unit to continue, no new
+   issue found).
 
 ## 2. SCOPE the unit
 - If the fix is **non-trivial** (new behavior / operator-visible / API change),
@@ -70,6 +87,17 @@ d. **Nothing to do** → skip to step 6 and record a clean `no-op` cycle, set a
   - The subagent returns a verdict: `approved` or `rejected` + reasons.
 - **Rejected** → revert, record `checker-rejected` with the reasons, set
   `next_focus`, do NOT push, exit.
+- **On a rejection, branch by mode (the convergence machinery):**
+  - `record-rejection`: `python3 scripts/loop/loop_state.py --repo . record-rejection --reasons "<the checker's specific reasons>"`.
+  - **`mode: wide`** → save the rejected diff for the next cycle to build on:
+    `mkdir -p .guardian-loop/carry && git diff > ".guardian-loop/carry/$(python3 -c 'import json;print(json.load(open(".guardian-loop/state.json"))["active_unit"]["id"])').patch"`
+    then revert the working tree (`git reset --hard HEAD && git clean -fd -e .guardian-loop`).
+  - **`mode: narrow`** → just revert (no carry); the slice will be re-derived (it's small).
+  - **DEFER check:** if `python3 scripts/loop/loop_state.py --repo . show-defer` prints `DEFER`
+    (rejections ≥ K: 2 narrow / 3 wide), HAND OFF instead of retrying:
+      1. File a GitHub issue: `gh issue create --title "loop deferred: <title>" --body "<scope + accumulated checker reasons>"` → capture the URL.
+      2. `python3 scripts/loop/loop_state.py --repo . defer-unit --issue "<url>"` (moves it to `deferred[]`, clears the active unit).
+      3. Record the cycle `--outcome checker-rejected`, set a fresh `--next-focus`, do NOT push the fix. Exit.
 
 ## 6. SHIP + STATE
 Record the cycle into the loop's memory, then ship the fix **and** the state
@@ -100,6 +128,10 @@ trigger and the state-loss race if a human pushes between two separate pushes.
    ```
    (The shipping commit *is* this one; git history is the source of truth for the
    SHA, so `--commit ""` in the record is fine.)
+  - **Drain the unit:** if the active unit still has `remaining_scope`, pop the shipped slice
+    (`... set-remaining --slices "<the rest>"`) so the next cycle continues it; if it's now empty,
+    `python3 scripts/loop/loop_state.py --repo . complete-unit`. A `wide` unit that finally ships:
+    delete its carry patch (`rm -f .guardian-loop/carry/<id>.patch`) and `complete-unit`.
 3. **no-op** — you MAY commit + push the state-only update (same one-commit/
    one-push shape) so the nightly cadence stays visible.
 4. **gate-failed / checker-rejected** — first revert the working changes
