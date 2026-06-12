@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.1",
+    date: "2026-06-12",
+    title: "Default chat-model picker — set a default model on Settings → Models.",
+    highlights: [
+      "Set a default chat model on Settings → Models; new chats use it automatically (no more 'auto').",
+      "Chat dropdown chip shows 'Default — <model>' when an operator default is active.",
+      "Per-chat model override still works; the next new chat resets to the default.",
+      "Resolution chain: per-chat override → operator default → GEMINI_MODEL env → hardcoded fallback.",
+    ],
+  },
+  {
     version: "0.1.0",
     date: "2026-06-11",
     title: "Guardian initial release — AI incident-investigation agent for Cortex XSOAR.",

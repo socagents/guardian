@@ -10,6 +10,31 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.1] (unreleased) — *Default chat-model picker*
+
+Operators can now pin a default model for all new chats. Previously every chat opened on the runtime default (`GEMINI_MODEL` env or the hardcoded `gemini-3.1-pro-preview` fallback) and operators had to run `/model <name>` in every session to override it.
+
+### What ships
+
+- **Default model picker** — Settings → Models → open a model card → **Set as default**. The selection is persisted in `operator_state.db` under key `default_model = {provider, model}`.
+- **Chat route default resolution** — the resolution chain is now: per-chat override → operator default (`operator_state.db`) → `GEMINI_MODEL` env → hardcoded fallback. New chats automatically pick up the operator default without any slash command.
+- **Dropdown chip** — the model picker chip in the chat header shows **Default — \<model\>** when an operator default is active (previously showed "auto"). Picking a different model in the dropdown overrides for that chat only; the next new chat resets to the default.
+
+### Files
+
+- `mcp/agent/app/(main)/models/[id]/page.tsx` — "Set as default" button on model detail page
+- `mcp/agent/app/(main)/models/page.tsx` — visual indicator on the default model card
+- `mcp/agent/app/api/chat/route.ts` — operator-default step inserted in `resolveModelName`
+- `mcp/agent/components/chat/model-picker.tsx` — chip shows "Default — \<model\>" vs "auto"
+- `mcp/agent/app/help/architecture/page.tsx` — `#model-routing` updated with the new chain
+- `mcp/agent/app/help/user/page.tsx` — `#models-providers` new "Default model" subsection
+- `mcp/agent/lib/journeys.ts` — `set-default-chat-model` journey added
+- `CHANGELOG.md`, `mcp/agent/lib/release-notes.ts` — this entry
+
+Scenario 1 (code-only, no installer change).
+
+---
+
 ## [v0.1.0] (unreleased) — *Guardian initial release: an AI incident-response agent for Cortex XSOAR*
 
 Guardian is derived from the Phantom agent platform, cut down to one job: **AI-assisted incident investigation on Cortex XSOAR.** An operator points Guardian at their XSOAR tenant; the agent then monitors the cases (incidents) opening on the SOAR, fetches each case's full record and war-room narrative, investigates and enriches it, documents its findings back onto the case, and updates or closes it — autonomously or on request.

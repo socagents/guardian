@@ -2371,6 +2371,21 @@ Networks documentation and returning evidence-backed, cited answers.
                 chat&apos;s telemetry panel.
               </p>
             </SubSection>
+
+            <SubSection icon="star" title="Default model">
+              <p>
+                Pick your default chat model on{" "}
+                <Link href="/models" className="link">
+                  Settings → Models
+                </Link>
+                : open any model card and click{" "}
+                <strong>Set as default</strong>. New chats use it
+                automatically — the model dropdown chip shows{" "}
+                <strong>Default — &lt;model&gt;</strong> instead of
+                &ldquo;auto&rdquo; — and you can still switch models
+                per chat without affecting the default.
+              </p>
+            </SubSection>
           </Section>
 
           {/* ============================================================

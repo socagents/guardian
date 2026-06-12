@@ -999,6 +999,49 @@ export const JOURNEYS: Journey[] = [
     related: ["recall-org-config"],
     components: ["settings", "models"],
   },
+  {
+    id: "set-default-chat-model",
+    category: "ops",
+    title: "Set the default chat model",
+    summary:
+      "Pin a model as the system-wide default so every new chat opens with it — no more per-session /model commands.",
+    difficulty: "starter",
+    durationMin: 2,
+    icon: "star",
+    prompts: [],
+    toolsExercised: [],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/v1/operator-state/default_model",
+        description:
+          "Returns the current default model as {provider, model}, or null if none is set.",
+      },
+      {
+        method: "PUT",
+        path: "/api/v1/operator-state/default_model",
+        description:
+          "Sets the operator default. Body: {value: {provider: \"<id>\", model: \"<name>\"}}. Persisted in operator_state.db.",
+      },
+    ],
+    howToTest: [
+      "Visit /models — the Models page lists available models grouped by kind.",
+      "Open any Chat-kind model card by clicking on it.",
+      "Click the 'Set as default' button on the model detail page.",
+      "Open a new chat at /. Confirm the model dropdown chip in the chat header reads 'Default — <model name>'.",
+      "Pick a different model from the dropdown and send a message — the model switches for this chat only.",
+      "Open another new chat — the dropdown resets to 'Default — <model name>', confirming the per-chat override didn't affect the default.",
+    ],
+    expectedResult:
+      "After clicking 'Set as default', all new chats open with that model pre-selected. The chat header chip shows 'Default — <model>' instead of 'auto'. Per-chat overrides work and are scoped to that chat only; the next new chat always resets to the operator default.",
+    verifyVia: [
+      "GET /api/v1/operator-state/default_model → {provider: \"<id>\", model: \"<name>\"} (not null).",
+      "Open /models — the default model card should show a visual indicator (filled star or similar) marking it as the current default.",
+      "Start two chats: in chat A pick a different model; in chat B confirm the header chip still reads 'Default — <model>'.",
+    ],
+    related: ["configure-vertex-provider"],
+    components: ["chat", "models", "settings"],
+  },
 
   // ─────────────────────────────────────────────────────────────────
   // OPS — Phase 11 chat-driven self-modification

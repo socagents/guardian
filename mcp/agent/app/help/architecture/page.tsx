@@ -1392,6 +1392,21 @@ function ChatLifecycle() {
  fallback inside <Code>resolveModelName</Code>.
  </p>
  <p style={{ marginTop: 8 }}>
+ <strong>Default model.</strong> The chat model resolves as:
+ per-chat override → operator default → <Code>GEMINI_MODEL</Code>{" "}
+ env → hardcoded fallback. The operator default is the{" "}
+ <Code>operator_state.db</Code> key{" "}
+ <Code>default_model = {`{provider, model}`}</Code>, set on{" "}
+ Settings → Models → a model → &ldquo;Set as default&rdquo;, and
+ read by the chat route via{" "}
+ <Code>GET /api/v1/operator-state/default_model</Code>. When a
+ default is set the chat dropdown chip shows{" "}
+ <strong>Default — &lt;model&gt;</strong> instead of
+ &ldquo;auto&rdquo;; picking a specific model in the dropdown
+ overrides per chat only — the next new chat resets to the
+ default.
+ </p>
+ <p style={{ marginTop: 8 }}>
  <strong>Per-job model override.</strong> When the scheduler
  dispatches a prompt-action job, the request body includes{" "}
  <Code>body.model = job.model_id</Code> if the job has an
