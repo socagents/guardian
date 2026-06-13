@@ -2499,6 +2499,16 @@ Networks documentation and returning evidence-backed, cited answers.
                 filters; opening a Case shows its grouped Issues together, so a
                 multi-Issue campaign reads as one investigation.
               </p>
+              <p>
+                <strong>Case-level diagrams (v0.2.2)</strong> — a Case detail is
+                itself tabbed (Issues · Attack chain · Relations). The
+                case&apos;s <Term>Attack chain</Term> and{" "}
+                <Term>Relations</Term> tabs draw <em>campaign-level</em>{" "}
+                diagrams synthesized across <em>all</em> the issues in the case:
+                one causal chain for the shared kill-chain, one STIX graph over
+                the union of the case&apos;s indicators. Generate them on demand,
+                the same way as the per-issue diagrams.
+              </p>
             </SubSection>
 
             <SubSection icon="fingerprint" title="Indicators (v0.2.0)">

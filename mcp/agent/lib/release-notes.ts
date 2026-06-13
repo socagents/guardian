@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.2",
+    date: "2026-06-13",
+    title: "Case-view diagrams — campaign-level attack chain + relations canvas.",
+    highlights: [
+      "Case detail is now tabbed: Issues · Attack chain · Relations.",
+      "The Attack chain tab draws one causal diagram across all the case's issues — the campaign kill-chain.",
+      "The Relations tab draws one STIX graph over the union of the case's indicators — the shared infrastructure, techniques, and actors.",
+      "Both generate on demand, the same way as the per-issue diagrams.",
+    ],
+  },
+  {
     version: "0.2.1",
     date: "2026-06-13",
     title: "Relations canvas — STIX indicator attribution + a relationship graph per issue.",

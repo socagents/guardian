@@ -3977,6 +3977,63 @@ export const JOURNEYS: Journey[] = [
     components: ["investigation", "xsoar", "connectors"],
   },
 
+  {
+    id: "investigation-case-diagrams",
+    category: "connectors",
+    title: "Draw campaign-level diagrams on a multi-issue Case",
+    summary:
+      "On a Case grouping 2+ related issues, generate the campaign-level attack chain and relations canvas — one causal diagram across the case's shared kill-chain, one STIX graph over the union of the case's indicators. The case-level companions to the per-issue diagrams; generated on demand from the case detail's tabs (v0.2.2).",
+    difficulty: "intermediate",
+    durationMin: 6,
+    icon: "folder_special",
+    prompts: [
+      {
+        text: "For Guardian case <id>, draw the campaign attack chain across its issues.",
+        note: "Exercises case_set_attack_chain via the svg_attack_chain skill's case-level variant — the agent reads case_get + each issue and synthesizes one chain. Equivalent to clicking Generate on the case's Attack chain tab.",
+      },
+      {
+        text: "Now draw the campaign relations canvas for that case.",
+        note: "Exercises case_set_relation_graph via the svg_relation_graph skill's case-level variant — the agent gathers the union of the case's issues' indicators + relationships and draws one STIX graph.",
+      },
+    ],
+    toolsExercised: [
+      "case_get",
+      "case_set_attack_chain",
+      "case_set_relation_graph",
+      "indicators_list",
+    ],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/agent/cases/{id}",
+        description:
+          "Case detail now carries attack_chain_svg + relations_canvas_svg (campaign-level, v0.2.2) alongside the grouped issues. Null until the agent draws them; the Attack chain / Relations tabs render them sandboxed as <img> data-URIs.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/jobs",
+        description:
+          "The case Attack-chain / Relations tabs' Generate button fires a one-shot, bypass_approvals agent job pinned to the matching skill (case-level variant); the page polls the case until the SVG changes. Same pattern as the issue diagrams.",
+      },
+    ],
+    howToTest: [
+      "Pick (or create) a Case grouping 2+ issues — e.g. assign two related phishing issues to one campaign Case.",
+      "Open the Case detail. It is tabbed: Issues · Attack chain · Relations.",
+      "On the Attack chain tab, click Generate diagram (or paste prompt 1). After ~1 min the campaign chain renders.",
+      "On the Relations tab, click Generate (or paste prompt 2). The campaign STIX graph renders over the union of the case's indicators.",
+      "Click Regenerate on either tab — it redraws from the current case state.",
+    ],
+    expectedResult:
+      "The Case detail renders campaign-level Attack chain + Relations diagrams synthesized across all its issues, generated on demand and regenerable — the case-level companions to the per-issue diagrams.",
+    verifyVia: [
+      "GET /api/agent/cases/<id> → attack_chain_svg and relations_canvas_svg are non-null after generation",
+      "/investigation/cases/<id> → Attack chain + Relations tabs render the SVGs",
+      "docker exec guardian_agent sqlite3 /app/data/investigations.db 'SELECT id, (attack_chain_svg IS NOT NULL) AS chain, (relations_canvas_svg IS NOT NULL) AS rel FROM cases' → the persisted SVG flags",
+    ],
+    related: ["investigation-relations-canvas", "investigate-to-issue"],
+    components: ["investigation", "xsoar", "connectors"],
+  },
+
   // [guardian v0.1.0] Retired: ops-list-stop-*-workers — the synthetic
   // log-worker registry shipped with the removed log-generation engine.
 

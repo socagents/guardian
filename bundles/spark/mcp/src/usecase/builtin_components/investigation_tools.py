@@ -32,6 +32,29 @@ def _store():
     return s, None
 
 
+def _clean_svg(svg: Any) -> tuple[str | None, dict | None]:
+    """Validate + sanitize an agent-produced SVG for sandboxed render.
+
+    Shared by the four diagram tools (issue/case × attack-chain/relations).
+    Returns (cleaned_svg, None) on success or (None, {"error": ...}) on
+    rejection. The UI renders the SVG sandboxed (an <img> data-URI never
+    executes script), but we strip active content as defense-in-depth so we
+    never STORE executable markup.
+    """
+    if not isinstance(svg, str):
+        return None, {"error": "svg must be a string"}
+    cleaned = svg.strip()
+    low = cleaned.lower()
+    if "<svg" not in low or "</svg>" not in low:
+        return None, {"error": "svg must be SVG markup containing <svg> … </svg>"}
+    if len(cleaned) > 256_000:
+        return None, {"error": f"svg too large ({len(cleaned)} bytes; cap 256000)"}
+    cleaned = re.sub(r"<script\b[^>]*>.*?</script>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"\son\w+\s*=\s*\"[^\"]*\"", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\son\w+\s*=\s*'[^']*'", "", cleaned, flags=re.IGNORECASE)
+    return cleaned, None
+
+
 def issue_create(
     title: str,
     kind: str = "other",
@@ -190,20 +213,9 @@ def issue_set_attack_chain(issue_id: str, svg: str) -> dict[str, Any]:
     s, err = _store()
     if err:
         return err
-    if not isinstance(svg, str):
-        return {"error": "svg must be a string"}
-    cleaned = svg.strip()
-    low = cleaned.lower()
-    if "<svg" not in low or "</svg>" not in low:
-        return {"error": "svg must be SVG markup containing <svg> … </svg>"}
-    if len(cleaned) > 256_000:
-        return {"error": f"svg too large ({len(cleaned)} bytes; cap 256000)"}
-    # Defense-in-depth: strip <script> blocks + inline on* handlers. The UI
-    # already renders the SVG sandboxed (an <img> data-URI never executes
-    # script), but never store active content.
-    cleaned = re.sub(r"<script\b[^>]*>.*?</script>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
-    cleaned = re.sub(r"\son\w+\s*=\s*\"[^\"]*\"", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\son\w+\s*=\s*'[^']*'", "", cleaned, flags=re.IGNORECASE)
+    cleaned, verr = _clean_svg(svg)
+    if verr:
+        return verr
     if not s.set_attack_chain(issue_id, cleaned):
         return {"error": f"issue {issue_id!r} not found"}
     return {"ok": True, "issue_id": issue_id, "bytes": len(cleaned)}
@@ -231,20 +243,72 @@ def issue_set_relation_graph(issue_id: str, svg: str) -> dict[str, Any]:
     s, err = _store()
     if err:
         return err
-    if not isinstance(svg, str):
-        return {"error": "svg must be a string"}
-    cleaned = svg.strip()
-    low = cleaned.lower()
-    if "<svg" not in low or "</svg>" not in low:
-        return {"error": "svg must be SVG markup containing <svg> … </svg>"}
-    if len(cleaned) > 256_000:
-        return {"error": f"svg too large ({len(cleaned)} bytes; cap 256000)"}
-    cleaned = re.sub(r"<script\b[^>]*>.*?</script>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
-    cleaned = re.sub(r"\son\w+\s*=\s*\"[^\"]*\"", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\son\w+\s*=\s*'[^']*'", "", cleaned, flags=re.IGNORECASE)
+    cleaned, verr = _clean_svg(svg)
+    if verr:
+        return verr
     if not s.set_relations_canvas(issue_id, cleaned):
         return {"error": f"issue {issue_id!r} not found"}
     return {"ok": True, "issue_id": issue_id, "bytes": len(cleaned)}
+
+
+def case_set_attack_chain(case_id: str, svg: str) -> dict[str, Any]:
+    """Attach a CASE-level attack-chain (campaign causality) diagram as an SVG.
+
+    Like issue_set_attack_chain, but for a Case — the campaign-level view that
+    synthesizes the attack across ALL the issues grouped under the case (shared
+    actor / infrastructure / kill-chain). Call this when a multi-issue case is
+    resolved, after the individual issues' chains. Read the case + its issues
+    first with case_get(case_id). Rendered on the Case's "Attack chain" tab.
+
+    Produce the SVG per the `svg_attack_chain` skill (it handles the case =
+    multiple issues input): SELF-CONTAINED, NO <script> / external refs,
+    rendered sandboxed as an <img> data-URI.
+
+    Args:
+        case_id: The Case id (from case_create / cases_list / case_get).
+        svg: The full SVG markup, starting "<svg" and ending "</svg>".
+
+    Returns: {"ok": true, "case_id": ..., "bytes": n} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    cleaned, verr = _clean_svg(svg)
+    if verr:
+        return verr
+    if not s.set_case_attack_chain(case_id, cleaned):
+        return {"error": f"case {case_id!r} not found"}
+    return {"ok": True, "case_id": case_id, "bytes": len(cleaned)}
+
+
+def case_set_relation_graph(case_id: str, svg: str) -> dict[str, Any]:
+    """Attach a CASE-level relations-canvas (STIX graph) diagram as an SVG.
+
+    Like issue_set_relation_graph, but for a Case — the campaign-level STIX
+    graph spanning the indicators of ALL issues grouped under the case, showing
+    the shared infrastructure / techniques / actors that tie the case together.
+    Read the case + its issues first with case_get(case_id), then the issues'
+    indicators + relationships. Rendered on the Case's "Relations" tab.
+
+    Produce the SVG per the `svg_relation_graph` skill (it handles the case =
+    multiple issues input): SELF-CONTAINED, NO <script> / external refs,
+    rendered sandboxed as an <img> data-URI.
+
+    Args:
+        case_id: The Case id.
+        svg: The full SVG markup, starting "<svg" and ending "</svg>".
+
+    Returns: {"ok": true, "case_id": ..., "bytes": n} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    cleaned, verr = _clean_svg(svg)
+    if verr:
+        return verr
+    if not s.set_case_relations_canvas(case_id, cleaned):
+        return {"error": f"case {case_id!r} not found"}
+    return {"ok": True, "case_id": case_id, "bytes": len(cleaned)}
 
 
 def issues_list(status: str | None = None, case_id: str | None = None) -> dict[str, Any]:

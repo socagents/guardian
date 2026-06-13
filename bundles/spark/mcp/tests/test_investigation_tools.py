@@ -174,3 +174,26 @@ def test_issue_set_relation_graph_strips_active_content_and_validates(wired):
 
 def test_issue_set_relation_graph_missing_issue(wired):
     assert "error" in it.issue_set_relation_graph("nope", '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>')
+
+
+def test_case_set_attack_chain_round_trip(wired):
+    cid = it.case_create(title="campaign")["case"]["id"]
+    svg = '<svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+    res = it.case_set_attack_chain(cid, svg)
+    assert res.get("ok") is True and res["case_id"] == cid and res["bytes"] > 0
+    assert wired.get_case_attack_chain(cid) == svg
+
+
+def test_case_set_relation_graph_round_trip_and_strips(wired):
+    cid = it.case_create(title="campaign")["case"]["id"]
+    assert "error" in it.case_set_relation_graph(cid, "not an svg")
+    svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>x()</script><rect onload="y()"/></svg>'
+    assert it.case_set_relation_graph(cid, svg).get("ok") is True
+    stored = wired.get_case_relations_canvas(cid).lower()
+    assert "<script" not in stored and "onload" not in stored
+
+
+def test_case_set_diagram_missing_case(wired):
+    svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>'
+    assert "error" in it.case_set_attack_chain("nope", svg)
+    assert "error" in it.case_set_relation_graph("nope", svg)

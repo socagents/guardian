@@ -277,6 +277,8 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("case_add_issue", investigation_tools.case_add_issue),
     ("cases_list", investigation_tools.cases_list),
     ("case_get", investigation_tools.case_get),
+    ("case_set_attack_chain", investigation_tools.case_set_attack_chain),
+    ("case_set_relation_graph", investigation_tools.case_set_relation_graph),
     # v0.2.0 — Indicators (IoCs extracted from issues + imported from the SOAR).
     # Catalog side of the guardrail (investigation metadata, no SecretStore).
     ("indicator_upsert", indicator_tools.indicator_upsert),

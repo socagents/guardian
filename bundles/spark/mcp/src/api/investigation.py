@@ -187,6 +187,10 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
             **dataclasses.asdict(case),
             "issues": [_issue_dict(i) for i in issues],
             "issue_count": len(issues),
+            # v0.2.2 — campaign-level diagram SVGs (kept off the lean case list,
+            # surfaced only on the detail). Null until the agent draws them.
+            "attack_chain_svg": store.get_case_attack_chain(case.id),
+            "relations_canvas_svg": store.get_case_relations_canvas(case.id),
         })
 
     @mcp.custom_route("/api/v1/cases/{id}", methods=["PATCH"], include_in_schema=False)

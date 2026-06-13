@@ -72,6 +72,11 @@ export interface Relationship {
 
 export interface CaseDetail extends CaseRow {
   issues: Issue[];
+  /** v0.2.2 — campaign-level diagram SVGs synthesized across the case's
+   *  issues (null until the agent draws them). Rendered sandboxed on the
+   *  case detail's Attack-chain / Relations tabs. */
+  attack_chain_svg: string | null;
+  relations_canvas_svg: string | null;
 }
 
 async function jsonOrThrow(resp: Response) {

@@ -130,6 +130,15 @@ edge #6b86b0 · verdict(TP) #ff9db0 · verdict(benign/FP) #a9c3ee
 4. XML-escape all labels. Keep the `.flow` dash animation on arrows + `.pulse` on the impact node (subtle).
 5. Call `issue_set_attack_chain(issue_id="<the Issue id>", svg="<the full SVG>")`. If it errors (not SVG / too large), fix + retry.
 
+## Case-level (campaign) variant — v0.2.2
+
+When the operator (re)generates the attack chain on a **Case** (not a single Issue), draw the **campaign-level** chain that synthesizes the attack across ALL issues grouped under the case:
+
+1. `case_get(case_id="<id>")` → read the case + its `issues[]`. For each issue, read its `conclusions` / activity (the issues are already investigated).
+2. Build ONE chain that spans the campaign — the shared kill-chain across the issues (e.g. phishing entry on issue A → credential use → lateral movement on issue B → impact). Where issues represent parallel victims of the same stage, you may branch or annotate "×N hosts" rather than drawing N identical lanes.
+3. Same palette / template / safety rules as the issue-level chain.
+4. Store with **`case_set_attack_chain(case_id="<id>", svg="<the full SVG>")`** (NOT `issue_set_attack_chain`). It renders on the Case detail's **Attack chain** tab.
+
 ## Cross-references
 
 - **Driver**: `xsoar_case_investigation` — calls this at resolve time (Step 6). The technique/tactic mapping comes from the investigation's MITRE conclusions.

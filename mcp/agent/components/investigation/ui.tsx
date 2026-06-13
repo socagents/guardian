@@ -391,3 +391,61 @@ export function EmptyState({
     </div>
   );
 }
+
+/**
+ * A diagram tab body (v0.2.1 issue, v0.2.2 case) — renders an agent-produced
+ * SVG sandboxed as an <img> data-URI (SVG-in-img never executes script, so the
+ * markup can't run code), or an empty state with a Generate button. Shared by
+ * the issue + case Attack-chain and Relations tabs; the parent owns the
+ * regenerate one-shot job + polling.
+ */
+export function DiagramTab({
+  svg, icon, title, alt, emptyHint, busy, disabled, onRegenerate,
+}: {
+  svg: string | null;
+  icon: string;
+  title: string;
+  alt: string;
+  emptyHint: string;
+  busy: boolean;
+  disabled: boolean;
+  onRegenerate: () => void;
+}) {
+  return svg ? (
+    <div className="rounded-2xl p-5" style={glassStyle}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px] text-on-surface-variant">{icon}</span>
+          {title}
+        </h3>
+        <button
+          onClick={onRegenerate}
+          disabled={disabled}
+          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:opacity-50"
+        >
+          <span className="material-symbols-outlined text-[14px]">{busy ? "hourglass_top" : "refresh"}</span>
+          {busy ? "Regenerating… (≈1 min)" : "Regenerate"}
+        </button>
+      </div>
+      <div className="rounded-xl overflow-hidden bg-surface-container-lowest border border-outline-variant">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`}
+          alt={alt}
+          className="w-full h-auto block"
+        />
+      </div>
+    </div>
+  ) : (
+    <EmptyState icon={icon} title={`No ${title.toLowerCase()} yet`} hint={emptyHint}>
+      <button
+        onClick={onRegenerate}
+        disabled={disabled}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
+      >
+        <span className="material-symbols-outlined text-[18px]">{busy ? "hourglass_top" : "auto_awesome"}</span>
+        {busy ? "Generating… (≈1 min)" : "Generate diagram"}
+      </button>
+    </EmptyState>
+  );
+}

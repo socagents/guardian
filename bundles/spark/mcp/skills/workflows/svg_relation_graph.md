@@ -92,6 +92,15 @@ identity / vulnerability  fill #3f3214 stroke #d4a93f
 4. XML-escape labels; truncate long hashes/URLs.
 5. Call `issue_set_relation_graph(issue_id="<id>", svg="<the full SVG>")`. Fix + retry on error.
 
+## Case-level (campaign) variant — v0.2.2
+
+When the operator (re)generates the relations canvas on a **Case** (not a single Issue), draw the **campaign-level** STIX graph spanning ALL issues in the case:
+
+1. `case_get(case_id="<id>")` → read the case + its `issues[]`. For each issue, `indicators_list(issue_id=…)` + `indicator_get(id)` to gather the union of indicators and their relationships across the whole case.
+2. Draw ONE layered graph over that union — the shared infrastructure / techniques / actors that tie the case's issues together. Indicators seen in multiple issues are the campaign's connective tissue; place them once and let edges from several issues converge on them.
+3. Same columns / palette / safety rules as the issue-level canvas.
+4. Store with **`case_set_relation_graph(case_id="<id>", svg="<the full SVG>")`** (NOT `issue_set_relation_graph`). It renders on the Case detail's **Relations** tab.
+
 ## Cross-references
 
 - **Companion**: `svg_attack_chain` (causal/temporal) — this is the relational/STIX view. Same render path, storage shape, and safety contract.

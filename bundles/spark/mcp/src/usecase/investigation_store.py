@@ -154,6 +154,8 @@ class InvestigationStore:
                     title       TEXT NOT NULL,
                     description TEXT,
                     status      TEXT NOT NULL DEFAULT 'open',
+                    attack_chain_svg TEXT,
+                    relations_canvas_svg TEXT,
                     created_at  TEXT NOT NULL,
                     updated_at  TEXT NOT NULL
                 )
@@ -257,6 +259,15 @@ class InvestigationStore:
                 """
             )
             c.execute("CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_id)")
+            # v0.2.2 — case-level diagram SVGs (migrate existing dbs). A Case
+            # groups multiple issues, so these are the campaign-level attack
+            # chain + relations canvas synthesized across the case's issues.
+            # Kept off the Case DTO, same as the issue-level columns.
+            case_cols = {r["name"] for r in c.execute("PRAGMA table_info(cases)")}
+            if "attack_chain_svg" not in case_cols:
+                c.execute("ALTER TABLE cases ADD COLUMN attack_chain_svg TEXT")
+            if "relations_canvas_svg" not in case_cols:
+                c.execute("ALTER TABLE cases ADD COLUMN relations_canvas_svg TEXT")
 
     # ─── Issues ────────────────────────────────────────────────────
 
@@ -377,6 +388,41 @@ class InvestigationStore:
                 "SELECT attack_chain_svg FROM issues WHERE id = ?", (issue_id,)
             ).fetchone()
         return row["attack_chain_svg"] if row else None
+
+    # ─── Case-level diagram SVGs (v0.2.2) ──────────────────────────
+    # Campaign-level attack chain + relations canvas, synthesized across the
+    # case's issues. Mirror the issue-level columns; kept off the Case DTO so
+    # list_cases stays lean (read back only on the case detail).
+
+    def set_case_attack_chain(self, case_id: str, svg: str | None) -> bool:
+        with self._lock, self._conn() as c:
+            cur = c.execute(
+                "UPDATE cases SET attack_chain_svg = ?, updated_at = ? WHERE id = ?",
+                (svg, _now(), case_id),
+            )
+        return cur.rowcount > 0
+
+    def get_case_attack_chain(self, case_id: str) -> str | None:
+        with self._lock, self._conn() as c:
+            row = c.execute(
+                "SELECT attack_chain_svg FROM cases WHERE id = ?", (case_id,)
+            ).fetchone()
+        return row["attack_chain_svg"] if row else None
+
+    def set_case_relations_canvas(self, case_id: str, svg: str | None) -> bool:
+        with self._lock, self._conn() as c:
+            cur = c.execute(
+                "UPDATE cases SET relations_canvas_svg = ?, updated_at = ? WHERE id = ?",
+                (svg, _now(), case_id),
+            )
+        return cur.rowcount > 0
+
+    def get_case_relations_canvas(self, case_id: str) -> str | None:
+        with self._lock, self._conn() as c:
+            row = c.execute(
+                "SELECT relations_canvas_svg FROM cases WHERE id = ?", (case_id,)
+            ).fetchone()
+        return row["relations_canvas_svg"] if row else None
 
     # ─── Cases ─────────────────────────────────────────────────────
 

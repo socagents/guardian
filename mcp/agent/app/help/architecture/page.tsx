@@ -6230,7 +6230,8 @@ function Investigation() {
  │     attack_chain_svg    -- the causal diagram SVG (v0.1.8, nullable)
  │     relations_canvas_svg-- the STIX relations graph SVG (v0.2.1, nullable)
  ├── cases           named groupings of related issues
- │     id, title, status, ...
+ │     id, title, status,
+ │     attack_chain_svg, relations_canvas_svg  -- campaign-level diagrams (v0.2.2)
  ├── issue_events    the per-issue activity timeline
  │     id, issue_id, kind, body, created_at
  ├── indicators      deduped IoCs (v0.2.0), unique by (value, type)
@@ -6258,7 +6259,7 @@ function Investigation() {
 
  <SubSection icon="api" title="Agent MCP tools — catalog side of the credential guardrail">
  <p>
- The agent reaches the module through fifteen MCP tools. They are on the{" "}
+ The agent reaches the module through seventeen MCP tools. They are on the{" "}
  <Term>catalog</Term> side of the credential guardrail, NOT the
  credential side: they touch only investigation metadata in{" "}
  <Code>investigations.db</Code> and never read, write, mint, or rotate
@@ -6278,7 +6279,10 @@ function Investigation() {
  <li>
  <strong>Cases</strong> — <Code>case_create</Code>,{" "}
  <Code>case_add_issue</Code>, <Code>cases_list</Code>,{" "}
- <Code>case_get</Code>.
+ <Code>case_get</Code>, plus the two case-level diagram tools{" "}
+ <Code>case_set_attack_chain</Code> and{" "}
+ <Code>case_set_relation_graph</Code> (v0.2.2) that store the
+ campaign-level SVGs synthesized across the case&apos;s issues.
  </li>
  <li>
  <strong>Indicators</strong> (v0.2.0–v0.2.1) —{" "}
@@ -6312,8 +6316,9 @@ function Investigation() {
  <Code>bundles/spark/mcp/src/api/investigation.py</Code> serves{" "}
  <Code>/api/v1/issues*</Code>, <Code>/api/v1/cases*</Code>, and{" "}
  <Code>/api/v1/indicators*</Code> under bearer <Code>MCP_TOKEN</Code>{" "}
- auth. The issue-detail GET carries <Code>attack_chain_svg</Code> +{" "}
- <Code>relations_canvas_svg</Code>; the indicator-detail GET carries
+ auth. The issue-detail AND case-detail GETs carry{" "}
+ <Code>attack_chain_svg</Code> + <Code>relations_canvas_svg</Code>{" "}
+ (case-level = campaign, v0.2.2); the indicator-detail GET carries
  the indicator&apos;s <Code>relationships</Code>.
  </li>
  <li>
@@ -6336,7 +6341,11 @@ function Investigation() {
  (STIX graph), each generated on demand via a one-shot agent job and
  rendered sandboxed as an <Code>&lt;img&gt;</Code> data-URI. The
  Indicator detail shows reputation, enrichment, its relationships,
- and every issue it appears in.
+ and every issue it appears in. The Case detail is likewise tabbed
+ (Issues · Attack chain · Relations) with the same two diagram tabs,
+ drawn at the campaign level across all the case&apos;s issues
+ (v0.2.2); the <Code>DiagramTab</Code> renderer is shared between the
+ issue + case pages.
  </li>
  </ul>
  <p>

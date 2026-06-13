@@ -10,6 +10,33 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.2] (unreleased) — *Case-view attack chain + relations canvas*
+
+The on-demand diagrams come to **Cases**: a multi-issue case now gets a campaign-level attack chain and relations canvas, synthesized across all the issues grouped under it.
+
+### What ships
+
+- **Case detail is now tabbed** — Issues · Attack chain · Relations (it was a flat issue list before). The Issues tab is the previous grouped-issue view.
+- **Campaign-level attack chain** — the Case's Attack chain tab draws ONE causal diagram spanning all the case's issues (the shared kill-chain across the campaign), generated on demand like the issue-level chain.
+- **Campaign-level relations canvas** — the Case's Relations tab draws ONE STIX graph over the union of the case's issues' indicators, surfacing the shared infrastructure / techniques / actors that tie the campaign together.
+- **Agent tools** (catalog side — no secrets): `case_set_attack_chain` · `case_set_relation_graph` (mirror the issue tools; all four diagram tools now share one `_clean_svg` validator). The two skills (`svg_attack_chain`, `svg_relation_graph`) gained a case-level (campaign) variant.
+- The SVGs ride on the existing case detail REST + proxy; the `DiagramTab` component was lifted into the shared module so the issue + case pages render diagrams identically.
+
+### Storage
+
+Additive to `investigations.db`: `attack_chain_svg` + `relations_canvas_svg` columns on `cases` (via `ALTER TABLE … ADD COLUMN`; existing data untouched). Kept off the lean Case DTO/list — read only on the case detail.
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/investigation_store.py` (cases columns + migration + `set/get_case_attack_chain` + `set/get_case_relations_canvas`) + `builtin_components/investigation_tools.py` (`_clean_svg` helper + `case_set_attack_chain` + `case_set_relation_graph`) + `connector_loader.py` + `api/investigation.py` + `skills/workflows/svg_attack_chain.md` + `skills/workflows/svg_relation_graph.md` (case-level variants). +6 tests.
+- `mcp/agent/components/investigation/ui.tsx` (shared `DiagramTab`), `app/investigation/cases/[id]/page.tsx` (tabs + diagram tabs + case regenerate), `app/investigation/issues/[id]/page.tsx` (imports shared `DiagramTab`), `lib/api/investigation.ts` (`CaseDetail` SVG fields). See [#16](https://github.com/kite-production/guardian/issues/16).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); additive columns (volumes preserved); no installer change. Patch bump (v0.2.2).
+
+---
+
 ## [v0.2.1] (unreleased) — *Relations canvas + STIX indicator attribution*
 
 A STIX relationship layer over the Investigation module: Guardian records typed edges between indicators and other entities, attributes IoCs to techniques / malware / campaigns / actors, and draws an on-demand **Relations canvas** per issue — the relational companion to the causal Attack chain.

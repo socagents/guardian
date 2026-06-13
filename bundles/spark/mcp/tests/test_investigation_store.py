@@ -301,3 +301,32 @@ def test_relations_canvas_set_and_get(store):
 def test_relations_canvas_missing_issue(store):
     assert store.set_relations_canvas("nope", "<svg/>") is False
     assert store.get_relations_canvas("nope") is None
+
+
+# ─── Case-level diagram SVGs (v0.2.2) ────────────────────────────────
+
+
+def test_case_attack_chain_set_and_get(store):
+    case = store.create_case(title="campaign")
+    assert store.get_case_attack_chain(case.id) is None
+    assert store.set_case_attack_chain(case.id, "<svg>chain</svg>") is True
+    assert store.get_case_attack_chain(case.id) == "<svg>chain</svg>"
+    # rides only on the detail path, never the lean Case DTO/list
+    assert not hasattr(store.get_case(case.id), "attack_chain_svg")
+    assert "attack_chain_svg" not in store.list_cases()[0]
+
+
+def test_case_relations_canvas_set_and_get(store):
+    case = store.create_case(title="campaign")
+    assert store.get_case_relations_canvas(case.id) is None
+    assert store.set_case_relations_canvas(case.id, "<svg>rel</svg>") is True
+    assert store.get_case_relations_canvas(case.id) == "<svg>rel</svg>"
+    # the two case SVGs are independent
+    assert store.get_case_attack_chain(case.id) is None
+
+
+def test_case_diagrams_missing_case(store):
+    assert store.set_case_attack_chain("nope", "<svg/>") is False
+    assert store.get_case_attack_chain("nope") is None
+    assert store.set_case_relations_canvas("nope", "<svg/>") is False
+    assert store.get_case_relations_canvas("nope") is None
