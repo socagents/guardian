@@ -2326,6 +2326,41 @@ Networks documentation and returning evidence-backed, cited answers.
                 </li>
               </ul>
             </SubSection>
+
+            <SubSection icon="cycle" title="Autonomous investigation loop (demo harness)">
+              <p>
+                A reference set of three jobs runs an unattended
+                investigate-and-improve cycle — useful as a demo/training
+                harness (it seeds <strong>synthetic</strong> incidents, so
+                point it at a non-production tenant). They&apos;re codified in{" "}
+                <Code>scripts/bootstrap_loop_jobs.sh</Code>; re-run it after a
+                fresh install to (re)provision them.
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm">
+                <li>
+                  <strong>guardian-incident-seeder</strong> (hourly) — creates
+                  one synthetic <Code>[guardian-loop]</Code> XSOAR incident +
+                  its tracking Issue.
+                </li>
+                <li>
+                  <strong>guardian-investigation-loop</strong> (every 30 min) —
+                  investigates the oldest open tracked Issue end-to-end
+                  (enrich → scope → attack-chain + relations diagrams → resolve
+                  with a verdict), and groups related incidents into a Case.
+                </li>
+                <li>
+                  <strong>guardian-investigation-judge</strong> (every 6h) —
+                  scores recent resolved investigations and, on a systematic
+                  weakness, refines the investigation skill itself. Every skill
+                  edit is snapshotted (<Code>skills/.history/</Code>) and
+                  audited (<Code>skill_updated</Code>), so you can review or
+                  roll back any autonomous change from{" "}
+                  <Link href="/observability/events" className="link">
+                    /observability/events
+                  </Link>.
+                </li>
+              </ul>
+            </SubSection>
           </Section>
 
           <Section

@@ -6383,6 +6383,62 @@ function Investigation() {
  either path.
  </p>
  </SubSection>
+
+ <SubSection icon="cycle" title="Autonomous investigation loop (seeder → loop → judge)">
+ <p>
+ Three Guardian <Term>scheduler jobs</Term> drive an unattended
+ investigate-and-improve cycle over the Investigation module. They are
+ a dev/demo harness (they seed <em>synthetic</em> XSOAR incidents) and
+ are codified for disaster recovery in{" "}
+ <Code>scripts/bootstrap_loop_jobs.sh</Code> — idempotent re-provisioning
+ via the agent jobs API, since runtime jobs otherwise live only in{" "}
+ <Code>jobs.db</Code> and are lost on a volume wipe.
+ </p>
+ <ul className="list-disc pl-5 space-y-1.5 text-sm">
+ <li>
+ <Code>guardian-incident-seeder</Code> (hourly) — creates one{" "}
+ <Code>[guardian-loop]</Code> XSOAR incident with synthetic IoCs and
+ its tracking Issue (<Code>issue_create</Code>, <Code>source_ref</Code>
+ = the incident id). The investigator runs with{" "}
+ <Code>permission_policy.denied_tools = [issue_create]</Code> so the
+ seeder/investigator split makes duplicate Issues structurally
+ impossible.
+ </li>
+ <li>
+ <Code>guardian-investigation-loop</Code> (every 30 min) — picks the
+ oldest open tracked Issue via{" "}
+ <Code>issues_list(status=&apos;open&apos;, source_ref_not_null=true,
+ order=&apos;asc&apos;)</Code> (the v0.2.11 structural filters — no
+ reliance on the model to skip sourceless Issues or reverse a list),
+ investigates the incident end-to-end per the{" "}
+ <Code>xsoar_case_investigation</Code> skill (enrich → scope → draw the
+ attack-chain + relations diagrams → resolve with a leading{" "}
+ <Code>VERDICT:</Code> line, MITRE, blast-radius, recommendations), and
+ groups related incidents into a Case.
+ </li>
+ <li>
+ <Code>guardian-investigation-judge</Code> (every 6h) — rubric-scores
+ the most-recent resolved investigations (VERDICT / MITRE /
+ blast-radius / recommendations) and, only on a{" "}
+ <em>systematic</em> weakness, makes one bounded additive edit to the{" "}
+ <Code>xsoar_case_investigation</Code> skill via{" "}
+ <Code>skills_update</Code>. Tightly whitelisted (reads
+ Issues/Cases/indicators + <Code>skills_read</Code>/<Code>skills_update</Code>
+ only). Every skill edit snapshots the prior content to{" "}
+ <Code>skills/.history/</Code> and writes a{" "}
+ <Code>skill_updated</Code> audit row — so an autonomous self-edit is
+ attributable and revertible (v0.2.12).
+ </li>
+ </ul>
+ <p>
+ Hardening from a 20-incident harness smoke campaign: the loop draws
+ diagrams for true-positives; broad <Code>subagent</Code> hunts spawned
+ during an investigation have their tool results truncated (v0.2.14) so
+ a single large XSOAR read can&apos;t blow the subagent&apos;s context
+ window (the Vertex token ceiling). 20/20 synthetic incidents resolved
+ with correct verdicts in that campaign.
+ </p>
+ </SubSection>
  </Section>
 );
 }
@@ -6428,6 +6484,19 @@ function XsoarConnector() {
 
  <SubSection icon="api" title="Tool family (case-investigation lifecycle)">
  <ul className="list-disc pl-5 space-y-1 text-sm">
+ <li>
+ <strong>Discover</strong> —{" "}
+ <Code>xsoar_list_integrations</Code> (v0.2.13) lists the
+ integration instances configured on the tenant and the
+ commands each exposes (one{" "}
+ <Code>POST /settings/integration/search</Code>, joining
+ configured instances to their definitions&apos;{" "}
+ <Code>integrationScript.commands[]</Code>). The discovery
+ companion to <Code>xsoar_run_command</Code> — the agent
+ learns which <Code>!commands</Code> actually exist (and
+ their arguments, with <Code>brand=…</Code>) instead of
+ guessing. No <Code>playground_id</Code> needed.
+ </li>
  <li>
  <strong>Monitor</strong> —{" "}
  <Code>xsoar_list_incidents</Code> lists/filters open cases

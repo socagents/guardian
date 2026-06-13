@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.15",
+    date: "2026-06-13",
+    title: "Docs synced with the harness after a 20-incident end-to-end test.",
+    highlights: [
+      "Architecture page now documents the autonomous investigation loop (seeder → loop → judge), the self-improving judge with rollback, and subagent tool-result truncation.",
+      "User guide gains an 'Autonomous investigation loop' section under Jobs, incl. how to review/roll back autonomous skill edits.",
+      "list_integrations documented as the discovery step in the XSOAR tool family.",
+    ],
+  },
+  {
     version: "0.2.14",
     date: "2026-06-13",
     title: "Subagent investigations scale on busy tenants.",

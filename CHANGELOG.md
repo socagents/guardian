@@ -10,6 +10,25 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.15] (unreleased) — *Harness documentation sync (post-campaign)*
+
+Documentation pass after a 20-incident end-to-end harness smoke campaign that validated the whole stack (investigations, hooks, subagents, skills, jobs, memory, observability) and shipped v0.2.10–v0.2.14. Brings the canonical docs up to date with the current harness.
+
+### What ships
+
+- **Architecture page** — new *"Autonomous investigation loop (seeder → loop → judge)"* subsection documenting the three scheduler jobs (codified in `scripts/bootstrap_loop_jobs.sh`), the structural `issues_list` Issue-pick, the judge's bounded self-improvement with `.history` rollback + `skill_updated` audit, and the v0.2.14 subagent tool-result truncation. Added `xsoar_list_integrations` as the *Discover* step in the XSOAR tool-family.
+- **User guide** — new *"Autonomous investigation loop (demo harness)"* subsection under Jobs, explaining the three jobs + how to review/roll back autonomous skill edits via `/observability/events`.
+
+### Files
+
+- `mcp/agent/app/help/architecture/page.tsx`, `mcp/agent/app/help/user/page.tsx`, `CHANGELOG.md`, `lib/release-notes.ts`. (Finer API-catalog entries for the Investigation REST surface tracked as a follow-up.)
+
+### Change scenario
+
+**Scenario 1** — docs-only (agent image help pages); volumes preserved. Patch bump (v0.2.15).
+
+---
+
 ## [v0.2.14] (unreleased) — *Subagent investigations scale on busy tenants (tool-result truncation)*
 
 Found by the 20-incident harness smoke campaign: broad **subagent** hunts (e.g. a threat-hunter scoping blast radius) on a busy XSOAR tenant failed with the Vertex 1M-token error — a single broad XSOAR read returned a payload large enough to blow the subagent's context window. The main agent already truncated tool results; subagents didn't.
