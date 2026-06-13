@@ -839,6 +839,7 @@ def test_all_exported_tools_are_callable():
         "xsoar_save_evidence",
         "xsoar_search_evidence",
         "xsoar_health_check",
+        "xsoar_list_integrations",
         "xsoar_run_command",
         "xsoar_enrich_indicator",
         "xsoar_complete_task",
@@ -851,3 +852,85 @@ def test_all_exported_tools_are_callable():
     assert set(connector.__all__) == expected
     for name in expected:
         assert callable(getattr(connector, name)), f"{name} not callable"
+
+
+# ─── list_integrations ───────────────────────────────────────────────
+
+# Mirrors the real POST /settings/integration/search shape: `configurations`
+# (definitions, holding integrationScript.commands) + `instances` (configured;
+# `enabled` is the STRING "true"/"false").
+_INTEGRATION_SEARCH_REPLY = {
+    "configurations": [
+        {"brand": "VirusTotal", "name": "VirusTotal", "integrationScript": {"commands": [
+            {"name": "file", "description": "Check file reputation",
+             "arguments": [{"name": "file", "required": True, "description": "hash"}]},
+            {"name": "url", "description": "Check url reputation", "arguments": []},
+        ]}},
+        {"brand": "Splunk", "name": "Splunk", "integrationScript": {"commands": [
+            {"name": "splunk-search", "description": "Run a search",
+             "arguments": [{"name": "query", "required": True, "description": "spl"}]},
+        ]}},
+    ],
+    "instances": [
+        {"brand": "VirusTotal", "name": "VT_prod", "enabled": "true",
+         "category": "Data Enrichment & Threat Intelligence"},
+        {"brand": "Splunk", "name": "splunk_old", "enabled": "false", "category": "SIEM"},
+    ],
+}
+
+
+def test_list_integrations_enabled_only_joins_commands(monkeypatch):
+    rf = _RecordingFetcher(post_reply=_INTEGRATION_SEARCH_REPLY)
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_list_integrations())
+    assert out["ok"] is True
+    # Only the enabled instance (VT) — Splunk is disabled ("false").
+    assert out["total"] == 1
+    vt = out["integrations"][0]
+    assert vt["brand"] == "VirusTotal"
+    assert vt["instance_name"] == "VT_prod"
+    assert vt["enabled"] is True
+    assert vt["command_count"] == 2
+    names = {c["name"] for c in vt["commands"]}
+    assert names == {"file", "url"}
+    # compact default: no arguments without command_detail
+    assert "arguments" not in vt["commands"][0]
+
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/settings/integration/search")
+    assert isinstance(body.get("size"), int)
+
+
+def test_list_integrations_brand_filter_includes_args(monkeypatch):
+    rf = _RecordingFetcher(post_reply=_INTEGRATION_SEARCH_REPLY)
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_list_integrations(brand="virustotal"))
+    assert out["total"] == 1
+    cmds = {c["name"]: c for c in out["integrations"][0]["commands"]}
+    # brand filter implies command_detail → arguments present
+    assert cmds["file"]["arguments"][0] == {
+        "name": "file", "required": True, "description": "hash",
+    }
+
+
+def test_list_integrations_enabled_only_false_lists_disabled(monkeypatch):
+    rf = _RecordingFetcher(post_reply=_INTEGRATION_SEARCH_REPLY)
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_list_integrations(enabled_only=False))
+    assert out["total"] == 2
+    by_name = {i["instance_name"]: i for i in out["integrations"]}
+    assert by_name["splunk_old"]["enabled"] is False
+    assert by_name["splunk_old"]["command_count"] == 1  # joined from Splunk def
+
+
+def test_list_integrations_include_commands_false_is_name_only(monkeypatch):
+    rf = _RecordingFetcher(post_reply=_INTEGRATION_SEARCH_REPLY)
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_list_integrations(include_commands=False))
+    assert out["total"] == 1
+    assert "commands" not in out["integrations"][0]
+    assert "command_count" not in out["integrations"][0]

@@ -253,6 +253,25 @@ spec:
       args: []
       returns: { type: "object", description: "{ ok, reachable, detail, generation: 'v6' | 'v8' }" }
 
+    # ─── Integration + command discovery ─────────────────────────
+    - name: "list_integrations"
+      method: "POST /settings/integration/search"
+      description: |
+        List the integrations CONFIGURED on this XSOAR tenant and the commands
+        each one exposes — the discovery tool that pairs with run_command so you
+        know which `!commands` are actually runnable instead of guessing. Joins
+        the configured instances to their integration definitions' command
+        catalog in one call. Does NOT need playground_id. Use brand=... to focus
+        one integration and get full command argument specs for building the
+        exact run_command string.
+      args:
+        - { name: "brand",           type: "string",  description: "Optional — filter to one integration (case-insensitive substring on brand or instance name, e.g. 'virustotal'). Implies command_detail.", required: false }
+        - { name: "enabled_only",    type: "boolean", description: "Default true — only enabled (runnable) instances. False also lists disabled ones.", required: false }
+        - { name: "include_commands", type: "boolean", description: "Default true — attach each integration's command list. False = fast name-only inventory.", required: false }
+        - { name: "command_detail",  type: "boolean", description: "Default false — when true (or brand set), each command also carries its arguments (name/required/description).", required: false }
+        - { name: "size",            type: "integer", description: "Max integration definitions to scan for the command join (default 1000, max 2000).", required: false }
+      returns: { type: "object", description: "{ ok, integrations: [{ brand, instance_name, enabled, category, command_count, commands: [{name, description, arguments?}] }], total }" }
+
     # ─── Command engine (needs playground_id) ────────────────────
     - name: "run_command"
       method: "POST /entry/execute/sync"

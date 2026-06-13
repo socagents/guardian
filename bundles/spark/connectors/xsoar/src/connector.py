@@ -78,6 +78,7 @@ __all__ = [
     "xsoar_save_evidence",
     "xsoar_search_evidence",
     "xsoar_health_check",
+    "xsoar_list_integrations",
     "xsoar_run_command",
     "xsoar_enrich_indicator",
     "xsoar_complete_task",
@@ -1217,6 +1218,162 @@ async def xsoar_health_check() -> dict:
         "total_incidents": total,
         "generation": "v8" if fetcher.is_v8 else "v6",
     }
+
+
+# ─── xsoar_list_integrations (integration + command discovery) ───────
+
+
+def _integration_commands(entry: dict) -> list:
+    """Pull an integration's command list from a search-response entry.
+
+    Commands live under `integrationScript.commands[]` (the API surface of
+    the integration YAML's `script.commands[]`); some surfaces also expose a
+    flattened top-level `commands[]`. Returns [] when neither is present.
+    """
+    if not isinstance(entry, dict):
+        return []
+    script = entry.get("integrationScript")
+    if isinstance(script, dict) and isinstance(script.get("commands"), list):
+        return script["commands"]
+    flat = entry.get("commands")
+    return flat if isinstance(flat, list) else []
+
+
+def _integration_enabled(inst: dict) -> bool:
+    """True when a configured instance is enabled.
+
+    XSOAR's integration surface returns `enabled` as the STRING "true"/"false"
+    (not a JSON bool), so handle both forms.
+    """
+    v = inst.get("enabled")
+    return v is True or (isinstance(v, str) and v.strip().lower() == "true")
+
+
+@_wrap_xsoar_call
+async def xsoar_list_integrations(
+    brand: Optional[str] = None,
+    enabled_only: bool = True,
+    include_commands: bool = True,
+    command_detail: bool = False,
+    size: int = 1000,
+) -> dict:
+    """List the integrations configured on this XSOAR tenant + the commands each exposes.
+
+    Discovery tool that PAIRS WITH xsoar_run_command: it tells you which
+    integrations are actually wired up and which `!commands` you can run,
+    instead of guessing. Without this you can call run_command but don't know
+    what's available. Calls POST /settings/integration/search once and joins
+    the configured instances to their integration definitions' command
+    catalog. Does NOT require playground_id (a /settings endpoint, not the
+    command engine).
+
+    Args:
+        brand: optional — filter to one integration (case-insensitive
+            substring match on the integration brand or instance name, e.g.
+            "virustotal", "splunk"). When set, full command argument specs are
+            returned for that integration (implies command_detail).
+        enabled_only: default true — return only ENABLED instances (the ones
+            whose commands you can actually run). False also lists disabled
+            instances.
+        include_commands: default true — attach each integration's command
+            list. False gives a fast name-only inventory.
+        command_detail: default false — when true (or when `brand` is set),
+            each command also carries its `arguments` (name / required /
+            description) so you can build the exact `!command arg=value`
+            string to pass to xsoar_run_command. Off keeps the response
+            compact (command name + description only).
+        size: max integration DEFINITIONS to scan for the command join
+            (default 1000, max 2000) — a tenant exposes many integration
+            definitions but only a few configured instances; a generous size
+            ensures every configured instance's commands are found.
+
+    Returns:
+        {ok, integrations: [{brand, instance_name, enabled, category,
+        command_count, commands: [{name, description, arguments?}]}], total}.
+        `total` is the number of configured integrations returned.
+
+    Example: xsoar_list_integrations(brand="VirusTotal") →
+        {"ok": true, "total": 1, "integrations": [{"brand": "VirusTotal",
+        "instance_name": "VT_prod", "enabled": true, "command_count": 6,
+        "commands": [{"name": "file", "description": "Check file reputation",
+        "arguments": [{"name": "file", "required": true, "description": "..."}]},
+        ...]}]}
+    """
+    fetcher = _get_fetcher()
+    want_detail = bool(command_detail) or bool(brand)
+    n = _clamp_int(size, 1000, 1, 2000)
+
+    resp = await fetcher.post("/settings/integration/search", {"size": n})
+    if not isinstance(resp, dict):
+        resp = {}
+
+    # `configurations[]` = integration DEFINITIONS (hold the command catalog);
+    # `instances[]` = the CONFIGURED instances. A bare-array response is
+    # normalized to `data` by the client — treat that as the instance list.
+    configurations = resp.get("configurations") or []
+    instances = resp.get("instances")
+    if instances is None:
+        instances = resp.get("data") or []
+
+    # Index command catalogs by brand from the definitions, so a configured
+    # instance without its own embedded commands can borrow its brand's.
+    commands_by_brand: dict[str, list] = {}
+    for conf in configurations:
+        if not isinstance(conf, dict):
+            continue
+        key = conf.get("brand") or conf.get("name")
+        if key and str(key) not in commands_by_brand:
+            commands_by_brand[str(key)] = _integration_commands(conf)
+
+    def _shape_command(cmd: dict) -> dict:
+        out: dict[str, Any] = {
+            "name": cmd.get("name"),
+            "description": (cmd.get("description") or "").strip(),
+        }
+        if want_detail:
+            args = cmd.get("arguments")
+            if isinstance(args, list):
+                out["arguments"] = [
+                    {
+                        "name": a.get("name"),
+                        "required": bool(a.get("required", False)),
+                        "description": (a.get("description") or "").strip()[:240],
+                    }
+                    for a in args
+                    if isinstance(a, dict)
+                ]
+        return out
+
+    brand_filter = str(brand).strip().lower() if brand else None
+    out_integrations: list[dict] = []
+    for inst in instances:
+        if not isinstance(inst, dict):
+            continue
+        if enabled_only and not _integration_enabled(inst):
+            continue
+        b = str(inst.get("brand") or inst.get("name") or "")
+        name = str(inst.get("name") or "")
+        if (
+            brand_filter
+            and brand_filter not in b.lower()
+            and brand_filter not in name.lower()
+        ):
+            continue
+
+        row: dict[str, Any] = {
+            "brand": b,
+            "instance_name": name,
+            "enabled": _integration_enabled(inst),
+            "category": inst.get("category") or "",
+        }
+        if include_commands:
+            cmds = _integration_commands(inst) or commands_by_brand.get(b, [])
+            shaped = [_shape_command(c) for c in cmds if isinstance(c, dict)]
+            row["command_count"] = len(shaped)
+            row["commands"] = shaped
+        out_integrations.append(row)
+
+    return {"integrations": out_integrations, "total": len(out_integrations)}
 
 
 # ─── xsoar_run_command ───────────────────────────────────────────────

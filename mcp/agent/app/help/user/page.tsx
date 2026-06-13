@@ -2681,6 +2681,17 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
+                  <em>&ldquo;which integrations are configured and what
+                  commands can I run?&rdquo;</em> — list the configured
+                  integration instances + each one&apos;s commands, via{" "}
+                  <Code>list_integrations</Code> (v0.2.13). The discovery
+                  companion to <Code>run_command</Code>: Guardian learns which{" "}
+                  <Code>!commands</Code> actually exist (ask{" "}
+                  <em>&ldquo;list the VirusTotal commands&rdquo;</em> to also
+                  see each command&apos;s arguments) instead of guessing. No{" "}
+                  <Code>playground_id</Code> needed.
+                </li>
+                <li>
                   <em>&ldquo;run <Code>!Print value=hi</Code> in
                   XSOAR&rdquo;</em> — any XSOAR command, via{" "}
                   <Code>run_command</Code>.

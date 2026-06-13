@@ -10,6 +10,28 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.13] (unreleased) — *Discover configured SOAR integrations + their commands*
+
+Guardian can now **see what's actually wired up in Cortex XSOAR** before it acts. The agent already had `xsoar_run_command` (run any `!command`) but no way to know which integrations are configured or which commands they expose — so it had to guess. A new `xsoar_list_integrations` tool answers exactly that.
+
+### What ships
+
+- **`xsoar_list_integrations`** (xsoar connector) — lists the integration instances configured on the tenant and, for each, the commands it exposes. One call to `POST /settings/integration/search` joins the configured instances to their integration definitions' command catalog (`integrationScript.commands[]`). No `playground_id` needed.
+  - `brand="virustotal"` focuses one integration and returns each command's **arguments** (name / required / description) so the agent can build the exact `!command arg=value` string for `xsoar_run_command`.
+  - `enabled_only` (default true — only runnable instances), `include_commands` (default true), `command_detail` (default false; on when `brand` is set), `size`.
+  - Returns `{ ok, integrations: [{ brand, instance_name, enabled, category, command_count, commands: [{name, description, arguments?}] }], total }`.
+- **The discovery → run pattern**: the agent calls `xsoar_list_integrations` to learn `{integration → commands}`, then `xsoar_run_command` with a command it now *knows* exists — no more guessing at the SOAR's command surface.
+
+### Files
+
+- `bundles/spark/connectors/xsoar/src/connector.py` (`xsoar_list_integrations` + `__all__`), `bundles/spark/connectors/xsoar/connector.yaml` (`spec.tools[]`), `bundles/spark/connectors/xsoar/tests/test_connector.py` (4 tests). Docs: `app/help/user/page.tsx`, `CHANGELOG.md`, `lib/release-notes.ts`. See [#27](https://github.com/kite-production/guardian/issues/27).
+
+### Change scenario
+
+**Scenario 1** — code-only (xsoar connector image rebuilds; new digest); storage unchanged; volumes preserved. Patch bump (v0.2.13).
+
+---
+
 ## [v0.2.12] (unreleased) — *Autonomous investigation self-improvement (evaluate→enhance)*
 
 Closes the autonomous investigation loop's final phase: it now **evaluates its own work and improves the investigation skill** without a human in the path. A new `guardian-investigation-judge` job scores recent resolved investigations against a SOC rubric and, on a systematic weakness, edits the `xsoar_case_investigation` skill via `skills_update`. Because that's autonomous self-modification, every skill edit is now **reversible and audited**.

@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.13",
+    date: "2026-06-13",
+    title: "Guardian can now discover which SOAR integrations + commands are available.",
+    highlights: [
+      "New xsoar_list_integrations tool: lists the integrations configured on the Cortex XSOAR tenant and the commands each one exposes.",
+      "Pairs with run_command — the agent learns which !commands actually exist (and their arguments) instead of guessing.",
+      "Filter to one integration with brand=... to get full command argument specs.",
+    ],
+  },
+  {
     version: "0.2.12",
     date: "2026-06-13",
     title: "Autonomous investigation self-improvement — with audited, reversible skill edits.",
