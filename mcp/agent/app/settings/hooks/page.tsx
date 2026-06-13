@@ -24,8 +24,15 @@
  *      PostToolUse, http transport (Slack webhook)
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import {
+  glassStyle,
+  Badge,
+  StatCard,
+  EmptyState,
+  InvestigationTabBar,
+} from "@/components/investigation/ui";
 
 const HOOK_EVENTS = [
   "PreToolUse",
@@ -100,11 +107,19 @@ interface HookRow {
   updatedAt?: string;
 }
 
-const glassCard = {
-  background: "var(--glass-bg-strong)",
-  backdropFilter: "blur(12px)",
-  border: "0.5px solid var(--glass-border)",
-} as const;
+// Event grouping for the filter bar — keeps the chip row short.
+const EVENT_GROUPS: { key: string; label: string; events: readonly HookEvent[] }[] = [
+  { key: "tool", label: "Tool", events: ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest"] },
+  { key: "prompt", label: "Prompt", events: ["UserPromptSubmit"] },
+  { key: "compaction", label: "Compaction", events: ["PreCompact", "PostCompact"] },
+  { key: "run", label: "Run", events: ["RunStart", "RunEnd"] },
+  { key: "subagent", label: "Subagent", events: ["SubagentStart", "SubagentEnd"] },
+  { key: "other", label: "Other", events: ["Notification"] },
+];
+
+function transportKindLabel(t: HookRow["transport"]["type"]): string {
+  return t === "http" ? "webhook" : t;
+}
 
 export default function HooksPage() {
   const [hooks, setHooks] = useState<HookRow[]>([]);
@@ -112,6 +127,19 @@ export default function HooksPage() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<HookRow | null>(null);
   const [adding, setAdding] = useState(false);
+  const [groupFilter, setGroupFilter] = useState<string>("all");
+  const [nameFilter, setNameFilter] = useState("");
+
+  // Client-side filtering over the already-fetched hooks — no extra fetch.
+  const filtered = useMemo(() => {
+    const group = EVENT_GROUPS.find((g) => g.key === groupFilter);
+    const q = nameFilter.trim().toLowerCase();
+    return hooks.filter((h) => {
+      if (group && !group.events.includes(h.event)) return false;
+      if (q && !(`${h.name} ${h.description ?? ""}`.toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [hooks, groupFilter, nameFilter]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -165,6 +193,20 @@ export default function HooksPage() {
     [refresh],
   );
 
+  const openNewHook = useCallback(() => {
+    setEditing({
+      id: crypto.randomUUID(),
+      name: "",
+      event: "PreToolUse",
+      transport: { type: "http", url: "" },
+      priority: 100,
+      timeoutMs: 5000,
+      failurePolicy: "warn",
+      enabled: true,
+    });
+    setAdding(true);
+  }, []);
+
   return (
     <div className="h-screen overflow-y-auto custom-scrollbar">
       <div className="max-w-[1400px] mx-auto px-8 py-8 space-y-6">
@@ -179,29 +221,13 @@ export default function HooksPage() {
                 Hooks
               </h1>
             </div>
-            <p className="text-sm text-on-surface-variant ml-9 max-w-2xl">
-              Policy contributors that fire at chat-lifecycle events
-              (tool calls, prompts, compaction, run start/end). Each hook
-              runs through a transport (command, HTTP webhook) and may
-              deny/ask/inject context. Configured here, executed
-              transparently by every chat turn.
+            <p className="text-sm text-on-surface-variant ml-9 max-w-3xl leading-relaxed">
+              Policy contributors that fire at chat-lifecycle events (tool calls, prompts, compaction, run start/end). Each hook runs through a transport (command, HTTP webhook) and may deny/ask/inject context. Configured here, executed transparently by every chat turn.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => {
-              setEditing({
-                id: crypto.randomUUID(),
-                name: "",
-                event: "PreToolUse",
-                transport: { type: "http", url: "" },
-                priority: 100,
-                timeoutMs: 5000,
-                failurePolicy: "warn",
-                enabled: true,
-              });
-              setAdding(true);
-            }}
+            onClick={openNewHook}
             className="px-4 py-2 rounded-xl text-xs font-medium text-on-primary-container bg-primary-container/30 hover:bg-primary-container/50 transition-colors"
           >
             <span className="material-symbols-outlined text-base align-middle mr-1">
@@ -218,33 +244,93 @@ export default function HooksPage() {
           </div>
         )}
 
+        {/* Summary stat cards */}
+        {!loading && hooks.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard icon="webhook" label="Total hooks" value={hooks.length} />
+            <StatCard
+              icon="toggle_on"
+              label="Enabled"
+              value={hooks.filter((h) => h.enabled !== false).length}
+              tone="bg-secondary/15 text-secondary"
+            />
+            <StatCard
+              icon="toggle_off"
+              label="Disabled"
+              value={hooks.filter((h) => h.enabled === false).length}
+              tone="bg-surface-container-high text-on-surface-variant"
+            />
+            <StatCard
+              icon="lock"
+              label="Fail-closed"
+              value={hooks.filter((h) => h.failurePolicy === "block").length}
+              tone="bg-error/15 text-error"
+            />
+          </div>
+        )}
+
+        {/* Filter bar */}
+        {!loading && hooks.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 rounded-2xl p-1.5" style={glassStyle}>
+              {[{ key: "all", label: "All" }, ...EVENT_GROUPS].map((g) => (
+                <button
+                  key={g.key}
+                  onClick={() => setGroupFilter(g.key)}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-[11px] uppercase tracking-wider font-medium transition",
+                    groupFilter === g.key
+                      ? "bg-secondary-container/40 border border-secondary/40 text-secondary"
+                      : "border border-transparent text-on-surface-variant hover:text-on-surface hover:bg-white/5",
+                  )}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <span className="material-symbols-outlined text-[16px] absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60">
+                search
+              </span>
+              <input
+                type="text"
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                placeholder="Filter by name…"
+                className="w-full rounded-xl pl-9 pr-3 py-2 text-xs bg-surface-container-low border-[0.5px] border-outline-variant text-on-surface outline-none focus:border-primary/40"
+              />
+            </div>
+            <span className="text-[11px] text-on-surface-variant/60 ml-auto">
+              {filtered.length} of {hooks.length}
+            </span>
+          </div>
+        )}
+
         {/* List */}
         {loading ? (
           <div className="text-center py-16 text-sm text-on-surface-variant/60">
             Loading hooks…
           </div>
         ) : hooks.length === 0 ? (
-          <div
-            className="text-center py-12 rounded-2xl"
-            style={glassCard}
+          <EmptyState
+            icon="webhook"
+            title="No hooks registered"
+            hint="A common starter is the slack-approval built-in on PreToolUse — it routes destructive-tool approvals through your existing Slack #soc-ops channel with just a webhook URL."
           >
-            <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-2 inline-block">
-              webhook
-            </span>
-            <p className="text-sm font-medium text-on-surface mb-1">
-              No hooks registered.
-            </p>
-            <p className="text-xs text-on-surface-variant/60 max-w-md mx-auto leading-relaxed">
-              Add your first hook above. A common starter is the{" "}
-              <span className="font-mono">slack-approval</span> built-in
-              on PreToolUse — installs in seconds with just a webhook URL,
-              routes destructive-tool approvals through your existing
-              Slack #soc-ops channel.
-            </p>
-          </div>
+            <button
+              type="button"
+              onClick={openNewHook}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-medium hover:opacity-90 transition"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Add your first hook
+            </button>
+          </EmptyState>
+        ) : filtered.length === 0 ? (
+          <EmptyState icon="filter_alt_off" title="No hooks match the filter" hint="Clear the filter to see all registered hooks." />
         ) : (
           <div className="grid gap-3">
-            {hooks.map((h) => (
+            {filtered.map((h) => (
               <HookRowCard
                 key={h.id}
                 hook={h}
@@ -294,33 +380,32 @@ function HookRowCard({
   onDelete: () => void;
 }) {
   const enabled = hook.enabled !== false;
-  const transportLabel =
-    hook.transport.type === "http"
-      ? `HTTP ${truncate(hook.transport.url, 60)}`
-      : hook.transport.type === "command"
-        ? `cmd ${truncate(hook.transport.command, 60)}`
-        : hook.transport.type === "agent"
-          ? `tool ${hook.transport.toolName}`
-          : hook.transport.type === "plugin"
-            ? `plugin ${hook.transport.handlerName}`
-            : `builtin ${hook.transport.name}`;
-  const transportBadge =
-    hook.transport.type === "builtin"
-      ? { label: "built-in", className: "bg-secondary/15 text-secondary" }
-      : hook.transport.type === "http"
-        ? { label: "http", className: "bg-primary/10 text-primary" }
-        : hook.transport.type === "command"
-          ? { label: "cmd", className: "bg-tertiary/10 text-tertiary" }
-          : hook.transport.type === "plugin"
-            ? { label: "plugin", className: "bg-tertiary/15 text-tertiary" }
-            : { label: "agent", className: "bg-on-surface-variant/15 text-on-surface-variant" };
+  const t = hook.transport;
+  const transportDetail =
+    t.type === "http"
+      ? truncate(t.url, 64)
+      : t.type === "command"
+        ? truncate(t.command, 64)
+        : t.type === "agent"
+          ? t.toolName
+          : t.type === "plugin"
+            ? t.handlerName
+            : t.name;
+  const transportTone =
+    t.type === "builtin"
+      ? "text-secondary border-secondary/40 bg-secondary/10"
+      : t.type === "http"
+        ? "text-primary border-primary/40 bg-primary/10"
+        : t.type === "command"
+          ? "text-tertiary border-tertiary/40 bg-tertiary/10"
+          : "text-on-surface-variant border-outline-variant bg-surface-container-high";
   return (
     <div
       className={cn(
-        "rounded-2xl p-4 flex items-start gap-4 transition-opacity",
+        "rounded-2xl p-5 flex items-start gap-4 transition-opacity",
         !enabled && "opacity-60",
       )}
-      style={glassCard}
+      style={glassStyle}
     >
       <button
         type="button"
@@ -341,43 +426,28 @@ function HookRowCard({
         />
       </button>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
           <span className="font-mono text-sm font-semibold text-on-surface truncate">
             {hook.name || "(unnamed)"}
           </span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/15 text-primary">
-            {hook.event}
-          </span>
-          <span
-            className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded", transportBadge.className)}
-            title={`Transport: ${hook.transport.type}`}
-          >
-            {transportBadge.label}
-          </span>
-          {hook.matcher?.toolGlob && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-tertiary/15 text-tertiary">
-              tool:{hook.matcher.toolGlob}
-            </span>
-          )}
+          <Badge tone="text-primary border-primary/40 bg-primary/10">{hook.event}</Badge>
+          <Badge tone={transportTone}>{transportKindLabel(t.type)}</Badge>
           {hook.failurePolicy === "block" && (
-            <span
-              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-error/15 text-error"
-              title="Hook errors deny the gated action"
-            >
-              fail-closed
-            </span>
+            <Badge tone="text-error border-error/40 bg-error/10">fail-closed</Badge>
           )}
-          <span className="text-[10px] font-mono text-on-surface-variant/60 ml-auto">
-            priority {hook.priority ?? 100}
-          </span>
         </div>
         {hook.description && (
           <p className="text-xs text-on-surface-variant mb-1.5">
             {hook.description}
           </p>
         )}
-        <div className="text-[11px] text-on-surface-variant/70 font-mono">
-          {transportLabel}
+        <div className="text-[11px] text-on-surface-variant/70 font-mono truncate">
+          {transportKindLabel(t.type)} · {transportDetail}
+        </div>
+        <div className="flex items-center gap-3 mt-1.5 text-[10px] uppercase tracking-wider text-on-surface-variant/50">
+          {hook.matcher?.toolGlob && <span>tool: {hook.matcher.toolGlob}</span>}
+          {hook.matcher?.triggerPrefix && <span>trigger: {hook.matcher.triggerPrefix}</span>}
+          <span>priority {hook.priority ?? 100}</span>
         </div>
       </div>
       <div className="flex flex-col gap-1.5 shrink-0">
@@ -418,6 +488,7 @@ function HookEditor({
   const [draft, setDraft] = useState<HookRow>(hook);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"meta" | "match" | "transport" | "exec">("meta");
   // Builtin catalog — fetched once on editor open. Empty array while
   // loading + safe to render "no builtins available" if the fetch fails.
   const [builtins, setBuiltins] = useState<BuiltinSpecMeta[]>([]);
@@ -474,10 +545,12 @@ function HookEditor({
   const handleSave = useCallback(async () => {
     setError(null);
     if (!draft.name.trim()) {
+      setTab("meta");
       setError("Name is required.");
       return;
     }
     if (draft.transport.type === "http" && !draft.transport.url.trim()) {
+      setTab("transport");
       setError("HTTP transport requires a url.");
       return;
     }
@@ -485,6 +558,7 @@ function HookEditor({
       draft.transport.type === "command" &&
       !draft.transport.command.trim()
     ) {
+      setTab("transport");
       setError("Command transport requires a command.");
       return;
     }
@@ -493,6 +567,7 @@ function HookEditor({
       // discriminator (TS doesn't carry narrowing across `.find()` lambdas).
       const builtinTransport = draft.transport;
       if (!builtinTransport.name) {
+        setTab("transport");
         setError("Built-in transport requires a name selection.");
         return;
       }
@@ -517,6 +592,7 @@ function HookEditor({
     }
     if (draft.transport.type === "plugin") {
       if (!draft.transport.handlerName?.trim()) {
+        setTab("transport");
         setError("Plugin transport requires a handler-name selection.");
         return;
       }
@@ -555,24 +631,39 @@ function HookEditor({
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-xl h-full overflow-y-auto p-6 space-y-4 custom-scrollbar"
         style={{
-          background: "var(--m3-surface-container)",
+          background: "var(--glass-bg-strong)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
           borderLeft: "0.5px solid var(--glass-border)",
         }}
       >
         <div className="flex items-center justify-between">
-          <h2 className="font-headline text-xl font-bold text-on-surface">
-            {isNew ? "New hook" : "Edit hook"}
+          <h2 className="font-headline text-xl font-bold text-on-surface truncate">
+            {isNew ? "Creating new hook…" : `Editing ${draft.name || "hook"}`}
           </h2>
           <button
             type="button"
             onClick={onCancel}
             aria-label="Close editor"
-            className="p-1.5 rounded hover:bg-white/5 text-on-surface-variant hover:text-on-surface"
+            className="p-1.5 rounded hover:bg-white/5 text-on-surface-variant hover:text-on-surface shrink-0"
           >
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
         </div>
 
+        <InvestigationTabBar
+          tabs={[
+            { key: "meta", label: "Metadata", icon: "badge" },
+            { key: "match", label: "Matching", icon: "filter_alt" },
+            { key: "transport", label: "Transport", icon: "swap_horiz" },
+            { key: "exec", label: "Execution", icon: "bolt" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+
+        {tab === "meta" && (
+        <>
         <Field label="Name">
           <input
             type="text"
@@ -591,7 +682,11 @@ function HookEditor({
             className="input-base"
           />
         </Field>
+        </>
+        )}
 
+        {tab === "match" && (
+        <>
         <Field label="Event">
           <select
             value={draft.event}
@@ -637,7 +732,11 @@ function HookEditor({
             placeholder="e.g. job: (only fires for scheduled runs)"
           />
         </Field>
+        </>
+        )}
 
+        {tab === "transport" && (
+        <>
         <Field label="Transport">
           <select
             value={draft.transport.type}
@@ -813,7 +912,11 @@ function HookEditor({
             }
           />
         )}
+        </>
+        )}
 
+        {tab === "exec" && (
+        <>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Priority (lower runs first)">
             <input
@@ -857,6 +960,8 @@ function HookEditor({
             <option value="block">block — deny on error (strict)</option>
           </select>
         </Field>
+        </>
+        )}
 
         {error && (
           <div className="rounded-xl border border-error/30 bg-error/10 p-3 text-xs text-error">

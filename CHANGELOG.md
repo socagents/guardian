@@ -10,6 +10,29 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.4] (unreleased) — *Hooks page modernization*
+
+The `/settings/hooks` CRUD views get the same polished, glass, Material-3 treatment as the Investigation pages. Pure UI — no change to the hook engine, transports, events, or the stored hook shape.
+
+### What ships
+
+- **Summary cards** — the page opens with four stat cards: total hooks · enabled · disabled · fail-closed (computed from the existing hook list, no new fetch).
+- **Filter bar** — event-group chips (Tool · Prompt · Compaction · Run · Subagent · Other) + a name filter over the in-memory list, with an "N of M" count.
+- **Slimmer hook rows** — each row now leads with three at-a-glance badges (event · transport · fail-closed), demoting the tool glob / trigger / priority to a muted second line; shared glass styling.
+- **Tabbed editor drawer** — the create/edit drawer is now a glass panel with its fields grouped into tabs (Metadata · Matching · Transport · Execution), so a hook is configured one concern at a time instead of one long column. Validation jumps to the tab holding the offending field.
+- **Shared empty state** — the "no hooks" view uses the standard glass empty-state with an "Add your first hook" CTA.
+- The descriptive one-liner under the title is unchanged in wording but renders as a tight single descriptor rather than a wrapped block.
+
+### Files
+
+- `mcp/agent/app/settings/hooks/page.tsx` (reuses `components/investigation/ui.tsx` primitives: `glassStyle`, `Badge`, `StatCard`, `EmptyState`, `InvestigationTabBar`). Docs: `app/help/user/page.tsx#hooks-ux`, `CHANGELOG.md`, `lib/release-notes.ts`. See [#18](https://github.com/kite-production/guardian/issues/18).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); no storage/engine change; volumes preserved. Patch bump (v0.2.4).
+
+---
+
 ## [v0.2.3] (unreleased) — *Investigation diagram hardening*
 
 Hardening pass over the v0.2.1/v0.2.2 diagram + relations work, from a post-release adversarial code review. No new feature surface — correctness, robustness, and doc-accuracy fixes.

@@ -3330,6 +3330,16 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </Link>
               .
             </p>
+            <p>
+              <strong>The page (v0.2.4)</strong> opens with summary cards
+              (total · enabled · disabled · fail-closed), an event-group +
+              name filter over the hook list, and slimmed hook rows showing
+              the event, transport, and a fail-closed flag at a glance. The
+              create/edit drawer groups its fields into tabs —{" "}
+              <Term>Metadata</Term>, <Term>Matching</Term>,{" "}
+              <Term>Transport</Term>, <Term>Execution</Term> — so a hook is
+              configured one concern at a time.
+            </p>
 
             <SubSection icon="bolt" title="The event taxonomy">
               <p>

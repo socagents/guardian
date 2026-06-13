@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.4",
+    date: "2026-06-13",
+    title: "Hooks page modernized — stat cards, filters, tabbed editor.",
+    highlights: [
+      "The /settings/hooks page gets summary cards (total / enabled / disabled / fail-closed) and an event + name filter.",
+      "Hook rows are slimmer — event, transport, and fail-closed at a glance.",
+      "The create/edit drawer is now a glass panel with tabbed fields (Metadata · Matching · Transport · Execution).",
+      "Pure UI polish — no change to the hook engine, transports, or events.",
+    ],
+  },
+  {
     version: "0.2.3",
     date: "2026-06-13",
     title: "Investigation diagram hardening — no more silent spinners.",
