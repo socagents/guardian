@@ -10,6 +10,33 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.1] (unreleased) — *Relations canvas + STIX indicator attribution*
+
+A STIX relationship layer over the Investigation module: Guardian records typed edges between indicators and other entities, attributes IoCs to techniques / malware / campaigns / actors, and draws an on-demand **Relations canvas** per issue — the relational companion to the causal Attack chain.
+
+### What ships
+
+- **Relations canvas** — the issue detail gains a **Relations** tab: a self-contained, layered STIX graph of the issue's indicators and how they relate to each other and to ATT&CK techniques, malware, campaigns, and threat-actors. Generated on demand (button) like the Attack chain, via a one-shot agent pass; rendered sandboxed as an `<img>` data-URI.
+- **Indicator attribution** — a new agent action `indicator_relate` records a STIX-style edge from an indicator to a target (another IoC, an ATT&CK technique, a malware/tool, a campaign, an intrusion-set, or a threat-actor). The verb (`resolves-to`, `indicates`, `attributed-to`, `uses`, …) is a STIX verb stored verbatim, so it round-trips with XSOAR's EntityRelationship enum + MITRE ATT&CK. Edges are deduped by (source, verb, target).
+- **Relationships on the indicator** — the Indicator detail gains a **Relationships** section listing every edge from that IoC (source → verb → target, with the target's STIX type).
+- **Skill wiring** — the `xsoar_case_investigation` lifecycle now records relationships as it attributes (Step 6) and draws the relations canvas at resolve; a new `svg_relation_graph` skill carries the layout + safety contract (mirrors `svg_attack_chain`).
+- **Agent tools** (catalog side — no secrets): `indicator_relate` · `issue_set_relation_graph`. The relations canvas SVG + the indicator's relationships ride on the existing issue/indicator detail REST + proxies.
+
+### Storage
+
+Additive to `investigations.db`: a new `relationships` table (STIX edges, unique on `(source_id, relationship_type, target_value, target_type)`) + a `relations_canvas_svg` column on `issues`, both created on boot via `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE … ADD COLUMN` (no destructive migration; existing data untouched).
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/investigation_store.py` (`relationships` table + `relations_canvas_svg` column + `add_relationship`/`list_relationships`/`set_relations_canvas`/`get_relations_canvas`) + `builtin_components/indicator_tools.py` (`indicator_relate` + relationships on `indicator_get`) + `builtin_components/investigation_tools.py` (`issue_set_relation_graph`) + `connector_loader.py` + `api/investigation.py` + `skills/workflows/svg_relation_graph.md` (new) + `skills/workflows/xsoar_case_investigation.md` (attribution + canvas wiring). +9 tests.
+- `mcp/agent/lib/api/investigation.ts` (`Relationship` type + `relations_canvas_svg` + target-type/verb helpers), `app/investigation/issues/[id]/page.tsx` (Relations tab + shared `DiagramTab` + generalized regenerate), `app/investigation/indicators/[id]/page.tsx` (Relationships section). See [#15](https://github.com/kite-production/guardian/issues/15).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); additive table + column (volumes preserved); no installer change. Patch bump (v0.2.1).
+
+---
+
 ## [v0.2.0] (unreleased) — *Indicators module + per-issue-type layouts*
 
 A third Investigation object — **Indicators** (IoCs) — plus issue layouts tailored to each incident type. Guardian now keeps a deduped, cross-referenced record of every indicator it sees.

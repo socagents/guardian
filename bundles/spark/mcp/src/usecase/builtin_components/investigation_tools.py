@@ -209,6 +209,44 @@ def issue_set_attack_chain(issue_id: str, svg: str) -> dict[str, Any]:
     return {"ok": True, "issue_id": issue_id, "bytes": len(cleaned)}
 
 
+def issue_set_relation_graph(issue_id: str, svg: str) -> dict[str, Any]:
+    """Attach a relations-canvas diagram to an Issue as an SVG.
+
+    Record a STIX-style relations graph for the issue — its indicators and the
+    entities they relate to (other IoCs, ATT&CK techniques, malware, campaigns,
+    threat-actors), edges labelled by the STIX relationship verb. Rendered on
+    the Issue's "Relations" tab.
+
+    Produce the SVG per the `svg_relation_graph` skill: SELF-CONTAINED (inline
+    styles + a single <style> block only, NO <script>, NO external refs,
+    XML-escaped labels), layered by STIX node type with verb-labelled edges.
+    Rendered sandboxed as an <img> data-URI.
+
+    Args:
+        issue_id: The Issue id.
+        svg: The full SVG markup, starting "<svg" and ending "</svg>".
+
+    Returns: {"ok": true, "issue_id": ..., "bytes": n} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    if not isinstance(svg, str):
+        return {"error": "svg must be a string"}
+    cleaned = svg.strip()
+    low = cleaned.lower()
+    if "<svg" not in low or "</svg>" not in low:
+        return {"error": "svg must be SVG markup containing <svg> … </svg>"}
+    if len(cleaned) > 256_000:
+        return {"error": f"svg too large ({len(cleaned)} bytes; cap 256000)"}
+    cleaned = re.sub(r"<script\b[^>]*>.*?</script>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"\son\w+\s*=\s*\"[^\"]*\"", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\son\w+\s*=\s*'[^']*'", "", cleaned, flags=re.IGNORECASE)
+    if not s.set_relations_canvas(issue_id, cleaned):
+        return {"error": f"issue {issue_id!r} not found"}
+    return {"ok": True, "issue_id": issue_id, "bytes": len(cleaned)}
+
+
 def issues_list(status: str | None = None, case_id: str | None = None) -> dict[str, Any]:
     """List Issues, optionally filtered by status or case.
 

@@ -10,6 +10,9 @@ import {
   kindLabel,
   INDICATOR_TYPE_ICON,
   STATUS_TOKENS,
+  relationTargetIcon,
+  relationTargetLabel,
+  relationVerbTone,
   type IndicatorDetail,
 } from "@/lib/api/investigation";
 import { glassStyle, Badge, EmptyState, fmtTs } from "@/components/investigation/ui";
@@ -106,6 +109,45 @@ export default function IndicatorDetailPage() {
       ) : (
         <div className="mb-6">
           <EmptyState icon="science" title="No enrichment recorded" hint="Guardian or XSOAR hasn't attached enrichment detail to this indicator yet." />
+        </div>
+      )}
+
+      {/* Relationships (STIX edges) — v0.2.1 */}
+      <h2 className="font-headline text-sm font-bold uppercase tracking-widest text-on-surface-variant mb-3">
+        Relationships{data.relationships?.length ? ` (${data.relationships.length})` : ""}
+      </h2>
+      {data.relationships && data.relationships.length > 0 ? (
+        <div className="grid grid-cols-1 gap-3 mb-6">
+          {data.relationships.map((r) => (
+            <div key={r.id} className="rounded-xl p-4 flex items-center gap-3 flex-wrap" style={glassStyle}>
+              {/* source (this indicator) → verb → target */}
+              <span className="inline-flex items-center gap-1.5 font-mono text-xs text-on-surface truncate max-w-[40%]">
+                <span className="material-symbols-outlined text-[16px] text-primary">{INDICATOR_TYPE_ICON[data.type] ?? "fingerprint"}</span>
+                {data.value}
+              </span>
+              <Badge tone={relationVerbTone(r.relationship_type)}>{r.relationship_type}</Badge>
+              <span className="material-symbols-outlined text-[16px] text-on-surface-variant/60">arrow_forward</span>
+              <span className="inline-flex items-center gap-1.5 text-sm text-on-surface min-w-0">
+                <span className="material-symbols-outlined text-[16px] text-tertiary">{relationTargetIcon(r.target_type)}</span>
+                <span className="font-medium truncate">{r.target_value}</span>
+                <span className="text-[10px] uppercase tracking-wider text-on-surface-variant/70">{relationTargetLabel(r.target_type)}</span>
+              </span>
+              {r.description && (
+                <span className="text-[11px] text-on-surface-variant/80 basis-full">{r.description}</span>
+              )}
+              <span className="text-[11px] text-on-surface-variant/50 ml-auto whitespace-nowrap">
+                {r.source} · {fmtTs(r.last_seen)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mb-6">
+          <EmptyState
+            icon="hub"
+            title="No relationships recorded"
+            hint="Guardian records STIX relationships (resolves-to, indicates, attributed-to, uses…) as it attributes this indicator. They also feed the issue's Relations canvas."
+          />
         </div>
       )}
 

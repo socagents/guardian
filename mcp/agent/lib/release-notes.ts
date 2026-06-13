@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.1",
+    date: "2026-06-13",
+    title: "Relations canvas — STIX indicator attribution + a relationship graph per issue.",
+    highlights: [
+      "New Relations tab on each issue: a STIX graph of its indicators and how they relate to techniques, malware, campaigns, and actors.",
+      "Guardian attributes indicators — resolves-to, indicates, uses, attributed-to — using STIX verbs that round-trip with XSOAR + MITRE ATT&CK.",
+      "Each indicator's detail now lists its relationships (source → verb → target).",
+      "Draw the relations canvas on demand from the tab, just like the attack chain.",
+    ],
+  },
+  {
     version: "0.2.0",
     date: "2026-06-13",
     title: "Indicators — a deduped IoC record across investigations.",

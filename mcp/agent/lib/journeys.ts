@@ -3913,6 +3913,70 @@ export const JOURNEYS: Journey[] = [
     components: ["investigation", "xsoar", "connectors"],
   },
 
+  {
+    id: "investigation-relations-canvas",
+    category: "connectors",
+    title: "Attribute indicators + draw the Relations canvas",
+    summary:
+      "On a resolved Issue, attribute its indicators with STIX relationships (indicator_relate) and draw the on-demand Relations canvas — a layered graph of the IoCs and how they relate to each other and to ATT&CK techniques, malware, campaigns, and actors. The relational companion to the causal Attack chain. The edges show on each indicator's detail; the canvas renders on the issue's Relations tab.",
+    difficulty: "intermediate",
+    durationMin: 6,
+    icon: "hub",
+    prompts: [
+      {
+        text: "For Guardian issue <id>, attribute the indicators: record the STIX relationships the evidence supports (domain resolves-to the IP, the URL indicates the malware, attributed-to the actor if research supports it).",
+        note: "Exercises indicator_relate — one STIX edge per relationship, deduped by (source, verb, target). Verbs are STIX verbs stored verbatim so they round-trip with XSOAR's EntityRelationship + MITRE ATT&CK.",
+      },
+      {
+        text: "Now draw the relations canvas for that issue.",
+        note: "Exercises issue_set_relation_graph via the svg_relation_graph skill — the agent reads the indicators + their relationships and emits a self-contained layered SVG. Equivalent to clicking Generate on the issue's Relations tab.",
+      },
+    ],
+    toolsExercised: [
+      "indicators_list",
+      "indicator_get",
+      "indicator_relate",
+      "issue_set_relation_graph",
+    ],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/agent/indicators/{id}",
+        description:
+          "Returns one indicator with the issues it appears in AND its relationships[] (STIX edges). The Indicator detail's Relationships section reads from here. MCP_TOKEN bearer; catalog domain — no SecretStore access.",
+      },
+      {
+        method: "GET",
+        path: "/api/agent/issues/{id}",
+        description:
+          "Issue detail now carries relations_canvas_svg (the STIX relations graph) alongside attack_chain_svg. Null until the agent draws one; the Relations tab renders it sandboxed as an <img> data-URI.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/jobs",
+        description:
+          "The Relations tab's Generate/Regenerate button fires a one-shot, bypass_approvals agent job pinned to the svg_relation_graph skill; the page polls the issue until relations_canvas_svg changes. Same pattern as the Attack-chain tab.",
+      },
+    ],
+    howToTest: [
+      "Pick a resolved Issue that has 2+ indicators (e.g. a phishing case with a domain + an IP + a URL).",
+      "Open a chat. Paste prompt 1 with the issue id. The agent calls indicator_relate for each supported edge and confirms the relationships recorded.",
+      "Open /investigation/indicators and click one of those indicators. The Relationships section lists the edges (source → verb → target).",
+      "Open the Issue detail → Relations tab. Click Generate diagram (or paste prompt 2). After ~1 min the layered STIX canvas renders.",
+      "Click Regenerate on the Relations tab — the canvas redraws from the current relationships.",
+    ],
+    expectedResult:
+      "Indicators carry STIX relationships visible on their detail page, and the Issue's Relations tab renders a self-contained layered graph of the IoCs and their relationships to techniques / malware / campaigns / actors. The canvas is generated on demand and regenerable, exactly like the Attack chain.",
+    verifyVia: [
+      "GET /api/agent/indicators/<id> → relationships[] carries the recorded edges (relationship_type, target_value, target_type)",
+      "GET /api/agent/issues/<id> → relations_canvas_svg is non-null after generation",
+      "/investigation/issues/<id> → Relations tab renders the SVG; /investigation/indicators/<id> → Relationships section lists the edges",
+      "docker exec guardian_agent sqlite3 /app/data/investigations.db 'SELECT relationship_type, target_value, target_type FROM relationships' → the persisted edges",
+    ],
+    related: ["investigate-to-issue"],
+    components: ["investigation", "xsoar", "connectors"],
+  },
+
   // [guardian v0.1.0] Retired: ops-list-stop-*-workers — the synthetic
   // log-worker registry shipped with the removed log-generation engine.
 

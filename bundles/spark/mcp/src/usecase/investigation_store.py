@@ -176,6 +176,7 @@ class InvestigationStore:
                     conclusions     TEXT,
                     next_steps      TEXT,
                     attack_chain_svg TEXT,
+                    relations_canvas_svg TEXT,
                     created_at      TEXT NOT NULL,
                     updated_at      TEXT NOT NULL
                 )
@@ -233,6 +234,29 @@ class InvestigationStore:
                 """
             )
             c.execute("CREATE INDEX IF NOT EXISTS idx_ind_issues_issue ON indicator_issues(issue_id)")
+            # v0.2.1 — relations canvas SVG on issues (migrate existing dbs) +
+            # a generic STIX-style edge table (one Relationship-SRO analog).
+            issue_cols2 = {r["name"] for r in c.execute("PRAGMA table_info(issues)")}
+            if "relations_canvas_svg" not in issue_cols2:
+                c.execute("ALTER TABLE issues ADD COLUMN relations_canvas_svg TEXT")
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS relationships (
+                    id                TEXT PRIMARY KEY,
+                    source_id         TEXT NOT NULL,
+                    source_type       TEXT NOT NULL,
+                    target_value      TEXT NOT NULL,
+                    target_type       TEXT NOT NULL,
+                    relationship_type TEXT NOT NULL,
+                    description       TEXT,
+                    source            TEXT NOT NULL DEFAULT 'guardian',
+                    first_seen        TEXT NOT NULL,
+                    last_seen         TEXT NOT NULL,
+                    UNIQUE(source_id, relationship_type, target_value, target_type)
+                )
+                """
+            )
+            c.execute("CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_id)")
 
     # ─── Issues ────────────────────────────────────────────────────
 
@@ -607,6 +631,76 @@ class InvestigationStore:
                 (issue_id,),
             ).fetchall()
         return [self._row_to_indicator(r) for r in rows]
+
+    # ─── Relationships (STIX edges) + relations canvas ─────────────
+
+    def add_relationship(
+        self,
+        source_id: str,
+        source_type: str,
+        target_value: str,
+        target_type: str,
+        relationship_type: str,
+        description: str | None = None,
+        source: str = "guardian",
+    ) -> dict:
+        """Upsert a STIX-style edge, deduped by (source_id, relationship_type,
+        target_value, target_type). Re-asserting bumps last_seen. The
+        relationship_type is the STIX verb stored verbatim (resolves-to,
+        communicates-with, indicates, attributed-to, uses, related-to, …)."""
+        if not (source_id and target_value and target_type and relationship_type):
+            raise ValueError("source_id, target_value, target_type, relationship_type are required")
+        ts = _now()
+        with self._lock, self._conn() as c:
+            row = c.execute(
+                "SELECT id FROM relationships WHERE source_id=? AND relationship_type=? "
+                "AND target_value=? AND target_type=?",
+                (source_id, relationship_type, target_value, target_type),
+            ).fetchone()
+            if row:
+                rid = row["id"]
+                c.execute(
+                    "UPDATE relationships SET last_seen=?, "
+                    "description=COALESCE(?, description), source=? WHERE id=?",
+                    (ts, description, source or "guardian", rid),
+                )
+            else:
+                rid = str(uuid.uuid4())
+                c.execute(
+                    "INSERT INTO relationships (id, source_id, source_type, target_value, "
+                    "target_type, relationship_type, description, source, first_seen, last_seen) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (rid, source_id, source_type, target_value, target_type,
+                     relationship_type, description, source or "guardian", ts, ts),
+                )
+            r = c.execute("SELECT * FROM relationships WHERE id=?", (rid,)).fetchone()
+        return dict(r)
+
+    def list_relationships(self, source_id: str | None = None) -> list[dict]:
+        with self._lock, self._conn() as c:
+            if source_id:
+                rows = c.execute(
+                    "SELECT * FROM relationships WHERE source_id=? ORDER BY last_seen DESC",
+                    (source_id,),
+                ).fetchall()
+            else:
+                rows = c.execute("SELECT * FROM relationships ORDER BY last_seen DESC").fetchall()
+        return [dict(r) for r in rows]
+
+    def set_relations_canvas(self, issue_id: str, svg: str | None) -> bool:
+        with self._lock, self._conn() as c:
+            cur = c.execute(
+                "UPDATE issues SET relations_canvas_svg=?, updated_at=? WHERE id=?",
+                (svg, _now(), issue_id),
+            )
+        return cur.rowcount > 0
+
+    def get_relations_canvas(self, issue_id: str) -> str | None:
+        with self._lock, self._conn() as c:
+            row = c.execute(
+                "SELECT relations_canvas_svg FROM issues WHERE id=?", (issue_id,)
+            ).fetchone()
+        return row["relations_canvas_svg"] if row else None
 
     # ─── Row mappers ───────────────────────────────────────────────
 

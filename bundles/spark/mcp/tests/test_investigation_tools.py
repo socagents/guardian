@@ -129,3 +129,48 @@ def test_indicator_upsert_rejects_empty(wired):
 def test_indicator_get_missing(wired):
     from usecase.builtin_components import indicator_tools as ind
     assert "error" in ind.indicator_get("nope")
+
+
+def test_indicator_relate_flow_and_appears_on_detail(wired):
+    from usecase.builtin_components import indicator_tools as ind
+    iid = it.issue_create(title="x", kind="phishing")["issue"]["id"]
+    src = ind.indicator_upsert(value="evil.com", type="domain", issue_id=iid)["indicator"]["id"]
+    r = ind.indicator_relate(
+        indicator_id=src, relationship_type="attributed-to",
+        target="APT-X", target_type="threat-actor", description="campaign overlap",
+    )
+    assert "relationship" in r
+    assert r["relationship"]["relationship_type"] == "attributed-to"
+    assert r["relationship"]["target_value"] == "APT-X"
+    # the edge rides on the indicator detail
+    det = ind.indicator_get(src)
+    assert det["indicator"]["relationships"][0]["target_value"] == "APT-X"
+
+
+def test_indicator_relate_missing_indicator(wired):
+    from usecase.builtin_components import indicator_tools as ind
+    assert "error" in ind.indicator_relate(
+        indicator_id="nope", relationship_type="uses",
+        target="T1071", target_type="attack-pattern",
+    )
+
+
+def test_issue_set_relation_graph_round_trip(wired):
+    iid = it.issue_create(title="x", kind="phishing")["issue"]["id"]
+    svg = '<svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+    res = it.issue_set_relation_graph(iid, svg)
+    assert res.get("ok") is True and res["bytes"] > 0
+    assert wired.get_relations_canvas(iid) == svg
+
+
+def test_issue_set_relation_graph_strips_active_content_and_validates(wired):
+    iid = it.issue_create(title="x")["issue"]["id"]
+    assert "error" in it.issue_set_relation_graph(iid, "not an svg")
+    svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect onload="x()"/></svg>'
+    assert it.issue_set_relation_graph(iid, svg).get("ok") is True
+    stored = wired.get_relations_canvas(iid).lower()
+    assert "<script" not in stored and "onload" not in stored
+
+
+def test_issue_set_relation_graph_missing_issue(wired):
+    assert "error" in it.issue_set_relation_graph("nope", '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>')

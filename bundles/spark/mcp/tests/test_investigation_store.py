@@ -234,3 +234,70 @@ def test_upsert_indicator_requires_value_and_type(store):
 
 def test_get_missing_indicator_returns_none(store):
     assert store.get_indicator("nope") is None
+
+
+# ─── Relationships (STIX edges) + relations canvas ───────────────────
+
+
+def test_add_relationship_dedups_and_bumps_last_seen(store):
+    i = store.create_issue(title="a", kind="phishing")
+    ind = store.upsert_indicator("evil.com", "domain", issue_id=i.id)
+    e1 = store.add_relationship(
+        source_id=ind.id, source_type="indicator",
+        target_value="185.234.219.12", target_type="indicator",
+        relationship_type="resolves-to",
+    )
+    assert e1["source_id"] == ind.id
+    assert e1["relationship_type"] == "resolves-to"
+    assert e1["target_value"] == "185.234.219.12"
+    assert e1["source"] == "guardian"
+    first_seen = e1["first_seen"]
+    # re-asserting the SAME edge dedups (same id) + keeps existing description
+    e2 = store.add_relationship(
+        source_id=ind.id, source_type="indicator",
+        target_value="185.234.219.12", target_type="indicator",
+        relationship_type="resolves-to", description="A-record",
+    )
+    assert e2["id"] == e1["id"]
+    assert e2["first_seen"] == first_seen  # unchanged
+    assert e2["description"] == "A-record"
+    rels = store.list_relationships(ind.id)
+    assert len(rels) == 1
+
+
+def test_add_relationship_requires_core_fields(store):
+    i = store.create_issue(title="a", kind="phishing")
+    ind = store.upsert_indicator("evil.com", "domain", issue_id=i.id)
+    with pytest.raises(ValueError):
+        store.add_relationship(
+            source_id=ind.id, source_type="indicator",
+            target_value="", target_type="indicator", relationship_type="resolves-to",
+        )
+
+
+def test_list_relationships_scopes_by_source(store):
+    i = store.create_issue(title="a", kind="phishing")
+    a = store.upsert_indicator("evil.com", "domain", issue_id=i.id)
+    b = store.upsert_indicator("8.8.8.8", "ip", issue_id=i.id)
+    store.add_relationship(source_id=a.id, source_type="indicator",
+                           target_value="T1566.002", target_type="attack-pattern",
+                           relationship_type="uses")
+    store.add_relationship(source_id=b.id, source_type="indicator",
+                           target_value="APT-X", target_type="threat-actor",
+                           relationship_type="attributed-to")
+    assert len(store.list_relationships()) == 2  # all
+    assert {r["source_id"] for r in store.list_relationships(a.id)} == {a.id}
+
+
+def test_relations_canvas_set_and_get(store):
+    issue = store.create_issue(title="x", kind="phishing")
+    assert store.get_relations_canvas(issue.id) is None
+    assert store.set_relations_canvas(issue.id, "<svg/>") is True
+    assert store.get_relations_canvas(issue.id) == "<svg/>"
+    # rides only on the detail path, never the lean Issue DTO/list
+    assert not hasattr(store.list_issues()[0], "relations_canvas_svg")
+
+
+def test_relations_canvas_missing_issue(store):
+    assert store.set_relations_canvas("nope", "<svg/>") is False
+    assert store.get_relations_canvas("nope") is None

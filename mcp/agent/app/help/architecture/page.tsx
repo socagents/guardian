@@ -6218,29 +6218,47 @@ function Investigation() {
  persists to <Code>investigations.db</Code> in the data root. It is{" "}
  <Term>catalog-domain</Term> state — no SecretStore values, no
  credentials — which is why the agent is permitted to read and mutate
- it (see the credential-guardrail subsection below). Three tables:
+ it (see the credential-guardrail subsection below). Six tables:
  </p>
  <Pre>{`investigations.db  (DATA_ROOT/ — SQLite, catalog domain)
- ├── issues         Guardian's own investigation records
+ ├── issues          Guardian's own investigation records
  │     id, title, status, severity,
  │     summary, scope, recommendations,
  │     conclusions, next_steps,
- │     source_ref   -- the XSOAR incident id this Issue tracks
- │     case_id      -- FK → cases.id (one-to-many issue→case)
- ├── cases          named groupings of related issues
+ │     source_ref          -- the XSOAR incident id this Issue tracks
+ │     case_id             -- FK → cases.id (one-to-many issue→case)
+ │     attack_chain_svg    -- the causal diagram SVG (v0.1.8, nullable)
+ │     relations_canvas_svg-- the STIX relations graph SVG (v0.2.1, nullable)
+ ├── cases           named groupings of related issues
  │     id, title, status, ...
- └── issue_events   the per-issue activity timeline
-       id, issue_id, kind, body, created_at`}</Pre>
+ ├── issue_events    the per-issue activity timeline
+ │     id, issue_id, kind, body, created_at
+ ├── indicators      deduped IoCs (v0.2.0), unique by (value, type)
+ │     id, value, type, dbot_score, enrichment, source, first/last_seen
+ ├── indicator_issues  M:N linking indicators ↔ the issues they're seen in
+ │     indicator_id, issue_id
+ └── relationships   STIX edges (v0.2.1), unique by
+       (source_id, relationship_type, target_value, target_type)
+       id, source_id, source_type, target_value, target_type,
+       relationship_type   -- STIX verb: resolves-to, indicates, uses, attributed-to, …
+       description, source, first_seen, last_seen`}</Pre>
  <p>
  The <Code>issues.case_id</Code> foreign key encodes the one-to-many
  issue→case relationship; <Code>issue_events</Code> is the append-only
- activity log that backs an Issue&apos;s timeline.
+ activity log that backs an Issue&apos;s timeline;{" "}
+ <Code>indicator_issues</Code> is the many-to-many that lets one IoC
+ correlate across cases. The <Code>relationships</Code> table (v0.2.1)
+ holds <Term>STIX</Term>-style edges — one generic relationship row per
+ (source, verb, target), deduped on re-assertion — which back the
+ indicator-attribution and the per-issue Relations canvas. The two SVG
+ columns ride only on the issue <em>detail</em> read, never the lean
+ list.
  </p>
  </SubSection>
 
  <SubSection icon="api" title="Agent MCP tools — catalog side of the credential guardrail">
  <p>
- The agent reaches the module through nine MCP tools. They are on the{" "}
+ The agent reaches the module through fifteen MCP tools. They are on the{" "}
  <Term>catalog</Term> side of the credential guardrail, NOT the
  credential side: they touch only investigation metadata in{" "}
  <Code>investigations.db</Code> and never read, write, mint, or rotate
@@ -6252,12 +6270,23 @@ function Investigation() {
  <li>
  <strong>Issues</strong> — <Code>issue_create</Code>,{" "}
  <Code>issue_update</Code>, <Code>issue_add_event</Code>,{" "}
- <Code>issue_get</Code>, <Code>issues_list</Code>.
+ <Code>issue_get</Code>, <Code>issues_list</Code>, plus the two
+ diagram tools <Code>issue_set_attack_chain</Code> (v0.1.8) and{" "}
+ <Code>issue_set_relation_graph</Code> (v0.2.1) that store the
+ sandboxed SVGs.
  </li>
  <li>
  <strong>Cases</strong> — <Code>case_create</Code>,{" "}
  <Code>case_add_issue</Code>, <Code>cases_list</Code>,{" "}
  <Code>case_get</Code>.
+ </li>
+ <li>
+ <strong>Indicators</strong> (v0.2.0–v0.2.1) —{" "}
+ <Code>indicator_upsert</Code>, <Code>indicators_list</Code>,{" "}
+ <Code>indicator_get</Code>, and <Code>indicator_relate</Code> — the
+ attribution action that records a STIX edge from an indicator to
+ another IoC, an ATT&amp;CK technique, malware, a campaign, or a
+ threat-actor.
  </li>
  </ul>
  <p>
@@ -6281,23 +6310,33 @@ function Investigation() {
  <li>
  <strong>REST API</strong>:{" "}
  <Code>bundles/spark/mcp/src/api/investigation.py</Code> serves{" "}
- <Code>/api/v1/issues*</Code> and <Code>/api/v1/cases*</Code> under
- bearer <Code>MCP_TOKEN</Code> auth.
+ <Code>/api/v1/issues*</Code>, <Code>/api/v1/cases*</Code>, and{" "}
+ <Code>/api/v1/indicators*</Code> under bearer <Code>MCP_TOKEN</Code>{" "}
+ auth. The issue-detail GET carries <Code>attack_chain_svg</Code> +{" "}
+ <Code>relations_canvas_svg</Code>; the indicator-detail GET carries
+ the indicator&apos;s <Code>relationships</Code>.
  </li>
  <li>
  <strong>Next.js proxies</strong>:{" "}
- <Code>mcp/agent/app/api/agent/issues*</Code> and{" "}
- <Code>mcp/agent/app/api/agent/cases*</Code> forward (session-gated)
- to the embedded MCP.
+ <Code>mcp/agent/app/api/agent/issues*</Code>,{" "}
+ <Code>mcp/agent/app/api/agent/cases*</Code>, and{" "}
+ <Code>mcp/agent/app/api/agent/indicators*</Code> forward
+ (session-gated) to the embedded MCP — verbatim, so new detail fields
+ ride through without proxy changes.
  </li>
  <li>
  <strong>UI</strong>: the sidebar <Term>Investigation</Term> group
- links <Code>/investigation/issues</Code> and{" "}
- <Code>/investigation/cases</Code>. The Issue detail is a rich layout
- — status/severity controls; editable Summary, Scope,
- Recommendations, Conclusions, and Next-steps fields; the activity
- timeline; and case assignment. The Case detail shows its grouped
- Issues.
+ links <Code>/investigation/issues</Code>,{" "}
+ <Code>/investigation/cases</Code>, and{" "}
+ <Code>/investigation/indicators</Code>. The Issue detail is a
+ tabbed layout — status/severity controls; editable Summary, Scope,
+ Recommendations, Conclusions, and Next-steps fields; the Indicators
+ tab; the activity timeline; and the two diagram tabs,{" "}
+ <Term>Attack chain</Term> (causal) and <Term>Relations</Term>{" "}
+ (STIX graph), each generated on demand via a one-shot agent job and
+ rendered sandboxed as an <Code>&lt;img&gt;</Code> data-URI. The
+ Indicator detail shows reputation, enrichment, its relationships,
+ and every issue it appears in.
  </li>
  </ul>
  <p>
@@ -6308,9 +6347,10 @@ function Investigation() {
  <Code>/api/v1/issues|cases</Code> →{" "}
  <Code>investigation_store</Code> (<Code>investigations.db</Code>). The
  agent reaches the very same store on the other side during chat and
- jobs, via the <Code>issue_*</Code> / <Code>case_*</Code> MCP tools —
- one canonical store, two front doors (operator REST/proxy/UI and agent
- MCP tools), no SecretStore in either path.
+ jobs, via the <Code>issue_*</Code> / <Code>case_*</Code> /{" "}
+ <Code>indicator_*</Code> MCP tools — one canonical store, two front
+ doors (operator REST/proxy/UI and agent MCP tools), no SecretStore in
+ either path.
  </p>
  </SubSection>
  </Section>

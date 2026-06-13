@@ -97,9 +97,9 @@ def indicators_list(type: str | None = None, issue_id: str | None = None) -> dic
 
 
 def indicator_get(indicator_id: str) -> dict[str, Any]:
-    """Fetch one indicator with the issues it appears in.
+    """Fetch one indicator with the issues it appears in + its relationships.
 
-    Returns: {"indicator": {..., "issues": [{id,title,kind,status,source_ref}]}}
+    Returns: {"indicator": {..., "issues": [...], "relationships": [...]}}
     or {"error": ...}.
     """
     s, err = _store()
@@ -108,4 +108,53 @@ def indicator_get(indicator_id: str) -> dict[str, Any]:
     ind = s.get_indicator(indicator_id)
     if ind is None:
         return {"error": f"indicator {indicator_id!r} not found"}
+    ind["relationships"] = s.list_relationships(indicator_id)
     return {"indicator": ind}
+
+
+def indicator_relate(
+    indicator_id: str,
+    relationship_type: str,
+    target: str,
+    target_type: str,
+    description: str | None = None,
+) -> dict[str, Any]:
+    """Relate an indicator to another entity — the **attribution** action.
+
+    Record a STIX-style relationship from an indicator to a target: another
+    indicator, a MITRE ATT&CK technique, a malware/tool, a campaign, an
+    intrusion-set, or a threat-actor. Use it to attribute an IoC (e.g. an IP
+    `attributed-to` a threat-actor, a domain `resolves-to` an IP, an indicator
+    `indicates` a malware family or `uses` a technique). Edges show on the
+    indicator detail and feed the issue's Relations canvas.
+
+    The relationship_type is a STIX verb stored verbatim, so it round-trips
+    with the SOAR's EntityRelationship enum + MITRE ATT&CK. Common verbs:
+    resolves-to · communicates-with · beacons-to · indicates · attributed-to ·
+    uses · drops · downloads · related-to · variant-of · derived-from.
+
+    Args:
+        indicator_id: The source indicator (from indicators_list / indicator_get).
+        relationship_type: STIX verb (e.g. "attributed-to", "resolves-to", "uses").
+        target: The target's value — an indicator value, a technique id ("T1071.004"),
+            a malware/campaign/actor name.
+        target_type: STIX SDO type of the target — one of indicator, attack-pattern,
+            malware, tool, campaign, intrusion-set, threat-actor, vulnerability, identity.
+        description: Optional note (why the relationship holds).
+
+    Returns: {"relationship": {...}} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    if s.get_indicator(indicator_id) is None:
+        return {"error": f"indicator {indicator_id!r} not found"}
+    try:
+        edge = s.add_relationship(
+            source_id=indicator_id, source_type="indicator",
+            target_value=target, target_type=target_type,
+            relationship_type=relationship_type, description=description, source="guardian",
+        )
+    except ValueError as e:
+        return {"error": str(e)}
+    return {"relationship": edge}

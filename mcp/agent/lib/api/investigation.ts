@@ -51,6 +51,23 @@ export interface IssueDetail extends Issue {
   /** v0.1.8 — self-contained SVG attack chain (null until the agent draws one).
    *  Rendered sandboxed as an <img> data-URI on the Attack-chain tab. */
   attack_chain_svg: string | null;
+  /** v0.2.1 — self-contained SVG STIX relations canvas (null until drawn).
+   *  Rendered sandboxed as an <img> data-URI on the Relations tab. */
+  relations_canvas_svg: string | null;
+}
+
+/** v0.2.1 — a STIX-style relationship edge (source indicator → target entity). */
+export interface Relationship {
+  id: string;
+  source_id: string;
+  source_type: string;
+  target_value: string;
+  target_type: string;
+  relationship_type: string; // STIX verb: resolves-to, indicates, attributed-to, uses, …
+  description: string | null;
+  source: string; // "guardian" | "xsoar"
+  first_seen: string;
+  last_seen: string;
 }
 
 export interface CaseDetail extends CaseRow {
@@ -217,6 +234,8 @@ export interface IndicatorIssueRef {
 
 export interface IndicatorDetail extends Indicator {
   issues: IndicatorIssueRef[];
+  /** v0.2.1 — STIX edges from this indicator to other entities. */
+  relationships?: Relationship[];
 }
 
 export async function listIndicators(params?: {
@@ -258,6 +277,50 @@ export const INDICATOR_TYPE_LABELS: Record<string, string> = {
 
 export function indicatorTypeLabel(t: string): string {
   return INDICATOR_TYPE_LABELS[t] ?? t;
+}
+
+// ── Relationships (STIX edges) — v0.2.1 ─────────────────────────────
+
+/** STIX SDO type → Material Symbol icon (for the target node of an edge). */
+export const RELATION_TARGET_ICON: Record<string, string> = {
+  indicator: "tag",
+  "attack-pattern": "swords", // MITRE ATT&CK technique
+  malware: "coronavirus",
+  tool: "build",
+  campaign: "campaign",
+  "intrusion-set": "groups",
+  "threat-actor": "skull",
+  vulnerability: "gpp_maybe",
+  identity: "badge",
+};
+
+export const RELATION_TARGET_LABELS: Record<string, string> = {
+  indicator: "Indicator",
+  "attack-pattern": "Technique",
+  malware: "Malware",
+  tool: "Tool",
+  campaign: "Campaign",
+  "intrusion-set": "Intrusion set",
+  "threat-actor": "Threat actor",
+  vulnerability: "Vulnerability",
+  identity: "Identity",
+};
+
+export function relationTargetIcon(t: string): string {
+  return RELATION_TARGET_ICON[t] ?? "hub";
+}
+
+export function relationTargetLabel(t: string): string {
+  return RELATION_TARGET_LABELS[t] ?? t;
+}
+
+/** STIX verb → tone. Attribution verbs read stronger than plain associations. */
+export function relationVerbTone(verb: string): string {
+  if (verb === "attributed-to" || verb === "indicates")
+    return "text-tertiary border-tertiary/40 bg-tertiary/10";
+  if (verb === "uses" || verb === "drops" || verb === "downloads" || verb === "beacons-to")
+    return "text-primary border-primary/40 bg-primary/10";
+  return "text-on-surface-variant border-outline-variant bg-surface-container-high";
 }
 
 /** DBotScore → (label, Material-3 token classes). 0 unknown · 1 good · 2 suspicious · 3 bad. */

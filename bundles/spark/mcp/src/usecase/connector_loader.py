@@ -270,6 +270,7 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("issue_update", investigation_tools.issue_update),
     ("issue_add_event", investigation_tools.issue_add_event),
     ("issue_set_attack_chain", investigation_tools.issue_set_attack_chain),
+    ("issue_set_relation_graph", investigation_tools.issue_set_relation_graph),
     ("issue_get", investigation_tools.issue_get),
     ("issues_list", investigation_tools.issues_list),
     ("case_create", investigation_tools.case_create),
@@ -281,6 +282,7 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("indicator_upsert", indicator_tools.indicator_upsert),
     ("indicators_list", indicator_tools.indicators_list),
     ("indicator_get", indicator_tools.indicator_get),
+    ("indicator_relate", indicator_tools.indicator_relate),
 ]
 
 

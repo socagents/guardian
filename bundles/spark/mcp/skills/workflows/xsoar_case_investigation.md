@@ -196,6 +196,19 @@ Alongside the XSOAR case, keep a **local Guardian Issue** — Guardian's own rec
 
    **When you resolve, draw the attack chain.** After recording the verdict, load the `svg_attack_chain` skill, emit a self-contained SVG of the attack's causal path (entry → pivots → action → impact), and attach it with `issue_set_attack_chain(issue_id, svg)`. It renders on the Issue's **Attack chain** tab — the causal companion to the Activity timeline. Skip only if the chain is genuinely a single step with nothing to draw.
 
+   **Record STIX relationships as you attribute.** Whenever the evidence establishes a relationship between indicators or between an indicator and a TTP/actor, persist it with `indicator_relate(indicator_id=…, relationship_type=<STIX verb>, target=…, target_type=…)`. The verb is a STIX verb stored verbatim so it round-trips with XSOAR's EntityRelationship enum + MITRE ATT&CK. Record the edges the evidence actually supports — common ones:
+
+   ```
+   indicator_relate(indicator_id="<domain ind>", relationship_type="resolves-to", target="185.234.219.12", target_type="indicator")
+   indicator_relate(indicator_id="<url ind>",    relationship_type="indicates",   target="Emotet",          target_type="malware")
+   indicator_relate(indicator_id="<ip ind>",     relationship_type="uses",        target="T1071.004",       target_type="attack-pattern")
+   indicator_relate(indicator_id="<ind>",        relationship_type="attributed-to", target="<actor/campaign>", target_type="threat-actor")
+   ```
+
+   Only attribute to a named campaign/actor when research (Step 3) supports it; otherwise leave attribution off rather than inventing one. The edges show on the Indicator detail's **Relationships** section.
+
+   **Then draw the relations canvas.** After recording relationships, load the `svg_relation_graph` skill, emit a self-contained layered SVG of the issue's indicators and their STIX relationships, and attach it with `issue_set_relation_graph(issue_id, svg)`. It renders on the Issue's **Relations** tab — the relational/STIX companion to the causal Attack chain. (Both diagrams are also regenerable on demand from their tabs.)
+
 4. **Group related Issues into a Case** when you notice two or more Issues share a campaign, actor, or root cause:
 
    ```

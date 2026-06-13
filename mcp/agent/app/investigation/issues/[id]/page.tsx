@@ -45,13 +45,14 @@ import {
 const STATUSES = ["open", "investigating", "resolved", "closed"];
 const SEVERITIES = ["low", "medium", "high", "critical"];
 
-type Tab = "overview" | "assessment" | "indicators" | "activity" | "chain";
+type Tab = "overview" | "assessment" | "indicators" | "activity" | "chain" | "relations";
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "overview", label: "Overview", icon: "dashboard" },
   { key: "assessment", label: "Assessment", icon: "gavel" },
   { key: "indicators", label: "Indicators", icon: "fingerprint" },
   { key: "activity", label: "Activity", icon: "timeline" },
   { key: "chain", label: "Attack chain", icon: "account_tree" },
+  { key: "relations", label: "Relations", icon: "hub" },
 ];
 
 const EVENT_ICONS: Record<string, string> = {
@@ -70,7 +71,8 @@ export default function IssueDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
-  const [regenerating, setRegenerating] = useState(false);
+  // null = idle; otherwise the diagram kind currently regenerating (only one at a time).
+  const [regenerating, setRegenerating] = useState<null | "chain" | "relations">(null);
   const [actType, setActType] = useState("all");
   const [actSort, setActSort] = useState<"oldest" | "newest">("oldest");
 
@@ -111,37 +113,46 @@ export default function IssueDetailPage() {
     }
   };
 
-  // Regenerate the attack-chain SVG: fire a one-shot agent job (reuses the
-  // scheduler — the agent reads the issue, draws the chain via the
-  // svg_attack_chain skill, and stores it with issue_set_attack_chain), then
-  // poll the issue until the SVG changes. Heavy op (a full agent turn), so we
-  // poll up to ~3 min and show a spinner.
-  const regenerate = async () => {
+  // Regenerate a diagram on demand: fire a one-shot agent job (reuses the
+  // scheduler — the agent reads the issue and draws the SVG via the matching
+  // skill, then stores it with the matching tool), then poll the issue until
+  // the relevant SVG field changes. Heavy op (a full agent turn), so we poll
+  // up to ~3 min and show a spinner. One code path drives both diagram kinds —
+  // only the skill, the storage tool, and the watched field differ.
+  const regenerate = async (kind: "chain" | "relations") => {
     if (!issue || regenerating) return;
-    setRegenerating(true);
-    const before = issue.attack_chain_svg ?? "";
+    setRegenerating(kind);
+    const isChain = kind === "chain";
+    const before = (isChain ? issue.attack_chain_svg : issue.relations_canvas_svg) ?? "";
+    const skill = isChain ? "svg_attack_chain" : "svg_relation_graph";
+    const message = isChain
+      ? `Regenerate the attack-chain diagram for Guardian Issue ${id}. ` +
+        `First call issue_get(issue_id="${id}") to read the investigation ` +
+        `(summary, conclusions, activity timeline). Then, per the ` +
+        `svg_attack_chain skill, draw a self-contained SVG of the attack's ` +
+        `causal path and store it with issue_set_attack_chain(issue_id="${id}", ` +
+        `svg="<the full svg>"). Do only this — do not change any other field.`
+      : `Regenerate the STIX relations canvas for Guardian Issue ${id}. ` +
+        `First call indicators_list(issue_id="${id}"), then indicator_get(id) for ` +
+        `each indicator to read its relationships. Where obvious edges are missing ` +
+        `(domain resolves-to ip, indicator indicates malware / uses a technique / ` +
+        `attributed-to an actor), record them first with indicator_relate. Then, ` +
+        `per the svg_relation_graph skill, draw a self-contained layered SVG of the ` +
+        `indicators and their STIX relationships and store it with ` +
+        `issue_set_relation_graph(issue_id="${id}", svg="<the full svg>"). ` +
+        `Do only this — do not change any other field.`;
     try {
       await fetch("/api/agent/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `regen-diagram-${id}`,
+          name: `regen-${kind}-${id}`,
           cron: "* * * * *",
           timezone: "UTC",
           run_once: true,
           enabled: true,
           bypass_approvals: true,
-          action: {
-            type: "prompt",
-            skill: "svg_attack_chain",
-            message:
-              `Regenerate the attack-chain diagram for Guardian Issue ${id}. ` +
-              `First call issue_get(issue_id="${id}") to read the investigation ` +
-              `(summary, conclusions, activity timeline). Then, per the ` +
-              `svg_attack_chain skill, draw a self-contained SVG of the attack's ` +
-              `causal path and store it with issue_set_attack_chain(issue_id="${id}", ` +
-              `svg="<the full svg>"). Do only this — do not change any other field.`,
-          },
+          action: { type: "prompt", skill, message },
         }),
       });
       const deadline = Date.now() + 180_000;
@@ -149,7 +160,8 @@ export default function IssueDetailPage() {
         await new Promise((r) => setTimeout(r, 5000));
         try {
           const det = await getIssue(id);
-          if (det.attack_chain_svg && (det.attack_chain_svg ?? "") !== before) {
+          const now = (isChain ? det.attack_chain_svg : det.relations_canvas_svg) ?? "";
+          if (now && now !== before) {
             setIssue(det);
             break;
           }
@@ -160,7 +172,7 @@ export default function IssueDetailPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "regenerate failed");
     } finally {
-      setRegenerating(false);
+      setRegenerating(null);
     }
   };
 
@@ -355,51 +367,88 @@ export default function IssueDetailPage() {
       )}
 
       {tab === "chain" && (
-        issue.attack_chain_svg ? (
-          <div className="rounded-2xl p-5" style={glassStyle}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-on-surface-variant">account_tree</span>
-                Attack chain
-              </h3>
-              <button
-                onClick={regenerate}
-                disabled={regenerating}
-                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[14px]">{regenerating ? "hourglass_top" : "refresh"}</span>
-                {regenerating ? "Regenerating… (≈1 min)" : "Regenerate"}
-              </button>
-            </div>
-            {/* Rendered sandboxed as an <img> data-URI — SVG-in-img never
-                executes script, so agent-produced markup can't run code. */}
-            <div className="rounded-xl overflow-hidden bg-surface-container-lowest border border-outline-variant">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`data:image/svg+xml;utf8,${encodeURIComponent(issue.attack_chain_svg)}`}
-                alt="Attack chain diagram"
-                className="w-full h-auto block"
-              />
-            </div>
-          </div>
-        ) : (
-          <EmptyState
-            icon="account_tree"
-            title="No attack chain yet"
-            hint="Guardian draws the causality / attack chain when it resolves an investigation. You can also generate it now (a full agent pass — takes about a minute)."
-          >
-            <button
-              onClick={regenerate}
-              disabled={regenerating}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined text-[18px]">{regenerating ? "hourglass_top" : "auto_awesome"}</span>
-              {regenerating ? "Generating… (≈1 min)" : "Generate diagram"}
-            </button>
-          </EmptyState>
-        )
+        <DiagramTab
+          svg={issue.attack_chain_svg}
+          icon="account_tree"
+          title="Attack chain"
+          alt="Attack chain diagram"
+          emptyHint="Guardian draws the causality / attack chain when it resolves an investigation. You can also generate it now (a full agent pass — takes about a minute)."
+          busy={regenerating === "chain"}
+          disabled={regenerating !== null}
+          onRegenerate={() => regenerate("chain")}
+        />
+      )}
+
+      {tab === "relations" && (
+        <DiagramTab
+          svg={issue.relations_canvas_svg}
+          icon="hub"
+          title="Relations canvas"
+          alt="STIX relations canvas"
+          emptyHint="A STIX graph of this issue's indicators and how they relate to each other and to ATT&CK techniques, malware, campaigns, and threat-actors. Generate it on demand — Guardian records the relationships (indicator_relate) and draws the canvas in one agent pass (about a minute)."
+          busy={regenerating === "relations"}
+          disabled={regenerating !== null}
+          onRegenerate={() => regenerate("relations")}
+        />
       )}
     </div>
+  );
+}
+
+/**
+ * A diagram tab body — renders an agent-produced SVG sandboxed as an <img>
+ * data-URI (SVG-in-img never executes script, so the markup can't run code),
+ * or an empty state with a Generate button. Shared by the Attack-chain and
+ * Relations tabs; the parent owns the regenerate job + polling.
+ */
+function DiagramTab({
+  svg, icon, title, alt, emptyHint, busy, disabled, onRegenerate,
+}: {
+  svg: string | null;
+  icon: string;
+  title: string;
+  alt: string;
+  emptyHint: string;
+  busy: boolean;
+  disabled: boolean;
+  onRegenerate: () => void;
+}) {
+  return svg ? (
+    <div className="rounded-2xl p-5" style={glassStyle}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px] text-on-surface-variant">{icon}</span>
+          {title}
+        </h3>
+        <button
+          onClick={onRegenerate}
+          disabled={disabled}
+          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:opacity-50"
+        >
+          <span className="material-symbols-outlined text-[14px]">{busy ? "hourglass_top" : "refresh"}</span>
+          {busy ? "Regenerating… (≈1 min)" : "Regenerate"}
+        </button>
+      </div>
+      <div className="rounded-xl overflow-hidden bg-surface-container-lowest border border-outline-variant">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`}
+          alt={alt}
+          className="w-full h-auto block"
+        />
+      </div>
+    </div>
+  ) : (
+    <EmptyState icon={icon} title={`No ${title.toLowerCase()} yet`} hint={emptyHint}>
+      <button
+        onClick={onRegenerate}
+        disabled={disabled}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
+      >
+        <span className="material-symbols-outlined text-[18px]">{busy ? "hourglass_top" : "auto_awesome"}</span>
+        {busy ? "Generating… (≈1 min)" : "Generate diagram"}
+      </button>
+    </EmptyState>
   );
 }
 

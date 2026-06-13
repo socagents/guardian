@@ -2483,6 +2483,14 @@ Networks documentation and returning evidence-backed, cited answers.
                   Use <strong>Regenerate</strong> on the tab to redraw it on
                   demand. It is rendered sandboxed, so it can&apos;t run code.
                 </li>
+                <li>
+                  <Term>Relations</Term> (v0.2.1) — a STIX graph of the Issue&apos;s
+                  indicators and how they relate to each other and to ATT&amp;CK
+                  techniques, malware, campaigns, and threat-actors. The
+                  relational companion to the causal Attack chain. Click{" "}
+                  <strong>Generate</strong> (or <strong>Regenerate</strong>) on
+                  the tab to draw it on demand — also sandboxed.
+                </li>
               </ul>
               <p>
                 The <Link href="/investigation/issues" className="link">Issues</Link>{" "}
@@ -2518,6 +2526,29 @@ Networks documentation and returning evidence-backed, cited answers.
                 <strong>every Issue it appears in</strong> — how you spot the same
                 actor or infrastructure across cases. Each Issue also has an{" "}
                 <Term>Indicators</Term> tab listing just its own IoCs.
+              </p>
+            </SubSection>
+
+            <SubSection icon="hub" title="Relations & attribution (v0.2.1)">
+              <p>
+                Guardian records typed <Term>relationships</Term> between
+                indicators and other entities using the same{" "}
+                <Term>STIX</Term> vocabulary the SOAR uses — so a domain{" "}
+                <em>resolves-to</em> an IP, a URL <em>indicates</em> a malware
+                family, an indicator <em>uses</em> an ATT&amp;CK technique, or an
+                IoC is <em>attributed-to</em> a campaign or threat-actor. Because
+                the verbs are STIX verbs, they round-trip with XSOAR&apos;s
+                EntityRelationship model and MITRE ATT&amp;CK. Each indicator&apos;s
+                detail page lists its relationships (source &#8594; verb &#8594;
+                target).
+              </p>
+              <p>
+                Those edges feed the Issue&apos;s <Term>Relations</Term> tab — an
+                on-demand, layered graph of the Issue&apos;s indicators and how
+                they relate. Generate it from the tab (a one-pass agent draw,
+                about a minute), the same way you generate the Attack chain. The
+                Attack chain answers <em>what happened in what order</em>; the
+                Relations canvas answers <em>how the entities connect</em>.
               </p>
             </SubSection>
 

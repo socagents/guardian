@@ -105,6 +105,8 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
             # v0.1.8 — the attack-chain SVG rides on the detail only (kept off
             # the lean list). Null until the agent generates one.
             "attack_chain_svg": store.get_attack_chain(issue.id),
+            # v0.2.1 — the relations canvas SVG (same treatment).
+            "relations_canvas_svg": store.get_relations_canvas(issue.id),
         })
 
     @mcp.custom_route("/api/v1/issues/{id}", methods=["PATCH"], include_in_schema=False)
@@ -250,6 +252,8 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
         ind = store.get_indicator(request.path_params["id"])
         if ind is None:
             return JSONResponse({"error": "indicator not found"}, status_code=404)
+        # v0.2.1 — the indicator's STIX relationship edges.
+        ind["relationships"] = store.list_relationships(request.path_params["id"])
         return JSONResponse(ind)
 
     logger.info("Investigation routes registered (issues + cases + indicators)")
