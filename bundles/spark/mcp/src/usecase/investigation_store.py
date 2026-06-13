@@ -301,12 +301,22 @@ class InvestigationStore:
         return self._row_to_case(row) if row else None
 
     def list_cases(self) -> list[dict]:
-        """Cases with an `issue_count` (for the case list UI)."""
+        """Cases with an `issue_count` (for the case list UI).
+
+        Single-pass LEFT JOIN + GROUP BY rather than a correlated
+        `(SELECT COUNT(*) …)` per case (which was N+1 at the SQL level —
+        1 outer + 1 per case — and made the Cases list noticeably slower
+        than the Issues list). `c.*` columns are functionally dependent on
+        the GROUP BY key (`c.id`, the primary key) so SQLite returns them
+        deterministically. The `issues(case_id)` index backs the join.
+        Response shape is unchanged: case fields + an `issue_count` key.
+        """
         with self._lock, self._conn() as c:
             rows = c.execute(
-                "SELECT c.*, "
-                "(SELECT COUNT(*) FROM issues i WHERE i.case_id = c.id) AS issue_count "
-                "FROM cases c ORDER BY c.updated_at DESC, c.created_at DESC"
+                "SELECT c.*, COUNT(i.id) AS issue_count "
+                "FROM cases c LEFT JOIN issues i ON i.case_id = c.id "
+                "GROUP BY c.id "
+                "ORDER BY c.updated_at DESC, c.created_at DESC"
             ).fetchall()
         out: list[dict] = []
         for r in rows:

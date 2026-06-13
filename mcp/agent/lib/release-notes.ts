@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.7",
+    date: "2026-06-13",
+    title: "Investigation pages redesigned — full-width, tabbed, faster cases.",
+    highlights: [
+      "Issues + Cases pages now full-width with summary stats, filter chips, and glass cards (matching Skills/Jobs).",
+      "Issue detail split into tabs: Overview · Assessment · Activity · Attack chain.",
+      "Issue summaries show a derived VERDICT banner at a glance.",
+      "Cases list loads much faster — the per-case issue count is now one query instead of N+1.",
+    ],
+  },
+  {
     version: "0.1.6",
     date: "2026-06-13",
     title: "Investigation skill — scope the blast radius before resolving.",

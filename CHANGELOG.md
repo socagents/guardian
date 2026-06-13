@@ -10,6 +10,28 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.7] (unreleased) — *Investigation UI overhaul — full-width, tabbed, prettified*
+
+The Investigation pages (Issues + Cases) now match the skills/jobs page standard, and the issue detail is split into tabs instead of one long page.
+
+### What ships
+
+- **Full-width, prettified layout** — all four pages (Issues list, Issue detail, Cases list, Case detail) use the `max-w-[1400px]` glass-card layout: summary stat cards, filter chips, glass rows with a per-kind glyph + status/severity/origin/XSOAR badges, and proper empty states. Shared primitives in `mcp/agent/components/investigation/ui.tsx` keep the list + detail visually consistent.
+- **Tabbed issue detail** — **Overview** (Summary · Scope · Recommendations, with a derived VERDICT banner) · **Assessment** (Conclusions · Next steps) · **Activity** (the investigation timeline) · **Attack chain** (placeholder for the SVG causality diagram shipping in v0.1.8).
+- **Cases-load performance fix** — `InvestigationStore.list_cases()` ran a correlated `(SELECT COUNT(*) FROM issues WHERE case_id = c.id)` *per case* (N+1 at the SQL level), which made the Cases list slower than Issues. Replaced with a single `LEFT JOIN issues … GROUP BY c.id` (one pass, identical response shape).
+- **Manual analyst actions** — deferred; a disabled "Actions" control marks where they'll live in a later release.
+
+### Files
+
+- `mcp/agent/components/investigation/ui.tsx` (new shared primitives) + `app/investigation/{issues,issues/[id],cases,cases/[id]}/page.tsx` (rewritten).
+- `bundles/spark/mcp/src/usecase/investigation_store.py` (`list_cases` LEFT JOIN). See [#10](https://github.com/kite-production/guardian/issues/10).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); the `list_cases` query optimization preserves the response shape; no installer change; volumes preserved. Patch bump (v0.1.7).
+
+---
+
 ## [v0.1.6] (unreleased) — *Investigation skill — blast-radius scoping gate*
 
 A focused, evidence-driven increment on top of v0.1.5. A second structured evaluation of the autonomous loop's output (four investigations across lateral-movement, malware, data-exfiltration, and DNS-tunnel C2 — every proposed change adversarially verified and biased to reject churn) confirmed v0.1.5 is solid and surfaced exactly **one** recurring gap: investigations resolve the immediate finding but **defer blast-radius scoping to next-steps** instead of executing it.
