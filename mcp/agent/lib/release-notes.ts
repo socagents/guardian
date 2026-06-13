@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.10",
+    date: "2026-06-13",
+    title: "Attack-chain diagrams — tactic colors, MITRE mapping, attribution, animation.",
+    highlights: [
+      "Attack chains are now color-coded by ATT&CK tactic, with a legend.",
+      "Each stage shows its tactic; each arrow shows the technique id + name (no more clipped labels).",
+      "Adds an attribution line (actor/campaign) and subtle animated arrows.",
+    ],
+  },
+  {
     version: "0.1.9",
     date: "2026-06-13",
     title: "Investigation text renders as markdown; Activity is filterable.",

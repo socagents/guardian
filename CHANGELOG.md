@@ -10,6 +10,30 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.10] (unreleased) — *Attack-chain diagram — richer, ATT&CK-mapped, animated*
+
+The auto-generated attack chain is upgraded from a plain node→arrow flow to a tactic-colored, MITRE-mapped diagram.
+
+### What ships (skill-only — `svg_attack_chain`)
+
+- **No more clipped labels** — wider 250px node pitch gives each arrow a 70px gap; the technique id + short name sit terse above the arrow.
+- **Tactic color-coding** — each stage is colored by its ATT&CK tactic (Initial Access · Execution · Lateral Movement · C2 · Impact · …), with a per-diagram legend.
+- **Tactics + techniques** — every node carries a tactic pill; every arrow carries the technique id + name.
+- **Attribution** — an attribution strip (threat actor / campaign, or "unattributed").
+- **Subtle animation** — flowing dashed arrows + a gentle pulse on the impact node, via an inline `<style>` + CSS keyframes (declarative, so it plays even in the sandboxed `<img>` render — no script).
+
+No code change: the renderer + `issue_set_attack_chain` already accept any valid SVG; the new template passes the sanitizer unchanged.
+
+### Files
+
+- `bundles/spark/mcp/skills/workflows/svg_attack_chain.md`. See [#13](https://github.com/kite-production/guardian/issues/13).
+
+### Change scenario
+
+**Scenario 1** — skill-only (agent image, volume-seeded on boot); no installer change; volumes preserved. Patch bump (v0.1.10).
+
+---
+
 ## [v0.1.9] (unreleased) — *Investigation content — markdown rendering + Activity filter/sort*
 
 The investigation text now renders as formatted markdown (the same as the chat window), and the Activity timeline is filterable + sortable.
