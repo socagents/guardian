@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.3",
+    date: "2026-06-13",
+    title: "Investigation diagram hardening — no more silent spinners.",
+    highlights: [
+      "Generate/Regenerate now reports an error instead of spinning silently for 3 minutes if the agent run fails.",
+      "Diagram-SVG sanitizer hardened to also strip <foreignObject> and unquoted event handlers.",
+      "Small correctness + documentation-accuracy fixes from a post-release code review.",
+    ],
+  },
+  {
     version: "0.2.2",
     date: "2026-06-13",
     title: "Case-view diagrams — campaign-level attack chain + relations canvas.",

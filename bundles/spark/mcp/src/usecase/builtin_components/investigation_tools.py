@@ -50,8 +50,15 @@ def _clean_svg(svg: Any) -> tuple[str | None, dict | None]:
     if len(cleaned) > 256_000:
         return None, {"error": f"svg too large ({len(cleaned)} bytes; cap 256000)"}
     cleaned = re.sub(r"<script\b[^>]*>.*?</script>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    # <foreignObject> can embed arbitrary HTML — strip it (the skills forbid it).
+    # The <img> data-URI render is already a no-script context, so this is
+    # defense-in-depth, but it keeps the stored markup matching the contract.
+    cleaned = re.sub(r"<foreignObject\b[^>]*>.*?</foreignObject>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"<foreignObject\b[^>]*/?>", "", cleaned, flags=re.IGNORECASE)
+    # Inline on* handlers in all three attribute forms: "double", 'single', unquoted.
     cleaned = re.sub(r"\son\w+\s*=\s*\"[^\"]*\"", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\son\w+\s*=\s*'[^']*'", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\son\w+\s*=\s*[^\s>]+", "", cleaned, flags=re.IGNORECASE)
     return cleaned, None
 
 

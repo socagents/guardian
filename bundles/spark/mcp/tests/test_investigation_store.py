@@ -273,6 +273,12 @@ def test_add_relationship_requires_core_fields(store):
             source_id=ind.id, source_type="indicator",
             target_value="", target_type="indicator", relationship_type="resolves-to",
         )
+    # v0.2.3 — source_type is NOT NULL in the schema; the guard enforces it too
+    with pytest.raises(ValueError):
+        store.add_relationship(
+            source_id=ind.id, source_type="",
+            target_value="1.2.3.4", target_type="indicator", relationship_type="resolves-to",
+        )
 
 
 def test_list_relationships_scopes_by_source(store):

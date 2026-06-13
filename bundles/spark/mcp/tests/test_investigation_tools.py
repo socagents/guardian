@@ -176,6 +176,21 @@ def test_issue_set_relation_graph_missing_issue(wired):
     assert "error" in it.issue_set_relation_graph("nope", '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>')
 
 
+def test_clean_svg_strips_foreign_object_and_unquoted_handlers(wired):
+    # v0.2.3 hardening — _clean_svg must also strip <foreignObject> and
+    # UNQUOTED on* handlers (the v0.2.1/2.2 version missed both).
+    iid = it.issue_create(title="x")["issue"]["id"]
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg">'
+           '<foreignObject width="10" height="10"><body xmlns="http://www.w3.org/1999/xhtml">'
+           '<script>alert(1)</script></body></foreignObject>'
+           '<rect onclick=steal() width="5" height="5"/></svg>')
+    assert it.issue_set_relation_graph(iid, svg).get("ok") is True
+    stored = wired.get_relations_canvas(iid).lower()
+    assert "<foreignobject" not in stored
+    assert "onclick" not in stored
+    assert "<script" not in stored
+
+
 def test_case_set_attack_chain_round_trip(wired):
     cid = it.case_create(title="campaign")["case"]["id"]
     svg = '<svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'

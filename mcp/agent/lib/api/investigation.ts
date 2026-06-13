@@ -239,8 +239,9 @@ export interface IndicatorIssueRef {
 
 export interface IndicatorDetail extends Indicator {
   issues: IndicatorIssueRef[];
-  /** v0.2.1 — STIX edges from this indicator to other entities. */
-  relationships?: Relationship[];
+  /** v0.2.1 — STIX edges from this indicator to other entities. The REST
+   *  endpoint always populates this (possibly empty), so it is non-optional. */
+  relationships: Relationship[];
 }
 
 export async function listIndicators(params?: {

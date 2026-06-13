@@ -6222,18 +6222,20 @@ function Investigation() {
  </p>
  <Pre>{`investigations.db  (DATA_ROOT/ — SQLite, catalog domain)
  ├── issues          Guardian's own investigation records
- │     id, title, status, severity,
+ │     id, title, status, severity, kind, origin,
  │     summary, scope, recommendations,
  │     conclusions, next_steps,
- │     source_ref          -- the XSOAR incident id this Issue tracks
- │     case_id             -- FK → cases.id (one-to-many issue→case)
- │     attack_chain_svg    -- the causal diagram SVG (v0.1.8, nullable)
- │     relations_canvas_svg-- the STIX relations graph SVG (v0.2.1, nullable)
+ │     source_ref           -- the XSOAR incident id this Issue tracks
+ │     case_id              -- FK → cases.id (one-to-many issue→case)
+ │     attack_chain_svg     -- the causal diagram SVG (v0.1.8, nullable)
+ │     relations_canvas_svg -- the STIX relations graph SVG (v0.2.1, nullable)
+ │     created_at, updated_at
  ├── cases           named groupings of related issues
- │     id, title, status,
- │     attack_chain_svg, relations_canvas_svg  -- campaign-level diagrams (v0.2.2)
+ │     id, title, description, status,
+ │     attack_chain_svg, relations_canvas_svg,  -- campaign-level diagrams (v0.2.2)
+ │     created_at, updated_at
  ├── issue_events    the per-issue activity timeline
- │     id, issue_id, kind, body, created_at
+ │     seq, id, issue_id, ts, type, content
  ├── indicators      deduped IoCs (v0.2.0), unique by (value, type)
  │     id, value, type, dbot_score, enrichment, source, first/last_seen
  ├── indicator_issues  M:N linking indicators ↔ the issues they're seen in

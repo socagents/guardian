@@ -10,6 +10,28 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.3] (unreleased) — *Investigation diagram hardening*
+
+Hardening pass over the v0.2.1/v0.2.2 diagram + relations work, from a post-release adversarial code review. No new feature surface — correctness, robustness, and doc-accuracy fixes.
+
+### What ships
+
+- **Regenerate no longer hangs silently.** The diagram Generate/Regenerate flow (issue + case tabs) now checks the job-submission response and surfaces an error if it fails, instead of leaving a "Regenerating…" spinner running to the 3-minute timeout. The one-shot job name is now collision-proof, and a timeout shows an actionable message + refreshes to the latest state.
+- **SVG sanitizer closes two gaps.** The agent-produced-SVG cleaner now also strips `<foreignObject>` and unquoted `on*=` event handlers (it already stripped `<script>` + quoted handlers). The diagrams render sandboxed as `<img>` data-URIs (a no-script context) so there was no live exploit, but the stored markup now matches the documented contract.
+- **Relationship validation.** `add_relationship` rejects an empty `source_type` (the column is `NOT NULL`), matching the schema.
+- **Type + doc accuracy.** `IndicatorDetail.relationships` is now non-optional (the REST endpoint always populates it). The architecture page's `investigations.db` schema diagram is corrected to match the code (`issue_events` columns, `cases`/`issues` column lists).
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/builtin_components/investigation_tools.py` (`_clean_svg` foreignObject + unquoted-handler strips) + `usecase/investigation_store.py` (`add_relationship` guard). +2 tests.
+- `mcp/agent/app/investigation/issues/[id]/page.tsx` + `app/investigation/cases/[id]/page.tsx` (regenerate error-handling + timeout feedback), `lib/api/investigation.ts` (`relationships` non-optional), `app/help/architecture/page.tsx` (schema-diagram corrections). See [#17](https://github.com/kite-production/guardian/issues/17).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); no storage change; volumes preserved. Patch bump (v0.2.3).
+
+---
+
 ## [v0.2.2] (unreleased) — *Case-view attack chain + relations canvas*
 
 The on-demand diagrams come to **Cases**: a multi-issue case now gets a campaign-level attack chain and relations canvas, synthesized across all the issues grouped under it.

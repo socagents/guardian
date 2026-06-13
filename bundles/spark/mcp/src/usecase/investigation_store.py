@@ -694,8 +694,8 @@ class InvestigationStore:
         target_value, target_type). Re-asserting bumps last_seen. The
         relationship_type is the STIX verb stored verbatim (resolves-to,
         communicates-with, indicates, attributed-to, uses, related-to, …)."""
-        if not (source_id and target_value and target_type and relationship_type):
-            raise ValueError("source_id, target_value, target_type, relationship_type are required")
+        if not (source_id and source_type and target_value and target_type and relationship_type):
+            raise ValueError("source_id, source_type, target_value, target_type, relationship_type are required")
         ts = _now()
         with self._lock, self._conn() as c:
             row = c.execute(

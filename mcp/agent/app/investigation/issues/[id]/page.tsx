@@ -143,11 +143,14 @@ export default function IssueDetailPage() {
         `issue_set_relation_graph(issue_id="${id}", svg="<the full svg>"). ` +
         `Do only this — do not change any other field.`;
     try {
-      await fetch("/api/agent/jobs", {
+      // A unique suffix avoids colliding with a prior one-shot job of the same
+      // name (which the scheduler 400s on) — the deterministic name was the
+      // v0.2.3 silent-spinner trigger.
+      const resp = await fetch("/api/agent/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `regen-${kind}-${id}`,
+          name: `regen-${kind}-${id}-${before.length}`,
           cron: "* * * * *",
           timezone: "UTC",
           run_once: true,
@@ -156,7 +159,14 @@ export default function IssueDetailPage() {
           action: { type: "prompt", skill, message },
         }),
       });
+      // fetch() does NOT throw on 4xx/5xx — check explicitly so a failed job
+      // surfaces an error instead of a silent 3-minute poll to the deadline.
+      if (!resp.ok) {
+        const detail = await resp.json().catch(() => ({}));
+        throw new Error((detail as { error?: string })?.error ?? `regenerate failed (${resp.status})`);
+      }
       const deadline = Date.now() + 180_000;
+      let updated = false;
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 5000));
         try {
@@ -164,11 +174,18 @@ export default function IssueDetailPage() {
           const now = (isChain ? det.attack_chain_svg : det.relations_canvas_svg) ?? "";
           if (now && now !== before) {
             setIssue(det);
+            updated = true;
             break;
           }
         } catch {
           /* transient — keep polling */
         }
+      }
+      // On deadline exit, refresh to the latest state and tell the operator
+      // rather than silently dropping the spinner.
+      if (!updated) {
+        try { setIssue(await getIssue(id)); } catch { /* ignore */ }
+        setError("Regenerate timed out — the diagram may not have updated (the agent run may have failed). Try again.");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "regenerate failed");
