@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.9",
+    date: "2026-06-13",
+    title: "Hooks & policies now reliably match connector tools.",
+    security: true,
+    highlights: [
+      "Fixed: hook tool-globs, job permission policies, and subagent tool scopes silently missed connector tools the model named in dotted form (xsoar.close_incident vs xsoar_close_incident).",
+      "The 'Block close without verdict' hook now actually denies a no-verdict close — with an audit row.",
+      "A subagent's deny glob now reliably blocks the connector tools it shouldn't reach (privilege-scoping gap closed).",
+      "Tool globs everywhere are now separator-insensitive — author them with either '.' or '_'.",
+    ],
+  },
+  {
     version: "0.2.8",
     date: "2026-06-13",
     title: "Tasks page — clearer purpose + modernized presentation.",

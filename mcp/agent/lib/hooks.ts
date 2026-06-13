@@ -54,6 +54,7 @@
  */
 
 import { getBuiltinHook } from "@/lib/hook-builtins";
+import { toolNameMatchesGlob } from "@/lib/tool-name-glob";
 
 /** Closed list of lifecycle fire-sites the chat-route emits.
  *
@@ -586,25 +587,14 @@ export function matchesHook(hook: Hook, payload: HookPayload): boolean {
 }
 
 /**
- * Tiny glob matcher — supports `*` (any sequence) and `?` (single
- * char). Backtracking-free linear scan; safe for short tool names.
- * Returns true if `subject` matches any pattern in the
- * comma-separated list.
+ * Tool-name glob matcher — supports `*` (any sequence) and `?` (single
+ * char), comma-separated OR lists. Returns true if `subject` matches any
+ * pattern. Separator-insensitive (`.` ≡ `_`) so a glob authored against the
+ * underscore alias matches a dotted connector-namespaced call and vice
+ * versa — see [tool-name-glob.ts](./tool-name-glob.ts) for the why (v0.2.9
+ * verdict-gate root cause). Thin re-export to keep this module's callers
+ * (matchesHook + the chat route's subagent scoping) on one matcher.
  */
 export function globMatch(subject: string, patternList: string): boolean {
-  return patternList
-    .split(",")
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0)
-    .some((p) => globMatchOne(subject, p));
-}
-
-function globMatchOne(subject: string, pattern: string): boolean {
-  // Convert glob to regex: escape regex chars, then `.*` for `*`,
-  // `.` for `?`. Anchor.
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(
-    "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
-  );
-  return re.test(subject);
+  return toolNameMatchesGlob(subject, patternList);
 }

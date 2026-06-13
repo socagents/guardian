@@ -3629,7 +3629,14 @@ probed          ── transient state during an in-flight probe`}</Pre>
                   name, matched payload, and the returned decision. No
                   rows for your hook means the matcher didn&apos;t hit
                   (check toolGlob / triggerPrefix / tenantId) or the
-                  event itself never fired.
+                  event itself never fired. Tool globs are{" "}
+                  <Term>separator-insensitive</Term> (v0.2.9): a glob of{" "}
+                  <Code>xsoar_close_incident</Code> matches the same tool
+                  whether the model invokes it as{" "}
+                  <Code>xsoar_close_incident</Code> or in the dotted
+                  connector form <Code>xsoar.close_incident</Code> — so you
+                  no longer need to author both. The same rule applies to{" "}
+                  job permission-policy globs and subagent allow/deny scopes.
                 </li>
                 <li>
                   Look for <Code>hook_denied</Code> (the hook actively

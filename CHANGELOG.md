@@ -10,6 +10,28 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.9] (unreleased) — *Hook & policy tool-globs now match connector tools reliably*
+
+A correctness + safety fix. Hook tool-globs, job permission policies, and subagent allow/deny scopes matched tool names with an exact pattern — so a rule written as `xsoar_close_incident` silently failed to match the same tool when the model invoked it in its dotted connector form `xsoar.close_incident`. Different Gemini variants emit one form or the other, so the failure was intermittent and hard to spot. The result: the **"Block close without verdict" hook never fired** on a real close, job `denied_tools` rules could be bypassed, and a deny-scoped subagent could still reach a connector tool. Matching is now separator-insensitive (`.` and `_` treated as the same), so a rule authored either way matches a call emitted either way.
+
+### What ships
+
+- **Verdict-gate hook now actually blocks** — closing an XSOAR incident whose Guardian Issue has no recorded `VERDICT:` line is denied, with a `hook_dispatched` audit row, regardless of which name form the model used.
+- **Job permission policies** (`denied_tools` / `require_approval` / `allowed_tools`) now match connector tools by either name form — a `denied_tools` of `xsoar_close_incident` blocks `xsoar.close_incident` too.
+- **Subagent tool scoping** — a subagent's deny glob now reliably blocks connector tools it shouldn't reach (a real privilege-scoping gap is closed).
+- One matcher behind all three: a new dependency-free `lib/tool-name-glob.ts`. The previously-duplicated matcher in `lib/permission-policy.ts` is removed (so was the duplicated bug).
+- Tool globs in the `/settings/hooks`, `/jobs` policy editor, and `/agents` scope fields are now **separator-insensitive** — author with either `.` or `_`.
+
+### Files
+
+- `mcp/agent/lib/tool-name-glob.ts` (new — the shared matcher), `mcp/agent/lib/hooks.ts` (`globMatch` delegates), `mcp/agent/lib/permission-policy.ts` (`matchesGlobList` delegates; dup removed), `mcp/agent/lib/hook-runner.ts` + `mcp/agent/app/api/chat/route.ts` (temporary diagnostic removed). Docs: `CHANGELOG.md`, `lib/release-notes.ts`, `app/help/user/page.tsx`. See [#23](https://github.com/kite-production/guardian/issues/23).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); stable data contract; volumes preserved. Patch bump (v0.2.9).
+
+---
+
 ## [v0.2.8] (unreleased) — *Tasks page — framing + modernization*
 
 The `/tasks` page gets a clear use-case framing and the same polished glass/Material-3 treatment as the hooks, agents, and investigation pages. Pure UI; the task store + API are unchanged.

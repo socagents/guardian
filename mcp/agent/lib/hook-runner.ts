@@ -91,11 +91,6 @@ async function loadHooks(event: HookEvent): Promise<Hook[]> {
       (a, b) =>
         (a.priority ?? 100) - (b.priority ?? 100) || a.id.localeCompare(b.id),
     );
-    // [hookdbg v0.2.9] temporary: trace per-event load counts to diagnose
-    // why PreToolUse hooks don't dispatch while PostToolUse do.
-    console.warn(
-      `[hookdbg] loadHooks(${event}) raw=${Array.isArray(data?.hooks) ? data.hooks.length : "NONARRAY"} validated=${validated.length} names=${validated.map((h) => h.name).join("|")}`,
-    );
     return validated;
   } catch (err) {
     console.warn(

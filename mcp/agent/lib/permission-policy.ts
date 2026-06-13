@@ -10,11 +10,13 @@
  * chat-route destructures it + invokes `evaluatePermissionPolicy`
  * per tool call.
  *
- * Glob syntax mirrors `globMatch` in `lib/hooks.ts` — `*` matches any
- * sequence, `?` matches a single character, comma-separated lists are
- * OR. We re-implement here rather than importing to keep this module
- * decoupled (hooks.ts already imports from hook-builtins; circular
- * dependency surface area grows fast if we add another consumer).
+ * Glob matching is delegated to `toolNameMatchesGlob` in
+ * `lib/tool-name-glob.ts` — the single separator-insensitive matcher shared
+ * with hook tool-globs and subagent scoping. (Pre-v0.2.9 this module
+ * re-implemented the matcher to dodge a circular import; the matcher now lives
+ * in a dependency-free leaf module, so the duplication — and the duplicated
+ * dotted-vs-underscore bug — is gone. A `denied_tools` of `xsoar_close_incident`
+ * now correctly blocks a `xsoar.close_incident` call.)
  *
  * Evaluation precedence (narrowest match wins):
  *
@@ -34,6 +36,8 @@
  * operator-facing scope check — "don't even *try* this tool from this
  * job" — that runs BEFORE the approval gate. Defense in depth.
  */
+
+import { toolNameMatchesGlob } from "@/lib/tool-name-glob";
 
 /** Operator-facing shape stored verbatim in jobs.db. */
 export interface PermissionPolicy {
@@ -132,23 +136,10 @@ export function evaluatePermissionPolicy(
 /**
  * Match `subject` against a comma-separated list of globs. Each item
  * is trimmed; empty items are ignored. Returns true on first match.
+ * Separator-insensitive (`.` ≡ `_`) — see `lib/tool-name-glob.ts`.
  */
 export function matchesGlobList(subject: string, patternList: string): boolean {
-  return patternList
-    .split(",")
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0)
-    .some((p) => matchesGlobSingle(subject, p));
-}
-
-function matchesGlobSingle(subject: string, pattern: string): boolean {
-  // Convert glob to anchored regex: escape regex chars, then `.*` for
-  // `*`, `.` for `?`.
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(
-    "^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
-  );
-  return re.test(subject);
+  return toolNameMatchesGlob(subject, patternList);
 }
 
 /**
