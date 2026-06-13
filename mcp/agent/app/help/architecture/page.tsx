@@ -5764,6 +5764,25 @@ Load-first lifecycle for any XSOAR case investigation.
  with a backup-on-rename collision handler).
  </p>
  <p>
+ <strong>Every skill edit is audited + versioned (v0.2.12).</strong>{" "}
+ Whether the edit comes from the operator (<Code>PUT /api/skills</Code>)
+ or the agent (<Code>skills_update</Code>),{" "}
+ <Code>update_skill</Code> snapshots the prior content to a
+ timestamped file under <Code>/app/skills/.history/</Code>{" "}
+ (multi-generation rollback, on top of the single-level{" "}
+ <Code>.md.bak</Code>) and records a <Code>skill_updated</Code>{" "}
+ audit event — file path, bytes before/after, backup location —
+ visible at <Code>/observability/events</Code>. The current actor
+ distinguishes operator vs agent edits, so an{" "}
+ <em>autonomous</em> skill edit (from the v0.2.12{" "}
+ <Code>guardian-investigation-judge</Code>, which rubric-scores
+ resolved investigations and refines the{" "}
+ <Code>xsoar_case_investigation</Code> skill on a systematic
+ weakness) is plainly attributable and revertible. The{" "}
+ <Code>.history</Code> + <Code>.deleted</Code> dirs are excluded
+ from the skills listing.
+ </p>
+ <p>
  The body textarea is controlled state with lazy-load — clicking
  into the editor pulls the live body via <Code>skills_read</Code>;
  not loaded eagerly because that&apos;d burn bytes for

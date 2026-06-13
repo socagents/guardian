@@ -10,6 +10,25 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.12] (unreleased) — *Autonomous investigation self-improvement (evaluate→enhance)*
+
+Closes the autonomous investigation loop's final phase: it now **evaluates its own work and improves the investigation skill** without a human in the path. A new `guardian-investigation-judge` job scores recent resolved investigations against a SOC rubric and, on a systematic weakness, edits the `xsoar_case_investigation` skill via `skills_update`. Because that's autonomous self-modification, every skill edit is now **reversible and audited**.
+
+### What ships
+
+- **Skill edits are now audited + versioned** (the safety substrate, applies to ALL skill edits — operator and agent): `skills_update` writes a timestamped snapshot of the prior content under `skills/.history/` (multi-generation rollback, on top of the existing single-level `.md.bak`) and records a `skill_updated` audit event (file path, bytes before/after, backup location) visible at `/observability/events`. The actor distinguishes operator vs agent edits, so an autonomous self-edit is plainly attributable. The `.history` snapshots never appear in the skills listing.
+- **`guardian-investigation-judge`** (dev/demo harness, codified in `scripts/bootstrap_loop_jobs.sh`): every 6h it rubric-scores the 8 most-recent resolved investigations (VERDICT / MITRE / blast-radius / enrichment / recommendations) and, only on a systematic weakness (≥3 of 8 score ≤1), makes ONE bounded, additive edit to the investigation skill. Tightly whitelisted (reads Issues/Cases/indicators + `skills_read`/`skills_update` only — no incident, credential, or skill-create/delete access). The bounded-edit contract (preserve the 6-step lifecycle, additive-only, ≤~25 lines, one edit/run) plus audit + `.history` make a bad self-edit catchable and revertible.
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/builtin_components/skills_crud.py` (`update_skill` history + audit; `.history` excluded from listings), `bundles/spark/mcp/tests/test_skills_crud_history.py` (new), `scripts/bootstrap_loop_jobs.sh` (the judge job), `scripts/CLAUDE.md`. Docs: `app/help/architecture/page.tsx` (self-improvement loop + rollback), `CHANGELOG.md`, `lib/release-notes.ts`. See [#26](https://github.com/kite-production/guardian/issues/26).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); no schema change (`.history` is a new on-disk dir under the skills volume, additive); volumes preserved. Patch bump (v0.2.12).
+
+---
+
 ## [v0.2.11] (unreleased) — *Investigation loop hardening + codification*
 
 Hardens the autonomous investigation loop (the demo/training harness that seeds synthetic XSOAR incidents and investigates them) and makes it reproducible. The loop's "take the oldest open Issue that tracks an incident" pick was previously a prose instruction the model had to follow correctly — a sourceless/manual Issue could jam it. That pick is now **structural**, and the two scheduler jobs that drive the loop are now **codified in git** instead of living only in the deployed install's `jobs.db`.

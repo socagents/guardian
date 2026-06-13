@@ -42,7 +42,7 @@ If the answer is *"only if the operator runs it manually"* — still `scripts/`.
 | `generate_bundle_manifest.py` | Create a file manifest + optional HMAC signature for a bundle directory | Paired with export |
 | `loop/loop_state.py` | The loop's on-disk memory writer (`.guardian-loop/state.json` + `docs/loop/state.md`); `init`/`record`/`render` | Auto, every loop cycle |
 | `loop/run_gate.sh` | Runs the full Guardian gate (tsc/lint/build · mcp+updater pytest · validator) | Auto, loop VERIFY step + manual |
-| `bootstrap_loop_jobs.sh` | Codify + (re)provision the autonomous investigation-loop scheduler jobs (`guardian-incident-seeder` + `guardian-investigation-loop`); idempotent upsert via the agent jobs API. DEV/DEMO harness — seeds synthetic XSOAR incidents | Manual, after a fresh install / volume wipe |
+| `bootstrap_loop_jobs.sh` | Codify + (re)provision the autonomous investigation-loop scheduler jobs — `guardian-incident-seeder` + `guardian-investigation-loop` + `guardian-investigation-judge` (the v0.2.12 self-improvement evaluator); idempotent upsert via the agent jobs API. DEV/DEMO harness — seeds synthetic XSOAR incidents | Manual, after a fresh install / volume wipe |
 | `loop/loop_bootstrap.sh` | One-time clone provisioning (npm ci + repo-root .venv + deps) | Manual, VM provisioning |
 | `loop/guardian_loop.sh` | launchd payload: guard → reset clone → best-effort tunnel → run headless `claude -p` against the playbook | Auto, nightly LaunchAgent |
 

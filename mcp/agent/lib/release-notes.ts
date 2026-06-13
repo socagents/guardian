@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.12",
+    date: "2026-06-13",
+    title: "Autonomous investigation self-improvement — with audited, reversible skill edits.",
+    security: true,
+    highlights: [
+      "The investigation loop now evaluates its own resolved cases against a SOC rubric and improves the investigation skill automatically (the new guardian-investigation-judge).",
+      "Every skill edit — operator OR agent — now writes a timestamped rollback snapshot under skills/.history and a skill_updated audit row visible in /observability/events.",
+      "The judge is tightly scoped (reads investigations + edits only the investigation skill) and bounded (one additive, lifecycle-preserving edit per run).",
+    ],
+  },
+  {
     version: "0.2.11",
     date: "2026-06-13",
     title: "Investigation loop hardening + codification.",

@@ -6,6 +6,7 @@ Provides tools for managing agent skills: Create, Read, Update, Delete
 
 import os
 import re
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from mcp import types as mcp_types
@@ -242,7 +243,7 @@ def get_all_skills() -> List[Dict[str, Any]]:
     # Each subdir's *.md files are indexed directly. The `plugins/`
     # dir gets special handling below — its layout is one extra level
     # deep (plugins/<vendor>/<skill>.md) and we walk that explicitly.
-    EXCLUDED_DIRS = {"__pycache__", ".git", ".deleted", "plugins"}
+    EXCLUDED_DIRS = {"__pycache__", ".git", ".deleted", ".history", "plugins"}
 
     for category_dir in SKILLS_DIR.iterdir():
         if not (category_dir.is_dir() and category_dir.name not in EXCLUDED_DIRS):
@@ -374,18 +375,58 @@ def update_skill(file_path: str, content: str) -> Dict[str, Any]:
         return {"success": False, "error": f"Skill not found: {file_path}"}
 
     try:
-        # Backup original content
+        # Backup original content. Two backups:
+        #   * single-level `.md.bak` (back-compat, immediate undo)
+        #   * timestamped copy under `.history/` so an ITERATING editor (the
+        #     v0.2.12 autonomous investigation-judge) can be rolled back
+        #     across multiple generations, not just the last one.
         original = skill_path.read_text(encoding="utf-8")
         backup_path = skill_path.with_suffix(".md.bak")
         backup_path.write_text(original, encoding="utf-8")
 
+        history_rel: str | None = None
+        try:
+            history_dir = SKILLS_DIR / ".history"  # excluded from listings
+            history_dir.mkdir(exist_ok=True)
+            ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+            hist_path = history_dir / f"{file_path.replace('/', '__')}.{ts}.md"
+            hist_path.write_text(original, encoding="utf-8")
+            history_rel = str(hist_path.relative_to(SKILLS_DIR))
+        except Exception:
+            pass  # history is best-effort; `.md.bak` is the guaranteed undo
+
         # Write new content
         skill_path.write_text(content, encoding="utf-8")
+
+        # Audit so EVERY skill edit — especially an autonomous one from the
+        # investigation-judge — is visible in /observability/events and
+        # reversible. The current actor (set by the REST route or the chat
+        # tool path) distinguishes operator vs agent edits. Best-effort:
+        # never fail the write on an audit hiccup.
+        try:
+            from usecase.audit_log import audit_log
+            log = audit_log()
+            if log is not None:
+                log.record(
+                    action="skill_updated",
+                    target=f"skill:{file_path}",
+                    status="success",
+                    metadata={
+                        "file_path": file_path,
+                        "bytes_before": len(original),
+                        "bytes_after": len(content),
+                        "backup": str(backup_path.relative_to(SKILLS_DIR)),
+                        "history": history_rel,
+                    },
+                )
+        except Exception:
+            pass
 
         return {
             "success": True,
             "message": f"Updated skill: {file_path}",
-            "backup": str(backup_path.relative_to(SKILLS_DIR))
+            "backup": str(backup_path.relative_to(SKILLS_DIR)),
+            "history": history_rel,
         }
     except Exception as e:
         return {"success": False, "error": f"Failed to update skill: {str(e)}"}

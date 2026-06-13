@@ -127,8 +127,66 @@ print(json.dumps({
 PY
 )
 
+# --- guardian-investigation-judge (v0.2.12) --------------------------------
+# The autonomous evaluate->enhance step: scores recent resolved investigations
+# against a SOC rubric and, on a SYSTEMATIC weakness, improves the
+# xsoar_case_investigation skill via skills_update. Safety rails:
+#   * tightly whitelisted tools (read Issues/Cases/indicators + skills_read +
+#     skills_update ONLY) — cannot touch incidents, create/delete skills, or
+#     manage credentials.
+#   * skills_update auto-snapshots the prior skill under .history/ and writes a
+#     `skill_updated` audit row (see /observability/events) — every self-edit
+#     is reversible + visible.
+#   * bounded edit contract in the prompt: preserve the 6-step lifecycle,
+#     additive-only, <=~25 added lines, AT MOST one edit per run.
+JUDGE_JSON=$(python3 - <<'PY'
+import json
+print(json.dumps({
+  "name": "guardian-investigation-judge",
+  "cron": "0 */6 * * *",
+  "timezone": "UTC",
+  "enabled": True,
+  "bypass_approvals": True,
+  "permission_policy": {"allowed_tools": [
+    "issues_list", "issue_get", "cases_list", "case_get",
+    "indicators_list", "indicator_get", "skills_read", "skills_update",
+  ]},
+  "action": {
+    "type": "prompt",
+    "message": (
+      "You are the autonomous investigation-judge. You evaluate the QUALITY "
+      "of recently-resolved investigations and, ONLY on a systematic "
+      "weakness, improve the investigation skill. STEPS: (1) Call "
+      "issues_list(status='resolved', source_ref_not_null=True, "
+      "order='desc') and take the 8 most recent. For each, issue_get and "
+      "score 0-2 on each dimension: VERDICT (summary leads with a clear "
+      "'VERDICT:' line?), MITRE (conclusions cite ATT&CK technique IDs?), "
+      "BLAST_RADIUS (affected hosts/accounts/data made explicit?), "
+      "ENRICHMENT (IoCs enriched — check indicators_list for the issue?), "
+      "RECOMMENDATIONS (next_steps concrete + actionable?). (2) A dimension "
+      "is SYSTEMATICALLY weak if >=3 of the 8 score <=1. If NO dimension is "
+      "systematically weak, reply 'investigations healthy — no skill change "
+      "needed' and STOP — do not edit anything. (3) If exactly one or more "
+      "dimensions are weak, pick the WEAKEST, call "
+      "skills_read('workflows/xsoar_case_investigation.md'), and make a "
+      "BOUNDED additive improvement via "
+      "skills_update('workflows/xsoar_case_investigation.md', <new content>) "
+      "that strengthens ONLY that dimension's guidance with a concrete "
+      "instruction or example. HARD CONSTRAINTS: preserve the existing "
+      "6-step lifecycle and ALL headings; ADD or REFINE guidance only, never "
+      "delete a step; keep the net change under ~25 added lines; touch NO "
+      "other skill; make AT MOST one skills_update call this run. (4) End by "
+      "stating which dimension you improved, the rubric evidence (the scores), "
+      "and a one-line summary of the edit — or that no change was needed."
+    ),
+  },
+}))
+PY
+)
+
 echo "Bootstrapping autonomous-investigation-loop jobs at ${AGENT_URL} ..."
 upsert_job guardian-incident-seeder "$SEEDER_JSON"
 upsert_job guardian-investigation-loop "$LOOP_JSON"
+upsert_job guardian-investigation-judge "$JUDGE_JSON"
 echo "Done. Verify:"
 echo "  curl -sk -H \"Authorization: Bearer \$GUARDIAN_API_KEY\" ${AGENT_URL}/api/agent/jobs | python3 -m json.tool"
