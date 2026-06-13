@@ -221,7 +221,7 @@ export default function HooksPage() {
                 Hooks
               </h1>
             </div>
-            <p className="text-sm text-on-surface-variant ml-9 max-w-3xl leading-relaxed">
+            <p className="text-xs text-on-surface-variant/80 ml-9 max-w-5xl leading-snug">
               Policy contributors that fire at chat-lifecycle events (tool calls, prompts, compaction, run start/end). Each hook runs through a transport (command, HTTP webhook) and may deny/ask/inject context. Configured here, executed transparently by every chat turn.
             </p>
           </div>
@@ -629,7 +629,7 @@ function HookEditor({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xl h-full overflow-y-auto p-6 space-y-4 custom-scrollbar"
+        className="w-full md:w-1/2 md:max-w-[1000px] md:min-w-[640px] h-full overflow-y-auto p-6 space-y-4 custom-scrollbar"
         style={{
           background: "var(--glass-bg-strong)",
           backdropFilter: "blur(16px)",
