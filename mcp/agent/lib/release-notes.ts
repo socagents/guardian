@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.7",
+    date: "2026-06-13",
+    title: "Agents page modernized — subagent CRUD with a tabbed, scoped-tools editor.",
+    highlights: [
+      "The /agents page gets summary cards, origin + name filters, and slimmer definition rows.",
+      "The create/edit drawer is wider and tabbed: Definition · Tools (allow/deny globs) · Execution.",
+      "Define a subagent (e.g. a threat-hunting agent) with a scoped tool catalog, then the chat agent can spawn it.",
+    ],
+  },
+  {
     version: "0.2.6",
     date: "2026-06-13",
     title: "Fixes — /jobs page loads, job chat sessions render, hooks UI polish.",

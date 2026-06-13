@@ -13,9 +13,16 @@
  * their sidechain transcripts).
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import {
+  glassStyle,
+  Badge,
+  StatCard,
+  EmptyState,
+  InvestigationTabBar,
+} from "@/components/investigation/ui";
 import {
   deleteAgentDefinition,
   listAgentDefinitions,
@@ -25,11 +32,22 @@ import {
   type AgentDefinition,
 } from "@/lib/api/agent-definitions";
 
-const glassCard = {
-  background: "var(--glass-bg-strong)",
-  backdropFilter: "blur(12px)",
-  border: "0.5px solid var(--glass-border)",
-} as const;
+// Origin filter chips — operator / plugin / builtin matched by `origin`
+// prefix (plugin origins look like `plugin:<name>`).
+const ORIGIN_GROUPS: { key: string; label: string; match: (origin: string) => boolean }[] = [
+  { key: "operator", label: "Operator", match: (o) => o === "operator" },
+  { key: "plugin", label: "Plugin", match: (o) => o.startsWith("plugin:") },
+  { key: "builtin", label: "Built-in", match: (o) => o === "builtin" },
+];
+
+/** Map the origin's `originBadgeTone` colours onto a `Badge` tone string
+ *  (border + text + bg classes), so the row cards match the hooks page's
+ *  badge idiom rather than the old hand-rolled chip. */
+function originTone(origin: string): string {
+  if (origin.startsWith("plugin:")) return "text-tertiary border-tertiary/40 bg-tertiary/10";
+  if (origin === "builtin") return "text-primary border-primary/40 bg-primary/10";
+  return "text-secondary border-secondary/40 bg-secondary/10";
+}
 
 export default function AgentsPage() {
   const [defs, setDefs] = useState<AgentDefinition[]>([]);
@@ -37,6 +55,19 @@ export default function AgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<AgentDefinition | null>(null);
   const [adding, setAdding] = useState(false);
+  const [originFilter, setOriginFilter] = useState<string>("all");
+  const [nameFilter, setNameFilter] = useState("");
+
+  // Client-side filtering over the already-fetched defs — no extra fetch.
+  const filtered = useMemo(() => {
+    const group = ORIGIN_GROUPS.find((g) => g.key === originFilter);
+    const q = nameFilter.trim().toLowerCase();
+    return defs.filter((d) => {
+      if (group && !group.match(d.origin)) return false;
+      if (q && !(`${d.name} ${d.description ?? ""}`.toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [defs, originFilter, nameFilter]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -85,10 +116,29 @@ export default function AgentsPage() {
     [refresh],
   );
 
+  const openNewAgent = useCallback(() => {
+    setEditing({
+      id: crypto.randomUUID(),
+      name: "",
+      description: "",
+      system_prompt: "",
+      tools_allowed: [],
+      tools_denied: [],
+      model: null,
+      max_turns: 10,
+      isolation: "fresh_session",
+      origin: "operator",
+      enabled: true,
+      created_at: "",
+      updated_at: "",
+    });
+    setAdding(true);
+  }, []);
+
   return (
     <div className="h-screen overflow-y-auto custom-scrollbar">
       <div className="max-w-[1400px] mx-auto px-8 py-8 space-y-6">
-        {/* Header — matches /skills layout pattern */}
+        {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -99,30 +149,13 @@ export default function AgentsPage() {
                 Agents
               </h1>
             </div>
-            <p className="text-sm text-on-surface-variant ml-9">
+            <p className="text-xs text-on-surface-variant/80 ml-9 max-w-5xl leading-snug">
               Subagent definitions — system prompt + scoped tool catalog. Spawned via <code className="font-mono">subagent_create</code>; runs appear in <Link href="/tasks" className="link">/tasks</Link>.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => {
-              setEditing({
-                id: crypto.randomUUID(),
-                name: "",
-                description: "",
-                system_prompt: "",
-                tools_allowed: [],
-                tools_denied: [],
-                model: null,
-                max_turns: 10,
-                isolation: "fresh_session",
-                origin: "operator",
-                enabled: true,
-                created_at: "",
-                updated_at: "",
-              });
-              setAdding(true);
-            }}
+            onClick={openNewAgent}
             className="px-4 py-2 rounded-xl text-xs font-medium text-on-primary-container bg-primary-container/30 hover:bg-primary-container/50 transition-colors"
           >
             <span className="material-symbols-outlined text-base align-middle mr-1">
@@ -132,40 +165,100 @@ export default function AgentsPage() {
           </button>
         </div>
 
+        {/* Error banner */}
         {error && (
           <div className="rounded-xl border border-error/30 bg-error/10 p-3 text-xs text-error">
             {error}
           </div>
         )}
 
+        {/* Summary stat cards */}
+        {!loading && defs.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard icon="groups" label="Total agents" value={defs.length} />
+            <StatCard
+              icon="toggle_on"
+              label="Enabled"
+              value={defs.filter((d) => d.enabled).length}
+              tone="bg-secondary/15 text-secondary"
+            />
+            <StatCard
+              icon="person"
+              label="Operator-defined"
+              value={defs.filter((d) => d.origin === "operator").length}
+              tone="bg-primary/15 text-primary"
+            />
+            <StatCard
+              icon="extension"
+              label="Plugin / built-in"
+              value={defs.filter((d) => d.origin !== "operator").length}
+              tone="bg-tertiary/15 text-tertiary"
+            />
+          </div>
+        )}
+
+        {/* Filter bar */}
+        {!loading && defs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 rounded-2xl p-1.5" style={glassStyle}>
+              {[{ key: "all", label: "All" }, ...ORIGIN_GROUPS].map((g) => (
+                <button
+                  key={g.key}
+                  onClick={() => setOriginFilter(g.key)}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-[11px] uppercase tracking-wider font-medium transition",
+                    originFilter === g.key
+                      ? "bg-secondary-container/40 border border-secondary/40 text-secondary"
+                      : "border border-transparent text-on-surface-variant hover:text-on-surface hover:bg-white/5",
+                  )}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <span className="material-symbols-outlined text-[16px] absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60">
+                search
+              </span>
+              <input
+                type="text"
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                placeholder="Filter by name…"
+                className="w-full rounded-xl pl-9 pr-3 py-2 text-xs bg-surface-container-low border-[0.5px] border-outline-variant text-on-surface outline-none focus:border-primary/40"
+              />
+            </div>
+            <span className="text-[11px] text-on-surface-variant/60 ml-auto">
+              {filtered.length} of {defs.length}
+            </span>
+          </div>
+        )}
+
+        {/* List */}
         {loading ? (
           <div className="text-center py-16 text-sm text-on-surface-variant/60">
             Loading agents…
           </div>
         ) : defs.length === 0 ? (
-          <div
-            className="text-center py-12 rounded-2xl"
-            style={glassCard}
+          <EmptyState
+            icon="groups"
+            title="No agents registered"
+            hint="Add an agent, OR drop a plugin under bundles/spark/plugins/ with an agents: block — e.g. a case-triage subagent scoped to xsoar_*, or an evidence-collector with read-only XSOAR + web tools."
           >
-            <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-2 inline-block">
-              groups
-            </span>
-            <p className="text-sm font-medium text-on-surface mb-1">
-              No agents registered.
-            </p>
-            <p className="text-xs text-on-surface-variant/60 max-w-md mx-auto leading-relaxed">
-              Add an agent above, OR drop a plugin under{" "}
-              <code className="font-mono">bundles/spark/plugins/</code>{" "}
-              with an{" "}
-              <code className="font-mono">agents:</code> block — e.g.
-              a case-triage subagent scoped to{" "}
-              <code className="font-mono">xsoar_*</code>, or an
-              evidence-collector with read-only XSOAR + web tools.
-            </p>
-          </div>
+            <button
+              type="button"
+              onClick={openNewAgent}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-medium hover:opacity-90 transition"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              New agent
+            </button>
+          </EmptyState>
+        ) : filtered.length === 0 ? (
+          <EmptyState icon="filter_alt_off" title="No agents match the filter" hint="Clear the filter to see all registered agents." />
         ) : (
-          <div className="grid gap-2">
-            {defs.map((d) => (
+          <div className="grid gap-3">
+            {filtered.map((d) => (
               <AgentRowCard
                 key={d.id}
                 def={d}
@@ -200,6 +293,8 @@ export default function AgentsPage() {
   );
 }
 
+// ─── List row card ──────────────────────────────────────────────────
+
 function AgentRowCard({
   def,
   onToggle,
@@ -212,13 +307,20 @@ function AgentRowCard({
   onDelete: () => void;
 }) {
   const tone = originBadgeTone(def.origin);
+  const noAllowlist = def.tools_allowed.length === 0;
+  // Tool-scope summary, demoted to a muted second line.
+  const allowSummary = noAllowlist
+    ? null
+    : def.tools_allowed.length === 1
+      ? def.tools_allowed[0]
+      : `${def.tools_allowed.length} allow patterns`;
   return (
     <div
       className={cn(
-        "rounded-2xl p-4 flex items-start gap-3 transition-opacity",
+        "rounded-2xl p-5 flex items-start gap-4 transition-opacity",
         !def.enabled && "opacity-60",
       )}
-      style={glassCard}
+      style={glassStyle}
     >
       <button
         type="button"
@@ -239,51 +341,32 @@ function AgentRowCard({
         />
       </button>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
           <span className="font-mono text-sm font-semibold text-on-surface truncate">
-            {def.name}
+            {def.name || "(unnamed)"}
           </span>
-          <span
-            className={cn(
-              "text-[10px] font-mono px-1.5 py-0.5 rounded",
-              tone.bg,
-              tone.fg,
-            )}
-            title={`Origin: ${def.origin}`}
-          >
-            {tone.label}
-          </span>
+          <Badge tone={originTone(def.origin)}>{tone.label}</Badge>
           {def.model && (
-            <span
-              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-on-surface-variant"
-              title="Model override"
-            >
+            <Badge tone="text-on-surface-variant border-outline-variant bg-surface-container-high">
               {def.model}
-            </span>
+            </Badge>
           )}
-          <span
-            className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-on-surface-variant"
-            title="Max turns budget"
-          >
+          <Badge tone="text-on-surface-variant border-outline-variant bg-surface-container-high">
             ≤{def.max_turns} turns
-          </span>
+          </Badge>
         </div>
         {def.description && (
           <p className="text-xs text-on-surface-variant mb-1.5 leading-relaxed">
             {def.description}
           </p>
         )}
-        <div className="flex items-center gap-2 text-[11px] font-mono text-on-surface-variant/70 flex-wrap">
-          {def.tools_allowed.length > 0 ? (
+        <div className="text-[11px] text-on-surface-variant/70 font-mono truncate">
+          {allowSummary ? (
             <>
-              <span title="Tools allowed (glob list)">
-                <span className="material-symbols-outlined text-[12px] align-middle mr-0.5 text-secondary">
-                  check_circle
-                </span>
-                {def.tools_allowed.length === 1
-                  ? def.tools_allowed[0]
-                  : `${def.tools_allowed.length} allow patterns`}
+              <span className="material-symbols-outlined text-[12px] align-middle mr-0.5 text-secondary">
+                check_circle
               </span>
+              {allowSummary}
             </>
           ) : (
             <span className="text-error">
@@ -294,7 +377,7 @@ function AgentRowCard({
             </span>
           )}
           {def.tools_denied.length > 0 && (
-            <span title="Tools denied">
+            <span className="ml-3">
               <span className="material-symbols-outlined text-[12px] align-middle mr-0.5 text-error/80">
                 block
               </span>
@@ -325,6 +408,8 @@ function AgentRowCard({
   );
 }
 
+// ─── Editor drawer ──────────────────────────────────────────────────
+
 function AgentEditor({
   def,
   isNew,
@@ -345,14 +430,19 @@ function AgentEditor({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"def" | "tools" | "exec">("def");
+
+  const noAllowlist = allowedText.split("\n").map((s) => s.trim()).filter(Boolean).length === 0;
 
   const handleSave = useCallback(async () => {
     setError(null);
     if (!draft.name.trim()) {
+      setTab("def");
       setError("Name is required.");
       return;
     }
     if (!draft.system_prompt.trim()) {
+      setTab("def");
       setError("System prompt is required.");
       return;
     }
@@ -389,21 +479,23 @@ function AgentEditor({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl h-full overflow-y-auto p-6 space-y-4 custom-scrollbar"
+        className="w-full md:w-1/2 md:max-w-[1000px] md:min-w-[640px] h-full overflow-y-auto p-6 space-y-4 custom-scrollbar"
         style={{
-          background: "var(--m3-surface-container)",
+          ...glassStyle,
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
           borderLeft: "0.5px solid var(--glass-border)",
         }}
       >
         <div className="flex items-center justify-between">
-          <h2 className="font-headline text-xl font-bold text-on-surface">
-            {isNew ? "New agent" : `Edit ${draft.name}`}
+          <h2 className="font-headline text-xl font-bold text-on-surface truncate">
+            {isNew ? "Creating new agent…" : `Editing ${draft.name || "agent"}`}
           </h2>
           <button
             type="button"
             onClick={onCancel}
             aria-label="Close editor"
-            className="p-1.5 rounded hover:bg-white/5 text-on-surface-variant hover:text-on-surface"
+            className="p-1.5 rounded hover:bg-white/5 text-on-surface-variant hover:text-on-surface shrink-0"
           >
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
@@ -422,106 +514,135 @@ function AgentEditor({
           </div>
         )}
 
-        <Field label="Name (unique identifier)">
-          <input
-            type="text"
-            value={draft.name}
-            onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
-            disabled={!isNew}
-            className="input-base font-mono"
-            placeholder="e.g. case-triage"
-          />
-        </Field>
+        <InvestigationTabBar
+          tabs={[
+            { key: "def", label: "Definition", icon: "badge" },
+            { key: "tools", label: "Tools", icon: "build" },
+            { key: "exec", label: "Execution", icon: "bolt" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
 
-        <Field label="Description">
-          <input
-            type="text"
-            value={draft.description}
-            onChange={(e) =>
-              setDraft((p) => ({ ...p, description: e.target.value }))
-            }
-            className="input-base"
-          />
-        </Field>
+        {tab === "def" && (
+          <>
+            <Field label="Name (unique identifier)">
+              <input
+                type="text"
+                value={draft.name}
+                onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
+                disabled={!isNew}
+                className="input-base font-mono"
+                placeholder="e.g. case-triage"
+              />
+            </Field>
 
-        <Field label="System prompt">
-          <textarea
-            value={draft.system_prompt}
-            onChange={(e) =>
-              setDraft((p) => ({ ...p, system_prompt: e.target.value }))
-            }
-            className="input-base font-body min-h-[200px]"
-            placeholder="The system instruction the subagent runs with…"
-          />
-        </Field>
+            <Field label="Description">
+              <input
+                type="text"
+                value={draft.description}
+                onChange={(e) =>
+                  setDraft((p) => ({ ...p, description: e.target.value }))
+                }
+                className="input-base"
+              />
+            </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Tools allowed (one glob per line; empty = all)">
-            <textarea
-              value={allowedText}
-              onChange={(e) => setAllowedText(e.target.value)}
-              className="input-base font-mono min-h-[120px]"
-              placeholder={"xsoar_*\ncortex_*"}
-            />
-          </Field>
-          <Field label="Tools denied (one glob per line)">
-            <textarea
-              value={deniedText}
-              onChange={(e) => setDeniedText(e.target.value)}
-              className="input-base font-mono min-h-[120px]"
-              placeholder={"*_delete\nxsoar_close_incident"}
-            />
-          </Field>
-        </div>
+            <Field label="System prompt">
+              <textarea
+                value={draft.system_prompt}
+                onChange={(e) =>
+                  setDraft((p) => ({ ...p, system_prompt: e.target.value }))
+                }
+                className="input-base font-body min-h-[200px]"
+                placeholder="The system instruction the subagent runs with…"
+              />
+            </Field>
+          </>
+        )}
 
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Max turns (1-50)">
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={draft.max_turns}
-              onChange={(e) =>
-                setDraft((p) => ({
-                  ...p,
-                  max_turns: Number(e.target.value) || 10,
-                }))
-              }
-              className="input-base"
-            />
-          </Field>
-          <Field label="Isolation">
-            <select
-              value={draft.isolation}
-              onChange={(e) =>
-                setDraft((p) => ({
-                  ...p,
-                  isolation: e.target.value as
-                    | "fresh_session"
-                    | "parent_session",
-                }))
-              }
-              className="input-base"
-            >
-              <option value="fresh_session">fresh_session (default)</option>
-              <option value="parent_session">parent_session (advanced)</option>
-            </select>
-          </Field>
-          <Field label="Model override (empty = inherit)">
-            <input
-              type="text"
-              value={draft.model ?? ""}
-              onChange={(e) =>
-                setDraft((p) => ({
-                  ...p,
-                  model: e.target.value || null,
-                }))
-              }
-              className="input-base font-mono"
-              placeholder="(inherit)"
-            />
-          </Field>
-        </div>
+        {tab === "tools" && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Tools allowed (one glob per line; empty = all)">
+                <textarea
+                  value={allowedText}
+                  onChange={(e) => setAllowedText(e.target.value)}
+                  className="input-base font-mono min-h-[160px]"
+                  placeholder={"xsoar_*\ncortex_*"}
+                />
+              </Field>
+              <Field label="Tools denied (one glob per line)">
+                <textarea
+                  value={deniedText}
+                  onChange={(e) => setDeniedText(e.target.value)}
+                  className="input-base font-mono min-h-[160px]"
+                  placeholder={"*_delete\nxsoar_close_incident"}
+                />
+              </Field>
+            </div>
+            {noAllowlist && (
+              <div className="rounded-xl border border-error/30 bg-error/10 p-3 text-xs text-error">
+                <span className="material-symbols-outlined text-sm align-middle mr-1">
+                  warning
+                </span>
+                No allowlist set — this agent will see ALL tools. Add at
+                least one allow glob to scope its catalog.
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === "exec" && (
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Max turns (1-50)">
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={draft.max_turns}
+                onChange={(e) =>
+                  setDraft((p) => ({
+                    ...p,
+                    max_turns: Number(e.target.value) || 10,
+                  }))
+                }
+                className="input-base"
+              />
+            </Field>
+            <Field label="Isolation">
+              <select
+                value={draft.isolation}
+                onChange={(e) =>
+                  setDraft((p) => ({
+                    ...p,
+                    isolation: e.target.value as
+                      | "fresh_session"
+                      | "parent_session",
+                  }))
+                }
+                className="input-base"
+              >
+                <option value="fresh_session">fresh_session (default)</option>
+                <option value="parent_session">parent_session (advanced)</option>
+              </select>
+            </Field>
+            <Field label="Model override (empty = inherit)">
+              <input
+                type="text"
+                value={draft.model ?? ""}
+                onChange={(e) =>
+                  setDraft((p) => ({
+                    ...p,
+                    model: e.target.value || null,
+                  }))
+                }
+                className="input-base font-mono"
+                placeholder="(inherit)"
+              />
+            </Field>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-xl border border-error/30 bg-error/10 p-3 text-xs text-error">

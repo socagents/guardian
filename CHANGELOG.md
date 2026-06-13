@@ -10,6 +10,28 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.7] (unreleased) — *Agents (subagents) CRUD modernization*
+
+The `/agents` page — where subagent definitions (system prompt + scoped tool catalog) are managed — gets the same polished glass/Material-3 treatment as the hooks + investigation pages. Pure UI; no change to the agent-definition store, the dispatch path, or the API.
+
+### What ships
+
+- **Summary cards** — total agents · enabled · operator-defined · plugin/built-in.
+- **Filter bar** — origin chips (All · Operator · Plugin · Built-in) + a name/description filter with an "N of M" count.
+- **Slimmer agent rows** — lead with badges (origin · model · ≤N turns) and a muted tool-scope line; the "no allowlist → sees ALL tools" warning is preserved as an inline hint.
+- **Wider, tabbed editor drawer** (~50% of page, was a narrow `max-w-2xl`) — fields grouped into tabs: **Definition** (name · description · system prompt), **Tools** (allowed/denied globs + the all-tools warning), **Execution** (max turns · isolation · model override). Validation jumps to the offending field's tab; the plugin-origin warning is preserved.
+- Shared glass empty-state with a "New agent" CTA.
+
+### Files
+
+- `mcp/agent/app/agents/page.tsx` (reuses `components/investigation/ui.tsx` primitives). Docs: `app/help/user/page.tsx`, `CHANGELOG.md`, `lib/release-notes.ts`. See [#21](https://github.com/kite-production/guardian/issues/21).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); stable data contract; volumes preserved. Patch bump (v0.2.7).
+
+---
+
 ## [v0.2.6] (unreleased) — *Post-v0.2.5 fixes: /jobs auth, chat-session viewer, hooks UI*
 
 Fixes for issues found right after v0.2.5 shipped.
