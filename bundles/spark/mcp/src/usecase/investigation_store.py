@@ -151,6 +151,7 @@ class InvestigationStore:
                     recommendations TEXT,
                     conclusions     TEXT,
                     next_steps      TEXT,
+                    attack_chain_svg TEXT,
                     created_at      TEXT NOT NULL,
                     updated_at      TEXT NOT NULL
                 )
@@ -158,6 +159,12 @@ class InvestigationStore:
             )
             c.execute("CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_issues_case ON issues(case_id)")
+            # v0.1.8 — attack-chain SVG (migrate existing dbs that predate the
+            # column). The SVG is read only on the issue DETAIL, never in the
+            # list, so it doesn't bloat list_issues payloads.
+            issue_cols = {r["name"] for r in c.execute("PRAGMA table_info(issues)")}
+            if "attack_chain_svg" not in issue_cols:
+                c.execute("ALTER TABLE issues ADD COLUMN attack_chain_svg TEXT")
             c.execute(
                 """
                 CREATE TABLE IF NOT EXISTS issue_events (
@@ -271,6 +278,26 @@ class InvestigationStore:
         with self._lock, self._conn() as c:
             cur = c.execute("DELETE FROM issues WHERE id = ?", (issue_id,))
         return cur.rowcount > 0
+
+    def set_attack_chain(self, issue_id: str, svg: str | None) -> bool:
+        """Store (or clear, with None) the issue's attack-chain SVG.
+
+        Kept off the Issue DTO so list_issues stays lean; read back via
+        get_attack_chain and surfaced only on the issue detail response.
+        """
+        with self._lock, self._conn() as c:
+            cur = c.execute(
+                "UPDATE issues SET attack_chain_svg = ?, updated_at = ? WHERE id = ?",
+                (svg, _now(), issue_id),
+            )
+        return cur.rowcount > 0
+
+    def get_attack_chain(self, issue_id: str) -> str | None:
+        with self._lock, self._conn() as c:
+            row = c.execute(
+                "SELECT attack_chain_svg FROM issues WHERE id = ?", (issue_id,)
+            ).fetchone()
+        return row["attack_chain_svg"] if row else None
 
     # ─── Cases ─────────────────────────────────────────────────────
 

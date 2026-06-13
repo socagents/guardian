@@ -79,3 +79,29 @@ def test_tools_handle_unwired_store():
     set_investigation_store(None)
     assert "error" in it.issues_list()
     assert "not initialized" in it.issues_list()["error"]
+
+
+def test_issue_set_attack_chain_round_trip(wired):
+    iid = it.issue_create(title="LM", kind="lateral_movement")["issue"]["id"]
+    svg = '<svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+    res = it.issue_set_attack_chain(iid, svg)
+    assert res.get("ok") is True and res["bytes"] > 0
+    assert wired.get_attack_chain(iid) == svg
+
+
+def test_issue_set_attack_chain_rejects_non_svg(wired):
+    iid = it.issue_create(title="x")["issue"]["id"]
+    assert "error" in it.issue_set_attack_chain(iid, "not an svg")
+    assert wired.get_attack_chain(iid) is None
+
+
+def test_issue_set_attack_chain_strips_active_content(wired):
+    iid = it.issue_create(title="x")["issue"]["id"]
+    svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect onload="x()"/></svg>'
+    assert it.issue_set_attack_chain(iid, svg).get("ok") is True
+    stored = wired.get_attack_chain(iid).lower()
+    assert "<script" not in stored and "onload" not in stored
+
+
+def test_issue_set_attack_chain_missing_issue(wired):
+    assert "error" in it.issue_set_attack_chain("nope", '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>')

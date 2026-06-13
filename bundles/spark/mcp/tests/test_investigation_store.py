@@ -191,3 +191,17 @@ def test_delete_issue_cascades_events(store):
 
 def test_add_event_to_missing_issue_returns_none(store):
     assert store.add_event("nope", "note", "x") is None
+
+
+def test_attack_chain_set_and_get(store):
+    issue = store.create_issue(title="x", kind="lateral_movement")
+    assert store.get_attack_chain(issue.id) is None
+    assert store.set_attack_chain(issue.id, "<svg/>") is True
+    assert store.get_attack_chain(issue.id) == "<svg/>"
+    # The SVG rides only on the detail path, never the lean Issue DTO/list.
+    assert not hasattr(store.list_issues()[0], "attack_chain_svg")
+
+
+def test_attack_chain_missing_issue(store):
+    assert store.set_attack_chain("nope", "<svg/>") is False
+    assert store.get_attack_chain("nope") is None

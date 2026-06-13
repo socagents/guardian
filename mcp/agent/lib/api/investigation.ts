@@ -48,6 +48,9 @@ export interface CaseRow {
 export interface IssueDetail extends Issue {
   events: IssueEvent[];
   case: CaseRow | null;
+  /** v0.1.8 — self-contained SVG attack chain (null until the agent draws one).
+   *  Rendered sandboxed as an <img> data-URI on the Attack-chain tab. */
+  attack_chain_svg: string | null;
 }
 
 export interface CaseDetail extends CaseRow {

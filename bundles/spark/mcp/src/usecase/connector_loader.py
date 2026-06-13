@@ -268,6 +268,7 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("issue_create", investigation_tools.issue_create),
     ("issue_update", investigation_tools.issue_update),
     ("issue_add_event", investigation_tools.issue_add_event),
+    ("issue_set_attack_chain", investigation_tools.issue_set_attack_chain),
     ("issue_get", investigation_tools.issue_get),
     ("issues_list", investigation_tools.issues_list),
     ("case_create", investigation_tools.case_create),

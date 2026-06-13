@@ -102,6 +102,9 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
             **_issue_dict(issue),
             "events": [dataclasses.asdict(e) for e in events],
             "case": dataclasses.asdict(case) if case else None,
+            # v0.1.8 — the attack-chain SVG rides on the detail only (kept off
+            # the lean list). Null until the agent generates one.
+            "attack_chain_svg": store.get_attack_chain(issue.id),
         })
 
     @mcp.custom_route("/api/v1/issues/{id}", methods=["PATCH"], include_in_schema=False)

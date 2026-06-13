@@ -193,6 +193,8 @@ Alongside the XSOAR case, keep a **local Guardian Issue** — Guardian's own rec
 
    Move status `open → investigating → resolved`/`closed` as the work progresses (set `investigating` at Step 3). Per Step 6's resolution gate, only move to `resolved` once a single root cause is supported — otherwise stay `investigating` and name the discriminating query in `next_steps`.
 
+   **When you resolve, draw the attack chain.** After recording the verdict, load the `svg_attack_chain` skill, emit a self-contained SVG of the attack's causal path (entry → pivots → action → impact), and attach it with `issue_set_attack_chain(issue_id, svg)`. It renders on the Issue's **Attack chain** tab — the causal companion to the Activity timeline. Skip only if the chain is genuinely a single step with nothing to draw.
+
 4. **Group related Issues into a Case** when you notice two or more Issues share a campaign, actor, or root cause:
 
    ```

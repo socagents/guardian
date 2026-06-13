@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.8",
+    date: "2026-06-13",
+    title: "Attack-chain diagrams — Guardian draws the causality chain.",
+    highlights: [
+      "Each investigation gets an SVG attack chain on the issue's 'Attack chain' tab.",
+      "Generated automatically when an investigation resolves; regenerate on demand.",
+      "Shows the causal path: entry → pivots → action → impact, with technique-labelled arrows.",
+      "Rendered sandboxed (SVG-in-img) so agent-produced markup can never execute.",
+    ],
+  },
+  {
     version: "0.1.7",
     date: "2026-06-13",
     title: "Investigation pages redesigned — full-width, tabbed, faster cases.",

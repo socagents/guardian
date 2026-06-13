@@ -19,6 +19,7 @@ store via the `investigation_store()` singleton and return a JSON-able dict
 from __future__ import annotations
 
 import dataclasses
+import re
 from typing import Any
 
 from usecase.investigation_store import investigation_store
@@ -164,6 +165,48 @@ def issue_get(issue_id: str) -> dict[str, Any]:
         "events": [dataclasses.asdict(e) for e in s.list_events(issue_id)],
         "case": dataclasses.asdict(case) if case else None,
     }
+
+
+def issue_set_attack_chain(issue_id: str, svg: str) -> dict[str, Any]:
+    """Attach an attack-chain (causality) diagram to an Issue as an SVG.
+
+    Call this when you RESOLVE an investigation (after recording the verdict)
+    to add a visual attack chain — the ordered path of the attack across
+    entities (e.g. attacker → entry → host/account → action → impact). It is
+    rendered on the Issue's "Attack chain" tab in the Investigation UI.
+
+    Produce the SVG per the `svg_attack_chain` skill: a SELF-CONTAINED SVG —
+    inline styles/attributes only, NO <script>, NO external fonts / images /
+    links — with a viewBox and left-to-right nodes connected by labelled
+    arrows. The UI renders it sandboxed (as an <img> data-URI, so scripts can
+    never execute); keeping it self-contained ensures it displays correctly.
+
+    Args:
+        issue_id: The Issue id (from issue_create / issues_list).
+        svg: The full SVG markup, starting with "<svg" and ending "</svg>".
+
+    Returns: {"ok": true, "issue_id": ..., "bytes": n} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    if not isinstance(svg, str):
+        return {"error": "svg must be a string"}
+    cleaned = svg.strip()
+    low = cleaned.lower()
+    if "<svg" not in low or "</svg>" not in low:
+        return {"error": "svg must be SVG markup containing <svg> … </svg>"}
+    if len(cleaned) > 256_000:
+        return {"error": f"svg too large ({len(cleaned)} bytes; cap 256000)"}
+    # Defense-in-depth: strip <script> blocks + inline on* handlers. The UI
+    # already renders the SVG sandboxed (an <img> data-URI never executes
+    # script), but never store active content.
+    cleaned = re.sub(r"<script\b[^>]*>.*?</script>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"\son\w+\s*=\s*\"[^\"]*\"", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\son\w+\s*=\s*'[^']*'", "", cleaned, flags=re.IGNORECASE)
+    if not s.set_attack_chain(issue_id, cleaned):
+        return {"error": f"issue {issue_id!r} not found"}
+    return {"ok": True, "issue_id": issue_id, "bytes": len(cleaned)}
 
 
 def issues_list(status: str | None = None, case_id: str | None = None) -> dict[str, Any]:

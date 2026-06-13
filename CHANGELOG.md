@@ -10,6 +10,30 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.8] (unreleased) — *Attack-chain SVG diagram*
+
+Guardian now draws a visual **attack chain** for each investigation — the causal path of the attack (entry → pivots → action → impact) — rendered on the issue's **Attack chain** tab. It generates automatically when an investigation resolves, and you can regenerate it on demand.
+
+### What ships
+
+- **Diagramming skill** (`svg_attack_chain`) — teaches the agent to emit a self-contained SVG of the attack chain (left-to-right nodes + labelled arrows, inline styling, own background, no scripts/external refs, XML-escaped labels), with a concrete template + palette.
+- **Agent tool** `issue_set_attack_chain(issue_id, svg)` — validates the SVG (`<svg>…</svg>`, ≤256 KB), defensively strips `<script>`/`on*`, and stores it. On the catalog side of the credential guardrail (agent-callable, no secrets).
+- **Automatic on resolve** — the `xsoar_case_investigation` skill now draws the chain at resolve time, so the autonomous loop produces one for every investigation.
+- **Safe rendering** — the Attack-chain tab renders the SVG via an `<img>` data-URI, which is sandboxed (SVG-in-`<img>` never executes script or fetches external resources) — so agent-produced markup can't run code.
+- **Regenerate** — a button on the tab redraws the diagram on demand (fires a one-shot agent pass; the tab polls until the new diagram lands).
+
+### Files
+
+- `bundles/spark/mcp/skills/workflows/svg_attack_chain.md` (new) + `xsoar_case_investigation.md` (resolve-step wiring).
+- `bundles/spark/mcp/src/usecase/investigation_store.py` (`attack_chain_svg` column + set/get) + `builtin_components/investigation_tools.py` + `connector_loader.py` + `api/investigation.py`.
+- `mcp/agent/lib/api/investigation.ts` + `app/investigation/issues/[id]/page.tsx`. +6 tests. See [#11](https://github.com/kite-production/guardian/issues/11).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); the `attack_chain_svg` column is additive (migration preserves existing issues); no installer change; volumes preserved. Patch bump (v0.1.8).
+
+---
+
 ## [v0.1.7] (unreleased) — *Investigation UI overhaul — full-width, tabbed, prettified*
 
 The Investigation pages (Issues + Cases) now match the skills/jobs page standard, and the issue detail is split into tabs instead of one long page.

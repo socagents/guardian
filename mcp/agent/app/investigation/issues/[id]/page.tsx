@@ -63,6 +63,7 @@ export default function IssueDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
+  const [regenerating, setRegenerating] = useState(false);
 
   // `silent` skips the full-page spinner — used for patch-triggered refetches
   // so editing a field doesn't flash the loading state. The initial mount (and
@@ -93,6 +94,59 @@ export default function IssueDetailPage() {
       load(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "update failed");
+    }
+  };
+
+  // Regenerate the attack-chain SVG: fire a one-shot agent job (reuses the
+  // scheduler — the agent reads the issue, draws the chain via the
+  // svg_attack_chain skill, and stores it with issue_set_attack_chain), then
+  // poll the issue until the SVG changes. Heavy op (a full agent turn), so we
+  // poll up to ~3 min and show a spinner.
+  const regenerate = async () => {
+    if (!issue || regenerating) return;
+    setRegenerating(true);
+    const before = issue.attack_chain_svg ?? "";
+    try {
+      await fetch("/api/agent/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `regen-diagram-${id}`,
+          cron: "* * * * *",
+          timezone: "UTC",
+          run_once: true,
+          enabled: true,
+          bypass_approvals: true,
+          action: {
+            type: "prompt",
+            skill: "svg_attack_chain",
+            message:
+              `Regenerate the attack-chain diagram for Guardian Issue ${id}. ` +
+              `First call issue_get(issue_id="${id}") to read the investigation ` +
+              `(summary, conclusions, activity timeline). Then, per the ` +
+              `svg_attack_chain skill, draw a self-contained SVG of the attack's ` +
+              `causal path and store it with issue_set_attack_chain(issue_id="${id}", ` +
+              `svg="<the full svg>"). Do only this — do not change any other field.`,
+          },
+        }),
+      });
+      const deadline = Date.now() + 180_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 5000));
+        try {
+          const det = await getIssue(id);
+          if (det.attack_chain_svg && (det.attack_chain_svg ?? "") !== before) {
+            setIssue(det);
+            break;
+          }
+        } catch {
+          /* transient — keep polling */
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "regenerate failed");
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -219,11 +273,49 @@ export default function IssueDetailPage() {
       )}
 
       {tab === "chain" && (
-        <EmptyState
-          icon="account_tree"
-          title="Attack-chain diagram"
-          hint="Guardian will render the causality / attack chain for this investigation as an SVG here — produced by the diagramming skill (shipping in v0.1.8). Until then, the timeline under Activity is the step-by-step record."
-        />
+        issue.attack_chain_svg ? (
+          <div className="rounded-2xl p-5" style={glassStyle}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] text-on-surface-variant">account_tree</span>
+                Attack chain
+              </h3>
+              <button
+                onClick={regenerate}
+                disabled={regenerating}
+                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[14px]">{regenerating ? "hourglass_top" : "refresh"}</span>
+                {regenerating ? "Regenerating… (≈1 min)" : "Regenerate"}
+              </button>
+            </div>
+            {/* Rendered sandboxed as an <img> data-URI — SVG-in-img never
+                executes script, so agent-produced markup can't run code. */}
+            <div className="rounded-xl overflow-hidden bg-surface-container-lowest border border-outline-variant">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`data:image/svg+xml;utf8,${encodeURIComponent(issue.attack_chain_svg)}`}
+                alt="Attack chain diagram"
+                className="w-full h-auto block"
+              />
+            </div>
+          </div>
+        ) : (
+          <EmptyState
+            icon="account_tree"
+            title="No attack chain yet"
+            hint="Guardian draws the causality / attack chain when it resolves an investigation. You can also generate it now (a full agent pass — takes about a minute)."
+          >
+            <button
+              onClick={regenerate}
+              disabled={regenerating}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-on-primary px-4 py-2 text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[18px]">{regenerating ? "hourglass_top" : "auto_awesome"}</span>
+              {regenerating ? "Generating… (≈1 min)" : "Generate diagram"}
+            </button>
+          </EmptyState>
+        )
       )}
     </div>
   );
