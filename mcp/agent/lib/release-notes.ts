@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.8",
+    date: "2026-06-13",
+    title: "Tasks page — clearer purpose + modernized presentation.",
+    highlights: [
+      "The /tasks page now states what it's for: long-running background work the agent or you spawned (enrichment sweeps, compactions, subagent hunts, hook runs).",
+      "Added summary cards (total/running/succeeded/failed) and a cleaner status filter.",
+      "Slimmer task rows with status + kind badges; progress, abort, and details retained.",
+    ],
+  },
+  {
     version: "0.2.7",
     date: "2026-06-13",
     title: "Agents page modernized — subagent CRUD with a tabbed, scoped-tools editor.",

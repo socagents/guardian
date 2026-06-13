@@ -10,6 +10,28 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.8] (unreleased) — *Tasks page — framing + modernization*
+
+The `/tasks` page gets a clear use-case framing and the same polished glass/Material-3 treatment as the hooks, agents, and investigation pages. Pure UI; the task store + API are unchanged.
+
+### What ships
+
+- **Use-case framing** — a one-line description names what tasks *are*: long-running background work Guardian spawns (enrichment sweeps, context compactions, subagent hunts, hook runs) kicked off by you or the agent — watch progress, abort what's stale, review results. (Distinct from Issues = findings and Jobs = scheduled/recurring.)
+- **Summary cards** — total · running · succeeded · failed.
+- **Restyled status filter** (All · Active · Succeeded · Failed · Aborted) + an N-of-M count.
+- **Slimmer task rows** — title + status `Badge` + kind `Badge`, the progress bar / label / elapsed / abort button retained, and the expand panel (timestamps · id · output · metadata) kept. Tasks stay grouped by kind.
+- Shared glass empty-state.
+
+### Files
+
+- `mcp/agent/app/tasks/page.tsx` (reuses `components/investigation/ui.tsx` primitives). Docs: `CHANGELOG.md`, `lib/release-notes.ts`. See [#22](https://github.com/kite-production/guardian/issues/22).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); stable data contract; volumes preserved. Patch bump (v0.2.8).
+
+---
+
 ## [v0.2.7] (unreleased) — *Agents (subagents) CRUD modernization*
 
 The `/agents` page — where subagent definitions (system prompt + scoped tool catalog) are managed — gets the same polished glass/Material-3 treatment as the hooks + investigation pages. Pure UI; no change to the agent-definition store, the dispatch path, or the API.
