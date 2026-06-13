@@ -10,6 +10,27 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.5] (unreleased) — *Two incident-response hooks (built-in)*
+
+Two Guardian-specific policy hooks ship as **built-ins** — in-process, agent-image, no subprocess and no host scripts. Install either from `/settings/hooks` with a dropdown pick + the tool glob; no code, no installer change.
+
+### What ships
+
+- **Block close without verdict** (`block-close-without-verdict`, PreToolUse) — denies `xsoar_close_incident` when the local Guardian Issue tracking that incident has no recorded `VERDICT:` line. Enforces a documented disposition before any incident is closed — the single most damaging analyst mistake is closing with no recorded verdict. Reads only investigation metadata (`GET /api/v1/issues`); never a secret. Conservative by default (untracked incidents pass); a `block_if_untracked` toggle makes it strict. Pair with `failurePolicy: block` (fail-closed) + tool glob `xsoar_close_incident`.
+- **Flag malicious indicator** (`flag-malicious-indicator`, PostToolUse) — scans an `xsoar_enrich_indicator` result for a DBotScore at/above the malicious threshold (3) and injects a confirmed-bad flag into the agent's next turn, nudging it to record the IOC + recommend containment. Inspect-only (reads the result already in the payload, no external call). Pair with `failurePolicy: warn` + tool glob `xsoar_enrich_indicator`.
+
+Both are on the catalog/workflow side of the credential guardrail — they read investigation metadata or inspect a tool result, and never read, write, or emit a SecretStore value. Builtins run in-process (no arbitrary command execution), the safest of the hook transports.
+
+### Files
+
+- `mcp/agent/lib/hook-builtins/block-close-without-verdict.ts` + `flag-malicious-indicator.ts` + `index.ts` (registry). They auto-appear in the `/settings/hooks` built-in dropdown via `/api/agent/hooks/builtins`. Docs: `app/help/user/page.tsx#hooks-ux`, `CHANGELOG.md`, `lib/release-notes.ts`. See [#19](https://github.com/kite-production/guardian/issues/19).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); no storage/installer change; volumes preserved. Patch bump (v0.2.5).
+
+---
+
 ## [v0.2.4] (unreleased) — *Hooks page modernization*
 
 The `/settings/hooks` CRUD views get the same polished, glass, Material-3 treatment as the Investigation pages. Pure UI — no change to the hook engine, transports, events, or the stored hook shape.

@@ -3375,6 +3375,41 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </ul>
             </SubSection>
 
+            <SubSection icon="security" title="Guardian IR built-ins (v0.2.5)">
+              <p>
+                Two built-in hooks ship for the incident-response workflow —
+                install either from the <Term>Transport → Built-in</Term>{" "}
+                dropdown with a tool glob; no code, no subprocess:
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm">
+                <li>
+                  <Term>Block close without verdict</Term> —{" "}
+                  <Code>PreToolUse</Code> on{" "}
+                  <Code>xsoar_close_incident</Code>. Denies the close when the
+                  Guardian Issue tracking that incident has no recorded{" "}
+                  <Code>VERDICT:</Code> line, so no incident is closed without a
+                  documented disposition. Use <Code>failurePolicy: block</Code>{" "}
+                  (fail-closed). Conservative by default — closes of incidents
+                  Guardian isn&apos;t tracking pass through; flip{" "}
+                  <Term>block_if_untracked</Term> for strict mode.
+                </li>
+                <li>
+                  <Term>Flag malicious indicator</Term> —{" "}
+                  <Code>PostToolUse</Code> on{" "}
+                  <Code>xsoar_enrich_indicator</Code>. When an enrichment
+                  returns a DBotScore of 3 (malicious), injects a confirmed-bad
+                  flag into the agent&apos;s next turn — nudging it to record the
+                  indicator and recommend containment. Informational only
+                  (can&apos;t block); use <Code>failurePolicy: warn</Code>.
+                </li>
+              </ul>
+              <p>
+                Both read only investigation metadata (or inspect the tool
+                result) and never touch a stored secret — they sit on the
+                catalog side of the credential guardrail.
+              </p>
+            </SubSection>
+
             <SubSection icon="add_circle" title="Installing a hook">
               <p>
                 Click <Term>New hook</Term> on{" "}

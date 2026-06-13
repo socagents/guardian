@@ -32,6 +32,8 @@ import { slackApprovalBuiltin } from "./slack-approval";
 import { preCompactContextWarningBuiltin } from "./pre-compact-context-warning";
 import { memoryInjectBuiltin } from "./memory-inject";
 import { costWarnOverBudgetBuiltin } from "./cost-warn-over-budget";
+import { blockCloseWithoutVerdictBuiltin } from "./block-close-without-verdict";
+import { flagMaliciousIndicatorBuiltin } from "./flag-malicious-indicator";
 
 /** Registry indexed by spec.name. Frozen so accidental mutation at
  *  runtime is a type error. */
@@ -41,6 +43,8 @@ export const BUILTIN_HOOKS: Readonly<Record<string, BuiltinHookSpec>> =
     [preCompactContextWarningBuiltin.name]: preCompactContextWarningBuiltin,
     [memoryInjectBuiltin.name]: memoryInjectBuiltin,
     [costWarnOverBudgetBuiltin.name]: costWarnOverBudgetBuiltin,
+    [blockCloseWithoutVerdictBuiltin.name]: blockCloseWithoutVerdictBuiltin,
+    [flagMaliciousIndicatorBuiltin.name]: flagMaliciousIndicatorBuiltin,
   });
 
 /** Lookup by name. Returns undefined when the name doesn't match any

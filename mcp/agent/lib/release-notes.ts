@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.5",
+    date: "2026-06-13",
+    title: "Two built-in incident-response hooks — verdict gate + malicious-indicator flag.",
+    highlights: [
+      "Block close without verdict: denies xsoar_close_incident when the Guardian Issue has no recorded VERDICT — install from /settings/hooks, no code.",
+      "Flag malicious indicator: injects a confirmed-bad flag when an enrichment returns DBotScore 3, nudging containment.",
+      "Both are in-process built-ins (no subprocess, no host scripts) and never touch secrets — install via dropdown + a tool glob.",
+    ],
+  },
+  {
     version: "0.2.4",
     date: "2026-06-13",
     title: "Hooks page modernized — stat cards, filters, tabbed editor.",
