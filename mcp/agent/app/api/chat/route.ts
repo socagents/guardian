@@ -4871,6 +4871,7 @@ export async function POST(request: NextRequest) {
             // calls hit the wrong tenant). Fires BEFORE the
             // approval-card poll loop so a hook deny short-circuits
             // the whole gating flow.
+            console.warn(`[hookdbg] PreToolUse fire-site reached: tool=${toolName} trigger=${trigger ?? 'none'}`);
             const preToolHook = await fireHookEvent(
               'PreToolUse',
               {
