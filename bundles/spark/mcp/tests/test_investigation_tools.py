@@ -105,3 +105,27 @@ def test_issue_set_attack_chain_strips_active_content(wired):
 
 def test_issue_set_attack_chain_missing_issue(wired):
     assert "error" in it.issue_set_attack_chain("nope", '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>')
+
+
+def test_indicator_tools_flow(wired):
+    import json as _json
+    from usecase.builtin_components import indicator_tools as ind
+    iid = it.issue_create(title="x", kind="malware")["issue"]["id"]
+    r = ind.indicator_upsert(value="1.2.3.4", type="ip", issue_id=iid, dbot_score=3,
+                             enrichment={"country": "AT"}, source="guardian")
+    assert "indicator" in r and r["indicator"]["value"] == "1.2.3.4"
+    assert _json.loads(r["indicator"]["enrichment"]) == {"country": "AT"}
+    assert ind.indicators_list()["count"] == 1
+    assert ind.indicators_list(type="domain")["count"] == 0
+    det = ind.indicator_get(r["indicator"]["id"])
+    assert det["indicator"]["issues"][0]["id"] == iid
+
+
+def test_indicator_upsert_rejects_empty(wired):
+    from usecase.builtin_components import indicator_tools as ind
+    assert "error" in ind.indicator_upsert(value="", type="ip")
+
+
+def test_indicator_get_missing(wired):
+    from usecase.builtin_components import indicator_tools as ind
+    assert "error" in ind.indicator_get("nope")

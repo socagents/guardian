@@ -92,6 +92,30 @@ class IssueEvent:
     content: str
 
 
+@dataclass(frozen=True)
+class Indicator:
+    """An IoC seen across investigations, deduped by (value, type).
+
+    `enrichment` is a JSON string (DBotScore detail, sources, …) so the
+    shape stays flexible; `source` is 'guardian' (extracted by the agent
+    during investigation) or 'xsoar' (imported from the SOAR on fetch).
+    """
+    id: str
+    value: str
+    type: str
+    dbot_score: int | None
+    enrichment: str | None
+    source: str
+    first_seen: str
+    last_seen: str
+    created_at: str
+    updated_at: str
+
+
+# Common IoC types (free-form accepted; the tool/API may validate).
+INDICATOR_TYPES = ("ip", "domain", "url", "file_hash", "email", "cve", "host", "account")
+
+
 def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -178,6 +202,37 @@ class InvestigationStore:
                 """
             )
             c.execute("CREATE INDEX IF NOT EXISTS idx_events_issue ON issue_events(issue_id)")
+            # v0.2.0 — Indicators (IoCs). New tables → CREATE IF NOT EXISTS
+            # creates them on existing dbs too (no column migration needed).
+            # Deduped by (value, type); linked M:N to issues.
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS indicators (
+                    id           TEXT PRIMARY KEY,
+                    value        TEXT NOT NULL,
+                    type         TEXT NOT NULL,
+                    dbot_score   INTEGER,
+                    enrichment   TEXT,
+                    source       TEXT NOT NULL DEFAULT 'guardian',
+                    first_seen   TEXT NOT NULL,
+                    last_seen    TEXT NOT NULL,
+                    created_at   TEXT NOT NULL,
+                    updated_at   TEXT NOT NULL,
+                    UNIQUE(value, type)
+                )
+                """
+            )
+            c.execute("CREATE INDEX IF NOT EXISTS idx_indicators_type ON indicators(type)")
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS indicator_issues (
+                    indicator_id TEXT NOT NULL REFERENCES indicators(id) ON DELETE CASCADE,
+                    issue_id     TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+                    PRIMARY KEY (indicator_id, issue_id)
+                )
+                """
+            )
+            c.execute("CREATE INDEX IF NOT EXISTS idx_ind_issues_issue ON indicator_issues(issue_id)")
 
     # ─── Issues ────────────────────────────────────────────────────
 
@@ -438,6 +493,121 @@ class InvestigationStore:
             for r in rows
         ]
 
+    # ─── Indicators (IoCs) ─────────────────────────────────────────
+
+    def upsert_indicator(
+        self,
+        value: str,
+        type: str,
+        issue_id: str | None = None,
+        dbot_score: int | None = None,
+        enrichment: str | None = None,
+        source: str = "guardian",
+    ) -> Indicator:
+        """Insert or update an IoC (deduped by value+type), bumping last_seen
+        and optionally linking it to an issue. Re-seeing an IoC updates the
+        existing row + adds the link, never duplicating."""
+        value = (value or "").strip()
+        type = (type or "").strip().lower()
+        if not value or not type:
+            raise ValueError("value and type are required")
+        ts = _now()
+        with self._lock, self._conn() as c:
+            row = c.execute(
+                "SELECT id FROM indicators WHERE value = ? AND type = ?", (value, type)
+            ).fetchone()
+            if row:
+                ind_id = row["id"]
+                sets = ["last_seen = ?", "updated_at = ?"]
+                params: list = [ts, ts]
+                if dbot_score is not None:
+                    sets.append("dbot_score = ?"); params.append(int(dbot_score))
+                if enrichment is not None:
+                    sets.append("enrichment = ?"); params.append(enrichment)
+                if source:
+                    sets.append("source = ?"); params.append(source)
+                params.append(ind_id)
+                c.execute(f"UPDATE indicators SET {', '.join(sets)} WHERE id = ?", params)
+            else:
+                ind_id = str(uuid.uuid4())
+                c.execute(
+                    "INSERT INTO indicators (id, value, type, dbot_score, enrichment, "
+                    "source, first_seen, last_seen, created_at, updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (ind_id, value, type,
+                     int(dbot_score) if dbot_score is not None else None,
+                     enrichment, source or "guardian", ts, ts, ts, ts),
+                )
+            if issue_id:
+                # Link only if the issue exists (FK is ON); skip silently otherwise.
+                if c.execute("SELECT 1 FROM issues WHERE id = ?", (issue_id,)).fetchone():
+                    c.execute(
+                        "INSERT OR IGNORE INTO indicator_issues (indicator_id, issue_id) "
+                        "VALUES (?, ?)",
+                        (ind_id, issue_id),
+                    )
+            r = c.execute("SELECT * FROM indicators WHERE id = ?", (ind_id,)).fetchone()
+        return self._row_to_indicator(r)
+
+    def list_indicators(self, type: str | None = None, issue_id: str | None = None) -> list[dict]:
+        """Indicators with an `issue_count` (for the list UI). Optional filter
+        by type or by the issue they're linked to. Single-pass GROUP BY."""
+        clauses: list[str] = []
+        params: list = []
+        join = ""
+        if issue_id:
+            join = "JOIN indicator_issues li2 ON li2.indicator_id = i.id "
+            clauses.append("li2.issue_id = ?"); params.append(issue_id)
+        if type:
+            clauses.append("i.type = ?"); params.append(type.lower())
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        with self._lock, self._conn() as c:
+            rows = c.execute(
+                "SELECT i.*, COUNT(DISTINCT li.issue_id) AS issue_count "
+                "FROM indicators i LEFT JOIN indicator_issues li ON li.indicator_id = i.id "
+                f"{join}{where} GROUP BY i.id "
+                "ORDER BY i.last_seen DESC, i.created_at DESC",
+                params,
+            ).fetchall()
+        return [
+            {**self._row_to_indicator(r).__dict__, "issue_count": int(r["issue_count"])}
+            for r in rows
+        ]
+
+    def get_indicator(self, indicator_id: str) -> dict | None:
+        """One indicator + the issues it's linked to (id/title/kind/status/ref)."""
+        with self._lock, self._conn() as c:
+            row = c.execute(
+                "SELECT * FROM indicators WHERE id = ?", (indicator_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            issues = c.execute(
+                "SELECT s.id, s.title, s.kind, s.status, s.source_ref FROM issues s "
+                "JOIN indicator_issues li ON li.issue_id = s.id "
+                "WHERE li.indicator_id = ? ORDER BY s.updated_at DESC",
+                (indicator_id,),
+            ).fetchall()
+        return {
+            **self._row_to_indicator(row).__dict__,
+            "issues": [
+                {"id": r["id"], "title": r["title"], "kind": r["kind"],
+                 "status": r["status"], "source_ref": r["source_ref"]}
+                for r in issues
+            ],
+        }
+
+    def list_indicators_for_issue(self, issue_id: str) -> list[Indicator]:
+        """The indicators linked to one issue (the issue's extracted-IoCs section)."""
+        with self._lock, self._conn() as c:
+            rows = c.execute(
+                "SELECT i.* FROM indicators i "
+                "JOIN indicator_issues li ON li.indicator_id = i.id "
+                "WHERE li.issue_id = ? ORDER BY i.type, i.value",
+                (issue_id,),
+            ).fetchall()
+        return [self._row_to_indicator(r) for r in rows]
+
     # ─── Row mappers ───────────────────────────────────────────────
 
     @staticmethod
@@ -457,6 +627,16 @@ class InvestigationStore:
         return Case(
             id=row["id"], title=row["title"], description=row["description"],
             status=row["status"], created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _row_to_indicator(row: sqlite3.Row) -> Indicator:
+        return Indicator(
+            id=row["id"], value=row["value"], type=row["type"],
+            dbot_score=row["dbot_score"], enrichment=row["enrichment"],
+            source=row["source"], first_seen=row["first_seen"],
+            last_seen=row["last_seen"], created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
 

@@ -17,7 +17,11 @@ import {
   SEVERITY_TOKENS,
   STATUS_TOKENS,
   kindLabel,
+  dbotMeta,
+  indicatorTypeLabel,
+  INDICATOR_TYPE_ICON,
   type Issue,
+  type Indicator,
 } from "@/lib/api/investigation";
 
 /** The glass effect skills/jobs use, verbatim (mirrors app/jobs/page.tsx). */
@@ -266,6 +270,102 @@ export function EditableSection({
       ) : (
         <p className="text-sm text-on-surface-variant/50 italic">Not recorded yet.</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Per-issue-type layout config (v0.2.0). Each kind gets a glyph, an accent,
+ * a one-line investigative "focus", and the IoC types that matter most for it —
+ * driving the issue-detail header + the emphasis of the Indicators tab. Config-
+ * driven (not separate components) so it stays maintainable + extensible.
+ */
+export const KIND_LAYOUT: Record<
+  string,
+  { icon: string; accent: string; focus: string; iocTypes: string[] }
+> = {
+  phishing: {
+    icon: "phishing",
+    accent: "text-primary",
+    focus: "Sender, lookalike domain, and the credential-harvest URL — confirm whether credentials were entered.",
+    iocTypes: ["domain", "url", "email", "ip"],
+  },
+  malware: {
+    icon: "bug_report",
+    accent: "text-error",
+    focus: "The malicious binary (hash) and its C2 — check host isolation and campaign spread.",
+    iocTypes: ["file_hash", "ip", "domain", "host"],
+  },
+  lateral_movement: {
+    icon: "lan",
+    accent: "text-tertiary",
+    focus: "The principal (account) and the credential-touch graph — which other hosts it reached.",
+    iocTypes: ["account", "host", "ip"],
+  },
+  access_violation: {
+    icon: "key",
+    accent: "text-tertiary",
+    focus: "The principal, logon type, and policy window — is this access authorized?",
+    iocTypes: ["account", "ip", "host"],
+  },
+  other: {
+    icon: "report",
+    accent: "text-on-surface-variant",
+    focus: "Triage the finding, enrich its indicators, and reach a verdict.",
+    iocTypes: ["ip", "domain", "url", "file_hash"],
+  },
+};
+
+export function kindLayout(kind: string) {
+  return KIND_LAYOUT[kind] ?? KIND_LAYOUT.other;
+}
+
+/** A reusable indicator (IoC) row — used by the Indicators list AND the issue's
+ *  Indicators tab. `emphasized` highlights the IoC types that matter for the
+ *  current issue kind. */
+export function IndicatorRow({
+  indicator,
+  emphasized = false,
+  href,
+}: {
+  indicator: Indicator;
+  emphasized?: boolean;
+  href?: string;
+}) {
+  const dbot = dbotMeta(indicator.dbot_score);
+  const body = (
+    <div className="flex items-center gap-3">
+      <span className="material-symbols-outlined text-[20px] text-on-surface-variant/70 shrink-0">
+        {INDICATOR_TYPE_ICON[indicator.type] ?? "fingerprint"}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="font-mono text-sm text-on-surface truncate">{indicator.value}</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-on-surface-variant">
+          <Badge>{indicatorTypeLabel(indicator.type)}</Badge>
+          <Badge tone={dbot.tone}>{dbot.label}</Badge>
+          {indicator.source === "xsoar" && <Badge tone="text-tertiary border-tertiary/30">from XSOAR</Badge>}
+          {typeof indicator.issue_count === "number" && (
+            <span className="inline-flex items-center gap-0.5">
+              <span className="material-symbols-outlined text-[13px]">report</span>
+              {indicator.issue_count}
+            </span>
+          )}
+          <span className="text-on-surface-variant/60">seen {fmtTs(indicator.last_seen)}</span>
+        </div>
+      </div>
+      {href && <span className="material-symbols-outlined text-on-surface-variant/40">chevron_right</span>}
+    </div>
+  );
+  const cls = `block rounded-xl p-4 transition-all ${
+    emphasized ? "ring-1 ring-primary/30" : ""
+  } ${href ? "hover:shadow-[0_0_20px_rgba(25,99,179,0.1)]" : ""}`;
+  return href ? (
+    <Link href={href} className={cls} style={glassStyle}>
+      {body}
+    </Link>
+  ) : (
+    <div className={cls} style={glassStyle}>
+      {body}
     </div>
   );
 }

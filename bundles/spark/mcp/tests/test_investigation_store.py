@@ -205,3 +205,32 @@ def test_attack_chain_set_and_get(store):
 def test_attack_chain_missing_issue(store):
     assert store.set_attack_chain("nope", "<svg/>") is False
     assert store.get_attack_chain("nope") is None
+
+
+def test_indicator_upsert_dedup_link_and_queries(store):
+    i1 = store.create_issue(title="a", kind="phishing")
+    i2 = store.create_issue(title="b", kind="phishing")
+    ind = store.upsert_indicator("evil.com", "domain", issue_id=i1.id, dbot_score=3, source="guardian")
+    assert ind.value == "evil.com" and ind.type == "domain" and ind.dbot_score == 3
+    # re-seeing in another issue → SAME row, linked to both, source updated
+    ind2 = store.upsert_indicator("evil.com", "domain", issue_id=i2.id, source="xsoar")
+    assert ind2.id == ind.id
+    listed = store.list_indicators()
+    assert len(listed) == 1 and listed[0]["issue_count"] == 2 and listed[0]["source"] == "xsoar"
+    # filters
+    assert store.list_indicators(type="domain")[0]["id"] == ind.id
+    assert store.list_indicators(type="ip") == []
+    assert len(store.list_indicators(issue_id=i1.id)) == 1
+    # detail carries related issues; per-issue list
+    detail = store.get_indicator(ind.id)
+    assert {x["id"] for x in detail["issues"]} == {i1.id, i2.id}
+    assert [x.id for x in store.list_indicators_for_issue(i1.id)] == [ind.id]
+
+
+def test_upsert_indicator_requires_value_and_type(store):
+    with pytest.raises(ValueError):
+        store.upsert_indicator("", "ip")
+
+
+def test_get_missing_indicator_returns_none(store):
+    assert store.get_indicator("nope") is None

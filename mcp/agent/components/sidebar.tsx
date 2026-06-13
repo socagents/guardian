@@ -77,6 +77,8 @@ const navEntries: NavEntry[] = [
     children: [
       { href: "/investigation/issues", label: "Issues", icon: "report" },
       { href: "/investigation/cases", label: "Cases", icon: "cases" },
+      // v0.2.0 — Indicators (IoCs extracted from issues + imported from the SOAR).
+      { href: "/investigation/indicators", label: "Indicators", icon: "fingerprint" },
     ],
   },
   {

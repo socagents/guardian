@@ -232,4 +232,24 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
             )
         return JSONResponse(_issue_dict(updated))
 
-    logger.info("Investigation routes registered (issues + cases)")
+    # ─── Indicators (IoCs) ─────────────────────────────────────────
+
+    @mcp.custom_route("/api/v1/indicators", methods=["GET"], include_in_schema=False)
+    async def list_indicators(request: Request) -> JSONResponse:
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        type_ = request.query_params.get("type") or None
+        issue_id = request.query_params.get("issue_id") or None
+        inds = store.list_indicators(type=type_, issue_id=issue_id)
+        return JSONResponse({"indicators": inds, "count": len(inds)})
+
+    @mcp.custom_route("/api/v1/indicators/{id}", methods=["GET"], include_in_schema=False)
+    async def get_indicator(request: Request) -> JSONResponse:
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        ind = store.get_indicator(request.path_params["id"])
+        if ind is None:
+            return JSONResponse({"error": "indicator not found"}, status_code=404)
+        return JSONResponse(ind)
+
+    logger.info("Investigation routes registered (issues + cases + indicators)")

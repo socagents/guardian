@@ -8,12 +8,14 @@ import {
   getIssue,
   updateIssue,
   listCases,
+  listIndicators,
   addIssueToCase,
   kindLabel,
   SEVERITY_TOKENS,
   STATUS_TOKENS,
   type IssueDetail,
   type CaseRow,
+  type Indicator,
 } from "@/lib/api/investigation";
 import {
   glassStyle,
@@ -22,6 +24,8 @@ import {
   InvestigationTabBar,
   EditableSection,
   EmptyState,
+  IndicatorRow,
+  kindLayout,
   fmtTs,
   splitVerdict,
   verdictTone,
@@ -41,10 +45,11 @@ import {
 const STATUSES = ["open", "investigating", "resolved", "closed"];
 const SEVERITIES = ["low", "medium", "high", "critical"];
 
-type Tab = "overview" | "assessment" | "activity" | "chain";
+type Tab = "overview" | "assessment" | "indicators" | "activity" | "chain";
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "overview", label: "Overview", icon: "dashboard" },
   { key: "assessment", label: "Assessment", icon: "gavel" },
+  { key: "indicators", label: "Indicators", icon: "fingerprint" },
   { key: "activity", label: "Activity", icon: "timeline" },
   { key: "chain", label: "Attack chain", icon: "account_tree" },
 ];
@@ -61,6 +66,7 @@ export default function IssueDetailPage() {
   const id = params.id;
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
+  const [issueIndicators, setIssueIndicators] = useState<Indicator[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
@@ -76,9 +82,14 @@ export default function IssueDetailPage() {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const [det, cl] = await Promise.all([getIssue(id), listCases()]);
+      const [det, cl, inds] = await Promise.all([
+        getIssue(id),
+        listCases(),
+        listIndicators({ issue_id: id }),
+      ]);
       setIssue(det);
       setCases(cl.cases);
+      setIssueIndicators(inds.indicators);
     } catch (e) {
       setError(e instanceof Error ? e.message : "failed to load issue");
     } finally {
@@ -169,6 +180,7 @@ export default function IssueDetailPage() {
   if (!issue) return <p className="text-sm text-on-surface-variant p-8 text-center">Issue not found.</p>;
 
   const { verdict } = splitVerdict(issue.summary);
+  const layout = kindLayout(issue.kind);
 
   return (
     <div className="max-w-[1400px] mx-auto px-8 py-8 pb-32">
@@ -179,7 +191,7 @@ export default function IssueDetailPage() {
       {/* Header */}
       <div className="rounded-2xl p-6 mb-6" style={glassStyle}>
         <div className="flex items-start gap-4">
-          <span className="material-symbols-outlined text-2xl text-primary mt-0.5">report</span>
+          <span className={`material-symbols-outlined text-2xl mt-0.5 ${layout.accent}`}>{layout.icon}</span>
           <div className="flex-1 min-w-0">
             <h1 className="font-headline text-2xl font-bold tracking-tight text-on-surface">{issue.title}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -194,6 +206,10 @@ export default function IssueDetailPage() {
               )}
               <span className="text-[11px] text-on-surface-variant/60">updated {fmtTs(issue.updated_at)}</span>
             </div>
+            <p className="text-xs text-on-surface-variant/80 mt-2 flex items-start gap-1.5">
+              <span className="material-symbols-outlined text-[14px] mt-0.5 shrink-0">center_focus_strong</span>
+              <span>{layout.focus}</span>
+            </p>
           </div>
         </div>
 
@@ -259,6 +275,27 @@ export default function IssueDetailPage() {
           <EditableSection icon="gavel" label="Conclusions" value={issue.conclusions ?? ""} onSave={(v) => patch({ conclusions: v })} />
           <EditableSection icon="checklist" label="Next steps" value={issue.next_steps ?? ""} onSave={(v) => patch({ next_steps: v })} />
         </div>
+      )}
+
+      {tab === "indicators" && (
+        issueIndicators.length === 0 ? (
+          <EmptyState
+            icon="fingerprint"
+            title="No indicators extracted yet"
+            hint="As Guardian enriches IoCs during this investigation — or imports them from the fetched XSOAR case — they appear here (and on the Indicators page). Types that matter for this case kind are highlighted."
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-3">
+            {issueIndicators.map((ind) => (
+              <IndicatorRow
+                key={ind.id}
+                indicator={ind}
+                href={`/investigation/indicators/${ind.id}`}
+                emphasized={layout.iocTypes.includes(ind.type)}
+              />
+            ))}
+          </div>
+        )
       )}
 
       {tab === "activity" && (

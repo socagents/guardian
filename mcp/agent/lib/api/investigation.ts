@@ -190,3 +190,86 @@ export const KIND_LABELS: Record<string, string> = {
 export function kindLabel(k: string): string {
   return KIND_LABELS[k] ?? k;
 }
+
+// ── Indicators (IoCs) — v0.2.0 ──────────────────────────────────────
+
+export interface Indicator {
+  id: string;
+  value: string;
+  type: string;
+  dbot_score: number | null;
+  enrichment: string | null; // JSON string
+  source: string; // "guardian" | "xsoar"
+  first_seen: string;
+  last_seen: string;
+  created_at: string;
+  updated_at: string;
+  issue_count?: number;
+}
+
+export interface IndicatorIssueRef {
+  id: string;
+  title: string;
+  kind: string;
+  status: string;
+  source_ref: string | null;
+}
+
+export interface IndicatorDetail extends Indicator {
+  issues: IndicatorIssueRef[];
+}
+
+export async function listIndicators(params?: {
+  type?: string;
+  issue_id?: string;
+}): Promise<{ indicators: Indicator[]; count: number }> {
+  const q = new URLSearchParams();
+  if (params?.type) q.set("type", params.type);
+  if (params?.issue_id) q.set("issue_id", params.issue_id);
+  const qs = q.toString() ? `?${q}` : "";
+  return jsonOrThrow(await fetch(`/api/agent/indicators${qs}`, { cache: "no-store" }));
+}
+
+export async function getIndicator(id: string): Promise<IndicatorDetail> {
+  return jsonOrThrow(await fetch(`/api/agent/indicators/${id}`, { cache: "no-store" }));
+}
+
+export const INDICATOR_TYPE_ICON: Record<string, string> = {
+  ip: "lan",
+  domain: "language",
+  url: "link",
+  file_hash: "fingerprint",
+  email: "mail",
+  cve: "gpp_maybe",
+  host: "computer",
+  account: "person",
+};
+
+export const INDICATOR_TYPE_LABELS: Record<string, string> = {
+  ip: "IP",
+  domain: "Domain",
+  url: "URL",
+  file_hash: "File hash",
+  email: "Email",
+  cve: "CVE",
+  host: "Host",
+  account: "Account",
+};
+
+export function indicatorTypeLabel(t: string): string {
+  return INDICATOR_TYPE_LABELS[t] ?? t;
+}
+
+/** DBotScore → (label, Material-3 token classes). 0 unknown · 1 good · 2 suspicious · 3 bad. */
+export function dbotMeta(score: number | null | undefined): { label: string; tone: string } {
+  switch (score) {
+    case 3:
+      return { label: "Malicious", tone: "text-error border-error/40 bg-error/10" };
+    case 2:
+      return { label: "Suspicious", tone: "text-tertiary border-tertiary/40 bg-tertiary/10" };
+    case 1:
+      return { label: "Good", tone: "text-secondary border-secondary/40 bg-secondary/10" };
+    default:
+      return { label: "Unknown", tone: "text-on-surface-variant border-outline-variant bg-surface-container-high" };
+  }
+}

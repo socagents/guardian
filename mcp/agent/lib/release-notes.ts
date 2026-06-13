@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.0",
+    date: "2026-06-13",
+    title: "Indicators — a deduped IoC record across investigations.",
+    highlights: [
+      "New Investigation → Indicators page: every IoC Guardian sees, deduped by value + type.",
+      "Guardian records the IoCs it enriches and imports the indicators XSOAR already extracted on case fetch.",
+      "Click an indicator to see its reputation, enrichment, and every issue it appears in (cross-case correlation).",
+      "Each issue gains an Indicators tab; per-issue-type layouts tailor the view to phishing / malware / lateral-movement / access-violation.",
+    ],
+  },
+  {
     version: "0.1.10",
     date: "2026-06-13",
     title: "Attack-chain diagrams — tactic colors, MITRE mapping, attribution, animation.",

@@ -10,6 +10,33 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.0] (unreleased) — *Indicators module + per-issue-type layouts*
+
+A third Investigation object — **Indicators** (IoCs) — plus issue layouts tailored to each incident type. Guardian now keeps a deduped, cross-referenced record of every indicator it sees.
+
+### What ships
+
+- **Indicators** — a new Investigation subpage (Issues · Cases · **Indicators**). An indicator is an IoC (ip · domain · url · file_hash · email · cve · host · account) deduped by `(value, type)`; re-seeing one updates its last-seen and links the new issue rather than duplicating. The list shows type, reputation (DBotScore), source, #issues, and last-seen; the detail shows the enrichment, first/last seen, and **every issue the indicator appears in** (cross-case correlation).
+- **Two feeds** — (1) Guardian records each IoC it enriches during an investigation (`source="guardian"`); (2) when it fetches an XSOAR case, the indicators the SOAR already extracted are imported (`source="xsoar"`), so XSOAR's enrichment carries into Guardian.
+- **Extracted-indicators on the issue** — each issue detail gains an **Indicators** tab listing the IoCs linked to that issue, with the types that matter for the case kind highlighted.
+- **Per-issue-type layouts** — the issue detail adapts to the kind: a kind-specific glyph + accent, a one-line investigative "focus" (what to look at for phishing vs malware vs lateral-movement vs access-violation), and IoC-type emphasis on the Indicators tab.
+- **Agent tools** (catalog side — no secrets): `indicator_upsert` · `indicators_list` · `indicator_get`. **REST**: `/api/v1/indicators*` + Next proxies.
+
+### Storage
+
+Additive to `investigations.db`: new `indicators` + `indicator_issues` (M:N) tables created on boot via `CREATE TABLE IF NOT EXISTS` (no column migration; existing issues/cases untouched).
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/investigation_store.py` (Indicator DTO + tables + upsert/list/get/per-issue) + `builtin_components/indicator_tools.py` + `connector_loader.py` + `api/investigation.py` + `skills/workflows/xsoar_case_investigation.md` (extraction wiring).
+- `mcp/agent/app/api/agent/indicators/**`, `lib/api/investigation.ts`, `components/investigation/ui.tsx` (IndicatorRow + KIND_LAYOUT), `app/investigation/indicators/**`, `app/investigation/issues/[id]/page.tsx` (Indicators tab + per-type header), `components/sidebar.tsx`. +6 tests. See [#14](https://github.com/kite-production/guardian/issues/14).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); additive tables (volumes preserved); no installer change. Minor bump (v0.2.0).
+
+---
+
 ## [v0.1.10] (unreleased) — *Attack-chain diagram — richer, ATT&CK-mapped, animated*
 
 The auto-generated attack chain is upgraded from a plain node→arrow flow to a tactic-colored, MITRE-mapped diagram.

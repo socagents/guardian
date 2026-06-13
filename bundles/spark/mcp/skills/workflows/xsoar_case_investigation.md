@@ -120,6 +120,7 @@ xsoar_search_indicators(query="value:185.234.219.12")
 - **Enrich, then rasterize — never rasterize instead of enrich.** `xsoar_run_command` rasterize gives a screenshot, not a DBotScore. If you want visual proof of a phishing page, enrich the URL for its score AND rasterize for the screenshot; the screenshot supplements the verdict, it does not substitute for it.
 - If `xsoar_enrich_indicator` errors with 'playground not configured', fall back to `xsoar_search_indicators` for store-only reputation and record that the live lookup was unavailable.
 - Record the verdict/score/sources per IoC. If an indicator isn't in the store and can't be enriched, say so — don't invent a reputation.
+- **Record each IoC as an Indicator (do this as you enrich).** After enriching an indicator, call `indicator_upsert(value=…, type=ip|domain|url|file_hash|email|cve|host|account, issue_id=<this issue>, dbot_score=<0-3>, enrichment={…}, source="guardian")`. It lands on the Investigation → **Indicators** page + the issue's **Indicators** tab, deduped by value+type and correlated across cases. **Also import the SOAR's own extractions:** for any indicator the fetched XSOAR case already carries (from `xsoar_search_indicators` or the incident record), `indicator_upsert(… source="xsoar")` so XSOAR's enrichment carries into Guardian.
 
 ### Step 5 — Document: write findings onto the case
 

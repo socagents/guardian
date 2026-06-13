@@ -2492,6 +2492,44 @@ Networks documentation and returning evidence-backed, cited answers.
                 multi-Issue campaign reads as one investigation.
               </p>
             </SubSection>
+
+            <SubSection icon="fingerprint" title="Indicators (v0.2.0)">
+              <p>
+                <Link href="/investigation/indicators" className="link">Indicators</Link>{" "}
+                is Guardian&apos;s deduped record of every <Term>IoC</Term>{" "}
+                (indicator of compromise) it sees — IPs, domains, URLs, file
+                hashes, emails, CVEs, hosts, accounts. Deduped by value + type:
+                re-seeing one updates its last-seen and links the new Issue rather
+                than duplicating. Two things feed it:
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm">
+                <li>
+                  Guardian records each IoC it <Term>enriches</Term> during an
+                  investigation (with its DBotScore + enrichment).
+                </li>
+                <li>
+                  When it <Term>fetches an XSOAR case</Term>, the indicators the
+                  SOAR already extracted are imported — the platform&apos;s
+                  enrichment carries straight into Guardian.
+                </li>
+              </ul>
+              <p>
+                Click an indicator for its reputation, enrichment, and{" "}
+                <strong>every Issue it appears in</strong> — how you spot the same
+                actor or infrastructure across cases. Each Issue also has an{" "}
+                <Term>Indicators</Term> tab listing just its own IoCs.
+              </p>
+            </SubSection>
+
+            <SubSection icon="dashboard_customize" title="Per-issue-type layouts (v0.2.0)">
+              <p>
+                The Issue detail adapts to the case kind — a kind-specific icon +
+                accent and a one-line investigative <Term>focus</Term> (what to
+                look at first for phishing vs malware vs lateral movement vs access
+                violation), with IoC-type emphasis on the Indicators tab — so the
+                layout surfaces the data that matters for each incident type.
+              </p>
+            </SubSection>
           </Section>
 
           <Section id="connectors" icon="cable" title="Connectors & Instances">

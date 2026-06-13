@@ -46,6 +46,7 @@ from config.config import (
 )
 from usecase.builtin_components import (
     cognitive_tools,
+    indicator_tools,
     investigation_tools,
     self_mod_tools,
     skills_crud,
@@ -275,6 +276,11 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("case_add_issue", investigation_tools.case_add_issue),
     ("cases_list", investigation_tools.cases_list),
     ("case_get", investigation_tools.case_get),
+    # v0.2.0 — Indicators (IoCs extracted from issues + imported from the SOAR).
+    # Catalog side of the guardrail (investigation metadata, no SecretStore).
+    ("indicator_upsert", indicator_tools.indicator_upsert),
+    ("indicators_list", indicator_tools.indicators_list),
+    ("indicator_get", indicator_tools.indicator_get),
 ]
 
 
