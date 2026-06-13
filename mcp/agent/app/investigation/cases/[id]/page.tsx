@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { getCase, type CaseDetail } from "@/lib/api/investigation";
 import { glassStyle, IssueRow, EmptyState, fmtTs } from "@/components/investigation/ui";
+import { MarkdownContent } from "@/components/markdown-content";
 
 /**
  * Investigation → Case detail (v0.1.7 — full-width glass layout). Case
@@ -51,7 +52,9 @@ export default function CaseDetailPage() {
           <div className="flex-1 min-w-0">
             <h1 className="font-headline text-2xl font-bold tracking-tight text-on-surface">{data.title}</h1>
             {data.description && (
-              <p className="text-sm text-on-surface-variant mt-2 whitespace-pre-wrap leading-relaxed">{data.description}</p>
+              <div className="text-sm mt-2">
+                <MarkdownContent compact>{data.description}</MarkdownContent>
+              </div>
             )}
             <div className="flex flex-wrap items-center gap-2 mt-3 text-[11px] text-on-surface-variant">
               <span className="rounded-full border border-outline-variant px-2 py-0.5 uppercase tracking-wide font-bold">{data.status}</span>

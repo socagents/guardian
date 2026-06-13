@@ -12,6 +12,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import { MarkdownContent } from "@/components/markdown-content";
 import {
   SEVERITY_TOKENS,
   STATUS_TOKENS,
@@ -259,7 +260,9 @@ export function EditableSection({
           </div>
         </div>
       ) : value ? (
-        <p className="text-sm text-on-surface whitespace-pre-wrap leading-relaxed">{value}</p>
+        <div className="text-sm">
+          <MarkdownContent compact>{value}</MarkdownContent>
+        </div>
       ) : (
         <p className="text-sm text-on-surface-variant/50 italic">Not recorded yet.</p>
       )}

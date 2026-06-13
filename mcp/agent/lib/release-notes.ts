@@ -37,6 +37,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.1.9",
+    date: "2026-06-13",
+    title: "Investigation text renders as markdown; Activity is filterable.",
+    highlights: [
+      "Issue fields + activity + case descriptions now render as formatted markdown (like the chat window).",
+      "Activity timeline: filter by event type (action / finding / note) and sort oldest/newest.",
+    ],
+  },
+  {
     version: "0.1.8",
     date: "2026-06-13",
     title: "Attack-chain diagrams — Guardian draws the causality chain.",

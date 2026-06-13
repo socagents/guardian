@@ -10,6 +10,25 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.1.9] (unreleased) — *Investigation content — markdown rendering + Activity filter/sort*
+
+The investigation text now renders as formatted markdown (the same as the chat window), and the Activity timeline is filterable + sortable.
+
+### What ships
+
+- **Markdown rendering** — the issue fields (Summary · Scope · Recommendations · Conclusions · Next steps), the activity event content, and the case description render through the shared `MarkdownContent` component the chat uses (react-markdown + remark-gfm + syntax highlighting). The agent already writes these fields as markdown; now they display formatted. Editing a field still shows the raw textarea.
+- **Activity filter + sort** — the Activity tab gets type filter chips (all / action / finding / note …, derived from the events present), an Oldest/Newest sort toggle, and an "N of M" visible count.
+
+### Files
+
+- `mcp/agent/components/investigation/ui.tsx` (`EditableSection` → `MarkdownContent`) + `app/investigation/issues/[id]/page.tsx` + `app/investigation/cases/[id]/page.tsx`. See [#12](https://github.com/kite-production/guardian/issues/12).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); no installer change; volumes preserved. Patch bump (v0.1.9).
+
+---
+
 ## [v0.1.8] (unreleased) — *Attack-chain SVG diagram*
 
 Guardian now draws a visual **attack chain** for each investigation — the causal path of the attack (entry → pivots → action → impact) — rendered on the issue's **Attack chain** tab. It generates automatically when an investigation resolves, and you can regenerate it on demand.

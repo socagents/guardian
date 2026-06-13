@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { MarkdownContent } from "@/components/markdown-content";
 import {
   getIssue,
   updateIssue,
@@ -64,6 +65,8 @@ export default function IssueDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [regenerating, setRegenerating] = useState(false);
+  const [actType, setActType] = useState("all");
+  const [actSort, setActSort] = useState<"oldest" | "newest">("oldest");
 
   // `silent` skips the full-page spinner — used for patch-triggered refetches
   // so editing a field doesn't flash the loading state. The initial mount (and
@@ -149,6 +152,17 @@ export default function IssueDetailPage() {
       setRegenerating(false);
     }
   };
+
+  const activityTypes = useMemo(
+    () => Array.from(new Set((issue?.events ?? []).map((e) => e.type))),
+    [issue],
+  );
+  const displayedEvents = useMemo(() => {
+    const evs = (issue?.events ?? []).filter((e) => actType === "all" || e.type === actType);
+    return [...evs].sort((a, b) =>
+      actSort === "oldest" ? a.ts.localeCompare(b.ts) : b.ts.localeCompare(a.ts),
+    );
+  }, [issue, actType, actSort]);
 
   if (loading) return <p className="text-sm text-on-surface-variant p-8 text-center">Loading…</p>;
   if (error) return <p className="text-sm text-error p-8 text-center">{error}</p>;
@@ -252,22 +266,53 @@ export default function IssueDetailPage() {
           {issue.events.length === 0 ? (
             <EmptyState icon="timeline" title="No activity yet" hint="As Guardian investigates, each step and finding appears here as a timeline entry." />
           ) : (
-            <ol className="space-y-3">
-              {issue.events.map((ev) => (
-                <li key={ev.id} className="flex gap-3 rounded-2xl p-4" style={glassStyle}>
-                  <span className="h-8 w-8 rounded-full bg-surface-container-highest border border-primary/40 flex items-center justify-center shrink-0 text-primary">
-                    <span className="material-symbols-outlined text-[16px]">{EVENT_ICONS[ev.type] ?? "circle"}</span>
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-[11px] text-on-surface-variant">
-                      <span className="font-bold uppercase tracking-wide">{ev.type}</span>
-                      <span className="text-on-surface-variant/60">{fmtTs(ev.ts)}</span>
+            <>
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <div className="flex items-center gap-1.5 rounded-2xl p-1.5" style={glassStyle}>
+                  {["all", ...activityTypes].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setActType(t)}
+                      className={`rounded-lg px-3 py-1.5 text-[11px] uppercase tracking-wider font-medium transition ${
+                        actType === t
+                          ? "bg-secondary-container/40 border border-secondary/40 text-secondary"
+                          : "border border-transparent text-on-surface-variant hover:text-on-surface hover:bg-white/5"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setActSort((s) => (s === "oldest" ? "newest" : "oldest"))}
+                  className="inline-flex items-center gap-1 text-[11px] text-on-surface-variant hover:text-on-surface rounded-lg border border-outline-variant px-3 py-1.5"
+                >
+                  <span className="material-symbols-outlined text-[14px]">{actSort === "oldest" ? "arrow_downward" : "arrow_upward"}</span>
+                  {actSort === "oldest" ? "Oldest first" : "Newest first"}
+                </button>
+                <span className="text-[11px] text-on-surface-variant/60 ml-auto">
+                  {displayedEvents.length} of {issue.events.length}
+                </span>
+              </div>
+              <ol className="space-y-3">
+                {displayedEvents.map((ev) => (
+                  <li key={ev.id} className="flex gap-3 rounded-2xl p-4" style={glassStyle}>
+                    <span className="h-8 w-8 rounded-full bg-surface-container-highest border border-primary/40 flex items-center justify-center shrink-0 text-primary">
+                      <span className="material-symbols-outlined text-[16px]">{EVENT_ICONS[ev.type] ?? "circle"}</span>
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 text-[11px] text-on-surface-variant">
+                        <span className="font-bold uppercase tracking-wide">{ev.type}</span>
+                        <span className="text-on-surface-variant/60">{fmtTs(ev.ts)}</span>
+                      </div>
+                      <div className="text-sm mt-1">
+                        <MarkdownContent compact>{ev.content}</MarkdownContent>
+                      </div>
                     </div>
-                    <p className="text-sm text-on-surface whitespace-pre-wrap mt-1 leading-relaxed">{ev.content}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+                  </li>
+                ))}
+              </ol>
+            </>
           )}
         </div>
       )}

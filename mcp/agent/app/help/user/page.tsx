@@ -2473,7 +2473,8 @@ Networks documentation and returning evidence-backed, cited answers.
                 </li>
                 <li>
                   <Term>Activity</Term> — the timeline of every step and finding
-                  logged against the Issue, in order.
+                  logged against the Issue. Filter by event type (action /
+                  finding / note) and sort oldest- or newest-first (v0.1.9).
                 </li>
                 <li>
                   <Term>Attack chain</Term> (v0.1.8) — an SVG causality diagram
