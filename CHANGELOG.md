@@ -10,6 +10,26 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.11] (unreleased) — *Investigation loop hardening + codification*
+
+Hardens the autonomous investigation loop (the demo/training harness that seeds synthetic XSOAR incidents and investigates them) and makes it reproducible. The loop's "take the oldest open Issue that tracks an incident" pick was previously a prose instruction the model had to follow correctly — a sourceless/manual Issue could jam it. That pick is now **structural**, and the two scheduler jobs that drive the loop are now **codified in git** instead of living only in the deployed install's `jobs.db`.
+
+### What ships
+
+- **`issues_list` gains two structural filters** (also on `GET /api/v1/issues`): `source_ref_not_null` (return only Issues that track an XSOAR incident — skip manual/standalone ones) and `order` (`asc` = oldest-first; `desc` default = unchanged). The loop now calls `issues_list(status='open', source_ref_not_null=True, order='asc')` and takes `issues[0]` — deterministic, no longer dependent on the model skipping sourceless Issues by hand. Operators filtering the Issues list benefit too.
+- **`scripts/bootstrap_loop_jobs.sh`** — the canonical, version-controlled definition of the `guardian-incident-seeder` + `guardian-investigation-loop` jobs. Idempotent upsert via the agent jobs API; re-run to (re)provision the loop after a fresh install / volume wipe. Previously these jobs existed only at runtime and were lost on a `WIPE_VOLUMES=true` reinstall.
+- **Loop prompt now groups campaigns into Cases** — the codified investigation-loop prompt instructs grouping a related incident under an existing Case (or opening one) as part of each tick, closing the "group into Cases" step.
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/investigation_store.py` (`list_issues` filters), `bundles/spark/mcp/src/usecase/builtin_components/investigation_tools.py` (`issues_list` tool args + docstring), `bundles/spark/mcp/src/api/investigation.py` (`GET /api/v1/issues` query params), `bundles/spark/mcp/tests/test_investigation_tools.py` (regression test), `scripts/bootstrap_loop_jobs.sh` (new), `scripts/CLAUDE.md` (catalogue). Docs: `CHANGELOG.md`, `lib/release-notes.ts`. See [#25](https://github.com/kite-production/guardian/issues/25).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); `investigations.db` schema unchanged (new params are query-only, backward-compatible); volumes preserved. Patch bump (v0.2.11).
+
+---
+
 ## [v0.2.10] (unreleased) — *Connector instance config edits take effect immediately*
 
 Editing a connector instance's config or secrets (e.g. the XSOAR `playground_id`, a base URL, or an API key) now takes effect within seconds — no manual container restart. Previously the edit was written to the store but the running connector container kept serving the old values until it was restarted by hand, because a per-instance connector container reads its config **once at boot** (into an in-memory ContextVar; there is no in-process reload by design). The fix makes `PATCH /api/v1/instances/<id>` recreate the connector container on a config/secret change — the same path the create flow already used.

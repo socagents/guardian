@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.11",
+    date: "2026-06-13",
+    title: "Investigation loop hardening + codification.",
+    highlights: [
+      "The Issues list can now filter to only incident-tracking Issues (source_ref_not_null) and sort oldest-first — used by the autonomous loop to deterministically pick the oldest open case.",
+      "The investigation-loop + incident-seeder jobs are now codified in scripts/bootstrap_loop_jobs.sh, so the loop survives a fresh install / volume wipe.",
+      "The loop now groups related incidents into Cases as it investigates.",
+    ],
+  },
+  {
     version: "0.2.10",
     date: "2026-06-13",
     title: "Connector instance config edits take effect immediately.",

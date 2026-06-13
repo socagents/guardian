@@ -63,7 +63,17 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
             return resp
         status = request.query_params.get("status") or None
         case_id = request.query_params.get("case_id") or None
-        issues = store.list_issues(status=status, case_id=case_id)
+        # v0.2.11 — parity with the issues_list tool: structural filters the
+        # autonomous loop relies on (skip sourceless Issues; oldest-first).
+        srnn = request.query_params.get("source_ref_not_null")
+        source_ref_not_null = str(srnn).lower() in ("1", "true", "yes")
+        order = request.query_params.get("order") or "desc"
+        issues = store.list_issues(
+            status=status,
+            case_id=case_id,
+            source_ref_not_null=source_ref_not_null,
+            order=order,
+        )
         return JSONResponse(
             {"issues": [_issue_dict(i) for i in issues], "count": len(issues)}
         )

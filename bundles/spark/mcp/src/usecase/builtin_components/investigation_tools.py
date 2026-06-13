@@ -318,7 +318,12 @@ def case_set_relation_graph(case_id: str, svg: str) -> dict[str, Any]:
     return {"ok": True, "case_id": case_id, "bytes": len(cleaned)}
 
 
-def issues_list(status: str | None = None, case_id: str | None = None) -> dict[str, Any]:
+def issues_list(
+    status: str | None = None,
+    case_id: str | None = None,
+    source_ref_not_null: bool = False,
+    order: str = "desc",
+) -> dict[str, Any]:
     """List Issues, optionally filtered by status or case.
 
     Use to find existing Issues — e.g. to check whether a related Issue
@@ -327,13 +332,29 @@ def issues_list(status: str | None = None, case_id: str | None = None) -> dict[s
     Args:
         status: filter to open / investigating / resolved / closed.
         case_id: filter to Issues grouped under a specific Case.
+        source_ref_not_null: when true, return ONLY Issues that track an
+            XSOAR incident (non-empty source_ref) — i.e. skip manual/
+            standalone Issues with nothing to fetch. The autonomous
+            investigation loop sets this so a sourceless Issue can never
+            jam its "oldest open" pick.
+        order: "asc" = oldest-first by creation time (use with status='open'
+            to deterministically take the OLDEST awaiting Issue); "desc"
+            (default) = newest-first.
 
     Returns: {"issues": [...], "count": n}.
+
+    Example (the loop's pick): issues_list(status="open",
+    source_ref_not_null=True, order="asc") → take issues[0].
     """
     s, err = _store()
     if err:
         return err
-    issues = s.list_issues(status=status, case_id=case_id)
+    issues = s.list_issues(
+        status=status,
+        case_id=case_id,
+        source_ref_not_null=bool(source_ref_not_null),
+        order=order,
+    )
     return {"issues": [dataclasses.asdict(i) for i in issues], "count": len(issues)}
 
 

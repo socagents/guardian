@@ -324,7 +324,19 @@ class InvestigationStore:
 
     def list_issues(
         self, status: str | None = None, case_id: str | None = None,
+        source_ref_not_null: bool = False, order: str = "desc",
     ) -> list[Issue]:
+        """List issues, optionally filtered + ordered.
+
+        source_ref_not_null=True excludes Issues with an empty/NULL
+        source_ref — manual/standalone Issues with no XSOAR incident to
+        fetch. The autonomous investigation loop sets this so a sourceless
+        Issue can never jam its "oldest open" pick (v0.2.11).
+
+        order="asc" sorts oldest-first by created_at (what the loop needs to
+        deterministically take the OLDEST open Issue); the default "desc"
+        preserves the original newest-first ordering for the UI.
+        """
         clauses: list[str] = []
         params: list[str] = []
         if status:
@@ -333,10 +345,17 @@ class InvestigationStore:
         if case_id:
             clauses.append("case_id = ?")
             params.append(case_id)
+        if source_ref_not_null:
+            clauses.append("source_ref IS NOT NULL AND TRIM(source_ref) != ''")
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        order_by = (
+            "created_at ASC, updated_at ASC"
+            if str(order).lower() == "asc"
+            else "updated_at DESC, created_at DESC"
+        )
         with self._lock, self._conn() as c:
             rows = c.execute(
-                f"SELECT * FROM issues{where} ORDER BY updated_at DESC, created_at DESC",
+                f"SELECT * FROM issues{where} ORDER BY {order_by}",
                 params,
             ).fetchall()
         return [self._row_to_issue(r) for r in rows]

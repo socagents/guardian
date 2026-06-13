@@ -51,6 +51,35 @@ def test_issues_list_filters(wired):
     assert it.issues_list(status="closed")["count"] == 1
 
 
+def test_issues_list_source_ref_not_null_and_order(wired):
+    # v0.2.11 — the loop's structural Issue pick. A tracked Issue (has an
+    # XSOAR source_ref) and a sourceless/manual Issue (none).
+    tracked = it.issue_create(
+        title="tracked", kind="malware", source_ref="9001"
+    )["issue"]["id"]
+    it.issue_create(title="sourceless", kind="other")  # no source_ref
+
+    # source_ref_not_null skips the sourceless Issue so it can never jam the
+    # loop's "oldest open" pick.
+    only_tracked = it.issues_list(source_ref_not_null=True)
+    assert only_tracked["count"] == 1
+    assert only_tracked["issues"][0]["id"] == tracked
+
+    # Without the filter, both are returned (default behaviour unchanged).
+    assert it.issues_list()["count"] == 2
+
+    # The order param is accepted and non-destructive (same set either way).
+    assert it.issues_list(order="asc")["count"] == 2
+    assert it.issues_list(order="desc")["count"] == 2
+
+    # The loop's exact call shape: open + tracked + oldest-first.
+    loop_pick = it.issues_list(
+        status="open", source_ref_not_null=True, order="asc"
+    )
+    assert loop_pick["count"] == 1
+    assert loop_pick["issues"][0]["id"] == tracked
+
+
 def test_case_create_group_and_get(wired):
     case = it.case_create(title="Campaign X", description="related")["case"]
     i1 = it.issue_create(title="i1", kind="phishing")["issue"]["id"]
