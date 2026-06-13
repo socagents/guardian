@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 
 import { resolveGatewayUrl } from "@/lib/gateway-url.server";
+import { SESSION_COOKIE_NAME } from "@/lib/auth-defaults";
 
 /**
  * Server action invoked by the "Verify pipeline" form on the Pipeline
@@ -24,7 +25,10 @@ import { resolveGatewayUrl } from "@/lib/gateway-url.server";
 export async function verifyPipelineAction(): Promise<void> {
   const gateway = resolveGatewayUrl();
   const cookieStore = await cookies();
-  const token = cookieStore.get("spark-token")?.value;
+  // Forward the operator's session as a Cookie header (middleware validates
+  // the guardian_session cookie, not a Bearer of its value). Was reading the
+  // stale "spark-token" cookie → always undefined → unauthenticated verify.
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
   const url = `${gateway}/api/v1/observability/verify?trigger=manual`;
 
@@ -33,7 +37,7 @@ export async function verifyPipelineAction(): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(token ? { cookie: `${SESSION_COOKIE_NAME}=${token}` } : {}),
       },
       cache: "no-store",
     });

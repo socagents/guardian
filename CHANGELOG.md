@@ -10,6 +10,26 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.6] (unreleased) — *Post-v0.2.5 fixes: /jobs auth, chat-session viewer, hooks UI*
+
+Fixes for issues found right after v0.2.5 shipped.
+
+### What ships
+
+- **`/jobs` page loads again.** The Jobs page (and the job-detail page) are server components that authenticated their internal data fetch by reading a **stale `spark-token` cookie** — a leftover from the pre-Guardian baseline that was never re-pointed during the v0.4.0 auth rename to `guardian_session`. They now read `guardian_session` and forward it as a **Cookie header** (the middleware validates the session cookie; it does not accept the session token as a bearer). The same dead literal was fixed in two siblings: the unused `lib/auth/cookie-config.ts` export and the **Verify-pipeline** server action on the observability page (which was silently unauthenticated).
+- **Chat sessions from scheduled jobs render their request + response.** A job binds a skill by prepending the entire skill markdown to the prompt; the chat viewer rendered that verbatim, so a job session looked like "just the skill name" with the real request and the response buried far below the fold. The user bubble now **collapses the `<skill>…</skill>` wrapper into a "Skill: \<name\>" chip + expander** and shows the operator's actual request inline. Fixes already-recorded sessions too.
+- **Hooks page polish.** The create/edit drawer is widened to ~50% of the page (was too narrow at `max-w-xl`); the title description renders as a compact one-line subtitle.
+
+### Files
+
+- `mcp/agent/lib/auth.ts` (`getToken` → `guardian_session` + new `getSessionFetchHeaders`), `app/jobs/page.tsx`, `app/jobs/[id]/page.tsx`, `lib/auth/cookie-config.ts`, `app/observability/pipeline/actions.ts`, `components/chat/message-list.tsx` (skill-wrapper collapse), `app/settings/hooks/page.tsx` (drawer width + description). See [#20](https://github.com/kite-production/guardian/issues/20).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); no storage change; volumes preserved. Patch bump (v0.2.6).
+
+---
+
 ## [v0.2.5] (unreleased) — *Two incident-response hooks (built-in)*
 
 Two Guardian-specific policy hooks ship as **built-ins** — in-process, agent-image, no subprocess and no host scripts. Install either from `/settings/hooks` with a dropdown pick + the tool glob; no code, no installer change.

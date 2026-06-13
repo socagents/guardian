@@ -1,6 +1,9 @@
 import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
+import { SESSION_COOKIE_NAME } from "@/lib/auth-defaults";
 
-export const COOKIE_NAME = "spark-token";
+// Re-export the canonical session-cookie name (was the stale "spark-token";
+// no current importer, but kept correct so it can't reintroduce the dead name).
+export const COOKIE_NAME = SESSION_COOKIE_NAME;
 export const MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
 /**

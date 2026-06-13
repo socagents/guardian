@@ -397,6 +397,41 @@ function formatMessageTime(timestamp: string): string {
   });
 }
 
+// Scheduler jobs prefix a skill-bound prompt with the FULL skill markdown:
+//   <skill name="…">…hundreds of lines…</skill>\n\n<operator's real request>
+// Rendering that verbatim buries the actual request (and the response below it)
+// under a wall of skill text, so job sessions looked empty (v0.2.6 fix). Detect
+// the wrapper, show a compact "Skill: <name>" chip + the body behind an
+// expander, and render the trailing real request as the message.
+const SKILL_WRAPPED_RE = /^<skill name="([^"]+)">\n?([\s\S]*?)\n?<\/skill>\s*([\s\S]*)$/;
+
+function UserMessageBody({ content }: { content: string }) {
+  const m = content.match(SKILL_WRAPPED_RE);
+  if (!m) {
+    return <span className="whitespace-pre-wrap break-words">{content}</span>;
+  }
+  const [, skillName, skillBody, request] = m;
+  return (
+    <div className="space-y-2">
+      <details className="group">
+        <summary className="cursor-pointer list-none inline-flex items-center gap-1.5 text-[11px] font-medium text-secondary/90 rounded-full border border-secondary/30 bg-secondary/10 px-2.5 py-1 select-none">
+          <span className="material-symbols-outlined text-[14px]">extension</span>
+          Skill: {skillName}
+          <span className="material-symbols-outlined text-[14px] transition-transform group-open:rotate-180">expand_more</span>
+        </summary>
+        <pre className="mt-2 max-h-72 overflow-y-auto custom-scrollbar text-[11px] font-mono leading-relaxed text-on-surface-variant whitespace-pre-wrap break-words rounded-lg border border-outline-variant/40 bg-surface-container-lowest/40 p-3">
+          {skillBody.trim()}
+        </pre>
+      </details>
+      {request.trim() ? (
+        <span className="whitespace-pre-wrap break-words block">{request.trim()}</span>
+      ) : (
+        <span className="text-on-surface-variant/60 italic text-xs">(skill-only prompt — no extra request text)</span>
+      )}
+    </div>
+  );
+}
+
 export function MessageList({
   messages,
   isStreaming,
@@ -626,9 +661,7 @@ export function MessageList({
                     border: "0.5px solid rgba(25, 99, 179, 0.15)",
                   }}
                 >
-                  <span className="whitespace-pre-wrap break-words">
-                    {msg.content}
-                  </span>
+                  <UserMessageBody content={msg.content} />
                 </div>
                 <div className="flex justify-end mt-1 px-1">
                   <span className="text-[10px] text-outline/60 font-label">

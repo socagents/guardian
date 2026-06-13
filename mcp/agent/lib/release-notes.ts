@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.6",
+    date: "2026-06-13",
+    title: "Fixes — /jobs page loads, job chat sessions render, hooks UI polish.",
+    highlights: [
+      "Fixed the /jobs page 'unable to load jobs' error (a stale session-cookie name in the server-side fetch).",
+      "Chat sessions created by scheduled jobs now show the real request + response (the skill body collapses into a chip).",
+      "Hooks editor drawer widened to ~50%; the title description renders as a compact subtitle.",
+    ],
+  },
+  {
     version: "0.2.5",
     date: "2026-06-13",
     title: "Two built-in incident-response hooks — verdict gate + malicious-indicator flag.",

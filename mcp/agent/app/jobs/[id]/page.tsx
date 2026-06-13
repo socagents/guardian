@@ -21,7 +21,7 @@ import { JobActions } from "../job-actions";
 import { RunsExportButton } from "../runs-export-button";
 import { getJob, listJobRuns } from "@/lib/api/jobs";
 import type { Job, JobRun } from "@/lib/api/jobs";
-import { getToken } from "@/lib/auth";
+import { getSessionFetchHeaders } from "@/lib/auth";
 import { buildQuery } from "@/lib/observability-query";
 
 const glassStyle = {
@@ -109,14 +109,16 @@ export default async function JobDetailPage({ params }: PageProps) {
   const ident = decodeURIComponent(rawIdent);
 
   const cookieStore = await cookies();
-  const token = getToken(cookieStore);
+  // Server-side hop: forward the session as a Cookie header (middleware
+  // validates the guardian_session cookie, not a Bearer of its value).
+  const headers = getSessionFetchHeaders(cookieStore);
 
   // Fetch row + runs in parallel — both are read-only and independent.
   // getJob/listJobRuns both call the MCP via the resolve_ident path so
   // either a UUID or a legacy name lands the same row.
   const [jobResult, runsResult] = await Promise.all([
-    getJob(ident, { token }),
-    listJobRuns(ident, { token, limit: 20 }),
+    getJob(ident, { headers }),
+    listJobRuns(ident, { headers, limit: 20 }),
   ]);
 
   if (!jobResult.ok) {

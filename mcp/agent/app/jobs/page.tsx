@@ -9,7 +9,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 
 import { RetryButton } from "@/components/retry-button";
-import { getToken } from "@/lib/auth";
+import { getToken, getSessionFetchHeaders } from "@/lib/auth";
 import { listJobs } from "@/lib/api/jobs";
 import type { Job } from "@/lib/api/jobs";
 import { listAgents } from "@/lib/api/agents";
@@ -69,10 +69,13 @@ async function fetchYamlIssues(token: string | undefined): Promise<YamlIssue[]> 
 export default async function JobsPage() {
   const cookieStore = await cookies();
   const token = getToken(cookieStore);
+  // Server-side hop: forward the session as a Cookie header (middleware
+  // validates the guardian_session cookie, not a Bearer of its value).
+  const headers = getSessionFetchHeaders(cookieStore);
 
   const [jobsResult, agentsResult, yamlIssues] = await Promise.all([
-    listJobs({ token }),
-    listAgents({ token }),
+    listJobs({ headers }),
+    listAgents({ headers }),
     fetchYamlIssues(token),
   ]);
 
