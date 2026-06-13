@@ -10,6 +10,24 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.14] (unreleased) — *Subagent investigations scale on busy tenants (tool-result truncation)*
+
+Found by the 20-incident harness smoke campaign: broad **subagent** hunts (e.g. a threat-hunter scoping blast radius) on a busy XSOAR tenant failed with the Vertex 1M-token error — a single broad XSOAR read returned a payload large enough to blow the subagent's context window. The main agent already truncated tool results; subagents didn't.
+
+### What ships
+
+- **Subagent tool results are now truncated** with the same `applyTruncation` policy the main agent uses (default 16 KB head+tail+marker, operator-tunable via `EVIDENCE_TRUNCATION_*`). One oversized tool result can no longer blow a subagent's context — so threat-hunter blast-radius hunts and other subagent investigations complete on busy tenants instead of failing on overflow.
+
+### Files
+
+- `mcp/agent/app/api/chat/route.ts` (`runSubagent` tool loop now applies `applyTruncation` to `resultText`). Docs: `CHANGELOG.md`, `lib/release-notes.ts`. See [#28](https://github.com/kite-production/guardian/issues/28).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); volumes preserved. Patch bump (v0.2.14).
+
+---
+
 ## [v0.2.13] (unreleased) — *Discover configured SOAR integrations + their commands*
 
 Guardian can now **see what's actually wired up in Cortex XSOAR** before it acts. The agent already had `xsoar_run_command` (run any `!command`) but no way to know which integrations are configured or which commands they expose — so it had to guess. A new `xsoar_list_integrations` tool answers exactly that.

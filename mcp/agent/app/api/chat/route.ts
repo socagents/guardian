@@ -727,10 +727,27 @@ async function runSubagent(args: {
           toolError = err instanceof Error ? err : new Error(String(err));
         }
 
-        const resultText = toolError
+        const rawResultText = toolError
           ? `Error: ${toolError.message}`
           : toolResult?.content[0]?.text ||
             JSON.stringify(toolResult?.content ?? '');
+        // v0.2.14 — cap a single live SUBAGENT tool result so one broad XSOAR
+        // read (a war-room / incident-list dump on a busy tenant) can't blow
+        // the subagent's context window (the Vertex ~1M-token ceiling). The
+        // main-agent loop already truncates tool results (see ~L5100 via
+        // applyTruncation); the subagent path did NOT, so broad threat-hunter
+        // hunts failed with "input token count exceeds the maximum number of
+        // tokens allowed". Same evidence-truncation policy (head+tail+marker)
+        // the operator already controls via EVIDENCE_TRUNCATION_* env.
+        const resultText = toolError
+          ? rawResultText
+          : String(
+              applyTruncation(
+                toolName,
+                rawResultText,
+                truncationPolicyFromEnv(),
+              ).output,
+            );
 
         toolCallsMade.push({
           tool: toolName,

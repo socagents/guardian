@@ -37,6 +37,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.14",
+    date: "2026-06-13",
+    title: "Subagent investigations scale on busy tenants.",
+    highlights: [
+      "Subagent tool results are now truncated like the main agent's — a single broad XSOAR read can no longer blow the subagent's context window (the Vertex 1M-token limit).",
+      "Threat-hunter blast-radius hunts and other subagent investigations now complete on busy tenants instead of failing on overflow.",
+    ],
+  },
+  {
     version: "0.2.13",
     date: "2026-06-13",
     title: "Guardian can now discover which SOAR integrations + commands are available.",
