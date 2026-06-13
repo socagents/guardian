@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.10",
+    date: "2026-06-13",
+    title: "Connector instance config edits take effect immediately.",
+    highlights: [
+      "Editing a connector instance's config or secrets (e.g. XSOAR playground_id, a URL, an API key) now applies within seconds — no manual container restart.",
+      "Saving the instance form recreates the connector container so it re-reads the new config at boot.",
+      "Only fires when config/secrets actually changed and the instance is enabled; renames and tool-toggles don't trigger a restart.",
+    ],
+  },
+  {
     version: "0.2.9",
     date: "2026-06-13",
     title: "Hooks & policies now reliably match connector tools.",

@@ -666,7 +666,40 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
                             },
                         )
 
-            return JSONResponse({"instance": _instance_to_dict(instance)})
+            # v0.2.10 (#24) — propagate config/secret edits to the RUNNING
+            # connector container. The container reads instances.db ONCE at
+            # boot into a ContextVar and never reloads by design (see
+            # guardian-connector-runtime/config/config.py), so writing the
+            # DB alone never reaches the live process — the edit silently
+            # took effect only after a manual restart. Recreate the container
+            # (idempotent: _updater_start removes the old one first) so it
+            # re-reads the freshly-written config + secrets at boot. Mirrors
+            # the create_instance start path. Gated on: a config/secret field
+            # actually changed AND the instance is enabled (a disabled
+            # instance has no running container; it picks up the new config
+            # when next enabled) AND the connector is container-style.
+            # Non-fatal on failure — the row is already updated; the operator
+            # can retry via POST /connectors/<id>/instances/<name>/start.
+            container_restarted: dict[str, Any] | None = None
+            config_or_secret_changed = (
+                "config" in update_kwargs or "secrets" in update_kwargs
+            )
+            if (
+                config_or_secret_changed
+                and instance is not None
+                and instance.enabled
+                and _connector_runtime_style(instance.connector_id) == "container"
+            ):
+                container_restarted = await _updater_start(
+                    instance.connector_id, instance.name, instance.id,
+                )
+
+            return JSONResponse(
+                {
+                    "instance": _instance_to_dict(instance),
+                    "container_restarted": container_restarted,
+                }
+            )
         finally:
             reset_current_actor(actor_token)
 

@@ -6791,11 +6791,21 @@ function SecretStore() {
  <li>
  The <Term>/connectors/[id]</Term> page edits per-instance
  config + secrets directly via the MCP&apos;s instance API.
- Writes go straight to the InstanceStore + SecretStore and
- take effect at the next tool call. Operator wants to
+ Writes go straight to the InstanceStore + SecretStore.
+ Because a per-instance connector container reads its
+ config once at boot (into a ContextVar — no in-process
+ reload by design), editing config/secrets on an{" "}
+ <em>enabled</em> container-style instance now{" "}
+ <Term>automatically recreates that connector container</Term>{" "}
+ (v0.2.10) so the new values are live within seconds — the{" "}
+ <Code>PATCH</Code> calls the updater&apos;s start endpoint
+ exactly as the create path does, then the container_url
+ callback triggers a tool reload. Operator wants to
  change a connector URL or rotate an API key →{" "}
  /connectors is the right surface, no agent restart, no
- setup re-run, no merge logic.
+ setup re-run, no manual container restart, no merge logic.
+ (A disabled instance has no running container; it picks up
+ the edit when next enabled.)
  </li>
  <li>
  The <Term>/profile</Term> password change path is its own

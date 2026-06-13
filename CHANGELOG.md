@@ -10,6 +10,26 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.10] (unreleased) — *Connector instance config edits take effect immediately*
+
+Editing a connector instance's config or secrets (e.g. the XSOAR `playground_id`, a base URL, or an API key) now takes effect within seconds — no manual container restart. Previously the edit was written to the store but the running connector container kept serving the old values until it was restarted by hand, because a per-instance connector container reads its config **once at boot** (into an in-memory ContextVar; there is no in-process reload by design). The fix makes `PATCH /api/v1/instances/<id>` recreate the connector container on a config/secret change — the same path the create flow already used.
+
+### What ships
+
+- **Config/secret edits auto-propagate** — saving the instance form on `/connectors/[id]` recreates the connector container (idempotent: the old one is removed first), so the new values are live within seconds. The PATCH response now echoes `container_restarted` so the UI can reflect "reconfiguring…".
+- **Gated correctly** — the recreate fires only when a `config` or `secrets` field actually changed, the instance is **enabled** (a disabled instance has no running container — it picks up the edit when next enabled), and the connector is container-style. Renames / enable-toggles / tool-disables don't trigger an unnecessary restart.
+- **Non-fatal on failure** — the row is updated regardless; the operator can still retry the start manually. Matches the create path's behavior.
+
+### Files
+
+- `bundles/spark/mcp/src/api/instances.py` (`patch_instance` now calls the existing `_updater_start` helper on config/secret change). Docs: `app/help/architecture/page.tsx#setup-wiring` (spec corrected — it claimed edits "take effect at the next tool call"; they now genuinely do, via auto-recreate), `CHANGELOG.md`, `lib/release-notes.ts`. See [#24](https://github.com/kite-production/guardian/issues/24).
+
+### Change scenario
+
+**Scenario 1** — code-only (agent image); `instances.db` schema unchanged; volumes preserved. Patch bump (v0.2.10).
+
+---
+
 ## [v0.2.9] (unreleased) — *Hook & policy tool-globs now match connector tools reliably*
 
 A correctness + safety fix. Hook tool-globs, job permission policies, and subagent allow/deny scopes matched tool names with an exact pattern — so a rule written as `xsoar_close_incident` silently failed to match the same tool when the model invoked it in its dotted connector form `xsoar.close_incident`. Different Gemini variants emit one form or the other, so the failure was intermittent and hard to spot. The result: the **"Block close without verdict" hook never fired** on a real close, job `denied_tools` rules could be bypassed, and a deny-scoped subagent could still reach a connector tool. Matching is now separator-insensitive (`.` and `_` treated as the same), so a rule authored either way matches a call emitted either way.
