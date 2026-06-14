@@ -61,6 +61,7 @@ const SECTIONS: SectionDef[] = [
   { id: "agents-ux", label: "Agents", group: "Command", icon: "smart_toy" },
   { id: "memory", label: "Memory", group: "Command", icon: "database" },
   { id: "knowledge", label: "Knowledge Bases", group: "Command", icon: "menu_book" },
+  { id: "playbook-builder", label: "Playbook Builder", group: "Command", icon: "design_services" },
   { id: "jobs", label: "Jobs", group: "Command", icon: "schedule" },
   { id: "models-providers", label: "Models & Providers", group: "Command", icon: "psychology" },
 
@@ -2135,6 +2136,40 @@ Networks documentation and returning evidence-backed, cited answers.
                 entry is therefore: drop a markdown file, redeploy. Future
                 Tier-3 will add runtime CRUD — the page is currently
                 read-only by design.
+              </p>
+            </SubSection>
+          </Section>
+
+          <Section id="playbook-builder" icon="design_services" title="Playbook Builder">
+            <p>
+              <Link href="/playbooks/build" className="link">/playbooks/build</Link>{" "}
+              drafts a new <strong>Cortex XSOAR playbook</strong> from a
+              plain-English use-case, grounded in the ~800 real playbooks in the{" "}
+              <Code>soar-playbooks</Code> knowledge base (v0.2.24).
+            </p>
+            <SubSection icon="bolt" title="How to use it">
+              <p>
+                Describe what the playbook should do (e.g. &quot;investigate a
+                phishing email end to end, then delete similar messages on
+                confirmation&quot;), optionally name a product/integration
+                (CrowdStrike, Defender, generic), and click{" "}
+                <strong>Build playbook</strong>. The agent finds the closest
+                existing playbooks, studies their task structure, and drafts a
+                new one in that shape — then <strong>validates</strong> it
+                (required fields, the task graph wiring, reachability) so you
+                know it will import. You get the YAML with a{" "}
+                <strong>Validate structure</strong> button and a{" "}
+                <strong>Download .yml</strong>, plus the example playbooks it
+                grounded on.
+              </p>
+            </SubSection>
+            <SubSection icon="verified_user" title="It's a draft — you import it">
+              <p>
+                The builder <strong>never deploys to a tenant</strong>. The
+                output is a starting point: review it, import it into Cortex
+                XSOAR (Playbooks → Import), and test it in a playground before
+                production. The agent flags any assumptions (the trigger, the
+                product) and TODOs (a command to confirm for your tenant).
               </p>
             </SubSection>
           </Section>

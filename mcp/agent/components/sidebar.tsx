@@ -58,6 +58,7 @@ const navEntries: NavEntry[] = [
       { href: "/agents", label: "Agents", icon: "groups" },
       { href: "/memory", label: "Memory", icon: "database" },
       { href: "/knowledge", label: "Knowledge", icon: "menu_book" },
+      { href: "/playbooks/build", label: "Playbook Builder", icon: "design_services" },
       { href: "/jobs", label: "Jobs", icon: "schedule" },
       { href: "/tasks", label: "Tasks", icon: "task_alt" },
       // /models + /providers moved to Settings (v0.1.35+) — they're

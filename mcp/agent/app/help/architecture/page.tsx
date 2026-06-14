@@ -5737,6 +5737,28 @@ function KnowledgePipeline() {
  <Code>manifest.context.passiveExcludeEcosystems</Code>.
  </p>
  </SubSection>
+ <SubSection icon="design_services" title="Playbook builder (v0.2.24)">
+ <p>
+ The first <em>generative</em> use of a KB: the{" "}
+ <Code>/playbooks/build</Code> page drafts a new Cortex XSOAR
+ playbook from a use-case description, grounded in the{" "}
+ <Code>soar-playbooks</Code> corpus.{" "}
+ <strong>Flow</strong>: the page sends a templated request to{" "}
+ <Code>/api/chat</Code> that invokes the{" "}
+ <Code>build_xsoar_playbook</Code> skill → the agent{" "}
+ <Code>knowledge_search</Code>es <Code>soar-playbooks</Code> for the
+ 2-3 closest real playbooks (their full <Code>raw_yaml</Code> is in
+ the KB), drafts a new playbook following those task-graph patterns,
+ then calls the <Code>playbook_validate</Code> MCP tool — a
+ deterministic structural check (required fields,{" "}
+ <Code>starttaskid</Code> exists, every <Code>nexttasks</Code> ref
+ resolves, reachability). The page re-validates the extracted YAML
+ via <Code>POST /api/v1/playbooks/validate</Code> (proxied at{" "}
+ <Code>/api/agent/playbooks/validate</Code>) and offers a download.
+ Output is a <strong>draft to review + import</strong> — the builder
+ never deploys a playbook to a tenant.
+ </p>
+ </SubSection>
  <SubSection icon="science" title="Why bundle-shipped (not runtime CRUD)">
  <p>
  KBs encode <em>curated</em> reference content reviewed before

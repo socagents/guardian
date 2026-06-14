@@ -3154,6 +3154,47 @@ export const JOURNEYS: Journey[] = [
   },
 
   {
+    id: "playbook-builder",
+    category: "ops",
+    title: "Build a Cortex XSOAR playbook from examples",
+    summary:
+      "Describe a use-case on /playbooks/build; the agent grounds a new XSOAR playbook in soar-playbooks examples, validates its structure, and gives you downloadable YAML.",
+    difficulty: "intermediate",
+    durationMin: 4,
+    icon: "design_services",
+    prompts: [
+      {
+        text: "Build a Cortex XSOAR playbook to isolate a compromised endpoint on CrowdStrike Falcon and notify the analyst.",
+        note: "Or use the /playbooks/build form (use-case + product).",
+      },
+    ],
+    toolsExercised: ["knowledge_search", "playbook_validate"],
+    apis: [
+      { method: "POST", path: "/api/chat", description: "Invokes the build_xsoar_playbook skill." },
+      {
+        method: "POST",
+        path: "/api/agent/playbooks/validate",
+        description: "Structural validation of the drafted playbook YAML.",
+      },
+    ],
+    howToTest: [
+      "Open /playbooks/build. Describe a use-case (+ optional product) and click Build playbook.",
+      "The agent searches soar-playbooks for close examples, drafts a playbook, and validates it.",
+      "The result shows the YAML with Validate structure + Download .yml; click Validate — it returns valid + a task count.",
+      "Citations name the example playbooks it grounded on; the draft is yours to import into XSOAR.",
+    ],
+    expectedResult:
+      "A structurally-valid Cortex XSOAR playbook YAML grounded in real soar-playbooks examples, validated (required fields + task-graph integrity), downloadable. The builder never deploys to a tenant — it's a reviewable draft.",
+    verifyVia: [
+      "The drafted YAML passes /api/agent/playbooks/validate (valid:true)",
+      "knowledge_search(kb_name='soar-playbooks') appears in the run",
+      "The answer cites at least one soar-playbooks example",
+    ],
+    related: ["soar-playbooks-search", "xsoar-investigate-case"],
+    components: ["knowledge", "mcp"],
+  },
+
+  {
     id: "skills-page-toggle",
     category: "ops",
     title: "Browse and toggle a skill",

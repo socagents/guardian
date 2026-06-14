@@ -48,6 +48,7 @@ from usecase.builtin_components import (
     cognitive_tools,
     indicator_tools,
     investigation_tools,
+    playbook_tools,
     self_mod_tools,
     skills_crud,
 )
@@ -157,6 +158,10 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     # knowledge.bundled[] declaration.
     ("knowledge_search", cognitive_tools.knowledge_search),
     ("knowledge_list", cognitive_tools.knowledge_list),
+    # v0.2.24 — playbook-builder validator. Pure structural check (no secrets,
+    # no catalog mutation) → safe as an agent tool. Paired with the
+    # build_xsoar_playbook skill + the /playbooks/build UI.
+    ("playbook_validate", playbook_tools.playbook_validate),
     # Phase 11 — agent self-modification (Tier 1: read tools).
     # Lets the agent introspect the same operator-facing state the UI
     # shows: jobs, settings, instances, providers, approvals, audit,

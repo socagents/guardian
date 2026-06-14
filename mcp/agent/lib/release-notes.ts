@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.24",
+    date: "2026-06-14",
+    title: "Playbook Builder — draft a Cortex XSOAR playbook from a use-case.",
+    highlights: [
+      "New /playbooks/build page: describe what a playbook should do and the agent drafts it, grounded in the ~800 real playbooks in the soar-playbooks KB.",
+      "Every draft is structurally validated (required fields + task-graph integrity) and downloadable as YAML, with the example playbooks cited.",
+      "The first generative use of the knowledge layer — the agent uses real playbooks as worked examples.",
+      "Output is a draft to review + import into Cortex XSOAR; the builder never deploys to a tenant.",
+    ],
+  },
+  {
     version: "0.2.23",
     date: "2026-06-14",
     title: "Sharper KB grounding — specialist matrices stay out of IT investigations' context.",

@@ -10,6 +10,27 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.24] (unreleased) — *Playbook Builder — draft Cortex XSOAR playbooks from examples*
+
+The first *generative* use of the knowledge layer: a new **Playbook Builder** that drafts a Cortex XSOAR playbook from a plain-English use-case, grounded in the ~800 real playbooks in the `soar-playbooks` KB. The operator's flagged "the agent helps build playbooks" use case.
+
+### What ships
+
+- **`/playbooks/build` page** (sidebar → Command → Playbook Builder). Describe what the playbook should do (+ optional product/integration) → the agent drafts it → you get validated YAML with **Validate structure** + **Download .yml** and the example playbooks it grounded on.
+- **`build_xsoar_playbook` skill** — the retrieval-augmented authoring lifecycle: `knowledge_search` `soar-playbooks` for the closest examples (their full `raw_yaml` is in the KB) → draft following those task-graph patterns → validate → present as a reviewable draft with citations.
+- **`playbook_validate` MCP tool** + `POST /api/v1/playbooks/validate` (proxied at `/api/agent/playbooks/validate`) — deterministic structural check: required fields, `starttaskid` exists, every `nexttasks` reference resolves, reachability. Agent-safe (no secrets, no catalog mutation).
+- The builder **never deploys to a tenant** — output is a draft to review + import (Playbooks → Import), tested in a playground first.
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/builtin_components/playbook_tools.py` — `playbook_validate` + tests (8).
+- `bundles/spark/mcp/src/api/playbooks.py`, `src/main.py`, `src/usecase/connector_loader.py` — REST route + registration.
+- `bundles/spark/mcp/skills/workflows/build_xsoar_playbook.md` — the authoring skill.
+- `mcp/agent/app/playbooks/build/page.tsx` + `app/api/agent/playbooks/validate/route.ts` + `components/sidebar.tsx` — UI page + proxy + nav.
+- `mcp/agent/app/help/{architecture,user}/page.tsx`, `mcp/agent/lib/journeys.ts` — docs + `playbook-builder` journey.
+
+---
+
 ## [v0.2.23] (unreleased) — *Keep specialist KBs out of IT investigations' passive context*
 
 Tuning pass after the KB expansion. With six KBs and ~1,973 docs, the **passive** per-turn context injection (the `ContextAssembler` puts the top-K KB hits into every turn) started leaking specialist matrices into IT investigations — a measured IT-ransomware turn surfaced an ICS technique (`T0809`, OT) *above* the correct Enterprise `T1486`. The noise is mid-cosine (~0.6), so a score floor can't separate it.
