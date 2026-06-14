@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.27",
+    date: "2026-06-15",
+    title: "Cortex XSIAM connector — investigation + EDR response.",
+    highlights: [
+      "New Cortex XSIAM connector in the marketplace — add an instance with your tenant API host + the Cortex public-API key pair, then investigate and respond from chat (mirrors XSOAR).",
+      "54 tools: XQL queries, incidents/alerts/issues, assets, audit, datamodel — plus EDR response (endpoint isolate/scan/quarantine, script execution, IOC + hash blocklisting).",
+      "Every write/response tool is approval-gated; the destructive remove_lookup_data is denied outright.",
+    ],
+  },
+  {
     version: "0.2.26",
     date: "2026-06-14",
     title: "Deploy + test-run playbooks — close the builder loop.",

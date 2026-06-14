@@ -5001,6 +5001,70 @@ export const JOURNEYS: Journey[] = [
     related: ["xsoar-monitor-cases", "chat-plan-multi-step"],
     components: ["connectors", "chat", "approvals", "audit"],
   },
+  {
+    id: "xsiam-investigate-respond",
+    category: "validation",
+    title: "Hunt + respond on Cortex XSIAM",
+    summary:
+      "Create a Cortex XSIAM instance, then from chat: run an XQL hunt, triage incidents/alerts, pivot on assets, and (approval-gated) take an EDR response action like isolating an endpoint.",
+    difficulty: "intermediate",
+    durationMin: 6,
+    icon: "siren",
+    prompts: [
+      {
+        text: "Run an XQL query for failed logins in the last hour, then list the open XSIAM incidents.",
+        note: "Agent chains: xsiam_run_xql_query → xsiam_incidents_list. Read-only — no approval cards.",
+        newSession: true,
+      },
+      {
+        text: "For the highest-severity incident, pull its extra data and the alerts, and show me the affected endpoints.",
+        note: "xsiam_incidents_get_extra_data → xsiam_alerts_list → xsiam_endpoints_list_all/get. Still read-only.",
+      },
+      {
+        text: "Isolate the most likely compromised endpoint, then report the action status.",
+        note: "Tier write: xsiam_endpoints_isolate surfaces an inline approval card — click Approve. Then xsiam_response_get_action_status polls the result.",
+      },
+    ],
+    toolsExercised: [
+      "xsiam_run_xql_query",
+      "xsiam_incidents_list",
+      "xsiam_incidents_get_extra_data",
+      "xsiam_alerts_list",
+      "xsiam_endpoints_list_all",
+      "xsiam_endpoints_isolate",
+      "xsiam_response_get_action_status",
+    ],
+    apis: [
+      {
+        method: "POST",
+        path: "/api/chat",
+        description:
+          "Streams SSE; the wire-event trace shows the hunt → triage → respond chain, with the isolate step blocking on an inline approval card.",
+      },
+      {
+        method: "GET",
+        path: "/api/agent/approvals?status=pending",
+        description:
+          "The response action (endpoints_isolate) is approval-gated; the chat route polls this while it blocks on operator approval.",
+      },
+    ],
+    howToTest: [
+      "Install the Cortex XSIAM connector from /connectors and create an instance with your tenant API host + api_id + api_key.",
+      "Open a fresh chat. Paste prompt 1 — the agent runs an XQL query and lists incidents (read-only).",
+      "Paste prompt 2 — it pulls incident extra-data, alerts, and endpoints (read-only).",
+      "Paste prompt 3 — the agent proposes isolating an endpoint; an inline approval card appears. Click Approve, then watch it poll the action status.",
+      "Open /observability/connectors and confirm xsiam is healthy.",
+    ],
+    expectedResult:
+      "A hunt-to-respond flow runs from chat against a real XSIAM tenant: XQL query results, incident/alert triage, endpoint enumeration, and an approval-gated endpoint isolation with the action status reported back.",
+    verifyVia: [
+      "Wire-event trace shows xsiam_run_xql_query → xsiam_incidents_list → … → xsiam_endpoints_isolate → xsiam_response_get_action_status",
+      "GET /api/agent/audit?action=tool_call → rows for each xsiam.* tool",
+      "The isolate step produced an approval card and only ran after Approve",
+    ],
+    related: ["xsoar-investigate-case", "chat-plan-multi-step"],
+    components: ["connectors", "chat", "approvals", "audit"],
+  },
 
 ];
 

@@ -8,6 +8,7 @@ Each connector ships as its own image at customer release time. The agent dispat
 
 Each connector is a subdirectory named after itself:
 - `xsoar/` — Cortex XSOAR case (incident) integration. Supports XSOAR 6 (on-prem, single API key in the Authorization header) and XSOAR 8 / Cortex cloud (API key + key id via `x-xdr-auth-id`, `/xsoar/public/v1` path prefix). Detection: `api_id` set → v8; else v6.
+- `xsiam/` — Cortex XSIAM integration over the Cortex public API (`/public_api/v1`). 54 tools: investigation (XQL, incidents, alerts, issues, assets, audit, datamodel) + EDR response (endpoint isolate/scan/quarantine, script run, IOC + hash blocklist). Auth is the api_id (`x-xdr-auth-id`) + api_key (`Authorization`) pair. Ported from Phantom v0.2.27, minus its simulation-only webhook-log + xql-examples-RAG tools. Write tools are approval-gated; `xsiam.remove_lookup_data` is manifest-denied.
 - `cortex-docs/` — Cortex documentation search
 - `web/` — Web browsing via Playwright + headless Chromium (guardian-browser CDP)
 - `_runtime/` — the shared `guardian-connector-runtime` base image source (not a connector itself; the others build `FROM` it).

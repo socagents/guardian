@@ -10,6 +10,33 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.27] (unreleased) — *Cortex XSIAM connector — investigation + EDR response*
+
+Guardian can now connect to a **Cortex XSIAM** tenant the same way it does Cortex XSOAR — create an instance, then investigate and respond from chat. Ported back from Phantom and adapted to Guardian, minus the simulation-only pieces.
+
+### What ships
+
+- **New `Cortex XSIAM` connector** in the marketplace (`/connectors`). Add an instance with your tenant API host + the Cortex public-API key pair (`api_id` → `x-xdr-auth-id`, `api_key` → `Authorization`); the connector appends `/public_api/v1`.
+- **54 tools** across the investigate-to-respond lifecycle:
+  - *Investigation:* XQL queries, incidents, alerts, issues, assets, audit logs, datamodel describe, parsers, broker, distributions, hash analytics, lookups.
+  - *EDR response:* endpoint isolate / unisolate / scan / scan-all / quarantine-file / retrieve-file / set-alias, script run / snippet, IOC insert / disable / enable, hash blocklist, alert exclusions, create dataset.
+- **Safety:** every write/response tool is approval-gated by the connector wrapper (same as XSOAR); the one destructive lookup mutation (`remove_lookup_data`) is denied outright in the manifest.
+- Tools advertise to the agent only once you create an instance.
+
+### What was dropped vs the Phantom connector
+
+The synthetic webhook **log-injection** tool (`send_webhook_log`) and the **xql-examples RAG** tools (`find_xql_examples_rag` / `get_xql_examples` / `get_dataset_fields`) — both belonged to the Phantom *simulation* (the latter depended on the `xql-examples` KB Guardian removed in the XSOAR pivot). XQL syntax reference lives in the `cortex-docs` connector.
+
+### Files
+
+- `bundles/spark/connectors/xsiam/` — connector.yaml (54 tools) + src (PAPI client + connector.py) + Dockerfile + tests.
+- `bundles/spark/manifest.yaml` — `toolConnectors[]` + `tools.allow: xsiam.*` / deny `xsiam.remove_lookup_data`.
+- `mcp/agent/app/api/marketplace/connectors/route.ts` — marketplace card.
+- `.github/workflows/build-connectors.yml` + `release.yml` — CI build/release for `guardian-connector-xsiam`.
+- `mcp/agent/app/help/{architecture,user}/page.tsx`, `mcp/agent/lib/journeys.ts` — docs + a create-instance journey.
+
+---
+
 ## [v0.2.26] (unreleased) — *Deploy + test-run playbooks — close the builder loop*
 
 The Playbook Builder no longer stops at a draft. From `/playbooks/build` (or by asking the agent), Guardian can now **import** a drafted playbook into the connected Cortex XSOAR tenant, **run** it on a disposable test incident, show the **outcome**, and **close** the test incident — the operator's "build the playbook, then prove it works" loop.

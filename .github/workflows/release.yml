@@ -239,13 +239,15 @@ jobs:
             CONNECTOR_WEB=$(changed bundles/spark/connectors/web/)
             # v0.3.1+ — Cortex docs connector
             CONNECTOR_CORTEX_DOCS=$(changed bundles/spark/connectors/cortex-docs/)
+            # v0.2.27+ — Cortex XSIAM connector
+            CONNECTOR_XSIAM=$(changed bundles/spark/connectors/xsiam/)
             # OR with runtime base — if it rebuilt, every connector
             # image's FROM resolves to a new digest, so they all need
             # a fresh build to inherit the new layer.
             if [ "$CONNECTOR_RUNTIME" = "1" ]; then
               CONNECTOR_XSOAR=1; CONNECTOR_WEB=1
-              CONNECTOR_CORTEX_DOCS=1
-              echo "::notice::guardian-connector-runtime rebuilt — forcing rebuild of all 3 per-connector images (FROM dependency)"
+              CONNECTOR_CORTEX_DOCS=1; CONNECTOR_XSIAM=1
+              echo "::notice::guardian-connector-runtime rebuilt — forcing rebuild of all 4 per-connector images (FROM dependency)"
             fi
           fi
 
@@ -257,6 +259,7 @@ jobs:
             echo "connector_xsoar=$CONNECTOR_XSOAR"
             echo "connector_web=$CONNECTOR_WEB"
             echo "connector_cortex_docs=$CONNECTOR_CORTEX_DOCS"
+            echo "connector_xsiam=$CONNECTOR_XSIAM"
             echo "prev_version=$PREV_VERSION"
           } >> "$GITHUB_OUTPUT"
 
@@ -292,7 +295,7 @@ jobs:
             # The hyphenated cortex-docs name needs a separate iteration
             # because the env-var conversion (csvc → uppercase) only
             # works cleanly for single-word connector names.
-            for csvc in xsoar web; do
+            for csvc in xsoar web xsiam; do
               var="CONNECTOR_$(echo $csvc | tr a-z A-Z)"
               ch=$(eval "echo \$$var")
               if [ "$ch" = "1" ]; then
@@ -526,6 +529,47 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
+      - name: Build or retag guardian-connector-xsiam
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          MM: ${{ steps.ver.outputs.minor }}
+          CHANGED: ${{ steps.changed.outputs.connector_xsiam }}
+          PREV_V: ${{ steps.changed.outputs.prev_version }}
+        run: |
+          IMG="$REGISTRY/$OWNER/guardian-connector-xsiam"
+          if [ "$CHANGED" = "1" ]; then
+            echo "::notice::guardian-connector-xsiam rebuilding (source or runtime base changed)"
+            docker build \
+              --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
+              -f bundles/spark/connectors/xsiam/Dockerfile \
+              -t "$IMG:$V" \
+              -t "$IMG:$MM" \
+              -t "$IMG:latest" \
+              .
+          else
+            # First release with the xsiam connector in the manifest has
+            # no $PREV_V tag (ported back from Phantom in v0.2.27). If the
+            # PREV pull fails, build from source so this release has a
+            # tagged image to pin. The next release retags normally.
+            echo "::notice::guardian-connector-xsiam source unchanged — retagging $PREV_V → $V/$MM/latest (or building if PREV pull fails)"
+            if docker pull "$IMG:$PREV_V"; then
+              docker tag  "$IMG:$PREV_V" "$IMG:$V"
+              docker tag  "$IMG:$PREV_V" "$IMG:$MM"
+              docker tag  "$IMG:$PREV_V" "$IMG:latest"
+            else
+              echo "::warning::guardian-connector-xsiam has no $PREV_V tag (first release with xsiam in the manifest). Building from source instead so this release has a tagged image to pin."
+              docker build \
+                --build-arg GUARDIAN_RUNTIME_VERSION="$V" \
+                -f bundles/spark/connectors/xsiam/Dockerfile \
+                -t "$IMG:$V" \
+                -t "$IMG:$MM" \
+                -t "$IMG:latest" \
+                .
+            fi
+          fi
+          .github/scripts/push-with-retry.sh \
+            "$IMG:$V" "$IMG:$MM" "$IMG:latest"
+
       - name: Build or retag guardian-connector-web
         env:
           V: ${{ steps.ver.outputs.version }}
@@ -629,6 +673,7 @@ jobs:
             guardian-connector-xsoar
             guardian-connector-web
             guardian-connector-cortex-docs
+            guardian-connector-xsiam
           )
 
           {
@@ -848,6 +893,7 @@ jobs:
             echo "- ghcr.io/$OWNER/guardian-connector-xsoar:$V (dormant unless an XSOAR instance is created)"
             echo "- ghcr.io/$OWNER/guardian-connector-web:$V (dormant unless a web instance is created)"
             echo "- ghcr.io/$OWNER/guardian-connector-cortex-docs:$V (dormant unless a cortex-docs instance is created)"
+            echo "- ghcr.io/$OWNER/guardian-connector-xsiam:$V (dormant unless a Cortex XSIAM instance is created)"
           } > "$NOTES"
 
           # v0.4.0 — reset-ui-password.sh standalone asset retired. The
@@ -927,7 +973,7 @@ jobs:
           for img in guardian-agent guardian-updater guardian-browser \
                      guardian-connector-runtime \
                      guardian-connector-xsoar guardian-connector-web \
-                     guardian-connector-cortex-docs; do
+                     guardian-connector-cortex-docs guardian-connector-xsiam; do
             docker image rm -f \
               "$REGISTRY/$OWNER/$img:$V" \
               "$REGISTRY/$OWNER/$img:$MM" 2>/dev/null || true

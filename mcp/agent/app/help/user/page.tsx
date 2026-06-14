@@ -349,9 +349,12 @@ export default function HelpPage() {
               connector instance. The agent is the human-facing surface
               — a UI where you chat, run jobs, configure connectors,
               and watch telemetry. Behind it sits an MCP server that
-              aggregates tools from three connectors:{" "}
+              aggregates tools from four connectors:{" "}
               <Term>xsoar</Term> for Cortex XSOAR cases (list / fetch /
               war room / indicators / notes / evidence / update / close),{" "}
+              <Term>xsiam</Term> for Cortex XSIAM (XQL hunts, incidents /
+              alerts / assets, and EDR response — endpoint isolate / scan /
+              quarantine),{" "}
               <Term>cortex-docs</Term> for official Palo Alto Networks
               documentation search, and <Term>web</Term>{" "}
               for evidence-gathering browsing via the browser sidecar.
@@ -2845,8 +2848,8 @@ Networks documentation and returning evidence-backed, cited answers.
                 config schema, secret slots, tool list, and the OCI
                 container image that runs when an instance is created.
                 Two flavors:{" "}
-                <Code>origin: bundle</Code> (the 3 connectors shipped in
-                the agent image: cortex-docs, web, xsoar) and{" "}
+                <Code>origin: bundle</Code> (the 4 connectors shipped in
+                the agent image: cortex-docs, web, xsoar, xsiam) and{" "}
                 <Code>origin: user</Code> (connectors you upload via
                 the marketplace).
               </li>
@@ -2868,6 +2871,33 @@ Networks documentation and returning evidence-backed, cited answers.
               row is created. Tool calls flow from the agent&apos;s MCP
               to the container over loopback HTTPS.
             </p>
+
+            <SubSection icon="siren" title="Cortex XSIAM connector (v0.2.27)">
+              <p>
+                The <Term>xsiam</Term> connector connects Guardian to a
+                Cortex XSIAM tenant over the Cortex public API — the same
+                add-an-instance flow as Cortex XSOAR. Create an instance with
+                your tenant <strong>API host</strong> (the connector appends{" "}
+                <Code>/public_api/v1</Code>), the <strong>API key ID</strong>{" "}
+                (sent as <Code>x-xdr-auth-id</Code>), and the{" "}
+                <strong>API key</strong> (the <Code>Authorization</Code> value).
+                Mint these in XSIAM under Settings → Configurations → API Keys.
+              </p>
+              <p>
+                It brings <strong>54 tools</strong>: investigation — XQL
+                queries over the data lake, incidents / alerts / issues,
+                assets, audit logs, datamodel, parsers — and{" "}
+                <strong>EDR response</strong>: isolate / unisolate / scan /
+                quarantine an endpoint, run a script or snippet, and blocklist
+                a hash or IOC. Response actions write to your tenant, so they
+                are <strong>approval-gated</strong> (you confirm at{" "}
+                <Link href="/approvals" className="link">/approvals</Link>);
+                the one destructive lookup deletion is blocked entirely. Ask
+                in chat: &quot;run an XQL query for failed logins in the last
+                hour&quot;, &quot;list the open XSIAM incidents&quot;, or
+                &quot;isolate endpoint &lt;id&gt;&quot;.
+              </p>
+            </SubSection>
 
             <SubSection icon="dynamic_form" title="The instance creation form">
               <p>

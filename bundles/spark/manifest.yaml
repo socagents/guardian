@@ -217,6 +217,18 @@ toolConnectors:
     version: "0.3.1"
     required: false
 
+  # Cortex XSIAM connector — investigation (XQL queries, incidents,
+  # alerts, issues, assets, audit, datamodel) + EDR response (endpoint
+  # isolate/scan/quarantine, script execution, IOC + hash blocklisting)
+  # over the Cortex public API. Auth is the api_id (x-xdr-auth-id) +
+  # api_key (Authorization) key pair; the connector appends
+  # /public_api/v1 to the tenant api_url. Tools advertise only once the
+  # operator creates an instance via /connectors.
+  - id: "xsiam"
+    path: "./connectors/xsiam/"
+    version: "0.2.0"
+    required: false
+
 # Model providers (per spec v1.2 §7.6). Parallel to toolConnectors[]
 # but contributes models the modelRequirements: resolver picks from,
 # rather than tools the agent calls. At least one provider instance
@@ -319,9 +331,20 @@ tools:
     # section research deliverables; standard lookups use the lighter
     # search/fetch tools.
     - "cortex-docs.*"
+    # Cortex XSIAM connector — investigation + EDR response over the
+    # Cortex public API. Tools advertise once an instance is created.
+    # Write/response tools (endpoint isolate/scan/quarantine, script
+    # run, IOC + hash blocklist, lookup add, alert exclusions, etc.) are
+    # approval-gated by the connector wrapper, same as XSOAR. The single
+    # destructive lookup mutation is denied outright (see deny[]).
+    - "xsiam.*"
   deny:
     - "shell_exec"
     - "file_write"
+    # XSIAM: deny the one destructive lookup mutation outright (it
+    # permanently deletes lookup rows). All other writes are
+    # approval-gated, not denied. Mirrors the Phantom deny.
+    - "xsiam.remove_lookup_data"
     # Phase 11 — security boundary for self-modification (Tier 5).
     # These tools MUST NOT exist as MCP-callable. The agent can configure
     # its own runtime data (jobs, personality, settings) but CANNOT alter

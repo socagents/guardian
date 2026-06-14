@@ -1,0 +1,1434 @@
+"""Cortex XSIAM connector — investigation (XQL, incidents, alerts, issues,
+assets, audit, datamodel) + EDR response (endpoint isolate/scan/quarantine,
+script execution, IOC + hash blocklisting) over the Cortex PAPI public API.
+
+Stateless container connector. PAPI auth (the `x-xdr-auth-id` + `Authorization`
+headers) is resolved from the instance's SecretStore config into the runtime
+contextvar at boot; each tool call reads it via `config.config.get_config()`.
+Mirrors the xsoar connector's shape (error envelope + per-call fetcher)."""
+
+import asyncio
+import functools
+import time
+from typing import Any, Dict, List, Optional
+
+from fastmcp import Context
+from pydantic import BaseModel, Field
+
+from ._papi_client import Fetcher
+
+
+# v0.5.80 (issue #51 — bug-family audit): explicit tool exports.
+# Pre-v0.5.80 xsiam relied on the runtime's auto-discovery fallback
+# (logged a missing-__all__ warning; pulled Pydantic Request classes
+# along with real tools). Same fix pattern as cortex-xdr v0.5.75.
+# The runtime filters non-functions in the fallback path, but the
+# explicit-export form is deterministic and documents the public
+# surface in one place.
+__all__ = [
+    "xsiam_run_xql_query",
+    "xsiam_add_lookup_data",
+    "xsiam_get_lookup_data",
+    "xsiam_remove_lookup_data",
+    "xsiam_get_datasets",
+    "xsiam_create_dataset",
+    "xsiam_get_asset_by_id",
+    "xsiam_get_assets",
+    "xsiam_get_issues",
+
+    # v0.15.1 R5.1 — incidents + alerts + IoC + download
+    "xsiam_incidents_list",
+    "xsiam_incidents_get_extra_data",
+    "xsiam_incidents_update",
+    "xsiam_alerts_list",
+    "xsiam_alerts_update",
+    "xsiam_ioc_insert_json",
+    "xsiam_ioc_disable",
+    "xsiam_ioc_enable",
+    "xsiam_download_file",
+
+    # v0.15.2 R5.2 — endpoints + response + scripts (18 tools)
+    "xsiam_endpoints_list_all",
+    "xsiam_endpoints_get",
+    "xsiam_endpoints_isolate",
+    "xsiam_endpoints_unisolate",
+    "xsiam_endpoints_scan",
+    "xsiam_endpoints_scan_all",
+    "xsiam_endpoints_set_alias",
+    "xsiam_endpoints_retrieve_file",
+    "xsiam_endpoints_quarantine_file",
+    "xsiam_response_get_action_status",
+    "xsiam_response_get_file_retrieval_details",
+    "xsiam_scripts_list",
+    "xsiam_scripts_get_metadata",
+    "xsiam_scripts_run_script",
+    "xsiam_scripts_run_snippet",
+    "xsiam_scripts_get_execution_status",
+    "xsiam_scripts_get_execution_results",
+    "xsiam_scripts_get_execution_result_files",
+
+    # v0.15.3 R5.3 — admin + XSIAM-unique (18 tools)
+    "xsiam_audit_list_management_logs",
+    "xsiam_audit_list_agent_logs",
+    "xsiam_distribution_list",
+    "xsiam_distribution_create",
+    "xsiam_distribution_get_url",
+    "xsiam_distribution_versions",
+    "xsiam_alert_exclusions_list",
+    "xsiam_alert_exclusions_create",
+    "xsiam_alert_exclusions_delete",
+    "xsiam_hash_get_analytics",
+    "xsiam_hash_blocklist",
+    "xsiam_exploits_list",
+    "xsiam_exploits_get_details",
+    "xsiam_parsers_list",
+    "xsiam_parsers_get",
+    "xsiam_datamodel_describe",
+    "xsiam_broker_list",
+    "xsiam_broker_get",
+]
+
+
+def _create_response(data: dict, is_error: bool = False) -> dict:
+    if "success" not in data:
+        data["success"] = not is_error
+    return data
+
+
+def _get_xsiam_config() -> dict:
+    """Read the live xsiam instance config + resolved secrets.
+
+    Uses the runtime-native `config.config.get_config()` proxy — the
+    runtime's `_load_instance` populates the contextvar it reads. Container
+    connectors have no `/app/usecase/` tree, so NEVER import
+    `usecase.instance_store`/`usecase.kb_store` here (that import crashed every
+    call with ModuleNotFoundError in container mode). Returns the three config
+    fields uniformly: api_url, api_id, and the api_key secret.
+    """
+    from config.config import get_config
+
+    proxy = get_config()
+    return {
+        "api_url": getattr(proxy, "api_url", None),
+        "api_id": getattr(proxy, "api_id", None),
+        "api_key": getattr(proxy, "api_key", None),
+    }
+
+
+def _get_fetcher() -> Fetcher:
+    """Resolve the XSIAM PAPI fetcher from the live instance config."""
+    cfg = _get_xsiam_config()
+    papi_url = cfg.get("api_url")
+    if not papi_url:
+        raise ValueError(
+            "xsiam instance has no api_url configured. Edit at /connectors."
+        )
+    api_key = cfg.get("api_key")
+    if not api_key:
+        raise ValueError(
+            "xsiam instance has no api_key (Authorization header) configured. "
+            "Edit at /connectors."
+        )
+    api_key_id = cfg.get("api_id")
+    if not api_key_id:
+        raise ValueError(
+            "xsiam instance has no api_id (x-xdr-auth-id header) configured. "
+            "Edit at /connectors."
+        )
+
+    base_url = str(papi_url).rstrip("/")
+    if "/public_api" in base_url:
+        if not base_url.endswith("/public_api/v1"):
+            base_url = base_url.split("/public_api")[0].rstrip("/") + "/public_api/v1"
+    else:
+        base_url = f"{base_url}/public_api/v1"
+
+    return Fetcher(base_url, str(api_key), str(api_key_id))
+
+
+class RunXqlQueryRequest(BaseModel):
+    """Request model for running XQL queries."""
+
+    query: str = Field(description="XQL query to execute. For syntax reference use the cortex-docs connector; for tenant-specific dataset discovery use xsiam_get_datasets.")
+
+
+class LookupDataRequest(BaseModel):
+    """Request model for adding lookup data."""
+
+    dataset_name: str = Field(description="Name of the lookup dataset to add data to.")
+    data: List[Dict[str, Any]] = Field(description="List of records to add (each record is a dict).")
+    key_fields: Optional[List[str]] = Field(default=None, description="Optional unique key fields.")
+
+
+class GetLookupDataRequest(BaseModel):
+    """Request model for retrieving lookup data."""
+
+    dataset_name: str = Field(description="Name of the lookup dataset to query.")
+    filters: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Filter conditions (field, operator, value).",
+    )
+    limit: int = Field(default=20, ge=1, le=1000, description="Max records (1-1000).")
+
+
+class RemoveLookupDataRequest(BaseModel):
+    """Request model for removing lookup data."""
+
+    dataset_name: str = Field(description="Name of the lookup dataset.")
+    filters: List[Dict[str, Any]] = Field(description="Filter conditions to identify records to delete.")
+
+
+class CreateDatasetRequest(BaseModel):
+    """Request model for creating a dataset."""
+
+    dataset_name: str = Field(description="Name for new dataset (lowercase with underscores).")
+    dataset_schema: Dict[str, Any] = Field(description="Schema definition with field types.")
+    dataset_type: str = Field(default="lookup", description="Dataset type (default: lookup).")
+
+
+class GetAssessmentResultsRequest(BaseModel):
+    """Request model for vulnerability assessment results."""
+
+    filters: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Filter conditions for vulnerability assessments.",
+    )
+
+
+class GetAssetByIdRequest(BaseModel):
+    """Request model for fetching asset by ID."""
+
+    asset_id: str = Field(description="Unique asset identifier in XSIAM.")
+
+
+class GetAssetsRequest(BaseModel):
+    """Request model for asset search."""
+
+    filters: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Filter object with AND/OR arrays. Each item uses SEARCH_FIELD, SEARCH_TYPE, SEARCH_VALUE. "
+            "SEARCH_TYPE values: EQ, IN, NIN, NEQ, IS, IS_NOT, LIKE_ANY, NOT_LIKE_ANY, WILDCARD, "
+            "WILDCARD_NOT, REGEX, REGEX_NOT, GT, LT, GTE, LTE, RELATIVE_TIMESTAMP, RANGE, CONTAINS, "
+            "JSON_SEARCH, JSON_OVERLAPS, JSON_OVERLAPS_NOT, NCONTAINS, CONTAINS_IN_LIST, "
+            "NOT_CONTAINS_IN_LIST, ARRAY_LEN_EQ, ARRAY_LEN_NEQ, ARRAY_CONTAINS, ARRAY_CONTAINS_NUMBERS, "
+            "ARRAY_NOT_CONTAINS, JSON_EQ, JSON_NEQ, JSON_WILDCARD_NOT, JSON_WILDCARD, JSON_GTE, "
+            "JSON_LTE, JSON_GT, JSON_LT, JSON_CONTAINS_NOT, JSON_CONTAINS, JSON_ARRAY_CONTAINED_IN, "
+            "JSON_ARRAY_NOT_CONTAINED_IN, JSON_ARRAY_CONTAINS, JSON_ARRAY_CONTAINS_NOT, "
+            "JSON_IS_EMPTY, JSON_IS_NOT_EMPTY."
+        ),
+    )
+    sort: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Sort criteria (field and order).",
+    )
+    search_from: int = Field(default=0, description="Pagination offset.")
+    search_to: int = Field(default=100, description="Pagination limit (max 1000).")
+
+
+class GetIssuesRequest(BaseModel):
+    """Request model for issues search."""
+
+    filters: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description=(
+            "Filters array of objects with keys: field, operator, value. "
+            "field allowed values: issue_id, external_id, detection_method, domain, "
+            "severity, _insert_time, status. "
+            "operator allowed values: in, gte, lte. "
+            "value is the value or list of values to compare against."
+        ),
+    )
+    search_from: int = Field(default=0, description="Pagination offset.")
+
+
+async def xsiam_run_xql_query(query: str = "", ctx: Context = None) -> dict:
+    """
+    Execute custom XQL query against XSIAM datasets.
+
+    Queries last 30 minutes by default. Returns JSON results.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_run_xql_query",
+        "arguments": {
+          "query": "datamodel dataset = corelight_http_raw | limit 10"
+        }
+      }
+    }
+    """
+    request = RunXqlQueryRequest(query=query)
+    if not request.query or not request.query.strip():
+        return _create_response({"error": "XQL query is required"}, is_error=True)
+
+    try:
+        fetcher = _get_fetcher()
+        to_ts = int(time.time() * 1000)
+        from_ts = to_ts - (30 * 60 * 1000)
+
+        start_payload = {"request_data": {"query": request.query.strip(), "timeframe": {"from": from_ts, "to": to_ts}}}
+        start_resp = await fetcher.send_request("xql/start_xql_query", data=start_payload)
+        query_id = start_resp.get("reply")
+        if not query_id:
+            return _create_response({"error": "Error starting XQL", "details": start_resp}, is_error=True)
+
+        await asyncio.sleep(2)
+        results_payload = {
+            "request_data": {"query_id": query_id, "pending_flag": False, "limit": 1000, "format": "json"}
+        }
+        results_resp = await fetcher.send_request("xql/get_query_results", data=results_payload)
+        return _create_response(results_resp)
+    except Exception as e:
+        return _create_response({"error": f"Error running XQL: {str(e)}"}, is_error=True)
+
+
+async def xsiam_add_lookup_data(
+    dataset_name: str = "",
+    data: Optional[List[Dict[str, Any]]] = None,
+    key_fields: Optional[List[str]] = None,
+    ctx: Context = None,
+) -> dict:
+    """
+    Add or update data in an XSIAM lookup dataset.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_add_lookup_data",
+        "arguments": {
+          "dataset_name": "ioc_lookup",
+          "data": [{"ip": "1.2.3.4", "label": "suspicious"}]
+        }
+      }
+    }
+    """
+    request = LookupDataRequest(
+        dataset_name=dataset_name,
+        data=data if data is not None else [],
+        key_fields=key_fields,
+    )
+    try:
+        fetcher = _get_fetcher()
+        payload = {"request_data": {"dataset_name": request.dataset_name, "data": request.data}}
+        if request.key_fields:
+            payload["request_data"]["key_fields"] = request.key_fields
+        response = await fetcher.send_request("xql/lookups/add_data", data=payload)
+        return _create_response(response)
+    except Exception as e:
+        return _create_response({"error": str(e)}, is_error=True)
+
+
+async def xsiam_get_lookup_data(
+    dataset_name: str = "",
+    filters: Optional[List[Dict[str, Any]]] = None,
+    limit: int = 20,
+    ctx: Context = None,
+) -> dict:
+    """
+    Retrieve data from an XSIAM lookup dataset.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_get_lookup_data",
+        "arguments": {
+          "dataset_name": "ioc_lookup",
+          "limit": 10
+        }
+      }
+    }
+    """
+    request = GetLookupDataRequest(dataset_name=dataset_name, filters=filters, limit=limit)
+    try:
+        fetcher = _get_fetcher()
+        payload = {"request_data": {"dataset_name": request.dataset_name, "limit": request.limit}}
+        if request.filters:
+            payload["request_data"]["filters"] = request.filters
+        response = await fetcher.send_request("xql/lookups/get_data", data=payload)
+        return _create_response(response)
+    except Exception as e:
+        return _create_response({"error": str(e)}, is_error=True)
+
+
+async def xsiam_remove_lookup_data(
+    dataset_name: str = "",
+    filters: Optional[List[Dict[str, Any]]] = None,
+    ctx: Context = None,
+) -> dict:
+    """
+    Remove data from an XSIAM lookup dataset.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_remove_lookup_data",
+        "arguments": {
+          "dataset_name": "ioc_lookup",
+          "filters": [{"field": "ip", "operator": "equals", "value": "1.2.3.4"}]
+        }
+      }
+    }
+    """
+    request = RemoveLookupDataRequest(
+        dataset_name=dataset_name,
+        filters=filters if filters is not None else [],
+    )
+    try:
+        fetcher = _get_fetcher()
+        payload = {"request_data": {"dataset_name": request.dataset_name, "filters": request.filters}}
+        response = await fetcher.send_request("xql/lookups/remove_data", data=payload)
+        return _create_response(response)
+    except Exception as e:
+        return _create_response({"error": str(e)}, is_error=True)
+
+
+async def xsiam_get_datasets(ctx: Context) -> dict:
+    """
+    List all available datasets in XSIAM.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_get_datasets",
+        "arguments": {}
+      }
+    }
+    """
+    try:
+        fetcher = _get_fetcher()
+        response = await fetcher.send_request("xql/get_datasets", data={})
+        return _create_response(response)
+    except Exception as e:
+        return _create_response({"error": str(e)}, is_error=True)
+
+
+async def xsiam_create_dataset(
+    dataset_name: str = "",
+    dataset_schema: Optional[Dict[str, Any]] = None,
+    dataset_type: str = "lookup",
+    ctx: Context = None,
+) -> dict:
+    """
+    Create a new lookup dataset in XSIAM.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_create_dataset",
+        "arguments": {
+          "dataset_name": "ioc_lookup",
+          "dataset_schema": {"ip": "string", "label": "string"}
+        }
+      }
+    }
+    """
+    request = CreateDatasetRequest(
+        dataset_name=dataset_name,
+        dataset_schema=dataset_schema if dataset_schema is not None else {},
+        dataset_type=dataset_type,
+    )
+    try:
+        fetcher = _get_fetcher()
+        payload = {
+            "request_data": {
+                "dataset_name": request.dataset_name,
+                "dataset_schema": request.dataset_schema,
+                "dataset_type": request.dataset_type,
+            }
+        }
+        response = await fetcher.send_request("xql/add_dataset", data=payload)
+        return _create_response(response)
+    except Exception as e:
+        return _create_response({"error": str(e)}, is_error=True)
+
+
+async def xsiam_get_asset_by_id(asset_id: str = "", ctx: Context = None) -> dict:
+    """
+    Retrieve full details for a specific asset by ID.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_get_asset_by_id",
+        "arguments": {
+          "asset_id": "ff75e045ecc6b1f47fd6104752b2f15ec3f0cedf9346dba6a1453d26c34001e6"
+        }
+      }
+    }
+    """
+    request = GetAssetByIdRequest(asset_id=asset_id)
+    try:
+        fetcher = _get_fetcher()
+        response = await fetcher.send_request(f"/assets/{request.asset_id}/", method="GET")
+        return _create_response(response)
+    except Exception as e:
+        return _create_response({"error": str(e)}, is_error=True)
+
+
+async def xsiam_get_assets(
+    filters: Optional[Dict[str, Any]] = None,
+    sort: Optional[List[Dict[str, Any]]] = None,
+    search_from: int = 0,
+    search_to: int = 100,
+    ctx: Context = None,
+) -> dict:
+    """
+    Search and retrieve monitored assets from XSIAM.
+
+    Filters format: object with AND/OR arrays of {SEARCH_FIELD, SEARCH_TYPE, SEARCH_VALUE}.
+    Example:
+    {
+      "filters": {
+        "AND": [
+          {
+            "SEARCH_FIELD": "xdm.asset.type.class",
+            "SEARCH_TYPE": "NEQ",
+            "SEARCH_VALUE": "Other"
+          }
+        ]
+      }
+    }
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_get_assets",
+        "arguments": {
+          "search_from": 0,
+          "search_to": 25,
+          "filters": {
+            "AND": [
+              {
+                "SEARCH_FIELD": "xdm.asset.type.class",
+                "SEARCH_TYPE": "NEQ",
+                "SEARCH_VALUE": "Other"
+              }
+            ]
+          }
+        }
+      }
+    }
+    """
+    request = GetAssetsRequest(
+        filters=filters,
+        sort=sort,
+        search_from=search_from,
+        search_to=search_to,
+    )
+    try:
+        fetcher = _get_fetcher()
+        request_data: Dict[str, Any] = {"search_from": request.search_from, "search_to": request.search_to}
+        if request.filters:
+            request_data["filters"] = request.filters
+        if request.sort:
+            request_data["sort"] = request.sort
+        response = await fetcher.send_request("/assets/", method="POST", data={"request_data": request_data})
+        return _create_response(response)
+    except Exception as e:
+        return _create_response({"error": str(e)}, is_error=True)
+
+
+async def xsiam_get_issues(
+    filters: Optional[List[Dict[str, Any]]] = None,
+    search_from: int = 0,
+    ctx: Context = None,
+) -> dict:
+    """
+    Search and retrieve security issues from XSIAM.
+
+    Filters format: an array of objects with {field, operator, value}.
+    Allowed fields: issue_id, external_id, detection_method, domain, severity, _insert_time, status.
+    Allowed operators: in, gte, lte.
+    Value can be a scalar or list depending on the operator.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_get_issues",
+        "arguments": {
+          "search_from": 0,
+          "filters": [
+            {
+              "field": "severity",
+              "operator": "in",
+              "value": ["HIGH", "CRITICAL"]
+            }
+          ]
+        }
+      }
+    }
+    """
+    request = GetIssuesRequest(filters=filters, search_from=search_from)
+    try:
+        fetcher = _get_fetcher()
+        payload: Dict[str, Any] = {"request_data": {"search_from": request.search_from}}
+        if request.filters:
+            payload["request_data"]["filters"] = request.filters
+        response = await fetcher.send_request("/issue/search/", data=payload)
+        return _create_response(response)
+    except Exception as e:
+        return _create_response({"error": str(e)}, is_error=True)
+
+
+# ───────────────────────────────────────────────────────────────────
+# v0.15.1 R5.1 — XSIAM incidents + alerts + IoC + download (12 tools)
+# ───────────────────────────────────────────────────────────────────
+#
+# Mirrors R4.1's XDR pattern. XSIAM and XDR share the Cortex Public
+# API surface for these categories — same /public_api/v1/<category>/
+# <action>/ paths, same request_data envelopes, same response shapes.
+# Tools below use kwarg-style (consistent with XDR's R4.x batches) for
+# tooling-friendly per-arg agent introspection.
+
+
+def _xsiam_err(message: str, **extra: Any) -> dict:
+    return {"ok": False, "success": False, "error": message, **extra}
+
+
+def _xsiam_ok(payload: dict) -> dict:
+    out = {"ok": True, "success": True}
+    out.update(payload)
+    return out
+
+
+def _xsiam_wrap(fn):
+    """Mirror of XDR's _wrap_xdr_call. Catches exceptions, returns error envelope."""
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await fn(*args, **kwargs)
+        except Exception as e:
+            return _xsiam_err(f"{type(e).__name__}: {e}")
+    return wrapper
+
+
+# ─── Incidents ───────────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_incidents_list(
+    modification_time: Optional[int] = None,
+    after_modification: bool = False,
+    creation_time: Optional[int] = None,
+    after_creation: bool = False,
+    incident_id_list: Optional[list[str]] = None,
+    description: Optional[str] = None,
+    status: Optional[str] = None,
+    search_from: int = 0,
+    search_to: int = 100,
+) -> dict:
+    """List XSIAM incidents with filters. Same shape as XDR incidents_list.
+
+    Args:
+        modification_time: Unix-millis filter.
+        after_modification: If true, modification_time is the lower bound.
+        creation_time: Unix-millis filter.
+        after_creation: If true, creation_time is the lower bound.
+        incident_id_list: Specific IDs.
+        description: Substring match.
+        status: One of new / under_investigation / resolved_threat_handled /
+                resolved_known_issue / resolved_duplicate /
+                resolved_false_positive / resolved_other.
+        search_from / search_to: Pagination.
+    """
+    fetcher = _get_fetcher()
+    filters: list[dict] = []
+    if modification_time is not None:
+        filters.append({"field": "modification_time", "operator": "gte" if after_modification else "lte", "value": modification_time})
+    if creation_time is not None:
+        filters.append({"field": "creation_time", "operator": "gte" if after_creation else "lte", "value": creation_time})
+    if incident_id_list:
+        filters.append({"field": "incident_id_list", "operator": "in", "value": incident_id_list})
+    if description:
+        filters.append({"field": "description", "operator": "contains", "value": description})
+    if status:
+        filters.append({"field": "status", "operator": "eq", "value": status})
+    body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
+    resp = await fetcher.send_request("/incidents/get_incidents/", data=body)
+    return _xsiam_ok({"incidents": (resp.get("reply") or {}).get("incidents", []), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_incidents_get_extra_data(
+    incident_id: str,
+    alerts_limit: int = 50,
+) -> dict:
+    """Full details for one XSIAM incident — alerts, artifacts, users, hosts."""
+    if not incident_id:
+        return _xsiam_err("incident_id is required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {"incident_id": incident_id, "alerts_limit": alerts_limit}}
+    resp = await fetcher.send_request("/incidents/get_incident_extra_data/", data=body)
+    return _xsiam_ok({"incident": resp.get("reply"), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_incidents_update(incident_id: str, update_data: dict) -> dict:
+    """Update XSIAM incident's mutable metadata — status / severity / assignee / comment."""
+    if not incident_id or not isinstance(update_data, dict) or not update_data:
+        return _xsiam_err("incident_id and non-empty update_data required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {"incident_id": incident_id, "update_data": update_data}}
+    resp = await fetcher.send_request("/incidents/update_incident/", data=body)
+    return _xsiam_ok({"incident_id": incident_id, "updated": True, "raw_response": resp})
+
+
+# ─── Alerts ───────────────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_alerts_list(
+    severity: Optional[list[str]] = None,
+    status: Optional[list[str]] = None,
+    search_from: int = 0,
+    search_to: int = 100,
+) -> dict:
+    """List XSIAM alerts (multi-event shape)."""
+    fetcher = _get_fetcher()
+    filters: list[dict] = []
+    if severity:
+        filters.append({"field": "severity", "operator": "in", "value": severity})
+    if status:
+        filters.append({"field": "status", "operator": "in", "value": status})
+    body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
+    resp = await fetcher.send_request("/alerts/get_alerts_multi_events/", data=body)
+    return _xsiam_ok({"alerts": (resp.get("reply") or {}).get("alerts", []), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_alerts_update(alert_id_list: list[str], update_data: dict) -> dict:
+    """Bulk-update one or more alerts (severity / status / resolve_comment)."""
+    if not alert_id_list or not isinstance(update_data, dict) or not update_data:
+        return _xsiam_err("alert_id_list and non-empty update_data required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {"alert_id_list": alert_id_list, "update_data": update_data}}
+    resp = await fetcher.send_request("/alerts/update_alerts/", data=body)
+    return _xsiam_ok({"updated_count": len(alert_id_list), "alert_id_list": alert_id_list, "raw_response": resp})
+
+
+# ─── IoC management ───────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_ioc_insert_json(indicators: list[dict], validate: bool = True) -> dict:
+    """Bulk-upload IoCs. Each dict needs indicator + type + severity + reputation."""
+    if not indicators or not isinstance(indicators, list):
+        return _xsiam_err("indicators must be a non-empty list of IoC dicts")
+    fetcher = _get_fetcher()
+    body = {"request_data": {"validate": validate, "indicators": indicators}}
+    resp = await fetcher.send_request("/indicators/insert_jsons/", data=body)
+    return _xsiam_ok({
+        "inserted_count": len(indicators),
+        "errors": (resp.get("reply") or {}).get("errors") or [],
+        "raw_response": resp,
+    })
+
+
+@_xsiam_wrap
+async def xsiam_ioc_disable(indicators: list[str]) -> dict:
+    """Disable IoCs by value."""
+    if not indicators:
+        return _xsiam_err("indicators required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {"indicators": indicators}}
+    resp = await fetcher.send_request("/indicators/disable_iocs/", data=body)
+    return _xsiam_ok({"disabled_count": len(indicators), "indicators": indicators, "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_ioc_enable(indicators: list[str]) -> dict:
+    """Re-enable previously disabled IoCs."""
+    if not indicators:
+        return _xsiam_err("indicators required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {"indicators": indicators}}
+    resp = await fetcher.send_request("/indicators/enable_iocs/", data=body)
+    return _xsiam_ok({"enabled_count": len(indicators), "indicators": indicators, "raw_response": resp})
+
+
+# ─── File download ────────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_download_file(file_link: str) -> dict:
+    """Download bytes from an XSIAM-issued retrieval URL.
+
+    Companion to xsiam_endpoints_retrieve_file (R5.2) — once retrieval
+    completes, pass file_link from xsiam_response_get_file_retrieval_details
+    here to pull the bytes as base64.
+
+    Pre-condition: file_link must point at the configured XSIAM tenant FQDN.
+    """
+    if not file_link or not isinstance(file_link, str):
+        return _xsiam_err("file_link must be a non-empty string")
+    cfg = _get_xsiam_config()
+    api_url = cfg.get("api_url", "")
+    if api_url and not file_link.startswith(api_url.rstrip("/")):
+        return _xsiam_err("file_link does not match configured XSIAM tenant",
+                          api_url=api_url, file_link_prefix=file_link[:60])
+    # XSIAM's downloads return raw bytes — we can't use send_request directly
+    # (it expects JSON responses). Use httpx directly with the bearer headers.
+    import base64
+    import httpx
+    headers = {"Authorization": cfg.get("api_key", ""), "x-xdr-auth-id": str(cfg.get("api_id", ""))}
+    timeout = httpx.Timeout(60.0, connect=10.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        r = await client.get(file_link, headers=headers)
+    if r.status_code != 200:
+        return _xsiam_err(f"HTTP {r.status_code} downloading file",
+                          body=r.text[:200])
+    return _xsiam_ok({
+        "file_link": file_link,
+        "size_bytes": len(r.content),
+        "content_b64": base64.b64encode(r.content).decode("ascii"),
+    })
+
+
+# ───────────────────────────────────────────────────────────────────
+# v0.15.2 R5.2 — XSIAM endpoints + response + scripts (18 tools)
+# ───────────────────────────────────────────────────────────────────
+#
+# Mirrors R4.2's XDR endpoints/response/scripts tier with xsiam_*
+# prefix + xsiam's Fetcher.send_request. Same /public_api/v1/<api>/
+# <call>/ paths as XDR — XSIAM uses the Cortex Public API.
+
+
+def _build_xsiam_endpoint_filters(
+    endpoint_id_list: Optional[list[str]] = None,
+    dist_name: Optional[list[str]] = None,
+    ip_list: Optional[list[str]] = None,
+    group_name: Optional[list[str]] = None,
+    platform: Optional[list[str]] = None,
+    alias: Optional[list[str]] = None,
+    isolate: Optional[list[str]] = None,
+    hostname: Optional[list[str]] = None,
+) -> list[dict]:
+    """Compose XSIAM endpoint filters. Same field set as XDR."""
+    filters: list[dict] = []
+    if endpoint_id_list:
+        filters.append({"field": "endpoint_id_list", "operator": "in", "value": endpoint_id_list})
+    if dist_name:
+        filters.append({"field": "dist_name", "operator": "in", "value": dist_name})
+    if ip_list:
+        filters.append({"field": "ip_list", "operator": "in", "value": ip_list})
+    if group_name:
+        filters.append({"field": "group_name", "operator": "in", "value": group_name})
+    if platform:
+        filters.append({"field": "platform", "operator": "in", "value": platform})
+    if alias:
+        filters.append({"field": "alias", "operator": "in", "value": alias})
+    if isolate:
+        filters.append({"field": "isolate", "operator": "in", "value": isolate})
+    if hostname:
+        filters.append({"field": "hostname", "operator": "in", "value": hostname})
+    return filters
+
+
+# ─── Endpoints ────────────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_endpoints_list_all() -> dict:
+    """List ALL XSIAM endpoints."""
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/endpoints/get_endpoints/", data={"request_data": {}})
+    endpoints = (resp.get("reply") or {}).get("endpoints") or resp.get("reply") or []
+    return _xsiam_ok({"endpoints": endpoints, "total": len(endpoints) if isinstance(endpoints, list) else 0, "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_endpoints_get(
+    endpoint_id_list: Optional[list[str]] = None,
+    dist_name: Optional[list[str]] = None,
+    ip_list: Optional[list[str]] = None,
+    group_name: Optional[list[str]] = None,
+    platform: Optional[list[str]] = None,
+    alias: Optional[list[str]] = None,
+    hostname: Optional[list[str]] = None,
+    isolate: Optional[list[str]] = None,
+) -> dict:
+    """Get filtered XSIAM endpoints. Same shape as xdr_endpoints_get."""
+    fetcher = _get_fetcher()
+    filters = _build_xsiam_endpoint_filters(
+        endpoint_id_list=endpoint_id_list, dist_name=dist_name, ip_list=ip_list,
+        group_name=group_name, platform=platform, alias=alias, hostname=hostname, isolate=isolate,
+    )
+    body = {"request_data": {"filters": filters} if filters else {}}
+    resp = await fetcher.send_request("/endpoints/get_endpoint/", data=body)
+    endpoints = (resp.get("reply") or {}).get("endpoints") or []
+    return _xsiam_ok({"endpoints": endpoints, "total": len(endpoints), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_endpoints_isolate(
+    endpoint_id_list: Optional[list[str]] = None, dist_name: Optional[list[str]] = None,
+    ip_list: Optional[list[str]] = None, platform: Optional[list[str]] = None, hostname: Optional[list[str]] = None,
+) -> dict:
+    """Isolate XSIAM endpoints. At least one filter required."""
+    fetcher = _get_fetcher()
+    filters = _build_xsiam_endpoint_filters(endpoint_id_list=endpoint_id_list, dist_name=dist_name,
+                                              ip_list=ip_list, platform=platform, hostname=hostname)
+    if not filters:
+        return _xsiam_err("at least one filter required")
+    resp = await fetcher.send_request("/endpoints/isolate/", data={"request_data": {"filters": filters}})
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_affected": reply.get("endpoints_count", 0), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_endpoints_unisolate(
+    endpoint_id_list: Optional[list[str]] = None, dist_name: Optional[list[str]] = None,
+    ip_list: Optional[list[str]] = None, platform: Optional[list[str]] = None, hostname: Optional[list[str]] = None,
+) -> dict:
+    """Unisolate XSIAM endpoints."""
+    fetcher = _get_fetcher()
+    filters = _build_xsiam_endpoint_filters(endpoint_id_list=endpoint_id_list, dist_name=dist_name,
+                                              ip_list=ip_list, platform=platform, hostname=hostname)
+    if not filters:
+        return _xsiam_err("at least one filter required")
+    resp = await fetcher.send_request("/endpoints/unisolate/", data={"request_data": {"filters": filters}})
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_affected": reply.get("endpoints_count", 0), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_endpoints_scan(
+    endpoint_id_list: Optional[list[str]] = None, dist_name: Optional[list[str]] = None,
+    ip_list: Optional[list[str]] = None, platform: Optional[list[str]] = None, hostname: Optional[list[str]] = None,
+) -> dict:
+    """Trigger scan on matching XSIAM endpoints."""
+    fetcher = _get_fetcher()
+    filters = _build_xsiam_endpoint_filters(endpoint_id_list=endpoint_id_list, dist_name=dist_name,
+                                              ip_list=ip_list, platform=platform, hostname=hostname)
+    if not filters:
+        return _xsiam_err("at least one filter required")
+    resp = await fetcher.send_request("/endpoints/scan/", data={"request_data": {"filters": filters}})
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_affected": reply.get("endpoints_count", 0), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_endpoints_scan_all() -> dict:
+    """Scan EVERY XSIAM endpoint (high-impact)."""
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/endpoints/scan/", data={"request_data": {"filters": []}})
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": reply.get("action_id"), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_endpoints_set_alias(endpoint_id_list: list[str], alias_name: str) -> dict:
+    """Set alias for one or more XSIAM endpoints."""
+    if not endpoint_id_list:
+        return _xsiam_err("endpoint_id_list is required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {
+        "filters": [{"field": "endpoint_id_list", "operator": "in", "value": endpoint_id_list}],
+        "alias": alias_name,
+    }}
+    resp = await fetcher.send_request("/endpoints/update_agent_name/", data=body)
+    return _xsiam_ok({"endpoint_id_list": endpoint_id_list, "alias_name": alias_name, "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_endpoints_retrieve_file(endpoint_id_list: list[str], files: dict) -> dict:
+    """Retrieve files from XSIAM endpoints. files = {windows/linux/macos: [paths]}."""
+    if not endpoint_id_list or not isinstance(files, dict):
+        return _xsiam_err("endpoint_id_list and files dict required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {
+        "filters": [{"field": "endpoint_id_list", "operator": "in", "value": endpoint_id_list}],
+        "files": files,
+    }}
+    resp = await fetcher.send_request("/endpoints/file_retrieval/", data=body)
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_count": reply.get("endpoints_count", 0), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_endpoints_quarantine_file(endpoint_id_list: list[str], file_path: str, file_hash: str) -> dict:
+    """Quarantine a file across XSIAM endpoints by path + SHA-256."""
+    if not endpoint_id_list or not file_path or not file_hash:
+        return _xsiam_err("endpoint_id_list, file_path, file_hash required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {
+        "filters": [{"field": "endpoint_id_list", "operator": "in", "value": endpoint_id_list}],
+        "file_path": file_path, "file_hash": file_hash,
+    }}
+    resp = await fetcher.send_request("/endpoints/quarantine/", data=body)
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": reply.get("action_id"), "file_path": file_path, "raw_response": resp})
+
+
+# ─── Response action status ───────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_response_get_action_status(action_id: str) -> dict:
+    """Get status of any XSIAM response action."""
+    if not action_id:
+        return _xsiam_err("action_id is required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/actions/get_action_status/",
+                                       data={"request_data": {"group_action_id": action_id}})
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": action_id, "status_per_endpoint": reply.get("data", {}), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_response_get_file_retrieval_details(action_id: str) -> dict:
+    """Download URLs for a completed XSIAM file_retrieval action."""
+    if not action_id:
+        return _xsiam_err("action_id is required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/actions/file_retrieval_details/",
+                                       data={"request_data": {"group_action_id": action_id}})
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": action_id, "files": reply.get("data", []), "raw_response": resp})
+
+
+# ─── Scripts library ─────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_scripts_list(
+    name: Optional[list[str]] = None,
+    windows_supported: Optional[bool] = None,
+    linux_supported: Optional[bool] = None,
+    macos_supported: Optional[bool] = None,
+) -> dict:
+    """List XSIAM scripts library."""
+    fetcher = _get_fetcher()
+    filters: list[dict] = []
+    if name:
+        filters.append({"field": "name", "operator": "in", "value": name})
+    if windows_supported is not None:
+        filters.append({"field": "windows_supported", "operator": "eq", "value": windows_supported})
+    if linux_supported is not None:
+        filters.append({"field": "linux_supported", "operator": "eq", "value": linux_supported})
+    if macos_supported is not None:
+        filters.append({"field": "macos_supported", "operator": "eq", "value": macos_supported})
+    body = {"request_data": {"filters": filters} if filters else {}}
+    resp = await fetcher.send_request("/scripts/get_scripts/", data=body)
+    reply = resp.get("reply") or {}
+    scripts = reply.get("scripts") or (reply if isinstance(reply, list) else [])
+    return _xsiam_ok({"scripts": scripts, "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_scripts_get_metadata(script_uid: str) -> dict:
+    """Full definition of one XSIAM script."""
+    if not script_uid:
+        return _xsiam_err("script_uid is required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/scripts/get_script_metadata/",
+                                       data={"request_data": {"script_uid": script_uid}})
+    return _xsiam_ok({"script": (resp.get("reply") or {}).get("script"), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_scripts_run_script(
+    script_uid: str, endpoint_id_list: list[str],
+    parameters_values: Optional[dict] = None, timeout: int = 600,
+) -> dict:
+    """Run a library script on XSIAM endpoints."""
+    if not script_uid or not endpoint_id_list:
+        return _xsiam_err("script_uid and endpoint_id_list required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {
+        "script_uid": script_uid,
+        "filters": [{"field": "endpoint_id_list", "operator": "in", "value": endpoint_id_list}],
+        "parameters_values": parameters_values or {}, "timeout": timeout,
+    }}
+    resp = await fetcher.send_request("/scripts/run_script/", data=body)
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": reply.get("action_id"), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_scripts_run_snippet(snippet_code: str, endpoint_id_list: list[str], timeout: int = 600) -> dict:
+    """Run ad-hoc snippet on XSIAM endpoints."""
+    if not snippet_code or not endpoint_id_list:
+        return _xsiam_err("snippet_code and endpoint_id_list required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {
+        "snippet_code": snippet_code,
+        "filters": [{"field": "endpoint_id_list", "operator": "in", "value": endpoint_id_list}],
+        "timeout": timeout,
+    }}
+    resp = await fetcher.send_request("/scripts/run_snippet_code_script/", data=body)
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": reply.get("action_id"), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_scripts_get_execution_status(action_id: str) -> dict:
+    """Poll status of an XSIAM script-execution action."""
+    if not action_id:
+        return _xsiam_err("action_id is required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/scripts/get_script_execution_status/",
+                                       data={"request_data": {"action_id": action_id}})
+    return _xsiam_ok({"action_id": action_id, "status_per_endpoint": resp.get("reply") or {}, "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_scripts_get_execution_results(action_id: str) -> dict:
+    """Get XSIAM script execution results."""
+    if not action_id:
+        return _xsiam_err("action_id is required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/scripts/get_script_execution_results/",
+                                       data={"request_data": {"action_id": action_id}})
+    return _xsiam_ok({"action_id": action_id, "results": resp.get("reply") or {}, "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_scripts_get_execution_result_files(action_id: int, endpoint_id: int) -> dict:
+    """Retrieve files a script produced on a specific endpoint."""
+    if not action_id or not endpoint_id:
+        return _xsiam_err("action_id and endpoint_id are required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/scripts/get_script_execution_result_files/",
+                                       data={"request_data": {"action_id": action_id, "endpoint_id": endpoint_id}})
+    reply = resp.get("reply") or {}
+    return _xsiam_ok({"action_id": action_id, "endpoint_id": endpoint_id, "file_link": reply.get("DATA"), "raw_response": resp})
+
+
+# ───────────────────────────────────────────────────────────────────
+# v0.15.3 R5.3 — XSIAM admin + XSIAM-unique (18 tools)
+# ───────────────────────────────────────────────────────────────────
+#
+# Common admin (audit/distribution/exclusions/hash/exploits) mirrors
+# R4.3's XDR additions with xsiam_* prefix. Plus XSIAM-unique categories:
+# parsers, datamodel introspection (XSIAM-license-gated), broker VM mgmt.
+# Hand-authored from public XSIAM docs knowledge — R5.4 E2E validates.
+
+
+# ─── Audit logs ──────────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_audit_list_management_logs(
+    audit_owner_email: Optional[list[str]] = None,
+    audit_severity: Optional[list[str]] = None,
+    audit_result: Optional[list[str]] = None,
+    timestamp_gte: Optional[int] = None,
+    timestamp_lte: Optional[int] = None,
+    search_from: int = 0,
+    search_to: int = 100,
+) -> dict:
+    """List XSIAM management-actions audit log."""
+    fetcher = _get_fetcher()
+    filters: list[dict] = []
+    if audit_owner_email:
+        filters.append({"field": "audit_owner_email", "operator": "in", "value": audit_owner_email})
+    if audit_severity:
+        filters.append({"field": "audit_severity", "operator": "in", "value": audit_severity})
+    if audit_result:
+        filters.append({"field": "audit_result", "operator": "in", "value": audit_result})
+    if timestamp_gte is not None:
+        filters.append({"field": "timestamp", "operator": "gte", "value": timestamp_gte})
+    if timestamp_lte is not None:
+        filters.append({"field": "timestamp", "operator": "lte", "value": timestamp_lte})
+    body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
+    resp = await fetcher.send_request("/audits/management_logs/", data=body)
+    return _xsiam_ok({"audit_entries": (resp.get("reply") or {}).get("data", []), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_audit_list_agent_logs(
+    endpoint_ids: Optional[list[str]] = None,
+    endpoint_names: Optional[list[str]] = None,
+    type_: Optional[list[str]] = None,
+    sub_type: Optional[list[str]] = None,
+    result: Optional[list[str]] = None,
+    timestamp_gte: Optional[int] = None,
+    timestamp_lte: Optional[int] = None,
+    search_from: int = 0,
+    search_to: int = 100,
+) -> dict:
+    """List XSIAM per-agent audit log."""
+    fetcher = _get_fetcher()
+    filters: list[dict] = []
+    if endpoint_ids:
+        filters.append({"field": "endpoint_id", "operator": "in", "value": endpoint_ids})
+    if endpoint_names:
+        filters.append({"field": "endpoint_name", "operator": "in", "value": endpoint_names})
+    if type_:
+        filters.append({"field": "type", "operator": "in", "value": type_})
+    if sub_type:
+        filters.append({"field": "sub_type", "operator": "in", "value": sub_type})
+    if result:
+        filters.append({"field": "result", "operator": "in", "value": result})
+    if timestamp_gte is not None:
+        filters.append({"field": "timestamp", "operator": "gte", "value": timestamp_gte})
+    if timestamp_lte is not None:
+        filters.append({"field": "timestamp", "operator": "lte", "value": timestamp_lte})
+    body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
+    resp = await fetcher.send_request("/audits/agents_reports/", data=body)
+    return _xsiam_ok({"audit_entries": (resp.get("reply") or {}).get("data", []), "raw_response": resp})
+
+
+# ─── Distribution lists ──────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_distribution_list() -> dict:
+    """List XSIAM distribution lists (agent installer bundles)."""
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/distributions/get_distributions/", data={"request_data": {}})
+    return _xsiam_ok({"distributions": (resp.get("reply") or {}).get("distributions", []), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_distribution_create(
+    name: str, platform: str, package_type: str = "standalone",
+    agent_version: Optional[str] = None, description: Optional[str] = None,
+) -> dict:
+    """Create new XSIAM distribution list."""
+    if not name or not platform:
+        return _xsiam_err("name and platform required")
+    fetcher = _get_fetcher()
+    rd: dict[str, Any] = {"name": name, "platform": platform, "package_type": package_type}
+    if agent_version:
+        rd["agent_version"] = agent_version
+    if description:
+        rd["description"] = description
+    resp = await fetcher.send_request("/distributions/create/", data={"request_data": rd})
+    return _xsiam_ok({"distribution_id": (resp.get("reply") or {}).get("distribution_id"), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_distribution_get_url(distribution_id: str) -> dict:
+    """Get installer URL for an XSIAM distribution."""
+    if not distribution_id:
+        return _xsiam_err("distribution_id required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {"distribution_id": distribution_id, "package_type": "standalone"}}
+    resp = await fetcher.send_request("/distributions/get_dist_url/", data=body)
+    return _xsiam_ok({"download_url": (resp.get("reply") or {}).get("distribution_url"), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_distribution_versions() -> dict:
+    """List XSIAM agent versions per platform."""
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/distributions/get_versions/", data={"request_data": {}})
+    return _xsiam_ok({"versions": resp.get("reply") or {}, "raw_response": resp})
+
+
+# ─── Alert exclusions ────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_alert_exclusions_list(
+    tenant_id: Optional[str] = None,
+    search_from: int = 0, search_to: int = 100,
+) -> dict:
+    """List XSIAM alert-exclusion rules."""
+    fetcher = _get_fetcher()
+    rd: dict[str, Any] = {"search_from": search_from, "search_to": search_to}
+    if tenant_id:
+        rd["tenant_id"] = tenant_id
+    resp = await fetcher.send_request("/alerts_exclusion/get_alert_exclusion/", data={"request_data": rd})
+    return _xsiam_ok({"exclusions": (resp.get("reply") or {}).get("alert_exclusions", []), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_alert_exclusions_create(
+    name: str, filter_expression: dict, comment: Optional[str] = None,
+) -> dict:
+    """Create XSIAM alert-exclusion rule."""
+    if not name or not filter_expression:
+        return _xsiam_err("name and filter_expression required")
+    fetcher = _get_fetcher()
+    rd: dict[str, Any] = {"name": name, "filterData": filter_expression}
+    if comment:
+        rd["comment"] = comment
+    resp = await fetcher.send_request("/alerts_exclusion/create_alert_exclusion/", data={"request_data": rd})
+    return _xsiam_ok({"exclusion_id": (resp.get("reply") or {}).get("alert_exclusion_id"), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_alert_exclusions_delete(alert_exclusion_id: str) -> dict:
+    """Delete XSIAM alert-exclusion rule."""
+    if not alert_exclusion_id:
+        return _xsiam_err("alert_exclusion_id required")
+    fetcher = _get_fetcher()
+    body = {"request_data": {"alert_exclusion_id": alert_exclusion_id}}
+    resp = await fetcher.send_request("/alerts_exclusion/delete_alert_exclusion/", data=body)
+    return _xsiam_ok({"alert_exclusion_id": alert_exclusion_id, "deleted": True, "raw_response": resp})
+
+
+# ─── Hash analytics ──────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_hash_get_analytics(file_hash: str) -> dict:
+    """Get XSIAM analytics for a file hash."""
+    if not file_hash:
+        return _xsiam_err("file_hash required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/hash_exceptions/get_hash_analytics/",
+                                       data={"request_data": {"hash": file_hash}})
+    return _xsiam_ok({"hash": file_hash, "analytics": resp.get("reply"), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_hash_blocklist(file_hashes: list[str], comment: Optional[str] = None) -> dict:
+    """Add file hashes to XSIAM global blocklist."""
+    if not file_hashes:
+        return _xsiam_err("file_hashes required")
+    fetcher = _get_fetcher()
+    rd: dict[str, Any] = {"hash_list": file_hashes}
+    if comment:
+        rd["comment"] = comment
+    resp = await fetcher.send_request("/hash_exceptions/blocklist/", data={"request_data": rd})
+    return _xsiam_ok({"blocked_count": len(file_hashes), "file_hashes": file_hashes, "raw_response": resp})
+
+
+# ─── Exploits ────────────────────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_exploits_list(
+    endpoint_id_list: Optional[list[str]] = None,
+    cve_id: Optional[list[str]] = None,
+    search_from: int = 0, search_to: int = 100,
+) -> dict:
+    """List XSIAM exploit detections."""
+    fetcher = _get_fetcher()
+    filters: list[dict] = []
+    if endpoint_id_list:
+        filters.append({"field": "endpoint_id", "operator": "in", "value": endpoint_id_list})
+    if cve_id:
+        filters.append({"field": "cve_id", "operator": "in", "value": cve_id})
+    body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
+    resp = await fetcher.send_request("/exploits/get_exploits/", data=body)
+    return _xsiam_ok({"exploits": (resp.get("reply") or {}).get("exploits", []), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_exploits_get_details(exploit_id: str) -> dict:
+    """Full details of one XSIAM exploit detection."""
+    if not exploit_id:
+        return _xsiam_err("exploit_id required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/exploits/get_exploit_details/",
+                                       data={"request_data": {"exploit_id": exploit_id}})
+    return _xsiam_ok({"exploit": (resp.get("reply") or {}).get("exploit"), "raw_response": resp})
+
+
+# ─── XSIAM-unique: Parsers ──────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_parsers_list(
+    vendor: Optional[str] = None, product: Optional[str] = None,
+    enabled: Optional[bool] = None,
+) -> dict:
+    """List XSIAM parsers (vendor-log → XDM schema transformers).
+
+    XSIAM-unique — XDR doesn't expose parsers directly (managed via
+    modeling-rule pipeline instead).
+    """
+    fetcher = _get_fetcher()
+    filters: list[dict] = []
+    if vendor:
+        filters.append({"field": "vendor", "operator": "eq", "value": vendor})
+    if product:
+        filters.append({"field": "product", "operator": "eq", "value": product})
+    if enabled is not None:
+        filters.append({"field": "enabled", "operator": "eq", "value": enabled})
+    body = {"request_data": {"filters": filters} if filters else {}}
+    resp = await fetcher.send_request("/parser/get_parsers/", data=body)
+    return _xsiam_ok({"parsers": (resp.get("reply") or {}).get("parsers", []), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_parsers_get(parser_id: str) -> dict:
+    """Full definition of one XSIAM parser."""
+    if not parser_id:
+        return _xsiam_err("parser_id required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/parser/get_parser/",
+                                       data={"request_data": {"parser_id": parser_id}})
+    return _xsiam_ok({"parser": (resp.get("reply") or {}).get("parser"), "raw_response": resp})
+
+
+# ─── XSIAM-unique: Datamodel ────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_datamodel_describe(dataset: str) -> dict:
+    """XSIAM-licensed datamodel introspection — get XDM-typed schema for a dataset.
+
+    Internally builds an XQL query with the `datamodel` stage. XDR-only
+    tenants return "Invalid License - XSIAM" for this query — XSIAM-only.
+    """
+    if not dataset:
+        return _xsiam_err("dataset required")
+    fetcher = _get_fetcher()
+    query = f"dataset = {dataset} | datamodel"
+    body = {"request_data": {"query": query, "tenants": []}}
+    # Start the query
+    start_resp = await fetcher.send_request("/xql/start_xql_query/", data=body)
+    execution_id = (start_resp.get("reply") or {}).get("execution_id")
+    if not execution_id:
+        return _xsiam_err("could not start datamodel query", raw_response=start_resp)
+    # Poll for results (XSIAM datamodel queries are usually fast — <5s)
+    import asyncio as _async
+    for _attempt in range(20):
+        await _async.sleep(1)
+        poll = await fetcher.send_request(
+            "/xql/get_query_results/",
+            data={"request_data": {"query_id": execution_id, "limit": 1000}},
+        )
+        reply = poll.get("reply") or {}
+        status = reply.get("status")
+        if status == "SUCCESS":
+            return _xsiam_ok({
+                "dataset": dataset,
+                "fields": (reply.get("results") or {}).get("data", []),
+                "raw_response": poll,
+            })
+        if status in ("FAIL", "FAILED", "CANCELLED"):
+            return _xsiam_err(
+                "datamodel query failed",
+                hint="XDR-only tenants return 'Invalid License - XSIAM' here — XSIAM license required",
+                raw_response=poll,
+            )
+    return _xsiam_err("datamodel query timed out after 20s")
+
+
+# ─── XSIAM-unique: Broker ───────────────────────────────────────
+
+
+@_xsiam_wrap
+async def xsiam_broker_list() -> dict:
+    """List XSIAM Broker VMs (on-prem data collectors)."""
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/broker/list_brokers/", data={"request_data": {}})
+    return _xsiam_ok({"brokers": (resp.get("reply") or {}).get("brokers", []), "raw_response": resp})
+
+
+@_xsiam_wrap
+async def xsiam_broker_get(broker_id: str) -> dict:
+    """Full status + config for one XSIAM Broker VM."""
+    if not broker_id:
+        return _xsiam_err("broker_id required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.send_request("/broker/get_broker/",
+                                       data={"request_data": {"broker_id": broker_id}})
+    return _xsiam_ok({"broker": (resp.get("reply") or {}).get("broker"), "raw_response": resp})

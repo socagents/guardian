@@ -120,6 +120,53 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
     ingestion: { enabled: false, mode: "pull", description: "Cases fetched on demand per tool call. No background polling." },
     topAgents: [{ name: "guardian-agent", color: "#6366f1" }],
   },
+  // ── xsiam (v0.2.0) ───────────────────────────────────────────────────────
+  {
+    id: "xsiam",
+    name: "Cortex XSIAM",
+    type: "tool",
+    version: "0.2.0",
+    publisher: "Palo Alto Networks / kite-production",
+    description:
+      "Cortex XSIAM connector — investigation (XQL queries, incidents, alerts, issues, assets, audit, datamodel) and EDR response (endpoint isolate/scan/quarantine, script execution, IOC + hash blocklisting) over the Cortex public API.",
+    longDescription:
+      "Guardian's interface to your Cortex XSIAM tenant. The chat agent hunts across the data lake with XQL, triages incidents and alerts, pivots on assets and issues, reads audit logs, and — when a case calls for containment — takes EDR response actions directly: isolate or scan an endpoint, quarantine a file, run a script or snippet, and blocklist a hash or IOC. 54 tools span the investigate-to-respond lifecycle. Authentication is the Cortex public-API key pair (an API key id sent as the x-xdr-auth-id header plus the API key as the Authorization header); the connector appends /public_api/v1 to your tenant API host. Every write/response tool is approval-gated by the connector wrapper, and the one destructive lookup mutation (remove_lookup_data) is denied outright.",
+    category: "Security",
+    tags: ["xsiam", "cortex", "siem", "xql", "edr", "incident-response"],
+    icon: "siren",
+    iconColor: "#f97316",
+    iconBg: "rgba(249, 115, 22, 0.12)",
+    toolCount: 54,
+    installs: "bundle-internal",
+    installCount: 0,
+    status: "installed",
+    reliability: "stable",
+    authType: "Cortex XSIAM API key (api_id + api_key)",
+    tools: [],
+    config: [
+      { display: "API URL", name: "api_url", type: "url", required: true },
+      { display: "API key ID", name: "api_id", type: "string", required: true },
+      { display: "API key", name: "api_key", type: "secret", required: true },
+    ],
+    versions: [
+      {
+        version: "0.2.0",
+        date: "2026-06-15",
+        changes: [
+          "Initial Guardian release — 54 tools covering XSIAM investigation (XQL, incidents, alerts, issues, assets, audit, datamodel, parsers, broker) and EDR response (endpoint isolate/unisolate/scan/quarantine/retrieve-file, script run/snippet, IOC insert/disable/enable, hash blocklist, alert exclusions).",
+          "Ported from the Phantom XSIAM connector, minus its simulation-only pieces (synthetic webhook log injection + the removed xql-examples KB RAG tools). Auth is the Cortex public-API key pair (api_id → x-xdr-auth-id, api_key → Authorization).",
+        ],
+      },
+    ],
+    setupGuide:
+      "1) Mint a Cortex XSIAM API key: Settings → Configurations → API Keys → New Key, with a role that can read incidents/alerts and (for response actions) manage endpoints. Copy both the key and its numeric ID. 2) Find your tenant API host — the base looks like https://api-<your-fqdn>.xdr.<region>.paloaltonetworks.com; the connector appends /public_api/v1. 3) Click 'Add instance' on the Cortex XSIAM card. 4) Paste the API URL (the host), the API key ID (api_id), and the API key (api_key). 5) Save, then click 'Test Connection'. 6) Ask the agent in chat: 'run an XQL query for failed logins in the last hour', 'list the open XSIAM incidents', or 'isolate endpoint <id>' (response actions are approval-gated).",
+    dockerImage: "ghcr.io/kite-production/guardian-connector-xsiam:latest",
+    runtime: "python",
+    sdkLanguage: "Python",
+    sdkPackage: "guardian-spark-xsiam-connector",
+    ingestion: { enabled: false, mode: "pull", description: "Data fetched on demand per tool call. No background polling." },
+    topAgents: [{ name: "guardian-agent", color: "#f97316" }],
+  },
   // ── web (v0.1.27) ────────────────────────────────────────────────────────
   {
     id: "web",

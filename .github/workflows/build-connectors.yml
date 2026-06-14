@@ -134,6 +134,30 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-actor: ${{ github.actor }}
 
+  build-xsiam-connector:
+    name: Build guardian-connector-xsiam
+    runs-on: [self-hosted, Linux, X64, guardian]
+    needs: build-runtime
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: guardian-connector-xsiam
+          build-context: '.'
+          dockerfile-path: bundles/spark/connectors/xsiam/Dockerfile
+          build-args: |
+            GUARDIAN_RUNTIME_VERSION=dev
+          pull-policy: never
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}
+
   build-web-connector:
     name: Build guardian-connector-web
     runs-on: [self-hosted, Linux, X64, guardian]

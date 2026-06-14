@@ -980,7 +980,7 @@ function ConnectorContainers() {
  <Section id="connector-containers" icon="apps" title="Per-instance Connector Containers">
  <p>
  <strong>Universal container-mode.</strong> Every connector — all
- 3 in the bundle (cortex-docs, web, xsoar) plus any
+ 4 in the bundle (cortex-docs, web, xsoar, xsiam) plus any
  user-uploaded connectors — runs as a
  per-instance container. The agent&apos;s connector_loader is a
  routing proxy that forwards tool calls over MCP-over-HTTP. The
