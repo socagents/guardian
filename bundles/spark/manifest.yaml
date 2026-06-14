@@ -121,6 +121,16 @@ knowledge:
     - name: "soar-playbooks"
       path: "./kbs/soar-playbooks/"
       schema: "./kbs/soar-playbooks/schema.json"
+    # v0.2.22 — round out the MITRE ATT&CK matrix family: ICS (OT/industrial)
+    # + Mobile (Android/iOS), same generator as Enterprise, embeddings baked.
+    # Shipped always-enabled like the other KBs (operator decision); scope by
+    # kb_name / ecosystem tag when an investigation is IT-only.
+    - name: "mitre-attack-ics"
+      path: "./kbs/mitre-attack-ics/"
+      schema: "./kbs/mitre-attack-ics/schema.json"
+    - name: "mitre-attack-mobile"
+      path: "./kbs/mitre-attack-mobile/"
+      schema: "./kbs/mitre-attack-mobile/schema.json"
   required: []
   optional: []
 

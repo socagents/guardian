@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MITRE ATT&CK ICS Technique",
+  "description": "One MITRE ATT&CK (OT (Industrial Control Systems)) technique or sub-technique, generated deterministically from the official ATT&CK STIX bundle by kbs/_tools/gen_mitre.py (--domain ics). Guardian searches it (knowledge_search) to ground analysis of ICS/OT incidents.",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "category"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "attack-technique"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ecosystem": {
+      "type": "string"
+    },
+    "framework": {
+      "type": "string"
+    },
+    "framework_version": {
+      "type": "string"
+    },
+    "is_subtechnique": {
+      "type": "boolean"
+    },
+    "parent_id": {
+      "type": "string"
+    },
+    "tactics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

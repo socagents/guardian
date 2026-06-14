@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.22",
+    date: "2026-06-14",
+    title: "MITRE ATT&CK ICS + Mobile knowledge bases complete the matrix family.",
+    highlights: [
+      "New mitre-attack-ics KB (97 docs): the ATT&CK for ICS / OT matrix — SCADA, PLC, HMI attacks.",
+      "New mitre-attack-mobile KB (124 docs): the ATT&CK for Mobile matrix (Android/iOS).",
+      "Same generator + baked embeddings as ATT&CK Enterprise; six bundled KBs now, ~1,973 docs total.",
+      "Always loaded; scope to mitre-attack-enterprise or the ecosystem tag for IT-only investigations.",
+    ],
+  },
+  {
     version: "0.2.21",
     date: "2026-06-14",
     title: "SOAR Playbooks knowledge base — ~800 Cortex XSOAR response playbooks.",

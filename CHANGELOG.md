@@ -10,6 +10,25 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.22] (unreleased) — *MITRE ATT&CK ICS + Mobile knowledge bases*
+
+Rounds out the MITRE ATT&CK matrix family with the **ICS** (OT / Industrial Control Systems) and **Mobile** (Android/iOS) matrices, so Guardian can ground OT and mobile incidents the same way it does IT ones.
+
+### What ships
+
+- **`mitre-attack-ics` KB — 97 docs** (79 techniques + 18 sub) — the ATT&CK for ICS matrix (SCADA/PLC/HMI; ICS-only tactics like Inhibit Response Function, Impair Process Control).
+- **`mitre-attack-mobile` KB — 124 docs** (77 techniques + 47 sub) — the ATT&CK for Mobile matrix (Android/iOS).
+- Both from ATT&CK STIX v19.1 via the same `gen_mitre.py --domain ics|mobile` generator; embeddings pre-computed (boot with zero Vertex calls); MITRE attribution bundled.
+- **Always loaded** alongside the other KBs (operator decision). An IT-only investigation scopes to `mitre-attack-enterprise` or filters by the `ecosystem` tag so OT/mobile techniques don't add noise.
+
+### Files
+
+- `bundles/spark/kbs/mitre-attack-ics/`, `bundles/spark/kbs/mitre-attack-mobile/` — new: `schema.json`, `README.md`, `NOTICE.txt`, `entries/*.md` (97 + 124 docs with baked embeddings).
+- `bundles/spark/manifest.yaml` — `knowledge.bundled[]` declares both.
+- `mcp/agent/app/help/{architecture,user}/page.tsx` — docs (six-KB family, ~1,973 docs).
+
+---
+
 ## [v0.2.21] (unreleased) — *SOAR Playbooks knowledge base (~800 Cortex XSOAR playbooks)*
 
 Guardian now has a knowledge base of **response playbooks**. ~800 Cortex XSOAR out-of-the-box playbooks from the MIT-licensed `demisto/content` repo are searchable by *what they do*, so the agent can find an existing playbook for a response — and, later, use them as worked examples for building playbooks.

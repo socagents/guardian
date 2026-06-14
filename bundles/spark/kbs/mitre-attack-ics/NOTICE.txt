@@ -1,0 +1,8 @@
+This knowledge base is generated from MITRE ATT&CK®.
+
+ATT&CK® is a registered trademark of The MITRE Corporation. The ATT&CK content
+is reproduced here under the ATT&CK Terms of Use
+(https://attack.mitre.org/resources/legal-and-branding/terms-of-use/).
+
+© The MITRE Corporation. This product is not endorsed or certified by MITRE.
+Source: https://github.com/mitre-attack/attack-stix-data (framework version 19.1).

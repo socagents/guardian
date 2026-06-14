@@ -5617,8 +5617,12 @@ function KnowledgePipeline() {
  The reference KBs are generated deterministically from official
  source data (<Code>kbs/_tools/gen_mitre.py</Code>,{" "}
  <Code>gen_atlas.py</Code>, <Code>gen_soar_playbooks.py</Code>) and
- ship with embeddings pre-computed (v0.2.17) so their ~1,750 docs
- boot with zero Vertex calls.
+ ship with embeddings pre-computed (v0.2.17) so they boot with zero
+ Vertex calls. v0.2.22 rounds out the ATT&amp;CK matrix family with{" "}
+ <Code>mitre-attack-ics</Code> (OT/industrial, 97 docs) and{" "}
+ <Code>mitre-attack-mobile</Code> (Android/iOS, 124 docs) — six KBs,
+ ~1,973 docs total, scoped per investigation via{" "}
+ <Code>kb_name</Code> or the <Code>ecosystem</Code> tag.
  </p>
  <SubSection icon="compare_arrows" title="Knowledge vs memory — the boundary">
  <p>

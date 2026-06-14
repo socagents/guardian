@@ -2082,6 +2082,26 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
+            <SubSection icon="lan" title="Bundled KBs — ATT&CK ICS + Mobile (v0.2.22)">
+              <p>
+                Rounding out the MITRE ATT&amp;CK matrix family:{" "}
+                <Link href="/knowledge/mitre-attack-ics" className="link">
+                  mitre-attack-ics
+                </Link>{" "}
+                (97 docs — the OT / Industrial-Control-Systems matrix, for
+                SCADA/PLC/HMI attacks) and{" "}
+                <Link href="/knowledge/mitre-attack-mobile" className="link">
+                  mitre-attack-mobile
+                </Link>{" "}
+                (124 docs — Android/iOS). Same deterministic generator + baked
+                embeddings as ATT&amp;CK Enterprise. They&apos;re always loaded;
+                when an investigation is IT-only, scope a search to{" "}
+                <Code>mitre-attack-enterprise</Code> (or filter by the{" "}
+                <Code>ecosystem</Code> tag) so OT/mobile techniques don&apos;t
+                add noise.
+              </p>
+            </SubSection>
+
             <SubSection icon="search" title="How the agent researches a case">
               <p>
                 When a case references something the agent can&apos;t

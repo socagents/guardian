@@ -155,7 +155,10 @@ def build(stix: dict[str, Any], domain: str) -> tuple[list[tuple[str, str]], str
             for p in t.get("kill_chain_phases", [])
             if p.get("kill_chain_name", "").startswith("mitre")
         ]
-        platforms = t.get("x_mitre_platforms") or []
+        platforms = [
+            p for p in (t.get("x_mitre_platforms") or [])
+            if isinstance(p, str) and p.strip() and p.strip().lower() != "none"
+        ]
 
         # frontmatter
         fm = ["---", f"id: {aid}", f"title: {json.dumps(name)}",
