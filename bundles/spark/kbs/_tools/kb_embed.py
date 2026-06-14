@@ -35,13 +35,15 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import struct
 import sys
 from pathlib import Path
 from typing import Any
 
 # Make the embedded-MCP source importable (kb_loader, embedders).
-_MCP_SRC = Path(__file__).resolve().parents[3] / "mcp" / "src"
+# __file__ = bundles/spark/kbs/_tools/kb_embed.py → parents[2] = bundles/spark
+_MCP_SRC = Path(__file__).resolve().parents[2] / "mcp" / "src"
 sys.path.insert(0, str(_MCP_SRC))
 
 import yaml  # noqa: E402
@@ -56,9 +58,62 @@ def _encode(vec: list[float]) -> str:
     return base64.b64encode(struct.pack(f"<{len(vec)}f", *vec)).decode("ascii")
 
 
+class _RestVertexEmbedder:
+    """Authoring-time embedder that calls Vertex text-embedding-* over REST
+    with a bearer access token — no SecretStore / ProviderStore needed.
+
+    Mirrors `providers/vertex/src/provider.embed` EXACTLY (body
+    `{"instances":[{"content": text}]}`, regional endpoint, model id) so the
+    baked DOC vectors live in the SAME space the runtime embeds QUERIES into.
+    `model_id` is reported as the bare model (e.g. text-embedding-004) so it
+    matches the runtime embedder's `model_id` and the loader trusts the bake.
+    """
+
+    def __init__(self, token: str, project: str, region: str, model: str, dims: int) -> None:
+        self._token = token
+        self._project = project
+        self._region = region if region and region != "global" else "us-central1"
+        self.model_id = model
+        self.dims = dims
+
+    def embed(self, text: str) -> list[float]:
+        import urllib.request
+
+        if not text.strip():
+            return [0.0] * self.dims
+        url = (
+            f"https://{self._region}-aiplatform.googleapis.com/v1/projects/"
+            f"{self._project}/locations/{self._region}/publishers/google/"
+            f"models/{self.model_id}:predict"
+        )
+        req = urllib.request.Request(
+            url,
+            data=json.dumps({"instances": [{"content": text}]}).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310 — trusted GCP host
+            data = json.loads(r.read().decode("utf-8"))
+        return data["predictions"][0]["embeddings"]["values"]
+
+
 def _build_embedder(args: argparse.Namespace) -> Any:
     if args.embedder == "stub":
         return TextHashEmbedder(dims=args.dims)
+    if args.embedder == "vertex-rest":
+        # Bearer-token REST path — simplest authoring bake (e.g. a developer's
+        # `gcloud auth print-access-token`). No SA JSON file needed.
+        import subprocess
+
+        token = args.access_token
+        if not token:
+            token = subprocess.run(
+                ["gcloud", "auth", "print-access-token"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        if not args.project:
+            sys.exit("--embedder vertex-rest requires --project (and a token)")
+        return _RestVertexEmbedder(token, args.project, args.region, args.model, args.dims)
     # vertex — construct a standalone provider straight from a service-account
     # JSON (NOT via the runtime SecretStore/ProviderStore), mirroring how
     # main.py wires the VertexEmbedder.
@@ -116,9 +171,10 @@ def _embed_json(path: Path, embedder: Any, force: bool) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Bake pre-computed embeddings into a KB dir.")
     ap.add_argument("kb_dir", type=Path, help="KB directory (its entries/ are walked)")
-    ap.add_argument("--embedder", choices=("stub", "vertex"), default="stub")
+    ap.add_argument("--embedder", choices=("stub", "vertex", "vertex-rest"), default="stub")
     ap.add_argument("--model", default="text-embedding-004", help="model id (vertex)")
     ap.add_argument("--dims", type=int, default=768)
+    ap.add_argument("--access-token", help="bearer token (vertex-rest); default: gcloud")
     ap.add_argument("--sa-json", help="service-account JSON path (vertex)")
     ap.add_argument("--project", help="GCP project id (vertex)")
     ap.add_argument("--region", default="us-central1")

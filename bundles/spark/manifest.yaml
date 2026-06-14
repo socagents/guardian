@@ -94,6 +94,15 @@ knowledge:
     - name: "soc-investigation"
       path: "./kbs/soc-investigation/"
       schema: "./kbs/soc-investigation/schema.json"
+    # v0.2.18 — the full MITRE ATT&CK Enterprise (IT) matrix as terse reference:
+    # every technique + sub-technique (~697), generated deterministically from
+    # the official ATT&CK STIX bundle (kbs/_tools/gen_mitre.py) and shipped with
+    # embeddings PRE-COMPUTED in the bundle (kbs/_tools/kb_embed.py + the v0.2.17
+    # keystone) so it boots with zero Vertex calls. Complements soc-investigation
+    # (hand-written narrative) — this is exhaustive machine-extracted reference.
+    - name: "mitre-attack-enterprise"
+      path: "./kbs/mitre-attack-enterprise/"
+      schema: "./kbs/mitre-attack-enterprise/schema.json"
   required: []
   optional: []
 

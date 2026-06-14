@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MITRE ATT&CK Enterprise Technique",
+  "description": "One MITRE ATT&CK (Enterprise/IT) technique or sub-technique, generated deterministically from the official ATT&CK STIX bundle by kbs/_tools/gen_mitre.py. The Guardian incident-investigation agent semantically searches this corpus (knowledge_search) to ground analysis of Cortex XSIAM/XSOAR alerts, which carry ATT&CK technique ids. Distinct from soc-investigation (hand-written narrative investigation guides) — this is exhaustive, terse reference, regenerated on each MITRE refresh.",
+  "type": "object",
+  "required": ["id", "title", "category"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The ATT&CK technique id (e.g. 'T1059' or sub-technique 'T1059.001'). Used as the doc id so re-loads are idempotent."
+    },
+    "title": { "type": "string", "description": "Technique name (e.g. 'PowerShell')." },
+    "category": {
+      "type": "string",
+      "description": "Always 'attack-technique' for this KB.",
+      "enum": ["attack-technique"]
+    },
+    "tags": { "type": "array", "items": { "type": "string" }, "description": "Tactic + platform slugs; surface as UI filter chips." },
+    "ecosystem": { "type": "string", "description": "Always 'IT' for Enterprise." },
+    "framework": { "type": "string", "description": "Always 'mitre-attack-enterprise'." },
+    "framework_version": { "type": "string", "description": "ATT&CK version the doc was generated from (e.g. '19.1') — pinned for reproducible regen." },
+    "is_subtechnique": { "type": "boolean" },
+    "parent_id": { "type": "string", "description": "For sub-techniques, the parent technique id (e.g. 'T1059')." },
+    "tactics": { "type": "array", "items": { "type": "string" } },
+    "platforms": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

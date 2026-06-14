@@ -1973,6 +1973,40 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
+            <SubSection icon="shield" title="Bundled KB — MITRE ATT&CK Enterprise (v0.2.18)">
+              <p>
+                <Link href="/knowledge/mitre-attack-enterprise" className="link">
+                  mitre-attack-enterprise
+                </Link>{" "}
+                is the <strong>complete</strong> MITRE ATT&amp;CK Enterprise
+                matrix — <strong>~697 docs</strong>, one per technique and
+                sub-technique. Where <Code>soc-investigation</Code> is curated
+                narrative, this is the exhaustive <em>reference</em>: each doc
+                carries the technique&apos;s description, tactics, platforms,
+                <strong> detection analytics + log sources</strong>, and
+                <strong> mitigations</strong>, with the ATT&amp;CK id as the doc
+                id (<Code>T1059</Code>, <Code>T1059.001</Code>).
+              </p>
+              <p className="mt-2">
+                It&apos;s <strong>generated deterministically</strong> from the
+                official ATT&amp;CK STIX bundle (never hand-edited), so it stays a
+                faithful mirror and regenerates cleanly on each MITRE release
+                (~2×/yr); the <Code>framework_version</Code> on every doc pins
+                the source. Its 697 embeddings are <strong>pre-computed and baked
+                into the bundle</strong> (the v0.2.17 keystone), so the KB loads
+                with <strong>zero Vertex calls</strong> at boot — no multi-minute
+                first-boot indexing. Search it with plain English (e.g.{" "}
+                <em>&quot;dumping credentials from lsass&quot;</em> →{" "}
+                <Code>T1003.001</Code>) and the agent uses it to ground every
+                investigation in the authoritative technique definition.
+              </p>
+              <p className="mt-2 text-xs text-on-surface-variant/70">
+                ATT&amp;CK® is © The MITRE Corporation, reproduced under the
+                ATT&amp;CK Terms of Use; Guardian is not endorsed or certified by
+                MITRE (see the KB&apos;s <Code>NOTICE.txt</Code>).
+              </p>
+            </SubSection>
+
             <SubSection icon="search" title="How the agent researches a case">
               <p>
                 When a case references something the agent can&apos;t

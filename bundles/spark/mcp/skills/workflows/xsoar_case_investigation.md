@@ -57,7 +57,9 @@ Detection is automatic inside the connector (if a key id is configured → v8 sh
 
 Research connectors (read-only, no XSOAR writes):
 
-- `knowledge_search` / `knowledge_list` — **the SOC Investigation knowledge base** (`kb_name="soc-investigation"`): curated, semantically-searchable MITRE ATT&CK technique investigation guides (`category="attack-technique"`) + IR playbooks (`category="playbook"`). This is Guardian's **internal, instant, first-choice** reference — consult it BEFORE cortex-docs/web. It grounds the investigation: each technique doc gives the manifestation signals to look for, the ordered investigation steps, the data sources to pull, and the related-technique pivots; each playbook gives the end-to-end response flow. READ-ONLY — there is no write tool (distinct from `memory_*`, which is the agent's mutable org memory). See § Step 3.
+- `knowledge_search` / `knowledge_list` — **Guardian's bundled knowledge bases**, the **internal, instant, first-choice** reference (consult BEFORE cortex-docs/web). READ-ONLY — there is no write tool (distinct from `memory_*`, the agent's mutable org memory). Two KBs today:
+  - **`soc-investigation`** — curated, hand-written tradecraft: MITRE technique *investigation guides* (`category="attack-technique"`) + *IR playbooks* (`category="playbook"`). Each guide gives the manifestation signals, the ordered investigation steps, the data sources to pull, the pivots; each playbook gives the end-to-end response flow. Search this for **"how do I investigate this well"**.
+  - **`mitre-attack-enterprise`** — the *complete* ATT&CK Enterprise matrix (~697 techniques + sub-techniques), machine-extracted from the official STIX: per-technique description, tactics, platforms, **detection analytics + log sources**, and **mitigations**. Search this for **"what exactly is T1234 / how is it detected / how is it mitigated"** and for the authoritative technique id of an observed behavior. To search both at once, omit `kb_name`; to scope, pass `kb_name`. See § Step 3.
 - `cortex-docs` — `cortex_search`, `cortex_suggest`, `cortex_fetch_topic`, `cortex_fetch_toc`, `cortex_deep_research`. Look up how a Cortex field/playbook/close-reason is defined, what a detection means, recommended response steps. Pair with the `cortex_kb_search` skill for query discipline.
 - `web` — `guardian_web_*` (navigate / evaluate / screenshot / get-cookies). Reach external reputation pages, vendor advisories, or any JS-gated source a REST tool can't.
 
@@ -97,11 +99,15 @@ xsoar_get_war_room(incident_id="<id-from-step-1>")
 **Ground the case in the knowledge base FIRST.** Before reaching for external research, query the curated SOC Investigation KB — it tells you *what this kind of attack looks like* and *how to investigate it*, so the rest of the investigation is driven by tradecraft instead of guesswork:
 
 ```
-# What's the attack technique? Search by the observed behavior, not the case label.
+# 1. How to investigate this WELL — the curated guide (search by observed behavior, not the case label).
 knowledge_search(query="<one line describing what fired — e.g. 'outlook spawned powershell that beaconed to a new domain'>",
                  kb_name="soc-investigation", category="attack-technique")
 
-# What's the response flow? Pull the matching playbook.
+# 2. The authoritative ATT&CK reference — exact technique, detection analytics, log sources, mitigations.
+knowledge_search(query="<the observed behavior — e.g. 'encoded powershell download cradle'>",
+                 kb_name="mitre-attack-enterprise")
+
+# 3. The response flow — the matching IR playbook.
 knowledge_search(query="<the case kind — e.g. 'phishing email with malicious attachment'>",
                  kb_name="soc-investigation", category="playbook")
 ```
@@ -154,7 +160,7 @@ xsoar_add_note(incident_id="<id>", note="## Investigation summary\n- VERDICT: <T
 
 - Use `xsoar_add_entry` instead when you have structured/formatted content (tables, command output) to attach. It returns the `entry_id` you pin with `xsoar_save_evidence`.
 - Pin the load-bearing proof to the Evidence Board with `xsoar_save_evidence` so a reviewer can find it without scrolling the timeline. Review what's already there with `xsoar_search_evidence(incident_id=...)` before concluding.
-- **Tag confirmed behaviors with MITRE ATT&CK technique IDs.** In BOTH the war-room note/entry AND the Issue `conclusions`, map each behavior the evidence actually supports to its ATT&CK technique ID + name (e.g. `T1566.001 Spearphishing Attachment`). Tag only what you grounded in the case record, indicator verdicts, or cited research — never staple a technique you can't point to evidence for. Use the technique that fits the observed behavior, not the case's `kind` label. If you need to find the right id, look it up via `knowledge_search(kb_name="soc-investigation", category="attack-technique")` first (the technique doc's "Pivot/related" lists the adjacent ids), then `cortex-docs` / `web` — rather than recalling from memory.
+- **Tag confirmed behaviors with MITRE ATT&CK technique IDs.** In BOTH the war-room note/entry AND the Issue `conclusions`, map each behavior the evidence actually supports to its ATT&CK technique ID + name (e.g. `T1566.001 Spearphishing Attachment`). Tag only what you grounded in the case record, indicator verdicts, or cited research — never staple a technique you can't point to evidence for. Use the technique that fits the observed behavior, not the case's `kind` label. If you need to find the right id, look it up via `knowledge_search(kb_name="mitre-attack-enterprise", query="<observed behavior>")` first (the authoritative full ATT&CK matrix — match the behavior to the exact technique/sub-technique id), then `soc-investigation` for the investigation guide, then `cortex-docs` / `web` — rather than recalling from memory.
 - **Stage block/allow recommendations against real list state.** When you recommend adding an IoC to a block/allow list AND the instance has `playground_id` configured, first read the relevant list with `xsoar_get_list(name=...)` and report whether the IoC is already present, so the recommendation reflects the tenant's actual list state. Stage the `xsoar_append_to_list(name=..., value=...)` for operator approval rather than auto-writing (it appends one line without clobbering the rest). If `playground_id` is not configured, the list tools are unavailable — make the recommendation anyway, but say the live list state couldn't be read.
 - **Every quantitative claim must trace to logged output.** Engine counts, DBotScores, ASNs, ports — copy them from a specific tool-output / war-room / timeline entry. If a number ("flagged by 5 VT engines") is not in the recorded output, either re-run the enrichment (`xsoar_enrich_indicator` / `xsoar_search_indicators`) to capture it or omit the figure. Never sharpen a vague "VirusTotal flags" into a precise count the record doesn't support.
 - **Document before you resolve.** The note/evidence is the justification for whatever Step 6 does.

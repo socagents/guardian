@@ -5595,12 +5595,20 @@ function KnowledgePipeline() {
  Knowledge bases are bundle-shipped, schema-validated, semantically
  searchable reference content. They differ from memory in three
  ways: read-only at the agent surface, sourced from the bundle
- (not chat), and indexed at boot rather than on-write. As of
- v0.2.16 the bundle ships one KB —{" "}
- <Code>soc-investigation</Code> — 30 curated docs (20 MITRE
- ATT&amp;CK technique investigation guides + 10 IR playbooks) the
- incident-investigation agent searches to <em>ground</em> its
- analysis of Cortex XSOAR cases.
+ (not chat), and indexed at boot rather than on-write. The bundle
+ ships two complementary KBs: <Code>soc-investigation</Code>{" "}
+ (v0.2.16) — 30 hand-written <em>narrative</em> investigation
+ guides + IR playbooks; and <Code>mitre-attack-enterprise</Code>{" "}
+ (v0.2.18) — the <em>complete</em> ATT&amp;CK Enterprise matrix
+ (~697 techniques + sub-techniques) as terse, machine-extracted
+ <em>reference</em> (description, tactics, platforms, detection
+ analytics, mitigations). The agent searches{" "}
+ <Code>soc-investigation</Code> for <em>how to investigate well</em>{" "}
+ and <Code>mitre-attack-enterprise</Code> for <em>what exactly a
+ technique is + how it&apos;s detected/mitigated</em>. The Enterprise
+ KB is generated deterministically from the official STIX bundle
+ (<Code>kbs/_tools/gen_mitre.py</Code>) and ships with embeddings
+ pre-computed (v0.2.17) so its 697 docs boot with zero Vertex calls.
  </p>
  <SubSection icon="compare_arrows" title="Knowledge vs memory — the boundary">
  <p>

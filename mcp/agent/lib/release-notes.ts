@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.18",
+    date: "2026-06-14",
+    title: "Full MITRE ATT&CK Enterprise is now a built-in knowledge base (~697 techniques).",
+    highlights: [
+      "New mitre-attack-enterprise KB: the complete ATT&CK Enterprise matrix — every technique + sub-technique, with detection analytics and mitigations.",
+      "Generated faithfully from the official MITRE STIX bundle (v19.1); regenerates on each MITRE release.",
+      "Embeddings baked into the bundle, so all ~697 docs load instantly with zero Vertex calls at boot.",
+      "Investigations now ground in the authoritative technique definition; soc-investigation stays as the curated 'how to investigate' guide.",
+      "ATT&CK® © The MITRE Corporation, reproduced under the ATT&CK Terms of Use.",
+    ],
+  },
+  {
     version: "0.2.17",
     date: "2026-06-14",
     title: "Knowledge bases can ship embeddings baked in — large KBs install in seconds, not minutes.",

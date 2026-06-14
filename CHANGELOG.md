@@ -10,6 +10,33 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.18] (unreleased) — *MITRE ATT&CK Enterprise knowledge base (full matrix, ~697 techniques)*
+
+The complete MITRE ATT&CK **Enterprise** matrix now ships as a bundled knowledge base — every technique and sub-technique, semantically searchable, so the agent grounds investigations in the authoritative technique definition (and customers see it populated on `/knowledge`).
+
+### What ships
+
+- **`mitre-attack-enterprise` KB — ~697 docs** (222 techniques + 475 sub-techniques), one per ATT&CK id. Each doc carries the technique's **description, tactics, platforms, detection analytics + log sources, and mitigations**, machine-extracted from the official ATT&CK STIX bundle (framework v19.1).
+- **Generated deterministically** by `kbs/_tools/gen_mitre.py` (walks the v19 Detection-Strategy → Analytic → data-component graph for detection, since `x_mitre_detection` was removed). Never hand-edited — regenerates faithfully on each MITRE release; `framework_version` pins the source.
+- **Embeddings pre-computed and baked into the bundle** (the v0.2.17 keystone + `kbs/_tools/kb_embed.py`), so all 697 docs load with **zero Vertex calls** at boot — no multi-minute first-boot indexing.
+- **Investigation skill wired** — `xsoar_case_investigation` now searches `mitre-attack-enterprise` for the authoritative technique id + detection + mitigations (and `soc-investigation` for the curated "how to investigate well" guide), and prefers the Enterprise KB for MITRE technique-id tagging.
+- **Complements, not replaces, `soc-investigation`**: that KB is hand-written narrative tradecraft; this is exhaustive reference. The small technique-id overlap is intentional.
+- **MITRE attribution** bundled (`NOTICE.txt`): ATT&CK® © The MITRE Corporation, reproduced under the ATT&CK Terms of Use; Guardian is not endorsed or certified by MITRE.
+
+### Files
+
+- `bundles/spark/kbs/mitre-attack-enterprise/` — new: `schema.json`, `README.md`, `NOTICE.txt`, `entries/*.md` (697 docs with baked embeddings).
+- `bundles/spark/kbs/_tools/gen_mitre.py` — STIX→docs generator.
+- `bundles/spark/manifest.yaml` — `knowledge.bundled[]` declares `mitre-attack-enterprise`.
+- `bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md` — both KBs wired into Step 3 + Step 5.
+- `mcp/agent/app/help/{architecture,user}/page.tsx`, `mcp/agent/lib/journeys.ts` — docs + `mitre-enterprise-search` journey.
+
+### Note
+
+Ships together with the **v0.2.17 keystone** (pre-computed embeddings) under one customer release tag — the keystone has no standalone customer-visible change; this KB is where its benefit (fast install of a large corpus) is first realized.
+
+---
+
 ## [v0.2.17] (unreleased) — *Knowledge bases can ship embeddings baked in (large-KB keystone)*
 
 Infrastructure release — the keystone for the knowledge-base expansion arc (full MITRE ATT&CK, ATLAS, SOAR playbooks). No new corpus; no operator-visible UI change beyond **much faster installs** once large KBs land.

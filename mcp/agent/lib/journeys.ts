@@ -3042,6 +3042,46 @@ export const JOURNEYS: Journey[] = [
   },
 
   {
+    id: "mitre-enterprise-search",
+    category: "ops",
+    title: "Search the full MITRE ATT&CK Enterprise KB",
+    summary:
+      "Open the bundled mitre-attack-enterprise KB (~697 techniques + sub-techniques, the complete ATT&CK Enterprise matrix) and search it semantically — proving it loaded fast (embeddings baked in) and grounds investigations in authoritative technique reference.",
+    difficulty: "starter",
+    durationMin: 2,
+    icon: "shield",
+    prompts: [],
+    toolsExercised: [],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/agent/knowledge",
+        description: "Lists bundled KBs; mitre-attack-enterprise shows ~697 docs.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/knowledge/mitre-attack-enterprise/search",
+        description: "Semantic search across the whole ATT&CK Enterprise matrix.",
+      },
+    ],
+    howToTest: [
+      "Open /knowledge. The mitre-attack-enterprise card shows ~697 entries (next to soc-investigation's 30).",
+      "Click it; entries list by ATT&CK id (T1003 … T1059.001 …). Open T1059.001 — description, detection analytics, mitigations render.",
+      "Search 'dumping credentials from lsass' — T1003.001 ranks #1 by similarity (not keyword).",
+      "Search 'kerberoasting service principal name' — T1558.003 ranks at the top.",
+    ],
+    expectedResult:
+      "mitre-attack-enterprise shows ~697 docs and returns semantically-ranked ATT&CK techniques. Because embeddings are baked into the bundle (v0.2.17), the KB loaded at boot with ZERO Vertex calls — confirmable in /observability/events (no embedder upstream calls during boot for this KB).",
+    verifyVia: [
+      "GET /api/agent/knowledge → mitre-attack-enterprise listed with doc_count ~697",
+      "Search 'lsass memory credential dump' → T1003.001 in the top hits with a real cosine score",
+      "guardian_embedder_upstream_calls_total stays flat across a restart (baked, not re-embedded)",
+    ],
+    related: ["knowledge-browse", "xsoar-investigate-case"],
+    components: ["knowledge", "mcp"],
+  },
+
+  {
     id: "skills-page-toggle",
     category: "ops",
     title: "Browse and toggle a skill",
