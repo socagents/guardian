@@ -17,7 +17,7 @@
 # Logical paths + request bodies are identical across generations.
 
 id: "xsoar"
-version: "0.2.0"
+version: "0.2.1"
 description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, and enrich with indicators and evidence. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
 displayName: "Cortex XSOAR"
 tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]
@@ -379,3 +379,17 @@ spec:
         - { name: "incident_id", type: "string", description: "The XSOAR incident id (its investigation id) to run on.", required: true }
         - { name: "playbook_id", type: "string", description: "The playbook NAME to assign and run.", required: true }
       returns: { type: "object", description: "{ ok, incident_id, playbook_id, output }" }
+
+    - name: "import_playbook"
+      method: "POST /playbook/import (multipart YAML upload)"
+      description: |
+        Import (deploy) a playbook DEFINITION into the tenant's library —
+        uploads the playbook YAML so it appears in XSOAR ready to assign + run.
+        Distinct from run_playbook, which RUNS an already-existing playbook by
+        name. To deploy + test-run a freshly authored playbook: import here →
+        create_incident → run_playbook on that incident. Validate structure
+        first with playbook_validate. WRITES to the tenant — approval-gated.
+      args:
+        - { name: "playbook_yaml", type: "string", description: "The full playbook definition as a YAML string.", required: true }
+        - { name: "filename",      type: "string", description: "Optional upload filename (default 'guardian-playbook.yml').", required: false }
+      returns: { type: "object", description: "{ ok, playbook_id, playbook_name, imported, raw_response }" }

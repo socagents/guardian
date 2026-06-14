@@ -87,6 +87,7 @@ __all__ = [
     "xsoar_append_to_list",
     "xsoar_create_incident",
     "xsoar_run_playbook",
+    "xsoar_import_playbook",
 ]
 
 
@@ -1712,4 +1713,62 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
         "incident_id": incident_id,
         "playbook_id": playbook_id,
         "output": output,
+    }
+
+
+# ─── xsoar_import_playbook ───────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_import_playbook(
+    playbook_yaml: str,
+    filename: Optional[str] = None,
+) -> dict:
+    """Import (deploy) a playbook DEFINITION into the Cortex XSOAR tenant.
+
+    Uploads the playbook YAML to XSOAR's playbook-import endpoint so the
+    playbook appears in the tenant's library, ready to assign + run. This is
+    distinct from xsoar_run_playbook, which RUNS an already-existing playbook
+    by name. To deploy + test-run a freshly authored playbook, pair them:
+    import here → xsoar_create_incident → xsoar_run_playbook on that incident.
+
+    The YAML must be a valid XSOAR playbook (id, name, starttaskid, tasks…);
+    validate structure first with playbook_validate. This WRITES to the tenant
+    — it is approval-gated like every connector action.
+
+    Args:
+        playbook_yaml: The full playbook definition as a YAML string.
+        filename: Optional upload filename (default 'guardian-playbook.yml').
+
+    Returns:
+        {ok, playbook_id, playbook_name, imported, raw_response} or
+        {ok:false, error}.
+    """
+    if not playbook_yaml or not playbook_yaml.strip():
+        raise ValueError("playbook_yaml is required")
+
+    fname = filename or "guardian-playbook.yml"
+    fetcher = _get_fetcher()
+    files = {
+        "file": (fname, playbook_yaml.encode("utf-8"), "application/octet-stream"),
+    }
+    response = await fetcher.post_multipart("/playbook/import", files=files)
+
+    # XSOAR returns the imported playbook object, or {data:[...]} for a bare
+    # array body — normalize to the first playbook's id/name.
+    pb: Any = response
+    if (
+        isinstance(response, dict)
+        and isinstance(response.get("data"), list)
+        and response["data"]
+    ):
+        pb = response["data"][0]
+    playbook_id = pb.get("id") if isinstance(pb, dict) else None
+    playbook_name = pb.get("name") if isinstance(pb, dict) else None
+
+    return {
+        "playbook_id": playbook_id,
+        "playbook_name": playbook_name,
+        "imported": True,
+        "raw_response": response,
     }

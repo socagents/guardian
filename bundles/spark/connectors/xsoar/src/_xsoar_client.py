@@ -203,6 +203,52 @@ class XSOARFetcher:
         self._raise_for_status(r, path)
         return {}  # unreachable — _raise_for_status always raises
 
+    async def post_multipart(
+        self,
+        path: str,
+        files: dict,
+        *,
+        data: Optional[dict] = None,
+        timeout_seconds: float = 60.0,
+    ) -> dict:
+        """POST a multipart/form-data body (file upload) to the logical path.
+
+        XSOAR's playbook-import endpoint takes the playbook YAML as an
+        uploaded file, not a JSON body — so we drop the JSON Content-Type
+        and let httpx set the multipart boundary. Redirects are NOT followed
+        (`follow_redirects=False`): on Cortex 8 some v6 REST endpoints
+        303-redirect, and surfacing that as an error (rather than silently
+        following to an HTML login) makes the generation mismatch visible.
+        """
+        full_url = self._full_url(path)
+        timeout = httpx.Timeout(timeout_seconds, connect=10.0)
+        headers = self._headers()
+        headers.pop("Content-Type", None)  # httpx sets multipart boundary
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=timeout, verify=self.verify_ssl, follow_redirects=False
+            ) as client:
+                r = await client.post(
+                    full_url, headers=headers, files=files, data=data or {}
+                )
+        except httpx.HTTPError as exc:
+            raise XSOARError(
+                f"network error talking to XSOAR: {type(exc).__name__}: {exc}"
+            ) from exc
+
+        if 200 <= r.status_code < 300:
+            return self._parse(r, path)
+        # Make a 3xx (redirect) visibly diagnosable for the spike.
+        if 300 <= r.status_code < 400:
+            raise XSOARRequestError(
+                f"HTTP {r.status_code} from {path} (redirect to "
+                f"{r.headers.get('location', '?')}) — endpoint not served on "
+                f"this XSOAR generation"
+            )
+        self._raise_for_status(r, path)
+        return {}  # unreachable — _raise_for_status always raises
+
     async def get(
         self,
         path: str,
