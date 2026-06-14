@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.21",
+    date: "2026-06-14",
+    title: "SOAR Playbooks knowledge base — ~800 Cortex XSOAR response playbooks.",
+    highlights: [
+      "New soar-playbooks KB: ~800 out-of-the-box Cortex XSOAR playbooks from the MIT-licensed demisto/content repo (SOC-relevant packs, ~77 products).",
+      "Search by what a playbook DOES — the embedded text is a reviewed description; the raw playbook YAML is kept in each entry.",
+      "Dual-labeled by product/pack and investigation-type, both filterable with the tag chips.",
+      "The agent can now find an existing response playbook during a case; later, these are worked examples for building playbooks.",
+    ],
+  },
+  {
     version: "0.2.20",
     date: "2026-06-14",
     title: "Filter knowledge bases by tag — tactic, platform, and more.",

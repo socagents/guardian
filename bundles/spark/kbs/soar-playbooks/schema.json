@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SOAR Playbook entry",
+  "description": "One Cortex XSOAR out-of-the-box playbook from the demisto/content repo (MIT). The EMBEDDED `content` is a reviewed description of what the playbook does (so semantic search matches intent); the raw playbook YAML is kept in `raw_yaml`. Dual-labeled by product/pack origin and investigation-type/use-case. Guardian's agent searches this to find response playbooks and, later, as worked examples for building playbooks.",
+  "type": "object",
+  "required": ["id", "title", "category"],
+  "properties": {
+    "id": { "type": "string", "description": "Stable doc id: pb-<pack>-<playbook>." },
+    "title": { "type": "string", "description": "Playbook display name." },
+    "category": { "type": "string", "enum": ["playbook"] },
+    "content": { "type": "string", "description": "The embedded description (what the playbook does, inputs/outputs, integrations used, product/use-case)." },
+    "raw_yaml": { "type": "string", "description": "The full playbook YAML — kept, NOT embedded." },
+    "product": { "type": "string", "description": "Product/vendor (pack author) — AXIS A of the dual label." },
+    "pack": { "type": "string", "description": "Source content pack id." },
+    "support_tier": { "type": "string", "description": "xsoar | partner | developer | community." },
+    "use_cases": { "type": "array", "items": { "type": "string" } },
+    "fromversion": { "type": "string" },
+    "source_repo": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" }, "description": "product:* / support:* / investigation-type slugs — AXIS B of the dual label, UI-filterable." }
+  },
+  "additionalProperties": true
+}

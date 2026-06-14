@@ -3118,6 +3118,42 @@ export const JOURNEYS: Journey[] = [
   },
 
   {
+    id: "soar-playbooks-search",
+    category: "ops",
+    title: "Find a SOAR response playbook",
+    summary:
+      "Search the bundled soar-playbooks KB (~800 Cortex XSOAR playbooks from demisto/content) by intent, filter by product/use-case, and open the raw playbook YAML.",
+    difficulty: "starter",
+    durationMin: 3,
+    icon: "automation",
+    prompts: [],
+    toolsExercised: [],
+    apis: [
+      { method: "GET", path: "/api/agent/knowledge", description: "soar-playbooks shows ~800 entries." },
+      {
+        method: "POST",
+        path: "/api/agent/knowledge/soar-playbooks/search",
+        description: "Semantic search matches the reviewed description (intent), not raw YAML.",
+      },
+    ],
+    howToTest: [
+      "Open /knowledge → soar-playbooks (~800 entries).",
+      "Search 'investigate a phishing email end to end' — generic phishing playbooks rank at the top by intent.",
+      "Use the tag chips to filter by product (e.g. product:crowdstrike) or use-case (e.g. phishing).",
+      "Open an entry: the reviewed description renders, and the raw playbook YAML is in the metadata.",
+    ],
+    expectedResult:
+      "soar-playbooks returns playbooks ranked by what they DO (the embedded description), filterable by product + investigation-type. The raw YAML is retained per entry. Loaded at boot with zero Vertex calls (embeddings baked in).",
+    verifyVia: [
+      "GET /api/agent/knowledge → soar-playbooks doc_count ~800",
+      "Search 'phishing investigation' → generic phishing playbooks in top hits",
+      "GET /api/agent/knowledge/soar-playbooks/tags → product:* and use-case facets",
+    ],
+    related: ["knowledge-browse", "xsoar-investigate-case"],
+    components: ["knowledge", "mcp"],
+  },
+
+  {
     id: "skills-page-toggle",
     category: "ops",
     title: "Browse and toggle a skill",

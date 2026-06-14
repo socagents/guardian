@@ -2048,6 +2048,40 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
+            <SubSection icon="automation" title="Bundled KB — SOAR Playbooks (v0.2.21)">
+              <p>
+                <Link href="/knowledge/soar-playbooks" className="link">
+                  soar-playbooks
+                </Link>{" "}
+                is ~800 Cortex XSOAR <strong>out-of-the-box response
+                playbooks</strong> from the MIT-licensed{" "}
+                <Term>demisto/content</Term> repo (SOC-relevant packs across ~77
+                products). Where the other KBs answer <em>what happened</em>,
+                this answers <strong>how to respond / automate</strong> — e.g.
+                &quot;a generic phishing-investigation playbook&quot; or
+                &quot;a CrowdStrike host-isolation playbook&quot;.
+              </p>
+              <p className="mt-2">
+                Per the design, the <strong>embedded text is a reviewed
+                description</strong> of what each playbook does (its purpose,
+                inputs/outputs, and the integrations it calls) so search matches
+                intent — and the <strong>raw playbook YAML is kept</strong>
+                (open an entry to see it). Each is <strong>dual-labeled</strong>:
+                by <em>product/pack</em> (e.g. <Code>product:crowdstrike</Code>,{" "}
+                <Code>support:partner</Code>) and by{" "}
+                <em>investigation-type / use-case</em> (e.g.{" "}
+                <Code>phishing</Code>, <Code>endpoint</Code>,{" "}
+                <Code>threat-intel</Code>) — both filterable via the v0.2.20 tag
+                chips. Later, these double as worked examples for an agent that
+                helps <em>build</em> playbooks.
+              </p>
+              <p className="mt-2 text-xs text-on-surface-variant/70">
+                Playbook YAML © Palo Alto Networks / Demisto under the MIT
+                License; product names are nominative (see{" "}
+                <Code>NOTICE.txt</Code>).
+              </p>
+            </SubSection>
+
             <SubSection icon="search" title="How the agent researches a case">
               <p>
                 When a case references something the agent can&apos;t

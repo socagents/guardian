@@ -1,0 +1,13 @@
+SOAR playbooks reproduced from the Cortex XSOAR Content repository
+(https://github.com/demisto/content), which is licensed under the MIT License.
+
+MIT License — Copyright (c) Palo Alto Networks / Demisto.
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files, to deal in the Software
+without restriction, including the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies, subject to including this copyright
++ permission notice. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY.
+
+Vendor and product names are nominative references to identify the integration a
+playbook targets; no endorsement is implied. Only playbook YAML is bundled (no
+vendor logo binaries or integration code).

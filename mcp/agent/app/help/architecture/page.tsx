@@ -5596,24 +5596,29 @@ function KnowledgePipeline() {
  searchable reference content. They differ from memory in three
  ways: read-only at the agent surface, sourced from the bundle
  (not chat), and indexed at boot rather than on-write. The bundle
- ships three complementary KBs:{" "}
+ ships four complementary KBs:{" "}
  <Code>soc-investigation</Code> (v0.2.16) — 30 hand-written{" "}
  <em>narrative</em> investigation guides + IR playbooks;{" "}
  <Code>mitre-attack-enterprise</Code> (v0.2.18) — the{" "}
  <em>complete</em> ATT&amp;CK Enterprise matrix (~697 techniques +
- sub-techniques) as terse, machine-extracted <em>reference</em>
- (description, tactics, platforms, detection analytics, mitigations);
- and <Code>mitre-atlas</Code> (v0.2.19) — MITRE ATLAS, the
+ sub-techniques) as terse, machine-extracted <em>reference</em>;
+ <Code>mitre-atlas</Code> (v0.2.19) — MITRE ATLAS, the
  ATT&amp;CK-style framework for attacks on <em>AI/ML systems</em>
- (227 docs: techniques + 57 real-world AI-incident case studies).
- The agent searches <Code>soc-investigation</Code> for{" "}
+ (227 docs: techniques + 57 case studies); and{" "}
+ <Code>soar-playbooks</Code> (v0.2.21) — ~800 Cortex XSOAR
+ out-of-the-box <em>response playbooks</em> from the MIT-licensed
+ demisto/content repo, each an embedded reviewed description with the
+ raw YAML kept and dual-labeled by product + investigation-type. The
+ agent searches <Code>soc-investigation</Code> for{" "}
  <em>how to investigate well</em>, <Code>mitre-attack-enterprise</Code>{" "}
  for <em>what a technique is + how it&apos;s detected/mitigated</em>,
- and <Code>mitre-atlas</Code> for <em>AI-targeting attacks</em>. The
- MITRE KBs are generated deterministically from the official source
- data (<Code>kbs/_tools/gen_mitre.py</Code>,{" "}
- <Code>gen_atlas.py</Code>) and ship with embeddings pre-computed
- (v0.2.17) so their ~900 docs boot with zero Vertex calls.
+ <Code>mitre-atlas</Code> for <em>AI-targeting attacks</em>, and{" "}
+ <Code>soar-playbooks</Code> for <em>how to respond / automate</em>.
+ The reference KBs are generated deterministically from official
+ source data (<Code>kbs/_tools/gen_mitre.py</Code>,{" "}
+ <Code>gen_atlas.py</Code>, <Code>gen_soar_playbooks.py</Code>) and
+ ship with embeddings pre-computed (v0.2.17) so their ~1,750 docs
+ boot with zero Vertex calls.
  </p>
  <SubSection icon="compare_arrows" title="Knowledge vs memory — the boundary">
  <p>
