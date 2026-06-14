@@ -133,10 +133,13 @@ print(json.dumps({
 PY
 )
 
-# --- guardian-investigation-judge (v0.2.12) --------------------------------
+# --- guardian-investigation-judge (v0.2.12; KB_GROUNDING dim added v0.2.24) -
 # The autonomous evaluate->enhance step: scores recent resolved investigations
-# against a SOC rubric and, on a SYSTEMATIC weakness, improves the
-# xsoar_case_investigation skill via skills_update. Safety rails:
+# against a SOC rubric (VERDICT / MITRE / BLAST_RADIUS / RECOMMENDATIONS /
+# KB_GROUNDING) and, on a SYSTEMATIC weakness, improves the
+# xsoar_case_investigation skill via skills_update. The KB_GROUNDING dimension
+# (v0.2.24) makes "did the investigation actually consult the bundled KBs?" a
+# measured quality bar with autonomous self-correction. Safety rails:
 #   * tightly whitelisted tools (read Issues/Cases/indicators + skills_read +
 #     skills_update ONLY) — cannot touch incidents, create/delete skills, or
 #     manage credentials.
@@ -165,11 +168,16 @@ print(json.dumps({
       "just call the tool and move on. Total tool budget: about 8 calls. "
       "STEP 1: call issues_list(status='resolved', source_ref_not_null=True, "
       "order='desc') and take the 5 most recent ids. STEP 2: for EACH of "
-      "those 5, call issue_get ONCE and silently score it 0-2 on four "
+      "those 5, call issue_get ONCE and silently score it 0-2 on five "
       "dimensions: VERDICT (summary starts with a 'VERDICT:' line), MITRE "
       "(conclusions name an ATT&CK technique id such as T1071), "
       "BLAST_RADIUS (conclusions/scope name the affected hosts/accounts/"
-      "data), RECOMMENDATIONS (next_steps are concrete + actionable). Do NOT "
+      "data), RECOMMENDATIONS (next_steps are concrete + actionable), "
+      "KB_GROUNDING (events or conclusions cite a BUNDLED KNOWLEDGE-BASE doc "
+      "— an ATT&CK technique reference, an investigation guide, or a SOAR "
+      "playbook, e.g. 'Per soc-investigation KB T1071.004' or a "
+      "soar-playbooks id — showing the agent consulted knowledge_search "
+      "rather than recalling from memory). Do NOT "
       "call indicators_list. STEP 3: tally each dimension across the 5; a "
       "dimension is WEAK if >=3 of 5 score <=1. STEP 4 (decide, then STOP): "
       "if NO dimension is weak, reply EXACTLY 'investigations healthy — no "
