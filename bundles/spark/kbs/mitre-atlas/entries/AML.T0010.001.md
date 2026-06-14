@@ -1,0 +1,36 @@
+---
+id: AML.T0010.001
+title: AI Software
+category: attack-technique
+tags:
+- ai
+- atlas
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+is_subtechnique: true
+parent_id: AML.T0010
+embedding_model: text-embedding-004
+embedding: zho3PdEkwjx7yTS9DP4kt04XiT2JRSk9/ACgPQk6NT3AIuO8IZMjvdEsGDwMAto870PkOpn5TT27PVo9GBFAvDLfoT3BGIY9Rd2zvXjaQD2PUAm95ztFO0rhj7w1kl+9rLo9vRgrrr0kcO08f6ekvHKh8rxrvh29se7UPN823DwTQR+9ykmVOzceLL0A5RQ8MqgqvBVI2jzcNOO8P4YUvW1Ze70NQpi867A3vakfhj1xnaq8/kMMPXOzBr2fRp68DUCIvC1LpDwlv1Q9aDQwvHU1B73gMuo8h7ldva2qnrxdsQi9DEOJvUFRzju0Lxg9vXc0vd3BJryWQhW6reXCO+a1jjuM3bi8jGhvve+5qbu4Ni29N1j0POo+E727gZa7HgByvYBkDTyd4Wc8WUtMvEZbpDwbPRi9eYmwO4P0gzzfWKC8PM0vPdCAWz1mYFk8XU5RPAM8Rr15M7O6NzgZvQuSTr1HEEO9C4Z1PSA9yTxrCWw7UpWTPC+Vjj0sqNS8tmdAvQjQkL2TelU9Y1FEPakes7r6wT484YtHvPntcr187rI9TNBcPZi8NLy4VhC93yXrvRZAuDzcUPK8VjNaPY7upzwtBQI9IN0ovKA0mbyJil+8OS4TPXqvFL1BbUi9vIGpt8zYkT30+289arW/PNxLjT3efjS8k4J1PO7cv7v/ko28ANVTPPvJfT0jgJq9BOYJvbYXqTzAuuY8lAixvMYt6Lp9jge8VGm3POApgT0JtRG8BaG+vIUZs728OGg8g2nHPC9r5rwqu2g7HqgEPbK3FbyGOgU9x7yBvY0GCb19Jia8ZWzRvA3UMbxIfSc9HfeCPNayYL2QH7w7jP34vAEShzzjJNq82usCPezD+Dwhm8K8aeuIvIW2sbzWHRe8nLcGPFxzUT1AGJi8QpsOvVUKbzzfvm+9YdLuu+IwRj30dhY9mxotvTB2VLyP0sO8TPS+Pe3mgT2n9f86BzVvvZoYqzywuxQ9trTdvNqJjrvTNf8866JfPXkpuzzRoCI9K48IPWbGSj0YTIe9W3t/Onf06zwfiW69w/AQvfdFLr12iTI9gEg8PJU8NT2VncO81yAWvJ22UDxdkKK7hel7vEe9FT3Adn88H8uMvardKTxAOhO9DPEXvVpqp7r/VUW8MfdPPWQEGj165y49OI/fvHh+n7xtOfO8I9MOvWbO6rt+XGc9B5IoPdkOJbvH0yI9bewQPSC+er0CLBM8JWR0PQBtUbuNeCQ9FH7GvGxwPT0T8Gk7ak5nOzKwtrwWpoA9e5sOvTHlQD0Xqow9ZXIYvS2P1jxAj2w9qTB1PDuK0jwSWyw87QKUvRfLBz2ZGPa8kk5rPIpsdD2VvfC8iYFQvFP7GT1x83u8e2h/u1ZDFr1/Raw9l4UUvdsRgby/2yO9lkmmuxW7mL0Q46+8jOoBvWCmpDw/eCC99wJSPGM0jjtHQXi8BiWuu2okcr2dJ0S8pxbWvJoJsDwOPAW9GVIXvUSmszrFX2e714ijvFOEy7yyJJW85ctyvTGJDby9rTc7Xq66POQxk73DrFc9WYWGPYbVZbxMMYS9pHDhO/LTpbzJZoM90H65PQhhcL1sz5q6G9KOPfVmWzyEhJ28ytxnPVnBe7y+8FU9aRMcu5rSATw8QmK9SQuavMO0PD0PWSU8PcwxvSNLQrwB5QO9iv8au95i4L32Xo+6UvKAvfJJFD3P3C09ilQ2PfBgJb2WAsC8MvesvKEDj72gFQi9D8i/PO99ozy5O8088vdQPe2Q6zyo9Cs89LUMvZTj8jxB9MM7yWRNvVV75jx/wF49ueVPPGLWLjugkyC8PNCRPciieDw5kfQ7akt9vXuaITuklpc4wzXvvGDEwT3U8fM86VwrPSADZjxompQ74W6LPKuOQb27l589f2M+vUuyDzuo+9K8b5V9O1iWjTxufdw7WY9zPdzuAz01yXY8WW4RPd7+ijynqrW75zJBOkxJ5zxkvIU6FIQXvFoI2TwqmLY83celvS4wgbxgSPg8fbm1vM1MML30SbA77G29uyy3tDxloPg8+tnpOrFbZDyFzLq8SeIPvHK3ITslCLy79Jn0vJgEuT2egb672oFXPVqqXbwq6g887Gw3vRgWDz0KnJ48/9YhPIi5D73uPDu8yDGYPeSlTjwcoZA848skvL1svT1bkFU9/gs/u6yb5bmvNTi8AS/qvMG8nrkT6k4829Ceu9ORBrzbVJY9F0G/PLBTELz66no9qX1YvJ9XI71Kc5O8UpOkPH6UhTo405K9XaxMvT140bw17Z88B8Leu4DyvrwphCs89hI8vFwPnTzniJU8BF5GPZAvLjwwLg+97s2yvNjN0zzHh6O8ChgYvYkxxDw6z0I8DXGOPCKkDD2Eljk9z7c3PaUCFL1Z9Su967RuOe3iiLtgHuu8/nSqvR8/z71KOYK60PxRPAH/tjzXDRG8BlDou5m8D73HHRW9bDNuPbYNED2+J508GpVcvFddojucpj89EbkNPX5J3DwDHTw97foOO7YTSj3a4x88MYArvXISJT2AsNE8NC8/vORtWD0mSwu99diROySeYj0SrMs83QCou/3agj2Ni7C5gaqIvcV9sDvlm4+8WXiwvKQ5CL2ANb+8lAiYvRhSZr1RpAW8gdzBvK0OVD3yhIK8rGIcvfOcFj0r9Ck9h87GPDDM4LutsoO9am5nvBpo7DzWJRS9BAnTu8LCWz0zGyg93McnPSSNz7x4ZB+8+Ie4PL9k9rxnnBI74bNmu+WnILzTYuG8fPePPKMmLr0vnv66lwK+O4/LjLzjgTu85w4JPNKWtLvsZOS8xvrhPJ7puTtIQJS8E5tCPSxnFjvRE9E7SGBqOQ39ZT101Em95tkBPWXciz0PhCo8MDgKvJYGA72HnqM8QapqO4UnpT3TqsQ8d5IEPVyX0DxL0fI6yIxbPc9/gbvbAKC6oxCYPJ+SNjyHjaE8JYCnvLjtDD2+LrO8gspivO9yM71A1gC8V6eRvMtkCLtyhzQ8XoPwPDhtzrwtdBO9FNOjPSxaK705r+08y0VtvWGkWrlTl++8jk5ovDTcKbx7EGA7+7IEvJJz7TwoYX49aY3Yu9+ELD3Apwi9vfmdPW4YEj2IZw28Q8r4u+yhoDqMY528AG4MvMQm8rwmvY680uCwPPvGHz3Vsrq86rlBvWSF67yJvTe9YzglvOsX5jyIZFQ83eOaOxdMq7sQviQ9zNnOOlcJir1/ggC9I/vxvFtVfr3a3tO7GvYWPX+4DTpfbTQ9RI13vDDqeL08nte9x0nVPCcLEL0z64C866CYuqRFiDzILVm8boc2O5sQPbw93G08T1WSu0PUG72D7J68goyEPKYF2TxRW349u2GJvN3ew7vWhZY91AxVua4bLjwAf3A747QoPRxUiTzcpfa8fJTfvF9QUj0LYpA8DI2QPdugITsrrKO9xS30u2gaAzs4k269ORnBvNyxLz146hy7I3+QPMKGVL1qhWU9yzkRvcvM67sRyiq9+P9OOkjScDwWYOi8asKkvOaGXTo7Q5K9tv9nO5+T8rwNjgi9BZ36vPeLnDy8ErY83twTPBiNOzyNh1m80h+svHwYCTzRI0m5VnCTvD+eSzx/y8q8pz+KvcN6IT2uyhc9BYB4vV/xvrmHyjq72cLmPJFZF7034gg9Gb3UvA6FOr1x4xE96zCjPOalkjzfdsG8FhPzPMS90zvqiqs8ABKbPPdpK7yq+pm9wS+KPLZbsjnyZPA8npCKvf5vSjvuepu7jwUAPHBQITwpuAw9OYZovbUoMz0/FCm9RbIKPegx4jw6ZJ67dM6VPJKEors5jjc9wnQaPcCPEDzQbLi7hJ8uPb5/ubzcWiM9bDJhPbhei7tcUqE89KczvftsOjyB4Pq86ltqPApIJT0ZH8w78hszvS49kz2LkyU7r+7HvKZSYDyE7Yu8PeDvvGl6G7wo8xO801KePHHXq7wOhbQ7mOR9PHUkKz0zAsy8mlZBPAepCjws4YW9f1iIvfvxTrpHhAQ9QVcXPNJpyDwdga07In9NPUVYajxZz9k7akmlPF05/bvXtRk9nJL0u/0Iojzs9gO90oguvabLlT3AtBE8
+---
+# AML.T0010.001 — AI Software
+
+**Sub-technique of:** AML.T0010 (AI Supply Chain Compromise)
+
+## Description
+
+Adversaries may target software packages that are commonly used in AI-enabled systems or are part of the AI DevOps lifecycle. This can include deep learning frameworks used to build AI models (e.g. PyTorch, TensorFlow, Jax), generative AI integration frameworks (e.g. LangChain, LangFlow), inference engines, and AI DevOps tools. They may also target the dependency chains of any of these software packages [\[1\]][1]. Additionally, adversaries may target specific components used by AI software such as configuration files [\[2\]][2] or example usage of AI packages, which may be distributed in Jupyter notebooks [\[3\]][3].
+
+Adversaries may compromise legitimate packages [\[4\]][4] or publish malicious software to a namesquatted location [\[1\]][1]. They may target package names that are hallucinated by large language models [\[5\]][5] (see: Publish Hallucinated Entities). They may also perform a AI Supply Chain Rug Pull in which they first publish a legitimate package and then publish a malicious version once they reach a critical mass of users.
+
+[1]: https://pytorch.org/blog/compromised-nightly-dependency/ "Compromised PyTorch-nightly dependency chain between December 25th and December 30th, 2022."
+[2]: https://www.pillar.security/blog/new-vulnerability-in-github-copilot-and-cursor-how-hackers-can-weaponize-code-agents "New Vulnerability in GitHub Copilot and Cursor: How Hackers Can Weaponize Code Agents"
+[3]: https://medium.com/mlearning-ai/careful-who-you-colab-with-fa8001f933e7 "Careful Who You Colab With: abusing google colaboratory"
+[4]: https://aws.amazon.com/security/security-bulletins/AWS-2025-015/ "Security Update for Amazon Q Developer Extension for Visual Studio Code (Version #1.84)"
+[5]: https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/slopsquatting-when-ai-agents-hallucinate-malicious-packages "Slopsquatting: When AI Agents Hallucinate Malicious Packages"
+
+## Mitigations
+
+- **Use Ensemble Methods** (AML.M0006): Use an ensemble of models for inference to increase robustness to adversarial inputs. Some attacks may effectively evade one model or model family but be ineffective against others.
+- **Code Signing** (AML.M0013): Enforce binary and application integrity with digital signature verification to prevent untrusted code from executing. Adversaries can embed malicious code in AI software or models. Developers should also cryptographically sign SBOM and AIBOM components that track model or data provenance. Enforcement of code signing can prevent the compromise of the AI supply chain and prevent execution of malicious code.
+

@@ -1,0 +1,48 @@
+---
+id: AML.CS0009
+title: Tay Poisoning
+category: case-study
+tags:
+- ai
+- atlas
+- case-study
+- incident
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+incident_date: '2016-03-23'
+embedding_model: text-embedding-004
+embedding: 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
+---
+# AML.CS0009 — Tay Poisoning
+
+**Target:** Microsoft's Tay AI Chatbot  ·  **Actor:** 4chan Users  ·  **Date:** 2016-03-23
+
+## Summary
+
+Microsoft created Tay, a Twitter chatbot designed to engage and entertain users.
+While previous chatbots used pre-programmed scripts
+to respond to prompts, Tay's machine learning capabilities allowed it to be
+directly influenced by its conversations.
+
+A coordinated attack encouraged malicious users to tweet abusive and offensive language at Tay,
+which eventually led to Tay generating similarly inflammatory content towards other users.
+
+Microsoft decommissioned Tay within 24 hours of its launch and issued a public apology
+with lessons learned from the bot's failure.
+
+## Procedure (attack chain)
+
+- **AML.TA0000 / AML.T0047** — Adversaries were able to interact with Tay via Twitter messages.
+- **AML.TA0004 / AML.T0010.002** — Tay bot used the interactions with its Twitter users as training data to improve its conversations.
+Adversaries were able to coordinate with the intent of defacing Tay bot by exploiting this feedback loop.
+- **AML.TA0006 / AML.T0020** — By repeatedly interacting with Tay using racist and offensive language, they were able to skew Tay's dataset towards that language as well. This was done by adversaries using the "repeat after me" function, a command that forced Tay to repeat anything said to it.
+- **AML.TA0011 / AML.T0031** — As a result of this coordinated attack, Tay's conversation algorithms began to learn to generate reprehensible material. Tay's internalization of this detestable language caused it to be unpromptedly repeated during interactions with innocent users.
+
+## References
+
+- AIID - Incident 6: TayBot — https://incidentdatabase.ai/cite/6
+- AVID - Vulnerability: AVID-2022-v013 — https://avidml.org/database/avid-2022-v013/
+- Microsoft BlogPost, "Learning from Tay's introduction" — https://blogs.microsoft.com/blog/2016/03/25/learning-tays-introduction/
+- IEEE Article, "In 2016, Microsoft's Racist Chatbot Revealed the Dangers of Online Conversation" — https://spectrum.ieee.org/tech-talk/artificial-intelligence/machine-learning/in-2016-microsofts-racist-chatbot-revealed-the-dangers-of-online-conversation
+

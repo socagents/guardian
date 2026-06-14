@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.19",
+    date: "2026-06-14",
+    title: "MITRE ATLAS (AI security) is now a built-in knowledge base.",
+    highlights: [
+      "New mitre-atlas KB: the ATT&CK-style framework for attacks on AI/ML systems — prompt injection, model evasion, data poisoning, agent hijacking.",
+      "227 docs: 170 techniques + sub-techniques plus 57 real-world AI-incident case studies.",
+      "AI techniques cross-link to their ATT&CK Enterprise mapping; embeddings baked in (zero Vertex calls at boot).",
+      "Guardian now grounds investigations of AI-targeting incidents — apt as it's itself an AI agent.",
+    ],
+  },
+  {
     version: "0.2.18",
     date: "2026-06-14",
     title: "Full MITRE ATT&CK Enterprise is now a built-in knowledge base (~697 techniques).",

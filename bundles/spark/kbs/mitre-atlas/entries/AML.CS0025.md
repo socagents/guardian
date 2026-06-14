@@ -1,0 +1,37 @@
+---
+id: AML.CS0025
+title: 'Web-Scale Data Poisoning: Split-View Attack'
+category: case-study
+tags:
+- ai
+- atlas
+- case-study
+- exercise
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+incident_date: '2024-06-06'
+embedding_model: text-embedding-004
+embedding: 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
+---
+# AML.CS0025 — Web-Scale Data Poisoning: Split-View Attack
+
+**Target:** 10 web-scale datasets  ·  **Actor:** Researchers from Google Deepmind, ETH Zurich, NVIDIA, Robust Intelligence, and Google  ·  **Date:** 2024-06-06
+
+## Summary
+
+Many recent large-scale datasets are distributed as a list of URLs pointing to individual datapoints. The researchers show that many of these datasets are vulnerable to a "split-view" poisoning attack. The attack exploits the fact that the data viewed when it was initially collected may differ from the data viewed by a user during training. The researchers identify expired and buyable domains that once hosted dataset content, making it possible to replace portions of the dataset with poisoned data. They demonstrate that for 10 popular web-scale datasets, enough of the domains are purchasable to successfully carry out a poisoning attack.
+
+## Procedure (attack chain)
+
+- **AML.TA0003 / AML.T0002.000** — The researchers download a web-scale dataset, which consists of URLs pointing to individual datapoints.
+- **AML.TA0003 / AML.T0008.002** — They identify expired domains in the dataset and purchase them.
+- **AML.TA0003 / AML.T0020** — An adversary could create poisoned training data to replace expired portions of the dataset.
+- **AML.TA0003 / AML.T0019** — An adversary could then upload the poisoned data to the domains they control.  In this particular exercise, the researchers track requests to the URLs they control to track downloads to demonstrate there are active users of the dataset.
+- **AML.TA0011 / AML.T0059** — The integrity of the dataset has been eroded because future downloads would contain poisoned datapoints.
+- **AML.TA0011 / AML.T0031** — Models that use the dataset for training data are poisoned, eroding model integrity. The researchers show as little as 0.01% of the data needs to be poisoned for a successful attack.
+
+## References
+
+- Poisoning Web-Scale Training Datasets is Practical — https://arxiv.org/pdf/2302.10149
+

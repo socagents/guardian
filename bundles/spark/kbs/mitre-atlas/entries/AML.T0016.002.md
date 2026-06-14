@@ -1,0 +1,36 @@
+---
+id: AML.T0016.002
+title: Generative AI
+category: attack-technique
+tags:
+- ai
+- atlas
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+is_subtechnique: true
+parent_id: AML.T0016
+embedding_model: text-embedding-004
+embedding: 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
+---
+# AML.T0016.002 — Generative AI
+
+**Sub-technique of:** AML.T0016 (Obtain Capabilities)
+
+## Description
+
+Adversaries may search for and obtain generative AI models or tools, such as large language models (LLMs), to assist them in various steps of their operation. Generative AI can be used in a variety of malicious ways, such as to generating malware, to Generate Deepfakes, to Generate Malicious Commands, for Retrieval Content Crafting, or to generate Phishing content.
+
+Adversaries may obtain open source models and serve them locally using frameworks such as [Ollama](https://ollama.com/) or [vLLM]( https://docs.vllm.ai/en/latest/). They may host them using cloud infrastructure. Or, they may leverage AI service providers such as HuggingFace.
+
+They may need to jailbreak the model (see LLM Jailbreak) to bypass any restrictions put in place to limit the types of responses it can generate. They may also need to break the terms of service of the model's developer.
+
+Generative AI models may also be "uncensored" meaning they are designed to generate content without any restrictions such as guardrails or content filters. Uncensored GenAI is ripe for abuse by cybercriminals [\[1\]][1] [\[2\]][2]. Models may be fine-tuned to remove alignment and guardrails [\[3\]][3] or be subjected to targeted manipulations to bypass refusal [\[4\]][4] resulting in uncensored variants of the model. Uncensored models may be built for offensive and defensive cybersecurity [\[5\]][5], which can be abused by an adversary. There are also models that are expressly designed and advertised for malicious use [\[6\]][6].
+
+[1]: https://blog.talosintelligence.com/cybercriminal-abuse-of-large-language-models/
+[2]: https://gbhackers.com/cybercriminals-exploit-llm-models/
+[3]: https://erichartford.com/uncensored-models
+[4]: https://arxiv.org/abs/2406.11717/
+[5]: https://taico.ca/posts/whiterabbitneo/
+[6]: https://gbhackers.com/wormgpt-enhanced-with-grok-and-mixtral/
+

@@ -10,6 +10,29 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.19] (unreleased) — *MITRE ATLAS knowledge base (AI / ML security)*
+
+Guardian can now ground investigations of **attacks on AI systems** — the bundle ships **MITRE ATLAS**, the ATT&CK-style framework for adversarial threats to AI/ML (prompt injection, model evasion, data poisoning, model theft, agent hijacking). Strategically apt: Guardian is itself an AI agent, and customers increasingly run AI/LLM workloads.
+
+### What ships
+
+- **`mitre-atlas` KB — 227 docs**: **170 techniques + sub-techniques** (`category: attack-technique`, e.g. `AML.T0051` LLM Prompt Injection) with description, tactics, mitigations, and the mapped ATT&CK Enterprise id where ATLAS declares one (cross-links into `mitre-attack-enterprise`); plus **57 real-world AI-incident case studies** (`category: case-study`, `AML.CS####`) — each a documented attack with its step-by-step procedure, target, and actor.
+- **Generated deterministically** by `kbs/_tools/gen_atlas.py` from the official ATLAS data (v5.6.0); `framework_version` pins the source. **Embeddings baked into the bundle** (v0.2.17 keystone) → boots with zero Vertex calls.
+- Third bundled KB alongside `soc-investigation` (curated narrative) and `mitre-attack-enterprise` (full IT matrix) — together ~954 docs of reference the agent searches to ground investigations.
+
+### Files
+
+- `bundles/spark/kbs/mitre-atlas/` — new: `schema.json`, `README.md`, `NOTICE.txt`, `entries/*.md` (227 docs with baked embeddings).
+- `bundles/spark/kbs/_tools/gen_atlas.py` — ATLAS YAML→docs generator.
+- `bundles/spark/manifest.yaml` — `knowledge.bundled[]` declares `mitre-atlas`.
+- `mcp/agent/app/help/{architecture,user}/page.tsx`, `mcp/agent/lib/journeys.ts` — docs + `atlas-ai-search` journey.
+
+### Note
+
+Ships under the same customer release tag as v0.2.17 + v0.2.18 (the MITRE-KB family + keystone), unless tagged separately.
+
+---
+
 ## [v0.2.18] (unreleased) — *MITRE ATT&CK Enterprise knowledge base (full matrix, ~697 techniques)*
 
 The complete MITRE ATT&CK **Enterprise** matrix now ships as a bundled knowledge base — every technique and sub-technique, semantically searchable, so the agent grounds investigations in the authoritative technique definition (and customers see it populated on `/knowledge`).

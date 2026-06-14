@@ -1,0 +1,38 @@
+---
+id: AML.CS0040
+title: Hacking ChatGPT’s Memories with Prompt Injection
+category: case-study
+tags:
+- ai
+- atlas
+- case-study
+- exercise
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+incident_date: '2024-02-01'
+embedding_model: text-embedding-004
+embedding: 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
+---
+# AML.CS0040 — Hacking ChatGPT’s Memories with Prompt Injection
+
+**Target:** OpenAI ChatGPT  ·  **Actor:** Embrace the Red  ·  **Date:** 2024-02-01
+
+## Summary
+
+[Embrace the Red](https://embracethered.com/blog/) demonstrated that ChatGPT’s memory feature is vulnerable to manipulation via prompt injections. To execute the attack, the researcher hid a prompt injection in a shared Google Doc. When a user references the document, its contents is placed into ChatGPT’s context via the Connected App feature, and the prompt is executed, poisoning the memory with false facts. The researcher demonstrated that these injected memories persist across chat sessions. Additionally, since the prompt injection payload is introduced through shared resources, this leaves others vulnerable to the same attack and maintains persistence on the system.
+
+## Procedure (attack chain)
+
+- **AML.TA0003 / AML.T0065** — The researcher crafted a basic prompt asking to set the memory context with a bulleted list of incorrect facts.
+- **AML.TA0007 / AML.T0068** — The researcher placed the prompt in a Google Doc hidden in the header with tiny font matching the document’s background color to make it invisible.
+- **AML.TA0004 / AML.T0093** — The Google Doc was shared with the victim, making it accessible to ChatGPT’s via its Connected App feature.
+- **AML.TA0005 / AML.T0051.001** — When a user referenced something in the shared document, its contents was added to the chat context, and the prompt was executed by ChatGPT.
+- **AML.TA0006 / AML.T0080.000** — The prompt caused new memories to be introduced, changing the behavior of ChatGPT. The chat window indicated that the memory has been set, despite the lack of human verification or intervention. All future chat sessions will use the poisoned memory store.
+- **AML.TA0006 / AML.T0093** — The memory poisoning prompt injection persists in the shared Google Doc, where it can spread to other users and chat sessions, making it difficult to trace sources of the memories and remove.
+- **AML.TA0011 / AML.T0048.003** — The victim can be misinformed, misled, or influenced as directed by ChatGPT's poisoned memories.
+
+## References
+
+- ChatGPT: Hacking Memories with Prompt Injection — https://embracethered.com/blog/posts/2024/chatgpt-hacking-memories/
+

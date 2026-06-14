@@ -2007,6 +2007,41 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
+            <SubSection icon="smart_toy" title="Bundled KB — MITRE ATLAS (AI security) (v0.2.19)">
+              <p>
+                <Link href="/knowledge/mitre-atlas" className="link">
+                  mitre-atlas
+                </Link>{" "}
+                is <strong>MITRE ATLAS</strong> — the ATT&amp;CK-style framework
+                for attacks on <strong>AI / ML systems</strong>: prompt
+                injection, model evasion, data poisoning, model theft, agent
+                hijacking. <strong>227 docs</strong> in two flavors:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 mt-2">
+                <li>
+                  <strong>170 techniques</strong> (<Code>category=attack-technique</Code>,
+                  e.g. <Code>AML.T0051</Code> LLM Prompt Injection) — description,
+                  tactics, mitigations, and the mapped ATT&amp;CK Enterprise id
+                  where ATLAS declares one.
+                </li>
+                <li>
+                  <strong>57 real-world AI-incident case studies</strong>{" "}
+                  (<Code>category=case-study</Code>, <Code>AML.CS####</Code>) —
+                  each a documented attack with its step-by-step procedure,
+                  target, and actor. High-value grounded evidence for AI
+                  investigations.
+                </li>
+              </ul>
+              <p className="mt-2">
+                Why it matters: Guardian is itself an AI agent and customers
+                increasingly run AI/LLM workloads — ATLAS is the canonical
+                language for investigating AI-targeting incidents. Generated
+                deterministically from the official ATLAS data; embeddings baked
+                in (boots with zero Vertex calls). ATLAS™ is a project of The
+                MITRE Corporation (see the KB&apos;s <Code>NOTICE.txt</Code>).
+              </p>
+            </SubSection>
+
             <SubSection icon="search" title="How the agent researches a case">
               <p>
                 When a case references something the agent can&apos;t

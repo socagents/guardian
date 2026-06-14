@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MITRE ATLAS (AI security) entry",
+  "description": "One MITRE ATLAS technique/sub-technique or real-world AI-incident case study, generated deterministically from the official ATLAS YAML by kbs/_tools/gen_atlas.py. ATLAS is the ATT&CK-style framework for attacks on AI/ML systems. Guardian searches it (knowledge_search) to ground investigations of AI-targeting incidents (prompt injection, model evasion, data poisoning, agent hijacking).",
+  "type": "object",
+  "required": ["id", "title", "category"],
+  "properties": {
+    "id": { "type": "string", "description": "ATLAS id: technique 'AML.T0051', sub-technique 'AML.T0000.000', or case study 'AML.CS0000'." },
+    "title": { "type": "string" },
+    "category": { "type": "string", "description": "'attack-technique' or 'case-study'.", "enum": ["attack-technique", "case-study"] },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "ecosystem": { "type": "string", "description": "Always 'AI'." },
+    "framework": { "type": "string", "description": "Always 'mitre-atlas'." },
+    "framework_version": { "type": "string" },
+    "is_subtechnique": { "type": "boolean" },
+    "parent_id": { "type": "string" },
+    "tactics": { "type": "array", "items": { "type": "string" } },
+    "attack_enterprise_ref": { "type": "string", "description": "Mapped ATT&CK Enterprise technique id, when ATLAS declares one." },
+    "incident_date": { "type": "string" }
+  },
+  "additionalProperties": true
+}

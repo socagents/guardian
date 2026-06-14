@@ -103,6 +103,15 @@ knowledge:
     - name: "mitre-attack-enterprise"
       path: "./kbs/mitre-attack-enterprise/"
       schema: "./kbs/mitre-attack-enterprise/schema.json"
+    # v0.2.19 — MITRE ATLAS (AI/ML security): the ATT&CK-style framework for
+    # attacks on AI systems (prompt injection, model evasion, data poisoning,
+    # agent hijacking) — techniques + sub-techniques + 57 real-world AI-incident
+    # case studies. Generated from the official ATLAS data (kbs/_tools/gen_atlas.py)
+    # with embeddings pre-computed in the bundle. Strategically apt: Guardian is
+    # itself an AI agent + customers run AI/LLM workloads.
+    - name: "mitre-atlas"
+      path: "./kbs/mitre-atlas/"
+      schema: "./kbs/mitre-atlas/schema.json"
   required: []
   optional: []
 

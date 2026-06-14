@@ -1,0 +1,48 @@
+---
+id: AML.CS0015
+title: Compromised PyTorch Dependency Chain
+category: case-study
+tags:
+- ai
+- atlas
+- case-study
+- incident
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+incident_date: '2022-12-25'
+embedding_model: text-embedding-004
+embedding: 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
+---
+# AML.CS0015 — Compromised PyTorch Dependency Chain
+
+**Target:** PyTorch  ·  **Actor:** Unknown  ·  **Date:** 2022-12-25
+
+## Summary
+
+Linux packages for PyTorch's pre-release version, called Pytorch-nightly, were compromised from December 25 to 30, 2022 by a malicious binary uploaded to the Python Package Index (PyPI) code repository.  The malicious binary had the same name as a PyTorch dependency and the PyPI package manager (pip) installed this malicious package instead of the legitimate one.
+
+This supply chain attack, also known as "dependency confusion," exposed sensitive information of Linux machines with the affected pip-installed versions of PyTorch-nightly. On December 30, 2022, PyTorch announced the incident and initial steps towards mitigation, including the rename and removal of `torchtriton` dependencies.
+
+## Procedure (attack chain)
+
+- **AML.TA0004 / AML.T0010.001** — A malicious dependency package named `torchtriton` was uploaded to the PyPI code repository with the same package name as a package shipped with the PyTorch-nightly build. This malicious package contained additional code that uploads sensitive data from the machine.
+The malicious `torchtriton` package was installed instead of the legitimate one because PyPI is prioritized over other sources. See more details at [this GitHub issue](https://github.com/pypa/pip/issues/8606).
+- **AML.TA0009 / AML.T0037** — The malicious package surveys the affected system for basic fingerprinting info (such as IP address, username, and current working directory), and steals further sensitive data, including:
+- nameservers from `/etc/resolv.conf`
+- hostname from `gethostname()`
+- current username from `getlogin()`
+- current working directory name from `getcwd()`
+- environment variables
+- `/etc/hosts`
+- `/etc/passwd`
+- the first 1000 files in the user's `$HOME` directory
+- `$HOME/.gitconfig`
+- `$HOME/.ssh/*.`
+- **AML.TA0010 / AML.T0025** — All gathered information, including file contents, is uploaded via encrypted DNS queries to the domain `*[dot]h4ck[dot]cfd`, using the DNS server `wheezy[dot]io`.
+
+## References
+
+- PyTorch statement on compromised dependency — https://pytorch.org/blog/compromised-nightly-dependency/
+- Analysis by BleepingComputer — https://www.bleepingcomputer.com/news/security/pytorch-discloses-malicious-dependency-chain-compromise-over-holidays/
+

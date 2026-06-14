@@ -1,0 +1,46 @@
+---
+id: AML.T0020
+title: Poison Training Data
+category: attack-technique
+tags:
+- ai
+- atlas
+- persistence
+- resource-development
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+is_subtechnique: false
+tactics:
+- Resource Development
+- Persistence
+embedding_model: text-embedding-004
+embedding: /vduO9NfODxU3Zm94KO2u/y65Dw56n892wd3Pfn/lz2mzbm6sOChvCHhVDz/l1897hbEuzLCRz3wmBg9VbGCvWOY3T28uio9CJwbvcYxED2Trzg5ZY4NvJZzpbyCSlW9ATSWvVqgnb2dTg4992hAvZ6lK7x4oxy8qBJ4PFylPTzY2t07mOcBvbdfoDw77bI7epVqvHPPpTxuWCW9s8tyO5/yfr2TiRc81fcmvRyfTz1pR3q9qgBZPNleAr0H4/g87XAevZ+NRT2qxpI9IdZ9vFYWab1uVNS8vBqGvRwCQL3PNqA6kQh0vQsYRLwn/RG9IgSqOnLDTb3tpom8sViuvOEA3jmLf7Y6SFE2vfTMOLychWi9bGMJvf7wLr15/Fw8crMIva20+TyzfIE8t3lZPAJGy7vkdIy8y3+Pu1wdYzsK5z+9a9HbPAgQDzwIcdy6mU5DvO4QCL2VwaG7RnZnvYZJhb0MQOO8a2pIPTbOujzjM/G6JcQbPf09uD2H6VK9KL5wva2bib2hmmM8Fz2duxw7yTxksJY8bXHfvJkFCL23Grk9uUNQPOkXbb2fByw9GJNuvTXaObz7zeG88TzUPNgTB7xCoCU971wRPPq9LzypCTQ7nE1NPeKsob02yOe8BEPsPEJkUjy+Ec47g7YqPInmeT3CngO8XOS/PDoQtLrI/ii9CN/nvEa2sD1s4Me9Yiv4uz0+Kj33OA49meakvG8dqLv+9kc8hBARPfKjWz1XW2u85JIPuoX3vb1L1gK8TEVQPX7DrrzGlgg9jB6EPYOQ5Dv5VR49sMzVvWVNNL1gBqs81xv2OivQg7x8mMM72O+KvHIz/L3tCno8RBSAvKStAzzb/8u7XaUJPRo7xjzNuKy8UYDju6BbhDwPx1K9W54YPCfetjxMt6u8Td8rvCGnn7xqkJG99vpIPPZbmjy8Yw+7Xv+bvJgECb2JRqC8cOHMPYbrDT09EJK6DL2JvanDsTwn+lk8IN8PPcagbLtjMu081dAnPZwbIbsZWjq99Dwku+WVvTxJKuq8OQ4MPRIoqDySCuy8gtKlvBBF07zdD2c9CORxvY26Xz3mAIG9EP6fvJx+Ez2T8oa7bLqCO84KLDzkKf66pdsCvfvPBz1kf1S9iZ2XvR4/grxGfh296Q0wPMILIT2AXb09e7aGPHDngbsCa9y7oeoOvKf9PjsWQ3E8KsemPaq30bzwhV88Q1iku7xpa71kiTI8+0hoPV6+m7xzJs86jOFKPOrI+zznEf+4px49vSvq2zsAAFw95l4Evb6mOT0ROjc7FeaTOsFJVjwP8Wg8rkOgPOEKxTyl7Q87ZUuLvZFrCD3bN5a8gKw1PfL/jD12FQ69VzysO8AzszxzmPK7bKrWvKyPJb1+FRk9Mp7zvCsj+rzmxGq9ooYkvNP76LyvjBi9fFcAvW3xbTwshAy9ayOgvB3fqTxAu4q76cdwO9zSOr2uMfM7Iq/au15aADwtEhi9C9Ouux0Kbby6n/g8O5u9PK0mhDylzuG7x9UGvevXprzsj7Q8dv6IPHezc72yB089TQlzPZVJ4Ls+pIS9J3ivPBZ6xjwmEnM9GWypPRCEVb0K8Oa8JdKKPQzvsjwh7a28ewBYPUkc87v8hQI8gh+buyQe0LuZ4xS9wQUfvFylej25p8+78BcPvZm5oruPY4O9ViJtvAwS8b2HvRY7M76Ove3NrzzJWic93C1mPeMub7xf1++8Lx68O8JX37xwR/q7n/lPPHvK2DyMdJ68pGdPPcntbDzzcEE81+/kvD1e7Lp4dhq87mD4vDRRdzsiKY89T4edPGCVdTuN+NI7GydhPd5lbD14IMI8bDONvM8GiTzIr7Q8SOq3OyZOYz0TtSY9np1+Pb88JjxOOYo8c3Y+PawxfLwo1hg9CCGmvDxc57u1Ohc8+Pt1uhfGjDw4yds8C64XPRbvrLuX8aI8EzBEPVXFmDxq8n+8QWlevJxxgTow7cW8722JujVvvrxSqic9nC2GvWeb4js4Qyg9nt2EvfVxQLwMBpy7l5BQvNdRgTwPr+A89aCKO6Eic7tZZA2898L5vOQ47rrfIHS8jYO0PAjWUD0tUTE9LdUPPVTVSLuFG6e8MMeQvXdrKT2fv9q7d6F4u3e+oLtTm0K8PUCBPZmGcDyVDIo8U0tOvBVhrD0E5gA99qpCvQhcpjxRPRy9gB2OvXCsz7yjZvk7nC/5PIDWeLwmsaw9HXIHPc5FS7ucNRc9fHc1PJU5gjtKTWw8GOcXPSoz+zmoK1a9wuxeu02rvTu9E7s8iQ4avH8RJDzhoz49i4NlvOFlFDw29Cs8vD4VPd7k/DzRsqa8VUSTPMHaDj3BoEi8FGywO0DXjDvzT+m7y2BOPMZ1WzzUKeE8MihCPZ7qSbxjOVy9X7yYvEHFJT0Mawu8uZ+ovcBU472B2CA74+aYPGvEgjzTeYK7AAMYuywWsLv90xS9o+oZPb6/tburPn47NAcHvLbEujw5xlo9Y5LUPAYFuzwzDJU9LG0KPe/QGzyHWfQ7lIvgvG7pBDthMoQ7pyj+vKT4oz0oo/g87g/tvF/LYT0begq8StoYO0BAhD1X5lu9jNg8vTDYCb0EiU8825Qwvfn56ry5mNo8sCtMvbOfzrzDKHg88Vi9O/+1Iz0ZdXg8x/csvaJRWj1oGc09ugZaPM/u/rywm1u9H8EmvG3zhT0DS1e8hGOVvHU7ED3wWzc9LFprPRavn71m3Mo7xUq3PNzvvbx5wlU80n3nui/ckTulrG69bnkJPRTCebz5va+7bG2/u0xDvzzc01A8KZijvGt60zyMU/w7XzZrPSdMELvV5xy92KbpPOF5F7wiqjW9HRCeu+q6hD1A/rM7if8FPfv0JT3LMKA8r+9zPOn6OL23oRI83XjsPEEsKD20U448OMv1PIET9jxf0CY8JXdiPaFwnTzvaXu8L37nPAk1xDxD4sw8506VvMFzzDzIlwa9tWbgvOBidr0F9Yi7G7S3vPRGiLw4ZUW8KdbjO/FKI7w3fXe9syBDPTapM7y+6Ik9vstavYyNkLqDsCA83yjQvMqoXDxbtHa9v5youzlT87t4XkY9P3zZvCxkDzsTkDG93oRzPcKPeTzMuQK9XL3LPA1ZKDyjrAA7hTJJvZweOb0zc5K8qQg/PKOEGT1L+Zu915V9vXKcFDy7p9i8yhmUvIckxDwPMgK8EZdePDA0MDyqEYE9X+AePSiW5rwUKj+8vEvbvO8ycL2ipNs7+3jUPImRKjyNkTQ9JCTOu0ulbr2Ra8C9JmYJPE2SuLxSCus6mr8PveutXj1epiK98P3iu+gQi7y2qUq82DoRPQMAL71EtxY8+hROu862Nj3FO5g9PjzbvATn4Lwc+Bo9k5dHu3RxlzuVc+s73OxePfxg8jyCChs9xGAGvVB5UD3/VAk9O9e1PCIrWbsdjm+9CkyxvDjCKTxwlz29HpfMPFC+Ej0WZKw8IlZTu/c4dL3HBIY9E7UjvZjne7zhGiq9qmyTvAHetjz/XTG9AtgBvQvKDr04jZ+9/27IPKQ0F71Bg5e8BYz4vH3x8LyHaI28yjPCPHMnuLtdlwm9/H8Evdr6Fbxkbcm8yvaqvG3GNzxpaa88odElvfG29zzzERo9PBXQvLfHtjxooZw8coLZPCEKFb3pVfY8y8ATvVM67LyMuJI8bVSovP7Zxbyx39w695TqvGY9nTtLhYg8UhiauxR3XDwqvIm9IgpWPLVPBb2BgGM8fV11vWs3DT3J6sG7iVPDvA6FPz0euQA9rbCIvTbLTT15xM68MmbaPKpA3zz6hKs8FJNOvCpuxrxm6D09vKDUPCw21TwqBxK8vH1iPUYz1bx2lBo9YzS0PWauajuTzxg95kvYvNzBEjy2hsu8hRGIvCL7qDw0+hE93bWLvdtW0T34QCG8fGCovKbMuTspJpa8spkYvNpFKTyzaoO8NXPHOyHoPr3pvBQ9pwDZPM45pDx4d3q8tY6QvP4cVzwa/2e9N5yBvX/Xv7zQjA29z3c1PHLgRDx0WUU89IvCvEptyTvdGRa8UOINPZmbjLxu1AE9P5C0OpHt4DziiIW9S6pcveoPJz3YIc+7
+---
+# AML.T0020 — Poison Training Data
+
+**Tactics:** Resource Development, Persistence
+
+## Description
+
+Adversaries may attempt to poison datasets used by an AI model by modifying the underlying data or its labels.
+This allows the adversary to embed vulnerabilities in AI models trained on the data that may not be easily detectable.
+Data poisoning attacks may or may not require modifying the labels.
+The embedded vulnerability is activated at a later time by data samples with an Insert Backdoor Trigger
+
+Poisoned data can be introduced via AI Supply Chain Compromise or the data may be poisoned after the adversary gains Initial Access to the system.
+
+## Mitigations
+
+- **Limit Model Artifact Release** (AML.M0001): Limit public release of technical project details including data, algorithms, model architectures, and model checkpoints that are used in production, or that are representative of those used in production.
+- **Control Access to AI Models and Data at Rest** (AML.M0005): Establish access controls on internal model registries and limit internal access to production models. Limit access to training data only to approved users.
+- **Sanitize Training Data** (AML.M0007): Detect and remove or remediate poisoned training data.  Training data should be sanitized prior to model training and recurrently for an active learning model.
+
+Implement a filter to limit ingested training data.  Establish a content policy that would remove unwanted content such as certain explicit or offensive language from being used.
+- **Validate AI Model** (AML.M0008): Validate that AI models perform as intended by testing for backdoor triggers, potential for data leakage, or adversarial influence.
+Monitor AI model for concept drift and training data drift, which may indicate data tampering and poisoning.
+- **AI Bill of Materials** (AML.M0023): An AI Bill of Materials (AI BOM) contains a full listing of artifacts and resources that were used in building the AI. The AI BOM can help mitigate supply chain risks and enable rapid response to reported vulnerabilities.
+
+This can include maintaining dataset provenance, i.e. a detailed history of datasets used for AI applications. The history can include information about the dataset source as well as well as a complete record of any modifications.
+- **Maintain AI Dataset Provenance** (AML.M0025): Maintain a detailed history of datasets used for AI applications. The history should include information about the dataset's source as well as a complete record of any modifications.
+

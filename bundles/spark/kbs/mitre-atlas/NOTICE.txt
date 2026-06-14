@@ -1,0 +1,6 @@
+This knowledge base is generated from MITRE ATLAS™.
+
+ATLAS™ (Adversarial Threat Landscape for AI Systems) is a project of The MITRE
+Corporation. Content reproduced from https://github.com/mitre-atlas/atlas-data
+(framework version 5.6.0) with copyright preserved; distribution unlimited.
+Guardian is not endorsed or certified by MITRE.

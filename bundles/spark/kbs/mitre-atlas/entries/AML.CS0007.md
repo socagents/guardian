@@ -1,0 +1,40 @@
+---
+id: AML.CS0007
+title: GPT-2 Model Replication
+category: case-study
+tags:
+- ai
+- atlas
+- case-study
+- exercise
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+incident_date: '2019-08-22'
+embedding_model: text-embedding-004
+embedding: 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
+---
+# AML.CS0007 — GPT-2 Model Replication
+
+**Target:** OpenAI GPT-2  ·  **Actor:** Researchers at Brown University  ·  **Date:** 2019-08-22
+
+## Summary
+
+OpenAI built GPT-2, a language model capable of generating high quality text samples. Over concerns that GPT-2 could be used for malicious purposes such as impersonating others, or generating misleading news articles, fake social media content, or spam, OpenAI adopted a tiered release schedule. They initially released a smaller, less powerful version of GPT-2 along with a technical description of the approach, but held back the full trained model.
+
+Before the full model was released by OpenAI, researchers at Brown University successfully replicated the model using information released by OpenAI and open source ML artifacts. This demonstrates that a bad actor with sufficient technical skill and compute resources could have replicated GPT-2 and used it for harmful goals before the AI Security community is prepared.
+
+## Procedure (attack chain)
+
+- **AML.TA0002 / AML.T0000** — Using the public documentation about GPT-2, the researchers gathered information about the dataset, model architecture, and training hyper-parameters.
+- **AML.TA0003 / AML.T0002.001** — The researchers obtained a reference implementation of a similar publicly available model called Grover.
+- **AML.TA0003 / AML.T0002.000** — The researchers were able to manually recreate the dataset used in the original GPT-2 paper using the gathered documentation.
+- **AML.TA0003 / AML.T0008.000** — The researchers were able to use TensorFlow Research Cloud via their academic credentials.
+- **AML.TA0001 / AML.T0005.000** — The researchers modified Grover's objective function to reflect GPT-2's objective function and then trained on the dataset they curated using used Grover's initial hyperparameters. The resulting model functionally replicates GPT-2, obtaining similar performance on most datasets.
+A bad actor who followed the same procedure as the researchers could then use the replicated GPT-2 model for malicious purposes.
+
+## References
+
+- Wired Article, "OpenAI Said Its Code Was Risky. Two Grads Re-Created It Anyway" — https://www.wired.com/story/dangerous-ai-open-source/
+- Medium BlogPost, "OpenGPT-2: We Replicated GPT-2 Because You Can Too" — https://blog.usejournal.com/opengpt-2-we-replicated-gpt-2-because-you-can-too-45e34e6d36dc
+

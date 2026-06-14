@@ -3082,6 +3082,42 @@ export const JOURNEYS: Journey[] = [
   },
 
   {
+    id: "atlas-ai-search",
+    category: "ops",
+    title: "Search the MITRE ATLAS (AI security) KB",
+    summary:
+      "Open the bundled mitre-atlas KB (227 docs — AI/ML attack techniques + 57 real-world AI-incident case studies) and search it for AI-targeting threats like prompt injection.",
+    difficulty: "starter",
+    durationMin: 2,
+    icon: "smart_toy",
+    prompts: [],
+    toolsExercised: [],
+    apis: [
+      { method: "GET", path: "/api/agent/knowledge", description: "mitre-atlas shows 227 docs." },
+      {
+        method: "POST",
+        path: "/api/agent/knowledge/mitre-atlas/search",
+        description: "Semantic search across ATLAS techniques + case studies.",
+      },
+    ],
+    howToTest: [
+      "Open /knowledge. The mitre-atlas card shows 227 entries.",
+      "Search 'manipulate an LLM with a crafted prompt' — AML.T0051 (LLM Prompt Injection) ranks at the top.",
+      "Filter or browse to a case study (AML.CS####) — its summary + step-by-step attack procedure render.",
+      "Open an AML technique that maps to ATT&CK — the Enterprise mapping is shown.",
+    ],
+    expectedResult:
+      "mitre-atlas returns AI-specific techniques and real incident case studies; prompt-injection queries surface AML.T0051. Like the other MITRE KBs, it loaded at boot with zero Vertex calls (embeddings baked in).",
+    verifyVia: [
+      "GET /api/agent/knowledge → mitre-atlas listed with doc_count 227",
+      "Search 'prompt injection' → AML.T0051 in top hits",
+      "A case-study doc (category=case-study) renders its procedure steps",
+    ],
+    related: ["mitre-enterprise-search", "knowledge-browse"],
+    components: ["knowledge", "mcp"],
+  },
+
+  {
     id: "skills-page-toggle",
     category: "ops",
     title: "Browse and toggle a skill",

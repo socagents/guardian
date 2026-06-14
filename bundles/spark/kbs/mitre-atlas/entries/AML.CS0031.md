@@ -1,0 +1,45 @@
+---
+id: AML.CS0031
+title: Malicious Models on Hugging Face
+category: case-study
+tags:
+- ai
+- atlas
+- case-study
+- incident
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+incident_date: '2025-02-25'
+embedding_model: text-embedding-004
+embedding: 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
+---
+# AML.CS0031 — Malicious Models on Hugging Face
+
+**Target:** Hugging Face users  ·  **Actor:** Unknown  ·  **Date:** 2025-02-25
+
+## Summary
+
+Researchers at ReversingLabs have identified malicious models containing embedded malware hosted on the Hugging Face model repository. The models were found to execute reverse shells when loaded, which grants the threat actor command and control capabilities on the victim's system. Hugging Face uses Picklescan to scan models for malicious code, however these models were not flagged as malicious. The researchers discovered that the model files were seemingly purposefully corrupted in a way that the malicious payload is executed before the model ultimately fails to de-serialize fully. Picklescan relied on being able to fully de-serialize the model.
+
+Since becoming aware of this issue, Hugging Face has removed the models and has made changes to Picklescan to catch this particular attack. However, pickle files are fundamentally unsafe as they allow for arbitrary code execution, and there may be other types of malicious pickles that Picklescan cannot detect.
+
+## Procedure (attack chain)
+
+- **AML.TA0001 / AML.T0018.002** — The adversary embedded malware into an AI model stored in a pickle file. The malware was designed to execute when the model is loaded by a user.
+
+ReversingLabs found two instances of this on Hugging Face during their research.
+- **AML.TA0003 / AML.T0058** — The adversary uploaded the model to Hugging Face.
+
+In both instances observed by the ReversingLab, the malicious models did not make any attempt to mimic a popular legitimate model.
+- **AML.TA0007 / AML.T0076** — The adversary evaded detection by [Picklescan](https://github.com/mmaitre314/picklescan), which Hugging Face uses to flag malicious models. This occurred because the model could not be fully deserialized.
+
+In their analysis, the ReversingLabs researchers found that the malicious payload was still executed.
+- **AML.TA0004 / AML.T0010** — Because the models were successfully uploaded to Hugging Face, a user relying on this model repository would have their supply chain compromised.
+- **AML.TA0005 / AML.T0011.000** — If a user loaded the malicious model, the adversary's malicious payload is executed.
+- **AML.TA0014 / AML.T0072** — The malicious payload was a reverse shell set to connect to a hardcoded IP address.
+
+## References
+
+- Malicious ML models discovered on Hugging Face platform — https://www.reversinglabs.com/blog/rl-identifies-malware-ml-model-hosted-on-hugging-face?&web_view=true
+

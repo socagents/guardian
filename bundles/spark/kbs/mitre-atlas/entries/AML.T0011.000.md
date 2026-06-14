@@ -1,0 +1,47 @@
+---
+id: AML.T0011.000
+title: Unsafe AI Artifacts
+category: attack-technique
+tags:
+- ai
+- atlas
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+is_subtechnique: true
+parent_id: AML.T0011
+embedding_model: text-embedding-004
+embedding: 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
+---
+# AML.T0011.000 — Unsafe AI Artifacts
+
+**Sub-technique of:** AML.T0011 (User Execution)
+
+## Description
+
+Adversaries may develop unsafe AI artifacts that when executed have a deleterious effect.
+The adversary can use this technique to establish persistent access to systems.
+These models may be introduced via a AI Supply Chain Compromise.
+
+Serialization of models is a popular technique for model storage, transfer, and loading.
+However, this format without proper checking presents an opportunity for code execution.
+
+## Mitigations
+
+- **Restrict Library Loading** (AML.M0011): Prevent abuse of library loading mechanisms in the operating system and software to load untrusted code by configuring appropriate library loading mechanisms and investigating potential vulnerable software.
+
+File formats such as pickle files that are commonly used to store AI models can contain exploits that allow for loading of malicious libraries.
+- **Code Signing** (AML.M0013): Enforce binary and application integrity with digital signature verification to prevent untrusted code from executing. Adversaries can embed malicious code in AI software or models. Developers should also cryptographically sign SBOM and AIBOM components that track model or data provenance. Enforcement of code signing can prevent the compromise of the AI supply chain and prevent execution of malicious code.
+- **Verify AI Artifacts** (AML.M0014): Verify the cryptographic checksum of all AI artifacts to verify that the file was not modified by an attacker.
+- **Vulnerability Scanning** (AML.M0016): Vulnerability scanning is used to find potentially exploitable software vulnerabilities to remediate them.
+
+File formats such as pickle files that are commonly used to store AI models can contain exploits that allow for arbitrary code execution.
+These files should be scanned for potentially unsafe calls, which could be used to execute code, create new processes, or establish networking capabilities.
+Adversaries may embed malicious code in model corrupt model files, so scanners should be capable of working with models that cannot be fully de-serialized.
+Model artifacts, downstream products produced by models, and external software dependencies should be scanned for known vulnerabilities.
+- **User Training** (AML.M0018): Educate AI model developers to on AI supply chain risks and potentially malicious AI artifacts.
+Educate users on how to identify deepfakes and phishing attempts.
+- **AI Bill of Materials** (AML.M0023): An AI Bill of Materials (AI BOM) contains a full listing of artifacts and resources that were used in building the AI. The AI BOM can help mitigate supply chain risks and enable rapid response to reported vulnerabilities.
+
+This can include maintaining dataset provenance, i.e. a detailed history of datasets used for AI applications. The history can include information about the dataset source as well as well as a complete record of any modifications.
+

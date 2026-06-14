@@ -1,0 +1,46 @@
+---
+id: AML.CS0006
+title: ClearviewAI Misconfiguration
+category: case-study
+tags:
+- ai
+- atlas
+- case-study
+- incident
+ecosystem: AI
+framework: mitre-atlas
+framework_version: 5.6.0
+incident_date: '2020-04-16'
+embedding_model: text-embedding-004
+embedding: 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
+---
+# AML.CS0006 — ClearviewAI Misconfiguration
+
+**Target:** Clearview AI facial recognition tool  ·  **Actor:** Researchers at spiderSilk  ·  **Date:** 2020-04-16
+
+## Summary
+
+Clearview AI makes a facial recognition tool that searches publicly available photos for matches.  This tool has been used for investigative purposes by law enforcement agencies and other parties.
+
+Clearview AI's source code repository, though password protected, was misconfigured to allow an arbitrary user to register an account.
+This allowed an external researcher to gain access to a private code repository that contained Clearview AI production credentials, keys to cloud storage buckets containing 70K video samples, and copies of its applications and Slack tokens.
+With access to training data, a bad actor has the ability to cause an arbitrary misclassification in the deployed model.
+These kinds of attacks illustrate that any attempt to secure ML system should be on top of "traditional" good cybersecurity hygiene such as locking down the system with least privileges, multi-factor authentication and monitoring and auditing.
+
+## Procedure (attack chain)
+
+- **AML.TA0003 / AML.T0021** — A security researcher gained initial access to Clearview AI's private code repository via a misconfigured server setting that allowed an arbitrary user to register a valid account.
+- **AML.TA0009 / AML.T0036** — The private code repository contained credentials which were used to access AWS S3 cloud storage buckets, leading to the discovery of assets for the facial recognition tool, including:
+- Released desktop and mobile applications
+- Pre-release applications featuring new capabilities
+- Slack access tokens
+- Raw videos and other data
+- **AML.TA0003 / AML.T0002** — Adversaries could have downloaded training data and gleaned details about software, models, and capabilities from the source code and decompiled application binaries.
+- **AML.TA0011 / AML.T0031** — As a result, future application releases could have been compromised, causing degraded or malicious facial recognition capabilities.
+
+## References
+
+- TechCrunch Article, "Security lapse exposed Clearview AI source code" — https://techcrunch.com/2020/04/16/clearview-source-code-lapse/
+- Gizmodo Article, "We Found Clearview AI's Shady Face Recognition App" — https://gizmodo.com/we-found-clearview-ais-shady-face-recognition-app-1841961772
+- New York Times Article, "The Secretive Company That Might End Privacy as We Know It" — https://www.nytimes.com/2020/01/18/technology/clearview-privacy-facial-recognition.html
+
