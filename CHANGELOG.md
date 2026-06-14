@@ -20,6 +20,7 @@ Rounds out the MITRE ATT&CK matrix family with the **ICS** (OT / Industrial Cont
 - **`mitre-attack-mobile` KB — 124 docs** (77 techniques + 47 sub) — the ATT&CK for Mobile matrix (Android/iOS).
 - Both from ATT&CK STIX v19.1 via the same `gen_mitre.py --domain ics|mobile` generator; embeddings pre-computed (boot with zero Vertex calls); MITRE attribution bundled.
 - **Always loaded** alongside the other KBs (operator decision). An IT-only investigation scopes to `mitre-attack-enterprise` or filters by the `ecosystem` tag so OT/mobile techniques don't add noise.
+- Also wired the **cross-KB search HTTP proxy** (`POST /api/agent/knowledge/search` → MCP `/api/v1/kbs/search`) so "search every loaded KB at once" is reachable over HTTP, mirroring the MCP surface (surfaced during the full-KB smoke).
 
 ### Files
 
