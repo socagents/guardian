@@ -5693,6 +5693,22 @@ function KnowledgePipeline() {
  (or a connector wrapper over one) would call.
  </p>
  </SubSection>
+ <SubSection icon="label" title="Label faceting (v0.2.20)">
+ <p>
+ Beyond <Code>category</Code>, each doc&apos;s front-matter{" "}
+ <Code>tags</Code> (tactic, platform, product, investigation-type,
+ …) are indexed into a normalized <Code>kb_doc_tags</Code> table at
+ upsert. <Code>list_docs</Code>, <Code>search</Code>, and{" "}
+ <Code>knowledge_search</Code> accept a <Code>tags[]</Code> filter
+ (AND semantics — a doc must carry every requested tag), and{" "}
+ <Code>GET /api/v1/kbs/&#123;name&#125;/tags</Code> returns the tag
+ facets + counts that drive the <Code>/knowledge/&#123;name&#125;</Code>{" "}
+ filter chips. Tags re-sync from front-matter on every upsert
+ (including the unchanged path), so the index backfills for docs
+ indexed before the table existed. Search also gained an{" "}
+ <Code>offset</Code> for pagination.
+ </p>
+ </SubSection>
  <SubSection icon="science" title="Why bundle-shipped (not runtime CRUD)">
  <p>
  KBs encode <em>curated</em> reference content reviewed before

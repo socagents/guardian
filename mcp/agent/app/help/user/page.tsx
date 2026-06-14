@@ -1915,7 +1915,13 @@ Networks documentation and returning evidence-backed, cited answers.
               schema-validated, semantically searchable reference content.
               KBs differ from memory in three ways: read-only at the agent
               surface, sourced from the bundle (not chat), and indexed at
-              boot rather than on-write.
+              boot rather than on-write. Open a KB and use the{" "}
+              <strong>tag filter chips</strong> (v0.2.20) to narrow by
+              tactic, platform, or any label — e.g. on{" "}
+              <Code>mitre-attack-enterprise</Code>, click{" "}
+              <Term>credential-access</Term> + <Term>windows</Term> to see
+              only Windows credential-access techniques; both browse and
+              semantic search respect the selected tags.
             </p>
 
             <SubSection icon="library_books" title="Bundled KB — SOC Investigation (v0.2.16)">

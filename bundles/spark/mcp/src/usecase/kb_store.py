@@ -172,10 +172,84 @@ class SqliteKnowledgeBase:
                 "CREATE INDEX IF NOT EXISTS idx_kb_category "
                 "ON kb_documents(kb_name, category)"
             )
+            # v0.2.20 — normalized tag index so arbitrary labels (tactic,
+            # platform, product, investigation-type, …) are UI-filterable.
+            # Only `category` was filterable before; large KBs (full ATT&CK,
+            # SOAR playbooks) need richer faceting. Tags are re-synced from
+            # each doc's frontmatter on every upsert (incl. the unchanged
+            # path), so adding this table to an existing kb.db backfills on
+            # the next boot.
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS kb_doc_tags (
+                    kb_name TEXT NOT NULL,
+                    doc_id  TEXT NOT NULL,
+                    tag     TEXT NOT NULL,
+                    UNIQUE(kb_name, doc_id, tag)
+                )
+                """
+            )
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS idx_kb_doc_tags_tag "
+                "ON kb_doc_tags(kb_name, tag)"
+            )
 
     @staticmethod
     def _now_iso() -> str:
         return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    @staticmethod
+    def _normalize_tags(metadata: dict[str, Any] | None) -> list[str]:
+        """Extract a doc's filterable tags from its metadata `tags` list,
+        lowercased + de-duplicated. Non-list / non-str entries are ignored."""
+        raw = (metadata or {}).get("tags")
+        if not isinstance(raw, list):
+            return []
+        out: list[str] = []
+        seen: set[str] = set()
+        for t in raw:
+            if isinstance(t, str) and t.strip():
+                tag = t.strip().lower()
+                if tag not in seen:
+                    seen.add(tag)
+                    out.append(tag)
+        return out
+
+    def _sync_tags(self, c: Any, kb_name: str, doc_id: str, metadata: dict[str, Any]) -> None:
+        """Replace a doc's tag rows from its current metadata. Uses the
+        caller's cursor `c` (no re-lock) so it can run inside an existing
+        transaction. Cheap enough to run on every upsert, which keeps the
+        index consistent AND backfills docs indexed before the table existed."""
+        c.execute("DELETE FROM kb_doc_tags WHERE kb_name = ? AND doc_id = ?", (kb_name, doc_id))
+        for tag in self._normalize_tags(metadata):
+            c.execute(
+                "INSERT OR IGNORE INTO kb_doc_tags(kb_name, doc_id, tag) VALUES (?, ?, ?)",
+                (kb_name, doc_id, tag),
+            )
+
+    @staticmethod
+    def _tag_clause(tags: list[str]) -> tuple[str, list[Any]]:
+        """SQL fragment (+ params) requiring a kb_documents row to carry ALL
+        of `tags` (AND semantics — filter chips narrow the set). References
+        kb_documents.kb_name/doc_id, so it slots into any WHERE on that table."""
+        placeholders = ",".join("?" for _ in tags)
+        clause = (
+            "(SELECT COUNT(DISTINCT t.tag) FROM kb_doc_tags t "
+            "WHERE t.kb_name = kb_documents.kb_name AND t.doc_id = kb_documents.doc_id "
+            f"AND t.tag IN ({placeholders})) = ?"
+        )
+        return clause, [*tags, len(tags)]
+
+    def kb_tags(self, kb_name: str, *, limit: int = 200) -> list[dict[str, Any]]:
+        """Distinct tags in a KB with per-tag doc counts, for UI filter chips.
+        Ordered by count desc then tag asc."""
+        with self._lock, self._conn() as c:
+            rows = c.execute(
+                "SELECT tag, COUNT(*) AS n FROM kb_doc_tags WHERE kb_name = ? "
+                "GROUP BY tag ORDER BY n DESC, tag ASC LIMIT ?",
+                (kb_name, max(1, min(limit, 1000))),
+            ).fetchall()
+        return [{"tag": r["tag"], "count": int(r["n"])} for r in rows]
 
     @staticmethod
     def _pack(vec: list[float]) -> bytes:
@@ -270,7 +344,9 @@ class SqliteKnowledgeBase:
                 (kb_name, doc_id),
             ).fetchone()
             if existing and existing["source_hash"] == source_hash:
-                # Nothing to do — content unchanged.
+                # Content unchanged — but re-sync tags (cheap; backfills the
+                # v0.2.20 kb_doc_tags index for docs indexed before it existed).
+                self._sync_tags(c, kb_name, doc_id, meta_dict)
                 return self._row_to_doc(existing), "unchanged"
 
         # Re-embed only when content actually changed (or doc is new) —
@@ -309,6 +385,7 @@ class SqliteKnowledgeBase:
                      embedding_blob, now),
                 )
                 action = "insert"
+            self._sync_tags(c, kb_name, doc_id, meta_dict)
 
         from usecase.audit_log import ACTION_KB_DOC_INDEXED, record_event
         record_event(
@@ -334,6 +411,10 @@ class SqliteKnowledgeBase:
         with self._lock, self._conn() as c:
             cur = c.execute(
                 "DELETE FROM kb_documents WHERE kb_name = ? AND doc_id = ?",
+                (kb_name, doc_id),
+            )
+            c.execute(
+                "DELETE FROM kb_doc_tags WHERE kb_name = ? AND doc_id = ?",
                 (kb_name, doc_id),
             )
         if cur.rowcount > 0:
@@ -388,6 +469,7 @@ class SqliteKnowledgeBase:
         kb_name: str,
         *,
         category: str | None = None,
+        tags: list[str] | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[KbDocument]:
@@ -400,6 +482,10 @@ class SqliteKnowledgeBase:
         if category:
             clauses.append("category = ?")
             params.append(category)
+        if tags:  # v0.2.20 — AND-filter by arbitrary tags
+            clause, tparams = self._tag_clause([t.lower() for t in tags])
+            clauses.append(clause)
+            params.extend(tparams)
         params.extend([max(1, min(limit, 2000)), max(0, offset)])
         with self._lock, self._conn() as c:
             rows = c.execute(
@@ -414,6 +500,7 @@ class SqliteKnowledgeBase:
         kb_name: str,
         *,
         category: str | None = None,
+        tags: list[str] | None = None,
     ) -> int:
         """v0.7.1: total-count helper for paginated responses.
 
@@ -421,12 +508,17 @@ class SqliteKnowledgeBase:
         beyond the returned slice. Returning just `len(docs)` (the slice
         size) silently hides the true total — operators see 500 of 787
         and don't know what they're missing. This helper feeds the
-        `total_count` field in the API response.
+        `total_count` field in the API response. v0.2.20: respects `tags`
+        so the count matches a filtered list.
         """
         clauses, params = ["kb_name = ?"], [kb_name]
         if category:
             clauses.append("category = ?")
             params.append(category)
+        if tags:
+            clause, tparams = self._tag_clause([t.lower() for t in tags])
+            clauses.append(clause)
+            params.extend(tparams)
         with self._lock, self._conn() as c:
             row = c.execute(
                 f"SELECT COUNT(*) AS n FROM kb_documents WHERE {' AND '.join(clauses)}",
@@ -452,7 +544,9 @@ class SqliteKnowledgeBase:
         *,
         kb_name: str | None = None,
         category: str | None = None,
+        tags: list[str] | None = None,
         limit: int = 5,
+        offset: int = 0,
         min_score: float = 0.0,
     ) -> list[tuple[KbDocument, float]]:
         """Cosine similarity search across one or all KBs.
@@ -472,6 +566,10 @@ class SqliteKnowledgeBase:
         if category:
             clauses.append("category = ?")
             params.append(category)
+        if tags:  # v0.2.20 — AND-filter candidates by tags before scoring
+            clause, tparams = self._tag_clause([t.lower() for t in tags])
+            clauses.append(clause)
+            params.extend(tparams)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         with self._lock, self._conn() as c:
             rows = c.execute(
@@ -491,7 +589,8 @@ class SqliteKnowledgeBase:
             scored.append((self._row_to_doc(row), score))
 
         scored.sort(key=lambda x: x[1], reverse=True)
-        scored = scored[: max(1, min(limit, 100))]
+        _start = max(0, offset)
+        scored = scored[_start : _start + max(1, min(limit, 100))]
 
         from usecase.audit_log import ACTION_KB_SEARCHED, record_event
         record_event(

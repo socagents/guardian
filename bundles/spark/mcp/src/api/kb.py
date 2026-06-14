@@ -84,9 +84,12 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
         except ValueError:
             limit, offset = 100, 0
         category = q.get("category") or None
+        # v0.2.20 — optional `tags` filter (comma-separated, AND semantics)
+        tags = [t for t in (q.get("tags") or "").split(",") if t.strip()] or None
         docs = kb.list_docs(
             name,
             category=category,
+            tags=tags,
             limit=limit,
             offset=offset,
         )
@@ -94,7 +97,7 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
         # correctly. Pre-v0.7.1 the response had only `count` (slice
         # size) which silently hid the true total — a 787-row KB
         # returned 500 with no signal of the 287 remaining rows.
-        total = kb.count_docs(name, category=category)
+        total = kb.count_docs(name, category=category, tags=tags)
         return JSONResponse(
             {
                 # Default to NOT including content here — the list view
@@ -108,6 +111,18 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
                 "has_more": (offset + len(docs)) < total,
             }
         )
+
+    @mcp.custom_route(
+        "/api/v1/kbs/{name}/tags", methods=["GET"], include_in_schema=False
+    )
+    async def list_kb_tags(request: Request) -> JSONResponse:
+        """v0.2.20 — distinct tags in a KB with doc counts, for UI filter chips."""
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        name = request.path_params["name"]
+        if (resp := _kb_exists_or_404(name)) is not None:
+            return resp
+        return JSONResponse({"tags": kb.kb_tags(name)})
 
     @mcp.custom_route(
         "/api/v1/kbs/{name}/docs/{doc_id}",
@@ -156,11 +171,15 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
                 {"error": "'query' is required (non-empty string)"},
                 status_code=400,
             )
+        _tags = body.get("tags")
+        _tags = [t for t in _tags if isinstance(t, str)] if isinstance(_tags, list) else None
         hits = kb.search(
             query,
             kb_name=name,
             category=body.get("category") or None,
+            tags=_tags or None,
             limit=int(body.get("limit") or 5),
+            offset=int(body.get("offset") or 0),
             min_score=float(body.get("min_score") or 0.0),
         )
         return JSONResponse(
@@ -192,11 +211,15 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
                 {"error": "'query' is required (non-empty string)"},
                 status_code=400,
             )
+        _tags = body.get("tags")
+        _tags = [t for t in _tags if isinstance(t, str)] if isinstance(_tags, list) else None
         hits = kb.search(
             query,
             kb_name=body.get("kb_name") or None,
             category=body.get("category") or None,
+            tags=_tags or None,
             limit=int(body.get("limit") or 5),
+            offset=int(body.get("offset") or 0),
             min_score=float(body.get("min_score") or 0.0),
         )
         return JSONResponse(

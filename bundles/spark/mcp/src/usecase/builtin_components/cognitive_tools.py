@@ -179,15 +179,22 @@ def knowledge_search(
     query: str,
     kb_name: str | None = None,
     category: str | None = None,
+    tags: list[str] | None = None,
     limit: int = 5,
 ) -> dict[str, Any]:
     """Semantic search over the bundle's knowledge bases.
 
     Args:
         query: free-form text. Embedded and matched by cosine similarity.
-        kb_name: restrict to a single KB (e.g. "cortex-docs"). When
-            null, search every loaded KB.
-        category: restrict to one schema category (e.g. "investigation").
+        kb_name: restrict to a single KB (e.g. "mitre-attack-enterprise").
+            When null, search every loaded KB.
+        category: restrict to one schema category (e.g. "attack-technique",
+            "playbook", "case-study").
+        tags: restrict to docs carrying ALL of these labels (AND semantics) —
+            e.g. ["execution", "windows"] on mitre-attack-enterprise, or
+            ["phishing"] on a playbook KB. Tags are the per-doc frontmatter
+            labels (tactic / platform / product / investigation-type). Use
+            `knowledge_list` first if unsure what tags a KB offers.
         limit: max results (1-100). Default 5.
 
     Returns {results: [...], count}. Each result includes the doc's
@@ -200,7 +207,7 @@ def knowledge_search(
     if kb is None:
         return {"error": "knowledge base not initialized on this MCP runtime"}
     try:
-        hits = kb.search(query, kb_name=kb_name, category=category, limit=limit)
+        hits = kb.search(query, kb_name=kb_name, category=category, tags=tags, limit=limit)
     except Exception as exc:
         return {"error": _friendly_embed_error(exc, "knowledge_search")}
     return {

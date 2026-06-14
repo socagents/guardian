@@ -10,6 +10,28 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.20] (unreleased) — *Filter knowledge bases by tag (label faceting)*
+
+KBs are now **filterable by any label**, not just `category`. Open a KB on `/knowledge` and click the **tag filter chips** — tactic, platform, product, investigation-type — to narrow the entries; both browse and semantic search respect the selection. This makes the big MITRE KBs navigable (e.g. show only Windows credential-access techniques) and is the substrate the SOAR-playbooks KB's dual-labels will use.
+
+### What ships
+
+- **`kb_doc_tags` index** — each doc's front-matter `tags` are normalized into a queryable table at upsert (re-synced on every load, so it backfills existing KBs). `list_docs` / `search` / `knowledge_search` accept a `tags[]` filter (AND semantics — a doc must carry every selected tag).
+- **`GET /api/v1/kbs/{name}/tags`** — tag facets + per-tag counts, driving the UI chips.
+- **`/knowledge/{name}` filter chips** — click tags to AND-filter the entries + search; "clear" resets. Chip cloud is server-side so it's complete on large KBs.
+- **Search pagination** — `search` gained an `offset` for paging through results.
+- The agent's `knowledge_search` tool gained a `tags` arg so it can scope a search by label (e.g. tactic).
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/kb_store.py` — `kb_doc_tags` table + `_sync_tags`/`_tag_clause`/`kb_tags`; `tags`/`offset` on `list_docs`/`count_docs`/`search`.
+- `bundles/spark/mcp/src/api/kb.py` — `tags` on docs+search routes; new `/tags` route.
+- `bundles/spark/mcp/src/usecase/builtin_components/cognitive_tools.py` — `knowledge_search(tags=...)`.
+- `mcp/agent/app/knowledge/[name]/page.tsx` + `app/api/agent/knowledge/[name]/tags/route.ts` — filter-chip UI + proxy.
+- `bundles/spark/mcp/tests/test_kb_tags.py` — 7 tests (AND filter, backfill, retag, remove, pagination).
+
+---
+
 ## [v0.2.19] (unreleased) — *MITRE ATLAS knowledge base (AI / ML security)*
 
 Guardian can now ground investigations of **attacks on AI systems** — the bundle ships **MITRE ATLAS**, the ATT&CK-style framework for adversarial threats to AI/ML (prompt injection, model evasion, data poisoning, model theft, agent hijacking). Strategically apt: Guardian is itself an AI agent, and customers increasingly run AI/LLM workloads.

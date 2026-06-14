@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.20",
+    date: "2026-06-14",
+    title: "Filter knowledge bases by tag — tactic, platform, and more.",
+    highlights: [
+      "Open any KB on /knowledge and click tag filter chips to narrow the entries (e.g. Windows credential-access techniques).",
+      "Both browsing and semantic search respect the selected tags (AND filter).",
+      "Big MITRE KBs are now easy to navigate by tactic/platform; the substrate also powers the upcoming playbook KB's product/use-case labels.",
+      "The agent's knowledge_search can now scope a search by tag too.",
+    ],
+  },
+  {
     version: "0.2.19",
     date: "2026-06-14",
     title: "MITRE ATLAS (AI security) is now a built-in knowledge base.",

@@ -43,6 +43,11 @@ interface SearchResponse {
   count: number;
 }
 
+interface TagFacet {
+  tag: string;
+  count: number;
+}
+
 const glassStyle = {
   background: "var(--glass-bg-strong)",
   backdropFilter: "blur(12px)",
@@ -76,6 +81,9 @@ export default function KbDetailPage({
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [activeDoc, setActiveDoc] = useState<KbDoc | null>(null);
   const [activeDocLoading, setActiveDocLoading] = useState(false);
+  // v0.2.20 — server-side tag facets + AND-filter selection
+  const [tagFacets, setTagFacets] = useState<TagFacet[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // Search tab state
   const [searchQuery, setSearchQuery] = useState("");
@@ -90,6 +98,7 @@ export default function KbDetailPage({
     try {
       const params = new URLSearchParams({ limit: "500" });
       if (categoryFilter) params.set("category", categoryFilter);
+      if (selectedTags.length) params.set("tags", selectedTags.join(","));
       const r = await fetch(
         `/api/agent/knowledge/${encodeURIComponent(name)}/docs?${params}`,
         { cache: "no-store" },
@@ -102,11 +111,40 @@ export default function KbDetailPage({
     } finally {
       setLoadingDocs(false);
     }
-  }, [name, categoryFilter]);
+  }, [name, categoryFilter, selectedTags]);
 
   useEffect(() => {
     void refreshDocs();
   }, [refreshDocs]);
+
+  // v0.2.20 — load the KB's tag facets (server-side, across ALL docs) for
+  // filter chips. Separate from the 500-doc browse page so the chip cloud is
+  // complete even on large KBs (full ATT&CK is 697 docs).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(
+          `/api/agent/knowledge/${encodeURIComponent(name)}/tags`,
+          { cache: "no-store" },
+        );
+        if (!r.ok) return;
+        const data = (await r.json()) as { tags: TagFacet[] };
+        if (!cancelled) setTagFacets(data.tags ?? []);
+      } catch {
+        /* tags are optional polish — ignore fetch errors */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [name]);
+
+  const toggleTag = useCallback((tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  }, []);
 
   const openDoc = useCallback(
     async (doc: KbDoc) => {
@@ -144,7 +182,11 @@ export default function KbDetailPage({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: q, limit: searchLimit }),
+          body: JSON.stringify({
+            query: q,
+            limit: searchLimit,
+            ...(selectedTags.length ? { tags: selectedTags } : {}),
+          }),
         },
       );
       if (!r.ok) throw new Error(`search ${r.status}`);
@@ -156,7 +198,7 @@ export default function KbDetailPage({
     } finally {
       setSearching(false);
     }
-  }, [name, searchQuery, searchLimit]);
+  }, [name, searchQuery, searchLimit, selectedTags]);
 
   // Categories surface as filter chips. Derived from loaded docs so
   // we don't need a separate /categories endpoint.
@@ -313,6 +355,59 @@ export default function KbDetailPage({
                 showing {filteredDocs.length} / {docs.length}
               </div>
             </div>
+
+            {/* v0.2.20 — tag filter chips (server-side AND filter) */}
+            {tagFacets.length > 0 ? (
+              <div className="rounded-2xl p-4 space-y-2" style={glassStyle}>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base text-on-surface-variant/60">
+                    label
+                  </span>
+                  <span className="text-xs text-on-surface-variant/70">
+                    Filter by tag
+                    {selectedTags.length
+                      ? ` · ${selectedTags.length} selected (docs must match all)`
+                      : ""}
+                  </span>
+                  {selectedTags.length ? (
+                    <button
+                      onClick={() => setSelectedTags([])}
+                      className="ml-1 text-[11px] text-primary hover:underline"
+                    >
+                      clear
+                    </button>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {tagFacets
+                    .filter((t) => selectedTags.includes(t.tag))
+                    .concat(
+                      tagFacets
+                        .filter((t) => !selectedTags.includes(t.tag))
+                        .slice(0, 28),
+                    )
+                    .map((t) => {
+                      const on = selectedTags.includes(t.tag);
+                      return (
+                        <button
+                          key={t.tag}
+                          onClick={() => toggleTag(t.tag)}
+                          className={
+                            "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors " +
+                            (on
+                              ? "bg-primary-container text-on-primary-container"
+                              : "text-on-surface-variant hover:text-on-surface")
+                          }
+                          style={on ? undefined : glassStyleSubtle}
+                        >
+                          {t.tag}{" "}
+                          <span className="opacity-50">{t.count}</span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            ) : null}
 
             {/* Entry list */}
             {loadingDocs ? (
