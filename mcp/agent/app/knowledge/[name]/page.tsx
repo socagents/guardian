@@ -36,6 +36,11 @@ interface KbDoc {
 interface DocsResponse {
   documents: KbDoc[];
   count: number;
+  // v0.2.25 — the MCP (v0.7.1) returns the true total + a has_more flag
+  // so callers can paginate. Pre-v0.2.25 the page ignored these and
+  // showed the capped slice length (500) as the entry count.
+  total_count?: number;
+  has_more?: boolean;
 }
 
 interface SearchResponse {
@@ -62,6 +67,27 @@ const glassStyleSubtle = {
 
 type TabId = "entries" | "search";
 
+// v0.2.25 — browse a page at a time; "Load more" appends the next page.
+// The list response omits `content` so a page is cheap to fetch.
+const PAGE_SIZE = 500;
+
+/**
+ * v0.2.25 — MITRE ATT&CK STIX descriptions embed literal inline HTML
+ * (`<code>…</code>`, `<br>`) that react-markdown renders as visible text
+ * (e.g. `<code>procdump …</code>`). Convert the handful of tags MITRE
+ * actually uses to their markdown equivalents at DISPLAY time only — the
+ * stored content (and the embedding computed over it) is untouched.
+ */
+function normalizeKbHtml(md: string): string {
+  return md
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<code>([\s\S]*?)<\/code>/gi, (_m, code) => {
+      const c = String(code).trim();
+      // Multi-line snippets become a fenced block; single-line stays inline.
+      return c.includes("\n") ? `\n\`\`\`\n${c}\n\`\`\`\n` : `\`${c}\``;
+    });
+}
+
 export default function KbDetailPage({
   params,
 }: {
@@ -76,7 +102,9 @@ export default function KbDetailPage({
 
   // Entries tab state
   const [docs, setDocs] = useState<KbDoc[]>([]);
+  const [total, setTotal] = useState(0); // v0.2.25 — true count for the active filter
   const [loadingDocs, setLoadingDocs] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filterText, setFilterText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [activeDoc, setActiveDoc] = useState<KbDoc | null>(null);
@@ -96,7 +124,10 @@ export default function KbDetailPage({
     setLoadingDocs(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ limit: "500" });
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: "0",
+      });
       if (categoryFilter) params.set("category", categoryFilter);
       if (selectedTags.length) params.set("tags", selectedTags.join(","));
       const r = await fetch(
@@ -105,13 +136,44 @@ export default function KbDetailPage({
       );
       if (!r.ok) throw new Error(`fetch ${r.status}`);
       const data = (await r.json()) as DocsResponse;
-      setDocs(data.documents ?? []);
+      const documents = data.documents ?? [];
+      setDocs(documents);
+      // v0.2.25 — trust the MCP's server-side total (filter-aware); fall
+      // back to the slice length only if the field is absent.
+      setTotal(data.total_count ?? documents.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoadingDocs(false);
     }
   }, [name, categoryFilter, selectedTags]);
+
+  // v0.2.25 — append the next page. Offset is the current loaded count so
+  // it stays correct under the active category/tag filter.
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(docs.length),
+      });
+      if (categoryFilter) params.set("category", categoryFilter);
+      if (selectedTags.length) params.set("tags", selectedTags.join(","));
+      const r = await fetch(
+        `/api/agent/knowledge/${encodeURIComponent(name)}/docs?${params}`,
+        { cache: "no-store" },
+      );
+      if (!r.ok) throw new Error(`fetch ${r.status}`);
+      const data = (await r.json()) as DocsResponse;
+      setDocs((prev) => [...prev, ...(data.documents ?? [])]);
+      if (typeof data.total_count === "number") setTotal(data.total_count);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [name, categoryFilter, selectedTags, docs.length]);
 
   useEffect(() => {
     void refreshDocs();
@@ -253,7 +315,7 @@ export default function KbDetailPage({
                   {name}
                 </h1>
                 <p className="text-xs text-on-surface-variant/60 font-mono">
-                  {docs.length} {docs.length === 1 ? "entry" : "entries"}
+                  {total} {total === 1 ? "entry" : "entries"}
                   {" · "}embedded with text-embedding-004
                 </p>
               </div>
@@ -352,7 +414,9 @@ export default function KbDetailPage({
                 </div>
               ) : null}
               <div className="text-xs text-on-surface-variant/60 font-mono">
-                showing {filteredDocs.length} / {docs.length}
+                {filterText.trim()
+                  ? `showing ${filteredDocs.length} of ${docs.length} loaded`
+                  : `showing ${docs.length} / ${total}`}
               </div>
             </div>
 
@@ -456,6 +520,24 @@ export default function KbDetailPage({
                 ))}
               </div>
             )}
+
+            {/* v0.2.25 — Load more (offset pagination). Hidden while a
+                client-side text filter is active, since it filters only the
+                already-loaded rows. */}
+            {!loadingDocs && !filterText.trim() && docs.length < total ? (
+              <div className="flex justify-center pt-1">
+                <button
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50"
+                  style={glassStyle}
+                >
+                  {loadingMore
+                    ? "Loading…"
+                    : `Load more (${total - docs.length} remaining)`}
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -616,7 +698,7 @@ export default function KbDetailPage({
                   style={glassStyleSubtle}
                 >
                   <MarkdownContent>
-                    {activeDoc.content ?? "(no content)"}
+                    {normalizeKbHtml(activeDoc.content ?? "(no content)")}
                   </MarkdownContent>
                 </div>
               )}

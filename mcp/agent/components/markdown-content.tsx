@@ -31,6 +31,7 @@
  */
 
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
 import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
@@ -81,6 +82,10 @@ export function MarkdownContent({
   return (
     <div className={`${space} text-on-surface leading-relaxed`}>
       <ReactMarkdown
+        // v0.2.25 — GFM enables tables (the table/thead/th/td overrides
+        // below were dead before this), strikethrough, and autolinks.
+        // The agent frequently answers with comparison tables.
+        remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children: c }) => (
             <h1 className="text-base font-headline font-bold text-on-surface mb-2 pb-1 border-b border-white/5">

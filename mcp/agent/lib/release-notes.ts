@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.25",
+    date: "2026-06-14",
+    title: "Knowledge detail pages show the full entry count + render code and tables.",
+    highlights: [
+      "Large KBs now show their true entry count (mitre-attack-enterprise: 697, soar-playbooks: 798) with a Load more button to browse them all.",
+      "MITRE code snippets in entry bodies render as code blocks instead of raw <code> text.",
+      "Agent comparison tables now render as real tables in chat and the KB drawer (GitHub-flavored markdown).",
+    ],
+  },
+  {
     version: "0.2.24",
     date: "2026-06-14",
     title: "Playbook Builder — draft a Cortex XSOAR playbook from a use-case.",

@@ -1922,7 +1922,11 @@ Networks documentation and returning evidence-backed, cited answers.
               <Code>mitre-attack-enterprise</Code>, click{" "}
               <Term>credential-access</Term> + <Term>windows</Term> to see
               only Windows credential-access techniques; both browse and
-              semantic search respect the selected tags.
+              semantic search respect the selected tags. On large KBs the
+              header shows the full entry count and a <strong>Load more</strong>{" "}
+              button (v0.2.25) pages through every entry — e.g.{" "}
+              <Code>mitre-attack-enterprise</Code> is 697 entries,{" "}
+              <Code>soar-playbooks</Code> 798.
             </p>
 
             <SubSection icon="library_books" title="Bundled KB — SOC Investigation (v0.2.16)">

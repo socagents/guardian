@@ -10,6 +10,24 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.25] (unreleased) — *Knowledge detail page + markdown rendering fidelity*
+
+Three display-fidelity fixes surfaced during the v0.2.24 UI smoke. No KB regeneration, no storage change — purely how the existing content is fetched and rendered.
+
+### What ships
+
+- **Full entry count + browse on large KBs.** The KB detail page (`/knowledge/<name>`) now reads the true `total_count` the MCP already returns instead of the 500-row slice — so `mitre-attack-enterprise` reads **697 entries** (was "500") and `soar-playbooks` reads **798**. A **Load more** button pages through the rest. Search and tag/category filters already covered the full corpus.
+- **MITRE code snippets render as code.** ATT&CK descriptions embed literal `<code>…</code>` / `<br>` HTML that showed as raw `<code>` text in the entry drawer. They now render as code spans/blocks (display-time transform — the stored content + its embedding are untouched).
+- **Tables render as tables.** The shared markdown renderer (chat + KB drawer) now enables GitHub-flavored markdown, so the agent's comparison tables (e.g. `T1003.001` vs `T1003.002`) render as real tables instead of raw `|` pipes. Strikethrough + autolinks come along too.
+
+### Files
+
+- `mcp/agent/app/knowledge/[name]/page.tsx` — `total_count` wiring, Load-more pagination, `<code>`/`<br>` → markdown transform.
+- `mcp/agent/components/markdown-content.tsx` — `remark-gfm` plugin (activates the existing table overrides).
+- `mcp/agent/app/help/user/page.tsx` — note on browsing large KBs.
+
+---
+
 ## [v0.2.24] (unreleased) — *Playbook Builder — draft Cortex XSOAR playbooks from examples*
 
 The first *generative* use of the knowledge layer: a new **Playbook Builder** that drafts a Cortex XSOAR playbook from a plain-English use-case, grounded in the ~800 real playbooks in the `soar-playbooks` KB. The operator's flagged "the agent helps build playbooks" use case.
