@@ -2167,13 +2167,27 @@ Networks documentation and returning evidence-backed, cited answers.
                 grounded on.
               </p>
             </SubSection>
-            <SubSection icon="verified_user" title="It's a draft — you import it">
+            <SubSection icon="rocket_launch" title="Deploy + test-run (v0.2.26)">
               <p>
-                The builder <strong>never deploys to a tenant</strong>. The
-                output is a starting point: review it, import it into Cortex
-                XSOAR (Playbooks → Import), and test it in a playground before
-                production. The agent flags any assumptions (the trigger, the
-                product) and TODOs (a command to confirm for your tenant).
+                Once you have a draft, click <strong>Deploy + test-run</strong>{" "}
+                and confirm. Guardian <strong>imports</strong> the playbook into
+                your connected Cortex XSOAR tenant, creates a throwaway{" "}
+                <Code>[Guardian test]</Code> incident, <strong>runs</strong> the
+                playbook on it, shows you the <strong>outcome</strong> (which
+                tasks ran, any errors), and <strong>closes</strong> the test
+                incident. Every tenant write is approval-gated. The agent can do
+                the same if you just ask it to &quot;deploy and test-run this
+                playbook&quot;.
+              </p>
+              <p>
+                <strong>If auto-import isn&apos;t available</strong> (a Cortex 8
+                tenant without the Core REST API integration, where the API
+                doesn&apos;t expose playbook import), Guardian tells you so and
+                gives you the manual step — import the downloaded YAML via{" "}
+                <strong>Settings → Playbooks → Import</strong> (or enable the Core
+                REST API integration for one-click) — then runs the test once the
+                playbook exists. Direct one-click import works on XSOAR 6 and on
+                Cortex 8 with that integration.
               </p>
             </SubSection>
           </Section>

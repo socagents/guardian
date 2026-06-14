@@ -1752,7 +1752,30 @@ async def xsoar_import_playbook(
     files = {
         "file": (fname, playbook_yaml.encode("utf-8"), "application/octet-stream"),
     }
-    response = await fetcher.post_multipart("/playbook/import", files=files)
+    try:
+        response = await fetcher.post_multipart("/playbook/import", files=files)
+    except XSOARRequestError as exc:
+        # Cortex 8's public API gateway doesn't proxy /playbook/import (405),
+        # and v6 REST endpoints 303-redirect on Cortex 8. Either way the tenant
+        # has no DIRECT import path. Surface a structured, actionable signal so
+        # the skill + UI branch to guided manual import (or the operator enables
+        # the Core REST API integration for one-click) — rather than a raw HTTP
+        # error. Direct import works on XSOAR 6 and on Cortex 8 + Core REST API.
+        msg = str(exc)
+        _markers = ("405", "method not allowed", "redirect", "not served")
+        if any(m in msg.lower() for m in _markers):
+            return _err(
+                "Direct playbook import isn't available on this XSOAR tenant. "
+                "On Cortex 8 the public API doesn't expose /playbook/import — "
+                "either enable the Core REST API integration for one-click "
+                "import, or import the downloaded YAML manually via "
+                "Playbooks → Import. The test-run still works once the "
+                "playbook exists in the tenant.",
+                import_unavailable=True,
+                reason="import_endpoint_unavailable_on_tenant",
+                detail=msg,
+            )
+        raise
 
     # XSOAR returns the imported playbook object, or {data:[...]} for a bare
     # array body — normalize to the first playbook's id/name.

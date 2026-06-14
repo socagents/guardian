@@ -247,10 +247,14 @@ class _RecordingFetcher:
     """Stand-in for XSOARFetcher that records calls + returns canned data."""
 
     def __init__(self, post_reply: Optional[dict] = None,
-                 get_reply: Optional[dict] = None, is_v8: bool = False):
+                 get_reply: Optional[dict] = None, is_v8: bool = False,
+                 multipart_reply: Optional[dict] = None,
+                 multipart_exc: Optional[Exception] = None):
         self.post_reply = post_reply if post_reply is not None else {}
         self.get_reply = get_reply if get_reply is not None else {}
         self.is_v8 = is_v8
+        self.multipart_reply = multipart_reply
+        self.multipart_exc = multipart_exc
         self.calls: list[tuple[str, str, Any]] = []
 
     async def post(self, path, body=None, **kw):
@@ -260,6 +264,12 @@ class _RecordingFetcher:
     async def get(self, path, **kw):
         self.calls.append(("GET", path, kw.get("params")))
         return self.get_reply
+
+    async def post_multipart(self, path, files, **kw):
+        self.calls.append(("POST_MULTIPART", path, files))
+        if self.multipart_exc is not None:
+            raise self.multipart_exc
+        return self.multipart_reply if self.multipart_reply is not None else self.post_reply
 
 
 def _install_fetcher(monkeypatch, fetcher: _RecordingFetcher):
@@ -848,6 +858,7 @@ def test_all_exported_tools_are_callable():
         "xsoar_append_to_list",
         "xsoar_create_incident",
         "xsoar_run_playbook",
+        "xsoar_import_playbook",
     }
     assert set(connector.__all__) == expected
     for name in expected:
@@ -934,3 +945,59 @@ def test_list_integrations_include_commands_false_is_name_only(monkeypatch):
     assert out["total"] == 1
     assert "commands" not in out["integrations"][0]
     assert "command_count" not in out["integrations"][0]
+
+
+# ─── import_playbook (v0.2.26) ───────────────────────────────────────
+
+
+def test_import_playbook_success(monkeypatch):
+    rf = _RecordingFetcher(multipart_reply={"id": "pb-1", "name": "My PB"})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_import_playbook(playbook_yaml="id: x\nname: My PB\n"))
+    assert out["ok"] is True
+    assert out["playbook_id"] == "pb-1"
+    assert out["playbook_name"] == "My PB"
+    assert out["imported"] is True
+    method, path, files = rf.calls[0]
+    assert (method, path) == ("POST_MULTIPART", "/playbook/import")
+    assert "file" in files
+
+
+def test_import_playbook_normalizes_array_body(monkeypatch):
+    rf = _RecordingFetcher(multipart_reply={"data": [{"id": "pb-2", "name": "Arr PB"}]})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_import_playbook(playbook_yaml="id: y\nname: Arr PB\n"))
+    assert out["ok"] is True and out["playbook_id"] == "pb-2"
+
+
+def test_import_playbook_requires_yaml(monkeypatch):
+    rf = _RecordingFetcher()
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_import_playbook(playbook_yaml="   "))
+    assert out["ok"] is False and "playbook_yaml" in out["error"]
+
+
+def test_import_playbook_unavailable_on_405(monkeypatch):
+    # Cortex 8 public gateway returns 405 — surface a structured signal.
+    rf = _RecordingFetcher(
+        multipart_exc=XSOARRequestError(
+            "HTTP 405 from /playbook/import: Method Not Allowed"
+        )
+    )
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_import_playbook(playbook_yaml="id: z\nname: Z\n"))
+    assert out["ok"] is False
+    assert out["import_unavailable"] is True
+    assert out["reason"] == "import_endpoint_unavailable_on_tenant"
+
+
+def test_import_playbook_other_4xx_is_normal_error(monkeypatch):
+    # A genuine bad-request (not a generation mismatch) stays a normal error.
+    rf = _RecordingFetcher(
+        multipart_exc=XSOARRequestError("HTTP 400 from /playbook/import: bad yaml")
+    )
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_import_playbook(playbook_yaml="id: z\nname: Z\n"))
+    assert out["ok"] is False
+    assert out.get("import_unavailable") is None
+    assert "request rejected" in out["error"]

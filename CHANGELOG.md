@@ -10,6 +10,30 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.26] (unreleased) — *Deploy + test-run playbooks — close the builder loop*
+
+The Playbook Builder no longer stops at a draft. From `/playbooks/build` (or by asking the agent), Guardian can now **import** a drafted playbook into the connected Cortex XSOAR tenant, **run** it on a disposable test incident, show the **outcome**, and **close** the test incident — the operator's "build the playbook, then prove it works" loop.
+
+### What ships
+
+- **`Deploy + test-run` button** on the Playbook Builder, behind an explicit confirm (it writes to your tenant). It drives the agent through: validate → import → create a `[Guardian test]` incident → run → read the war room → close the incident → report. The agent can do the same conversationally.
+- **New connector tool `xsoar_import_playbook`** — uploads the playbook definition to XSOAR. Approval-gated like every connector write; uses the instance's API key (never a stored credential).
+- **Generation-aware.** Direct import works on XSOAR 6 (and on Cortex 8 with the Core REST API integration). On a Cortex 8 tenant without it, the public API doesn't expose playbook import — so Guardian returns clear **manual-import guidance** (Settings → Playbooks → Import) and still runs the automated test-run once the playbook exists. No silent failure.
+- The `build_xsoar_playbook` skill gained the **Deploy + test-run lifecycle (D1–D7)**.
+
+### Known limitation
+
+One-click *auto-import* requires XSOAR 6 or the Core REST API integration on Cortex 8. On a plain Cortex 8 tenant the import step is guided-manual; the test-run automation is unaffected.
+
+### Files
+
+- `bundles/spark/connectors/xsoar/` — `import_playbook` tool + `post_multipart` client method + tests + connector v0.2.1.
+- `bundles/spark/mcp/skills/workflows/build_xsoar_playbook.md` — Deploy + test-run lifecycle.
+- `mcp/agent/app/playbooks/build/page.tsx` — Deploy + test-run button, confirm, result panel.
+- `mcp/agent/app/help/{architecture,user}/page.tsx`, `mcp/agent/lib/journeys.ts` — docs + journey.
+
+---
+
 ## [v0.2.25] (unreleased) — *Knowledge detail page + markdown rendering fidelity*
 
 Three display-fidelity fixes surfaced during the v0.2.24 UI smoke. No KB regeneration, no storage change — purely how the existing content is fetched and rendered.

@@ -8,8 +8,12 @@
  * that through /api/chat, extracts the playbook YAML, re-validates it via
  * /api/agent/playbooks/validate, and offers a download.
  *
- * The output is a DRAFT to review + import into Cortex XSOAR — this page never
- * deploys a playbook to any tenant.
+ * The output is a DRAFT. v0.2.26 adds "Deploy + test-run": behind an explicit
+ * confirm, the page asks the agent (build_xsoar_playbook skill, Deploy lifecycle)
+ * to import the playbook into the connected tenant, run it on a disposable
+ * [Guardian test] incident, report the outcome, and close the incident. On a
+ * Cortex 8 tenant without the Core REST API integration the import is unavailable,
+ * so the agent returns manual-import guidance + still runs the test once imported.
  */
 
 "use client";
@@ -41,14 +45,17 @@ function extractYaml(md: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-/** Read the /api/chat SSE stream and return the final assistant answer. */
-async function readChatAnswer(resp: Response): Promise<string> {
+/** Read the /api/chat SSE stream — final assistant answer + the session id. */
+async function readChatStream(
+  resp: Response,
+): Promise<{ answer: string; sessionId: string | null }> {
   const reader = resp.body?.getReader();
-  if (!reader) return "";
+  if (!reader) return { answer: "", sessionId: null };
   const dec = new TextDecoder();
   let buf = "";
   let content = "";
   let done = "";
+  let sessionId: string | null = null;
   for (;;) {
     const { value, done: streamDone } = await reader.read();
     if (streamDone) break;
@@ -59,6 +66,7 @@ async function readChatAnswer(resp: Response): Promise<string> {
       if (!line.startsWith("data:")) continue;
       try {
         const d = JSON.parse(line.slice(5).trim());
+        if (typeof d.session_id === "string") sessionId = d.session_id;
         if (typeof d.response === "string") done = d.response;
         else if (typeof d.text === "string") content += d.text;
         else if (typeof d.content === "string") content += d.content;
@@ -67,7 +75,15 @@ async function readChatAnswer(resp: Response): Promise<string> {
       }
     }
   }
-  return done || content;
+  return { answer: done || content, sessionId };
+}
+
+/** A deploy turn whose answer ends with a confirmation question — the agent
+ *  is waiting for the operator to approve the tenant write. The page's own
+ *  confirm dialog already captured that approval, so we auto-continue. */
+function isAwaitingConfirmation(answer: string): boolean {
+  const tail = answer.slice(-240).toLowerCase();
+  return /fire it|confirm|proceed\?|shall i|do you want|may i|approve|\?\s*$/.test(tail);
 }
 
 export default function PlaybookBuilderPage() {
@@ -78,6 +94,10 @@ export default function PlaybookBuilderPage() {
   const [error, setError] = useState<string | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [validating, setValidating] = useState(false);
+  // v0.2.26 — deploy + test-run
+  const [deploying, setDeploying] = useState(false);
+  const [deployAnswer, setDeployAnswer] = useState("");
+  const [confirmDeploy, setConfirmDeploy] = useState(false);
 
   const yaml = useMemo(() => extractYaml(answer), [answer]);
 
@@ -101,7 +121,7 @@ export default function PlaybookBuilderPage() {
         body: JSON.stringify({ message }),
       });
       if (!r.ok) throw new Error(`generate ${r.status}`);
-      const text = await readChatAnswer(r);
+      const { answer: text } = await readChatStream(r);
       setAnswer(text || "(no response)");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -126,6 +146,56 @@ export default function PlaybookBuilderPage() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setValidating(false);
+    }
+  }, [yaml]);
+
+  const deploy = useCallback(async () => {
+    if (!yaml) return;
+    setConfirmDeploy(false);
+    setDeploying(true);
+    setError(null);
+    setDeployAnswer("");
+    const message =
+      `Deploy and test-run this playbook in the connected Cortex XSOAR tenant now. ` +
+      `The operator has ALREADY approved this deployment in the Guardian UI — proceed ` +
+      `without asking for further confirmation. Follow the build_xsoar_playbook skill's ` +
+      `Deploy + test-run lifecycle (D1–D7): validate, xsoar_import_playbook, create a ` +
+      `[Guardian test] incident, xsoar_run_playbook, read the war room, then close the ` +
+      `test incident. If import returns import_unavailable, explain how to import the ` +
+      `playbook manually (Settings → Playbooks → Import) and what to do next. Report the ` +
+      `imported playbook, the test incident id, the run outcome, and confirm cleanup. ` +
+      `Playbook YAML:\n\n\`\`\`yaml\n${yaml}\n\`\`\``;
+    try {
+      const r = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      if (!r.ok) throw new Error(`deploy ${r.status}`);
+      let { answer: result, sessionId } = await readChatStream(r);
+      // If the agent paused for confirmation, auto-approve once — the UI confirm
+      // dialog already captured the operator's go-ahead for this tenant write.
+      if (sessionId && isAwaitingConfirmation(result)) {
+        const r2 = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message:
+              "Yes, proceed — the operator approved this in the UI. Run the full " +
+              "deploy + test-run and report the result.",
+            session_id: sessionId,
+          }),
+        });
+        if (r2.ok) {
+          const second = await readChatStream(r2);
+          result = second.answer || result;
+        }
+      }
+      setDeployAnswer(result || "(no response)");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeploying(false);
     }
   }, [yaml]);
 
@@ -164,7 +234,8 @@ export default function PlaybookBuilderPage() {
             <h1 className="text-xl font-bold text-on-surface">Playbook Builder</h1>
             <p className="text-xs text-on-surface-variant/60">
               Draft a Cortex XSOAR playbook grounded in the ~800 real playbooks in the
-              soar-playbooks knowledge base. Output is a draft to review + import.
+              soar-playbooks knowledge base, then deploy + test-run it on a throwaway
+              incident in your connected tenant.
             </p>
           </div>
         </div>
@@ -243,6 +314,59 @@ export default function PlaybookBuilderPage() {
                 >
                   Download .yml
                 </button>
+                <button
+                  onClick={() => setConfirmDeploy(true)}
+                  disabled={deploying}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary-container text-on-primary-container disabled:opacity-50 transition-opacity inline-flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-sm">rocket_launch</span>
+                  {deploying ? "Deploying…" : "Deploy + test-run"}
+                </button>
+              </div>
+            ) : null}
+
+            {/* v0.2.26 — deploy confirm (mutates the tenant) */}
+            {confirmDeploy ? (
+              <div className="rounded-xl p-4 text-xs border border-amber-500/30 bg-amber-500/10 space-y-2.5">
+                <div className="text-on-surface leading-relaxed">
+                  This <strong>imports and runs</strong> the playbook in your connected
+                  Cortex XSOAR tenant — on a disposable{" "}
+                  <code className="font-mono">[Guardian test]</code> incident that&apos;s
+                  auto-closed afterward. On Cortex 8 without the Core REST API integration,
+                  Guardian will instead give you manual-import steps, then test-run once
+                  it&apos;s imported. Proceed?
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => void deploy()}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary-container text-on-primary-container"
+                  >
+                    Deploy now
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeploy(false)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors"
+                    style={glassSubtle}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {deploying ? (
+              <div className="text-center py-8 text-sm text-on-surface-variant/60">
+                Importing + running on a test incident…
+              </div>
+            ) : null}
+
+            {deployAnswer ? (
+              <div className="rounded-2xl p-5 space-y-2" style={glass}>
+                <div className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">rocket_launch</span>
+                  Deploy + test-run result
+                </div>
+                <MarkdownContent>{deployAnswer}</MarkdownContent>
               </div>
             ) : null}
 

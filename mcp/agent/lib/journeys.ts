@@ -3184,14 +3184,55 @@ export const JOURNEYS: Journey[] = [
       "Citations name the example playbooks it grounded on; the draft is yours to import into XSOAR.",
     ],
     expectedResult:
-      "A structurally-valid Cortex XSOAR playbook YAML grounded in real soar-playbooks examples, validated (required fields + task-graph integrity), downloadable. The builder never deploys to a tenant — it's a reviewable draft.",
+      "A structurally-valid Cortex XSOAR playbook YAML grounded in real soar-playbooks examples, validated (required fields + task-graph integrity), downloadable. The Build step produces a reviewable draft; deploying + test-running it is the separate playbook-deploy-test-run journey (v0.2.26).",
     verifyVia: [
       "The drafted YAML passes /api/agent/playbooks/validate (valid:true)",
       "knowledge_search(kb_name='soar-playbooks') appears in the run",
       "The answer cites at least one soar-playbooks example",
     ],
-    related: ["soar-playbooks-search", "xsoar-investigate-case"],
+    related: ["soar-playbooks-search", "xsoar-investigate-case", "playbook-deploy-test-run"],
     components: ["knowledge", "mcp"],
+  },
+  {
+    id: "playbook-deploy-test-run",
+    category: "ops",
+    title: "Deploy + test-run a drafted playbook",
+    summary:
+      "From a drafted playbook on /playbooks/build, import it into the connected Cortex XSOAR tenant, run it on a disposable [Guardian test] incident, see the outcome, and auto-close the incident.",
+    difficulty: "intermediate",
+    durationMin: 5,
+    icon: "rocket_launch",
+    prompts: [
+      {
+        text: "Deploy and test-run this playbook in my XSOAR tenant, then report the outcome and clean up.",
+        note: "Or click Deploy + test-run on /playbooks/build after building a draft.",
+      },
+    ],
+    toolsExercised: [
+      "playbook_validate",
+      "xsoar_import_playbook",
+      "xsoar_create_incident",
+      "xsoar_run_playbook",
+      "xsoar_get_war_room",
+      "xsoar_close_incident",
+    ],
+    apis: [
+      { method: "POST", path: "/api/chat", description: "Drives the build_xsoar_playbook Deploy lifecycle (D1–D7)." },
+    ],
+    howToTest: [
+      "Build a draft on /playbooks/build, then click Deploy + test-run and confirm.",
+      "The agent imports the playbook, creates a [Guardian test] incident, runs the playbook on it, reads the war room, and closes the incident.",
+      "On a Cortex 8 tenant without the Core REST API integration, the import returns import_unavailable — the agent gives manual-import steps (Settings → Playbooks → Import) and runs the test once it exists.",
+    ],
+    expectedResult:
+      "On XSOAR 6 / Cortex 8 + Core REST API: a one-click import + test-run with the outcome shown and the test incident closed. On a plain Cortex 8 tenant: clear manual-import guidance plus the automated test-run. Every tenant write is approval-gated.",
+    verifyVia: [
+      "xsoar_import_playbook appears in the run (ok:true, or import_unavailable with guidance)",
+      "A [Guardian test] incident is created, run on, and closed",
+      "The result reports the run outcome (task results / errors)",
+    ],
+    related: ["playbook-builder", "xsoar-investigate-case"],
+    components: ["mcp", "connectors"],
   },
 
   {

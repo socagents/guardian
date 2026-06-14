@@ -5755,8 +5755,23 @@ function KnowledgePipeline() {
  resolves, reachability). The page re-validates the extracted YAML
  via <Code>POST /api/v1/playbooks/validate</Code> (proxied at{" "}
  <Code>/api/agent/playbooks/validate</Code>) and offers a download.
- Output is a <strong>draft to review + import</strong> — the builder
- never deploys a playbook to a tenant.
+ </p>
+ <p>
+ <strong>Deploy + test-run (v0.2.26)</strong>: behind an explicit
+ confirm, the <Code>Deploy + test-run</Code> button drives the skill&apos;s
+ deploy lifecycle through <Code>/api/chat</Code> — <Code>playbook_validate</Code> →{" "}
+ <Code>xsoar_import_playbook</Code> (a new approval-gated connector tool
+ that uploads the YAML to the tenant) → <Code>xsoar_create_incident</Code>{" "}
+ (a disposable <Code>[Guardian test]</Code> case) → <Code>xsoar_run_playbook</Code> →{" "}
+ <Code>xsoar_get_war_room</Code> (read the outcome) → <Code>xsoar_close_incident</Code>.
+ Import is <strong>generation-aware</strong>: <Code>POST /playbook/import</Code>{" "}
+ works directly on XSOAR 6 and on Cortex 8 with the Core REST API integration;
+ on a plain Cortex 8 tenant the public gateway returns 405, so{" "}
+ <Code>xsoar_import_playbook</Code> returns a structured{" "}
+ <Code>import_unavailable</Code> signal and the agent gives manual-import
+ guidance (Settings → Playbooks → Import) while the test-run automation still
+ runs. Every tenant write uses the connector instance&apos;s API key (catalog
+ side of the credential boundary) and is approval-gated.
  </p>
  </SubSection>
  <SubSection icon="science" title="Why bundle-shipped (not runtime CRUD)">

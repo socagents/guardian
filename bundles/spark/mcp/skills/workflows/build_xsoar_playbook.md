@@ -2,7 +2,7 @@
 name: build_xsoar_playbook
 displayName: Build a Cortex XSOAR playbook from examples
 category: workflows
-description: '**LOAD-FIRST WHEN THE OPERATOR ASKS TO BUILD / CREATE / DRAFT / GENERATE / SCAFFOLD a Cortex XSOAR (SOAR) PLAYBOOK.** Whenever the request is to author a new automation/response playbook (e.g. "build a phishing-triage playbook", "draft a CrowdStrike host-isolation playbook", "generate a playbook for X"), call `skills_read({file_path: "workflows/build_xsoar_playbook.md"})` IMMEDIATELY as your first tool call. The skill body is the retrieval-augmented authoring lifecycle: GROUND in real examples from the `soar-playbooks` KB via `knowledge_search` (study their `raw_yaml` task graph), DRAFT a new valid playbook YAML following those patterns, VALIDATE it with `playbook_validate`, then PRESENT it as a reviewable draft with the examples cited. This is for AUTHORING a new playbook — distinct from `xsoar_run_playbook` (run an existing one) and `xsoar_case_investigation` (investigate a case).'
+description: '**LOAD-FIRST WHEN THE OPERATOR ASKS TO BUILD / CREATE / DRAFT / GENERATE / SCAFFOLD a Cortex XSOAR (SOAR) PLAYBOOK.** Whenever the request is to author a new automation/response playbook (e.g. "build a phishing-triage playbook", "draft a CrowdStrike host-isolation playbook", "generate a playbook for X"), call `skills_read({file_path: "workflows/build_xsoar_playbook.md"})` IMMEDIATELY as your first tool call. The skill body is the retrieval-augmented authoring lifecycle: GROUND in real examples from the `soar-playbooks` KB via `knowledge_search` (study their `raw_yaml` task graph), DRAFT a new valid playbook YAML following those patterns, VALIDATE it with `playbook_validate`, then PRESENT it as a reviewable draft with the examples cited. This is for AUTHORING a new playbook — distinct from `xsoar_run_playbook` (run an existing one) and `xsoar_case_investigation` (investigate a case). ALSO load this skill when the operator asks to DEPLOY / IMPORT / TEST-RUN a drafted playbook into the tenant — the "Deploy + test-run" lifecycle (import → disposable test incident → run → report → close) is at the bottom of the skill body and is an explicit, approval-gated, operator-triggered step.'
 icon: automation
 source: platform
 loadingMode: on-demand
@@ -14,8 +14,9 @@ attack: []
 > XSOAR playbook. Do NOT free-hand the YAML from memory — Guardian ships ~800
 > real, vetted playbooks (`soar-playbooks` KB) precisely so you can ground a new
 > one in proven structure. Follow the lifecycle in order; the result is a
-> DRAFT for the operator to review + import, never something you apply to a
-> tenant yourself.
+> DRAFT. Deploying + test-running that draft into a tenant is a SEPARATE,
+> explicit, approval-gated step — see "Deploy + test-run" at the bottom, and
+> only do it when the operator asks.
 
 # Skill: Build a Cortex XSOAR playbook from examples
 
@@ -82,11 +83,72 @@ Present the validated YAML in a single ```yaml fenced block. Then:
 - Note any assumptions you made (the trigger, the product) and any TODOs (e.g. a
   task whose exact command the operator must confirm for their tenant).
 
+## Deploy + test-run (only when the operator explicitly asks)
+
+Authoring stops at a draft. **Deploying + test-running is a separate step**,
+triggered by the operator — the "Deploy + test-run" button on `/playbooks/build`,
+or a direct "deploy / import / test-run this playbook" request. Every step below
+WRITES to the connected XSOAR tenant and is approval-gated. Never deploy a
+playbook the operator didn't explicitly ask you to deploy. Run in order:
+
+### D1 — Validate first
+Re-run `playbook_validate` on the exact YAML you're about to deploy. Never import
+an invalid playbook.
+
+### D2 — Import the definition
+```
+xsoar_import_playbook(playbook_yaml="<the validated YAML>")
+```
+- On success: `{ok:true, playbook_id, playbook_name}` — the playbook now exists in
+  the tenant library. Use `playbook_name` for the run step.
+- If it returns `{ok:false, import_unavailable:true}`: the tenant has no direct
+  import path (Cortex 8 without the Core REST API integration). This is NOT a draft
+  defect. Tell the operator the playbook is valid + downloadable and they should
+  import it once via **Settings → Playbooks → Import** (or enable the Core REST API
+  integration for one-click), then continue to D3 once the playbook exists (verify
+  by name). On any other `{ok:false}`, report the error and stop.
+
+### D3 — Create a disposable test incident
+```
+xsoar_create_incident(name="[Guardian test] <playbook name> <short timestamp>",
+                      details="Auto-created by Guardian to test-run a drafted playbook. Safe to close.",
+                      create_investigation=true)
+```
+Keep the `[Guardian test]` prefix — it's how these are found + cleaned up. Capture
+the returned `incident_id`.
+
+### D4 — Run the playbook on it
+```
+xsoar_run_playbook(incident_id="<from D3>", playbook_id="<playbook_name from D2>")
+```
+
+### D5 — Observe the outcome
+```
+xsoar_get_war_room(incident_id="<from D3>")
+```
+Summarize what ran: which tasks executed, any errors, key outputs. A freshly
+imported playbook may reference integrations not configured on the tenant —
+surface those as expected environmental gaps, NOT draft defects.
+
+### D6 — Clean up
+```
+xsoar_close_incident(incident_id="<from D3>")
+```
+Close the test incident (the `[Guardian test]` prefix keeps it filterable). Close,
+do not delete.
+
+### D7 — Report
+Imported playbook (id/name), test incident (id + that you closed it), the run
+outcome (task results / errors), and any environmental gaps to wire up before
+production use.
+
 ## Boundaries
 
-- You AUTHOR YAML; you do NOT create, run, or deploy the playbook on any tenant
-  (no `xsoar_run_playbook` / writes here). The operator imports + runs it.
+- AUTHORING (Steps 1-5) produces a DRAFT and never touches a tenant. DEPLOY +
+  test-run (D1-D7) is a separate, operator-triggered, approval-gated step — run it
+  only when explicitly asked, and it always WRITES to the tenant.
 - Ground every structural choice in a real example; if `knowledge_search` returns
   nothing close, say so and draft a minimal skeleton, flagged as un-grounded.
-- This skill is for AUTHORING. To run an existing playbook use `xsoar_run_playbook`;
-  to investigate a case use `xsoar_case_investigation`.
+- This skill covers AUTHORING + DEPLOY of a playbook. To run an EXISTING playbook
+  on a real case use `xsoar_run_playbook`; to investigate a case use
+  `xsoar_case_investigation`.

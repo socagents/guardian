@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.26",
+    date: "2026-06-14",
+    title: "Deploy + test-run playbooks — close the builder loop.",
+    highlights: [
+      "Playbook Builder gains a Deploy + test-run button: import a drafted playbook into your XSOAR tenant, run it on a throwaway test incident, see the outcome, and auto-close the incident.",
+      "New xsoar_import_playbook connector tool — approval-gated, uses the instance API key.",
+      "Generation-aware: direct one-click import on XSOAR 6 (or Cortex 8 + Core REST API); on a plain Cortex 8 tenant Guardian gives manual-import guidance and still runs the test.",
+    ],
+  },
+  {
     version: "0.2.25",
     date: "2026-06-14",
     title: "Knowledge detail pages show the full entry count + render code and tables.",
