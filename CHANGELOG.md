@@ -10,6 +10,25 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.23] (unreleased) — *Keep specialist KBs out of IT investigations' passive context*
+
+Tuning pass after the KB expansion. With six KBs and ~1,973 docs, the **passive** per-turn context injection (the `ContextAssembler` puts the top-K KB hits into every turn) started leaking specialist matrices into IT investigations — a measured IT-ransomware turn surfaced an ICS technique (`T0809`, OT) *above* the correct Enterprise `T1486`. The noise is mid-cosine (~0.6), so a score floor can't separate it.
+
+### What ships
+
+- Passive per-turn KB injection now **excludes the specialist ecosystems** (OT / Mobile / AI). Docs with no ecosystem (`soc-investigation`, `soar-playbooks`) and IT (`mitre-attack-enterprise`) stay in; `mitre-attack-ics` / `mitre-attack-mobile` / `mitre-atlas` are **active-pull only** — the agent still reaches them via `knowledge_search(kb_name=…)` when a case is OT/Mobile/AI (the investigation skill already scopes by KB).
+- Overridable per deploy via **`manifest.context.passiveExcludeEcosystems`** (e.g. `[]` for an OT-first install).
+- Verified on the real KBs: the IT queries that previously leaked ICS/Mobile/AI docs now return zero specialist hits; the active path still reaches ICS.
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/context_assembler.py` — over-fetch + ecosystem filter on the passive KB injection; `kb_passive_exclude_ecosystems` param.
+- `bundles/spark/mcp/src/main.py` — wire the `context.passiveExcludeEcosystems` manifest override.
+- `bundles/spark/mcp/tests/test_context_assembler_kb_filter.py` — 2 tests.
+- `mcp/agent/app/help/architecture/page.tsx` — "Passive vs active KB use" subsection.
+
+---
+
 ## [v0.2.22] (unreleased) — *MITRE ATT&CK ICS + Mobile knowledge bases*
 
 Rounds out the MITRE ATT&CK matrix family with the **ICS** (OT / Industrial Control Systems) and **Mobile** (Android/iOS) matrices, so Guardian can ground OT and mobile incidents the same way it does IT ones.

@@ -546,9 +546,20 @@ async def async_main(transport: str):
     else:
         logger.info("No knowledge.bundled[] in manifest — KB store empty")
 
+    # v0.2.23 — specialist-ecosystem KBs (ICS/Mobile/ATLAS) are kept OUT of the
+    # PASSIVE per-turn context injection so they don't crowd IT investigations;
+    # the agent still pulls them via active knowledge_search. An OT/mobile-first
+    # deploy can override via manifest.context.passiveExcludeEcosystems (e.g. []).
+    _passive_excl = context_cfg.get("passiveExcludeEcosystems")
+    _assembler_kwargs: dict = {}
+    if isinstance(_passive_excl, list):
+        _assembler_kwargs["kb_passive_exclude_ecosystems"] = tuple(
+            str(e) for e in _passive_excl
+        )
     assembler = ContextAssembler(
         budget_tokens=budget_tokens,
         strategy=strategy,
+        **_assembler_kwargs,
     )
     set_context_assembler(assembler)
 

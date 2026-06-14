@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.23",
+    date: "2026-06-14",
+    title: "Sharper KB grounding — specialist matrices stay out of IT investigations' context.",
+    highlights: [
+      "With six KBs, the per-turn context occasionally pulled an ICS or Mobile technique into an IT case; that's fixed.",
+      "Passive context now excludes the specialist ecosystems (OT/Mobile/AI); the agent still searches them directly when a case calls for it.",
+      "Configurable per deployment via manifest.context.passiveExcludeEcosystems.",
+    ],
+  },
+  {
     version: "0.2.22",
     date: "2026-06-14",
     title: "MITRE ATT&CK ICS + Mobile knowledge bases complete the matrix family.",

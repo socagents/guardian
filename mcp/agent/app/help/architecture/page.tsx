@@ -5718,6 +5718,25 @@ function KnowledgePipeline() {
  <Code>offset</Code> for pagination.
  </p>
  </SubSection>
+ <SubSection icon="tune" title="Passive vs active KB use (v0.2.23)">
+ <p>
+ Two paths put KB content in front of the agent.{" "}
+ <strong>Active</strong>: the agent calls{" "}
+ <Code>knowledge_search</Code> (scoped by <Code>kb_name</Code> /{" "}
+ tags) — unrestricted across all six KBs.{" "}
+ <strong>Passive</strong>: the <Code>ContextAssembler</Code> injects
+ the top-K KB hits into <em>every</em> turn&apos;s context. At
+ six-KB scale the passive path leaked specialist matrices into IT
+ cases — a ransomware turn surfaced an ICS technique (eco=OT) above
+ the correct Enterprise one (the noise is mid-cosine ~0.6, so a
+ score floor can&apos;t separate it). So passive injection now{" "}
+ <strong>excludes the specialist ecosystems</strong> (OT / Mobile /
+ AI) — docs with no ecosystem (soc-investigation, soar-playbooks)
+ and IT stay in; ICS/Mobile/ATLAS remain reachable via active
+ search. Override per deploy with{" "}
+ <Code>manifest.context.passiveExcludeEcosystems</Code>.
+ </p>
+ </SubSection>
  <SubSection icon="science" title="Why bundle-shipped (not runtime CRUD)">
  <p>
  KBs encode <em>curated</em> reference content reviewed before

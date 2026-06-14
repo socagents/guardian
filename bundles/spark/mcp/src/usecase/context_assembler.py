@@ -75,6 +75,15 @@ DEFAULT_MEMORY_K = 5
 DEFAULT_KB_K = 3
 DEFAULT_MEMORY_MIN_SCORE = 0.05
 DEFAULT_KB_MIN_SCORE = 0.05
+# v0.2.23 — the PASSIVE per-turn KB injection searches every loaded KB. At
+# 6-KB scale (full ATT&CK Enterprise/ICS/Mobile + ATLAS + playbooks) the
+# specialist matrices leak in: an IT ransomware turn pulled an ICS technique
+# (T0809, eco=OT) ABOVE the correct Enterprise T1486 — measured. The noise is
+# mid-score (~0.6), so raising min_score can't separate it. Instead, keep the
+# specialist ecosystems OUT of passive context — the agent still ACTIVELY
+# searches them via knowledge_search(kb_name=…) when a case is OT/Mobile/AI.
+# Docs with no ecosystem (soc-investigation, soar-playbooks) + IT stay in.
+DEFAULT_KB_PASSIVE_EXCLUDE_ECOSYSTEMS = ("OT", "Mobile", "AI")
 RECENCY_BUDGET_FRACTION = 0.35
 
 
@@ -128,6 +137,7 @@ class ContextAssembler:
         kb_k: int = DEFAULT_KB_K,
         memory_min_score: float = DEFAULT_MEMORY_MIN_SCORE,
         kb_min_score: float = DEFAULT_KB_MIN_SCORE,
+        kb_passive_exclude_ecosystems: tuple[str, ...] = DEFAULT_KB_PASSIVE_EXCLUDE_ECOSYSTEMS,
     ) -> None:
         self._budget_tokens = max(1024, budget_tokens)
         self._strategy = strategy
@@ -136,6 +146,7 @@ class ContextAssembler:
         self._kb_k = kb_k
         self._memory_min_score = memory_min_score
         self._kb_min_score = kb_min_score
+        self._kb_passive_exclude = {e.lower() for e in (kb_passive_exclude_ecosystems or ())}
         logger.info(
             "ContextAssembler ready: strategy=%s budget_tokens=%d "
             "recent_n=%d memory_k=%d kb_k=%d",
@@ -244,9 +255,17 @@ class ContextAssembler:
         remaining_after_mem = max(0, self._budget_tokens - recency_tokens - mem_tokens)
         if kb is not None and self._strategy in {"hybrid", "kb_only"} and not truncated:
             try:
-                hits = kb.search(
-                    query, limit=self._kb_k, min_score=self._kb_min_score,
+                # Over-fetch, then drop specialist-ecosystem docs (ICS/Mobile/
+                # ATLAS) so they don't crowd IT investigations' passive context
+                # — they remain reachable via the agent's active knowledge_search.
+                raw = kb.search(
+                    query, limit=max(self._kb_k * 6, 12), min_score=self._kb_min_score,
                 )
+                hits = [
+                    (d, s) for d, s in raw
+                    if str((d.metadata or {}).get("ecosystem", "")).lower()
+                    not in self._kb_passive_exclude
+                ][: self._kb_k]
             except Exception as exc:
                 logger.warning("ContextAssembler: KB search failed (%s)", exc)
                 hits = []
