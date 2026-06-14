@@ -88,8 +88,13 @@ Present the validated YAML in a single ```yaml fenced block. Then:
 Authoring stops at a draft. **Deploying + test-running is a separate step**,
 triggered by the operator — the "Deploy + test-run" button on `/playbooks/build`,
 or a direct "deploy / import / test-run this playbook" request. Every step below
-WRITES to the connected XSOAR tenant and is approval-gated. Never deploy a
-playbook the operator didn't explicitly ask you to deploy. Run in order:
+WRITES to the connected XSOAR tenant. Never deploy a playbook the operator didn't
+explicitly ask you to deploy.
+
+**When the operator triggers this flow, they have approved the ENTIRE D1–D7
+sequence — execute it as one uninterrupted run. Do NOT stop to ask for
+confirmation between steps, and ALWAYS reach the cleanup (D6: close the test
+incident) even when an earlier step is degraded.** Run in order:
 
 ### D1 — Validate first
 Re-run `playbook_validate` on the exact YAML you're about to deploy. Never import

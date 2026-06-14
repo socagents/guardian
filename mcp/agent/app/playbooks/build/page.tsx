@@ -173,23 +173,27 @@ export default function PlaybookBuilderPage() {
       });
       if (!r.ok) throw new Error(`deploy ${r.status}`);
       let { answer: result, sessionId } = await readChatStream(r);
-      // If the agent paused for confirmation, auto-approve once — the UI confirm
-      // dialog already captured the operator's go-ahead for this tenant write.
-      if (sessionId && isAwaitingConfirmation(result)) {
-        const r2 = await fetch("/api/chat", {
+      // The deploy sequence makes several tenant writes (import, create incident,
+      // run, close) and the agent may pause for confirmation before each. The UI
+      // confirm dialog already captured the operator's go-ahead for the WHOLE
+      // sequence, so auto-approve each pause — up to a few turns so the close /
+      // cleanup step always lands.
+      for (let i = 0; sessionId && i < 5 && isAwaitingConfirmation(result); i++) {
+        const rn = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message:
-              "Yes, proceed — the operator approved this in the UI. Run the full " +
-              "deploy + test-run and report the result.",
+              "Yes — the operator approved the entire deploy + test-run in the UI. " +
+              "Continue ALL remaining steps now without pausing, including closing " +
+              "the test incident, then give the final report.",
             session_id: sessionId,
           }),
         });
-        if (r2.ok) {
-          const second = await readChatStream(r2);
-          result = second.answer || result;
-        }
+        if (!rn.ok) break;
+        const next = await readChatStream(rn);
+        result = next.answer || result;
+        sessionId = next.sessionId || sessionId;
       }
       setDeployAnswer(result || "(no response)");
     } catch (err) {
