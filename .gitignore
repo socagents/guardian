@@ -265,3 +265,7 @@ scripts/loop/loop.env
 # External reference implementations pulled in during connector/agent design
 # (scratch only — NOT Guardian source; may carry creds from their origin).
 docs/ref/
+
+# Next.js app-router source dirs literally named "build" are ROUTES, not build output (v0.2.24)
+!mcp/agent/app/**/build/
+!mcp/agent/app/**/build/**
