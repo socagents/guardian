@@ -54,6 +54,8 @@ class _FakeKb:
         metadata: dict,
         source_path: str,
         source_hash: str,
+        precomputed_embedding: list[float] | None = None,
+        precomputed_model: str | None = None,
     ) -> tuple[object, str]:
         self.upserts.append({
             "kb_name": kb_name,
@@ -62,6 +64,8 @@ class _FakeKb:
             "category": category,
             "metadata": metadata,
             "source_path": source_path,
+            "precomputed_embedding": precomputed_embedding,
+            "precomputed_model": precomputed_model,
         })
         return (None, "insert")
 

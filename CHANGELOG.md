@@ -10,6 +10,31 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.17] (unreleased) — *Knowledge bases can ship embeddings baked in (large-KB keystone)*
+
+Infrastructure release — the keystone for the knowledge-base expansion arc (full MITRE ATT&CK, ATLAS, SOAR playbooks). No new corpus; no operator-visible UI change beyond **much faster installs** once large KBs land.
+
+### Why
+
+Today the boot loader embeds every KB doc one-by-one against Vertex (~200ms each, no batch API). The hand-written `soc-investigation` KB is 30 docs (fine), but full ATT&CK Enterprise alone is ~691 docs and the whole arc is ~5k — that's **16+ minutes on a fresh-volume install, plus a Vertex bill every time**. This release lets a KB ship its embeddings **baked into the bundle** so a pre-computed KB boots with **zero Vertex calls**.
+
+### What ships
+
+- **Pre-computed embedding support** — a doc may carry `embedding` (base64 little-endian float32) + `embedding_model` in its front-matter/JSON. `kb_loader` decodes it and `kb_store.upsert` trusts it **only when** the model matches the runtime embedder's `model_id` and the length matches `dims`; any mismatch logs a warning and falls back to a live embed (a stale bake is self-healing, never silently wrong).
+- **`kbs/_tools/kb_embed.py`** — authoring tool that bakes embeddings into a KB dir (`--embedder stub` for CI/tests, `--embedder vertex --sa-json … --project …` for the real bake). Reuses the loader's parsing so the embedded content is byte-for-byte what the loader stores.
+- **Embedder `model_id`** — the `Embedder` protocol, `TextHashEmbedder`, and `VertexEmbedder` now expose a stable `model_id` so a baked vector's provenance can be verified before it's trusted.
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/kb_store.py` — `upsert(precomputed_embedding=, precomputed_model=)` + `_resolve_embedding` trust logic.
+- `bundles/spark/mcp/src/usecase/kb_loader.py` — `_extract_precomputed_embedding` (decode + pop) wired into the ingest loop.
+- `bundles/spark/mcp/src/usecase/{memory_store,vertex_embedder}.py` — `model_id` on the protocol + both embedders.
+- `bundles/spark/kbs/_tools/kb_embed.py` — new authoring tool.
+- `bundles/spark/mcp/tests/test_kb_precomputed_embeddings.py` — 9 tests (trust logic, loader decode, full author→load round-trip with zero embed calls).
+- `mcp/agent/app/help/architecture/page.tsx` — Knowledge Pipeline → "Pre-computed embeddings" subsection.
+
+---
+
 ## [v0.2.16] (unreleased) — *SOC Investigation knowledge base (Vertex-embedded vector search)*
 
 Guardian's knowledge subsystem was fully built but shipped **empty** — the `/knowledge` page had nothing to show. v0.2.16 ships the first bundled knowledge base, **`soc-investigation`**, and wires it into the investigation workflow so the agent grounds every case in curated tradecraft instead of recalling from memory.

@@ -5653,6 +5653,25 @@ function KnowledgePipeline() {
  detection means an unchanged repo = zero Vertex calls at boot.
  </p>
  </SubSection>
+ <SubSection icon="bolt" title="Pre-computed embeddings (v0.2.17)">
+ <p>
+ A bundle may ship a doc&apos;s embedding <em>baked in</em> —
+ an <Code>embedding</Code> (base64 little-endian float32) +{" "}
+ <Code>embedding_model</Code> pair in the front-matter, written at
+ authoring time by <Code>kbs/_tools/kb_embed.py</Code>. The loader
+ trusts a baked vector ONLY when its <Code>embedding_model</Code>{" "}
+ matches the runtime embedder&apos;s <Code>model_id</Code> and its
+ length matches <Code>dims</Code>; any mismatch falls back to a live
+ embed. This is the keystone for large KBs: full ATT&amp;CK
+ Enterprise (~691 docs) and the rest of the expansion arc would
+ otherwise cost 16+ minutes of sequential Vertex calls on a
+ fresh-volume install (~200&nbsp;ms each, no batch API). With
+ embeddings baked in, a fully-pre-computed KB boots with{" "}
+ <strong>zero Vertex calls</strong>. Hand-written KBs that are small
+ (e.g. <Code>soc-investigation</Code>, 30 docs) stay un-baked and
+ embed on first boot — the cost only matters at scale.
+ </p>
+ </SubSection>
  <SubSection icon="search" title="Retrieval">
  <p>
  <Code>knowledge_search(kb, query, top_k)</Code> embeds the query

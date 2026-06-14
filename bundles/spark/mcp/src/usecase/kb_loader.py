@@ -42,11 +42,13 @@ counts of inserted / updated / unchanged / skipped).
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
 import os
 import re
+import struct
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -199,6 +201,38 @@ def _doc_from_json(text: str) -> tuple[dict[str, Any], str]:
     return obj, json.dumps(obj, ensure_ascii=False)
 
 
+def _extract_precomputed_embedding(
+    meta: dict[str, Any],
+) -> tuple[list[float] | None, str | None]:
+    """Pop a pre-computed embedding + its model id out of a doc's metadata
+    (v0.2.17). The `embedding` field is a base64 little-endian float32 array
+    (as written by `scripts/kb_embed.py`); `embedding_model` names the model
+    that produced it. Returns (None, None) when absent or malformed — the
+    loader then embeds the doc on boot as before.
+
+    The fields are POPPED so the (large) base64 blob never lands in
+    `metadata_json`: the vector lives only in the embedding BLOB column, and
+    the model id is carried separately to `kb.upsert`. A malformed blob is a
+    warning, never a hard failure — a bad bake degrades to embed-on-boot.
+    """
+    raw = meta.pop("embedding", None)
+    model = meta.pop("embedding_model", None)
+    if not isinstance(raw, str) or not raw:
+        return None, None
+    try:
+        buf = base64.b64decode(raw, validate=True)
+        if len(buf) % 4 != 0:
+            raise ValueError("byte length is not a multiple of 4 (float32)")
+        vec = list(struct.unpack(f"<{len(buf) // 4}f", buf))
+    except (ValueError, struct.error) as exc:
+        logger.warning(
+            "kb_loader: malformed pre-computed embedding (%s) — embedding on boot",
+            exc,
+        )
+        return None, None
+    return vec, (model if isinstance(model, str) and model else None)
+
+
 def load_bundled_knowledge(
     *,
     kb,                         # SqliteKnowledgeBase, but typed Any to dodge cycles
@@ -315,6 +349,10 @@ def load_bundled_knowledge(
                 counts["invalid"] += 1
                 continue
 
+            # Pop any baked-in vector BEFORE building the stored metadata so
+            # the base64 blob never bloats metadata_json (v0.2.17).
+            precomputed, precomputed_model = _extract_precomputed_embedding(meta)
+
             try:
                 _, action = kb.upsert(
                     kb_name=name,
@@ -325,6 +363,8 @@ def load_bundled_knowledge(
                     metadata=meta,
                     source_path=rel,
                     source_hash=_sha256(text),
+                    precomputed_embedding=precomputed,
+                    precomputed_model=precomputed_model,
                 )
                 counts[action] = counts.get(action, 0) + 1
                 seen_doc_ids.add(doc_id)

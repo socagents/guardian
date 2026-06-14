@@ -84,6 +84,12 @@ class Embedder(Protocol):
     """Minimal interface the memory store needs from any embedding backend."""
 
     dims: int
+    # Stable identifier of the embedding model, e.g. "text-embedding-004"
+    # (Vertex) or "texthash-v1" (stub). Used to validate that a doc's
+    # PRE-COMPUTED embedding (baked into a KB bundle, v0.2.17+) was
+    # produced by the SAME model the runtime uses before trusting it —
+    # see kb_store.upsert(precomputed_embedding=...).
+    model_id: str
 
     def embed(self, text: str) -> list[float]: ...
 
@@ -109,6 +115,11 @@ class TextHashEmbedder:
 
     def __init__(self, dims: int = DEFAULT_EMBED_DIMS) -> None:
         self.dims = dims
+        # Pre-computed Vertex embeddings must NEVER match the stub, so a
+        # bundle baked with "text-embedding-004" falls back to embed-on-boot
+        # when the runtime is the stub (and vice-versa). The dims suffix
+        # guards the rare mismatched-dims stub case too.
+        self.model_id = f"texthash-v1-{dims}d"
 
     def embed(self, text: str) -> list[float]:
         if not isinstance(text, str):

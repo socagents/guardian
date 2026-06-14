@@ -73,6 +73,10 @@ class VertexEmbedder:
             raise ValueError("VertexEmbedder needs a provider instance")
         self._provider = provider
         self._model_id = model_id
+        # Public, stable model identifier (Embedder protocol). KB bundles
+        # bake pre-computed embeddings tagged with this id; the loader trusts
+        # a baked embedding only when its `embedding_model` matches.
+        self.model_id = model_id
         self.dims = dims
         self._cache: OrderedDict[str, list[float]] = OrderedDict()
         self._cache_size = cache_size

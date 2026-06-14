@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.17",
+    date: "2026-06-14",
+    title: "Knowledge bases can ship embeddings baked in — large KBs install in seconds, not minutes.",
+    highlights: [
+      "Infrastructure keystone for the knowledge-base expansion (full MITRE ATT&CK, ATLAS, SOAR playbooks).",
+      "A KB can ship pre-computed embeddings in the bundle, so it loads with zero Vertex calls at boot.",
+      "Baked vectors are trusted only when the model + dimensions match the runtime embedder — otherwise it re-embeds (self-healing).",
+      "New authoring tool kb_embed.py bakes embeddings into a KB at build time.",
+    ],
+  },
+  {
     version: "0.2.16",
     date: "2026-06-14",
     title: "SOC Investigation knowledge base — the agent now grounds cases in curated tradecraft.",

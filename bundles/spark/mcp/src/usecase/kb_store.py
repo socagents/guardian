@@ -185,6 +185,45 @@ class SqliteKnowledgeBase:
     def _unpack(blob: bytes, dims: int) -> list[float]:
         return list(struct.unpack(f"{dims}f", blob))
 
+    def _resolve_embedding(
+        self,
+        content: str,
+        precomputed: list[float] | None,
+        precomputed_model: str | None,
+        *,
+        where: str,
+    ) -> list[float]:
+        """Return the embedding for `content`, preferring a TRUSTWORTHY
+        pre-computed vector over a live (slow, billed) `embed()` call.
+
+        A pre-computed vector is trusted only when its declared model matches
+        the runtime embedder's `model_id` AND its length matches `dims`. Any
+        other case (absent, wrong model, wrong dims) falls back to embed —
+        loudly when a vector was supplied but couldn't be trusted, so a
+        wrong-model bundle never silently ships bad vectors.
+        """
+        if precomputed is not None:
+            runtime_model = getattr(self._embedder, "model_id", None)
+            if (
+                precomputed_model
+                and runtime_model
+                and precomputed_model == runtime_model
+                and len(precomputed) == self._embedder.dims
+            ):
+                return precomputed
+            logger.warning(
+                "kb_store: %s pre-computed embedding NOT trusted "
+                "(doc_model=%r runtime_model=%r dims=%d/expected %d) — embedding live",
+                where, precomputed_model, runtime_model,
+                len(precomputed), self._embedder.dims,
+            )
+        embedding = self._embedder.embed(content)
+        if len(embedding) != self._embedder.dims:
+            raise RuntimeError(
+                f"embedder returned {len(embedding)} dims; expected {self._embedder.dims}"
+            )
+        return embedding
+
     @staticmethod
     def _cosine(a: list[float], b: list[float]) -> float:
         norm_b = math.sqrt(sum(x * x for x in b)) or 1.0
@@ -203,6 +242,8 @@ class SqliteKnowledgeBase:
         metadata: dict[str, Any] | None = None,
         source_path: str | None = None,
         source_hash: str,
+        precomputed_embedding: list[float] | None = None,
+        precomputed_model: str | None = None,
     ) -> tuple[KbDocument, str]:
         """Insert or update a document. Returns (doc, action) where
         action is "insert" | "update" | "unchanged".
@@ -211,6 +252,14 @@ class SqliteKnowledgeBase:
         embed step entirely. That's the v1 change-detection win: most
         boots re-load the same docs, and re-embedding is the slow
         part (especially with a future network embedder).
+
+        v0.2.17: `precomputed_embedding` (+ `precomputed_model`) lets a KB
+        bundle ship the vector baked in, so a fresh-volume install skips the
+        per-doc Vertex round-trip (which is ~200ms each — minutes for a large
+        KB). It is trusted ONLY when its declared model matches the runtime
+        embedder's `model_id` AND its length matches `dims`; any mismatch logs
+        a warning and falls back to a live `embed()` — never silently ships a
+        wrong-model vector.
         """
         if not kb_name or not doc_id:
             raise ValueError("kb_name and doc_id are required")
@@ -224,12 +273,14 @@ class SqliteKnowledgeBase:
                 # Nothing to do — content unchanged.
                 return self._row_to_doc(existing), "unchanged"
 
-        # Re-embed only when content actually changed (or doc is new).
-        embedding = self._embedder.embed(content)
-        if len(embedding) != self._embedder.dims:
-            raise RuntimeError(
-                f"embedder returned {len(embedding)} dims; expected {self._embedder.dims}"
-            )
+        # Re-embed only when content actually changed (or doc is new) —
+        # unless the doc shipped a trustworthy pre-computed vector.
+        embedding = self._resolve_embedding(
+            content,
+            precomputed_embedding,
+            precomputed_model,
+            where=f"{kb_name}:{doc_id}",
+        )
         embedding_blob = self._pack(embedding)
         now = self._now_iso()
 
