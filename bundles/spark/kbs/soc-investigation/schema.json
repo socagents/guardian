@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SOC Investigation Knowledge Entry",
+  "description": "One curated reference doc — a MITRE ATT&CK technique investigation guide or an IR playbook — that the Guardian incident-investigation agent semantically searches (knowledge_search) to ground its analysis of Cortex XSOAR incidents. Distinct from memory: knowledge is curated, shipped reference material; memory is the agent's accumulated, mutable org-specific facts.",
+  "type": "object",
+  "required": ["id", "title", "category"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable doc id — the ATT&CK technique id for techniques (e.g. 'T1071.004') or a 'pb-<slug>' for playbooks (e.g. 'pb-ransomware'). Used as the doc_id in kb.db so re-loading is idempotent."
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable title. Included in the embedded searchable content, so it should describe the investigator's intent."
+    },
+    "category": {
+      "type": "string",
+      "description": "Doc type. Operators/agent can filter knowledge_search by category.",
+      "enum": ["attack-technique", "playbook"]
+    },
+    "tags": {
+      "type": "array",
+      "description": "Tactic + keyword tags; surface as UI filter chips.",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}

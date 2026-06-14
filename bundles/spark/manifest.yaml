@@ -83,11 +83,17 @@ memory:
   embeddingDims: 768
 
 knowledge:
-  # Minimal-default-state policy: no KBs ship in the image by default.
-  # Operator-needed KBs come in via the operator's own workflow
-  # (manifest fork / future KB upload surface) or via the cortex-docs
-  # connector's runtime KB-indexing tools — not bundled by default.
-  bundled: []
+  # v0.2.16 — the soc-investigation KB ships as the default reference
+  # corpus: MITRE ATT&CK technique investigation guides + IR playbooks the
+  # incident-investigation agent semantically searches (knowledge_search) to
+  # GROUND its analysis. Distinct from memory (curated, shipped reference vs
+  # the agent's accumulated, mutable org facts). Loaded at boot + embedded
+  # via Vertex text-embedding-004 (the same embedder memory uses). See
+  # bundles/spark/kbs/soc-investigation/README.md.
+  bundled:
+    - name: "soc-investigation"
+      path: "./kbs/soc-investigation/"
+      schema: "./kbs/soc-investigation/schema.json"
   required: []
   optional: []
 

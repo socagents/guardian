@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.16",
+    date: "2026-06-14",
+    title: "SOC Investigation knowledge base — the agent now grounds cases in curated tradecraft.",
+    highlights: [
+      "New bundled knowledge base 'soc-investigation' (30 docs): 20 MITRE ATT&CK technique investigation guides + 10 IR playbooks.",
+      "The /knowledge page is no longer empty — browse all 30 entries and search them semantically (Vertex text-embedding-004).",
+      "Every investigation now consults the KB first: technique manifestation signals, ordered investigation steps, and the matching response playbook.",
+      "Knowledge vs memory: knowledge is curated, read-only reference shipped in the bundle; memory is the agent's mutable, accumulated org facts.",
+    ],
+  },
+  {
     version: "0.2.15",
     date: "2026-06-13",
     title: "Docs synced with the harness after a 20-incident end-to-end test.",

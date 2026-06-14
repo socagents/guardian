@@ -10,6 +10,34 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.16] (unreleased) — *SOC Investigation knowledge base (Vertex-embedded vector search)*
+
+Guardian's knowledge subsystem was fully built but shipped **empty** — the `/knowledge` page had nothing to show. v0.2.16 ships the first bundled knowledge base, **`soc-investigation`**, and wires it into the investigation workflow so the agent grounds every case in curated tradecraft instead of recalling from memory.
+
+### What this is — and how it differs from memory
+
+**Knowledge** is *curated reference material* — how to investigate an attack technique, what a response playbook looks like — authored in the bundle, version-controlled, indexed at boot, and **read-only** at the agent surface. **Memory** is the agent's *accumulated, mutable org facts* (crown-jewel hosts, prior-incident outcomes) it writes as it works. Same Vertex embedder (`text-embedding-004`, 768-dim), deliberately opposite write paths: the agent **reads** knowledge to know the method; it **writes** memory to remember this environment.
+
+### What ships
+
+- **30-doc curated corpus** at `bundles/spark/kbs/soc-investigation/entries/`:
+  - **20 MITRE ATT&CK technique investigation guides** (`category: attack-technique`, id = the ATT&CK id, e.g. `T1071.004` DNS C2, `T1486` ransomware, `T1558.003` Kerberoasting). Each gives how the technique manifests in telemetry, the ordered investigation steps, the data sources to pull, and pivot/related techniques.
+  - **10 IR playbooks** (`category: playbook`, id = `pb-<slug>`, e.g. `pb-phishing`, `pb-ransomware`, `pb-lateral-movement`). Each gives triage, blast-radius scoping, containment, evidence to collect, and TRUE/FALSE-positive verdict criteria.
+- **Manifest declaration** — `knowledge.bundled[]` now declares `soc-investigation` with its schema, so `kb_loader` embeds + indexes all 30 docs into `kb.db` at boot via the same Vertex embedder memory uses.
+- **Investigation skill wiring** — `xsoar_case_investigation` now calls `knowledge_search` as its **first research step** on every case (`category=attack-technique` by observed behavior, `category=playbook` by case kind), uses the doc's manifestation signals + ordered steps to drive the investigation, cites the matching doc id in the case Issue, and prefers the KB for MITRE technique-id tagging.
+- **Already-present surfaces now light up** — the `/knowledge` browser, `/knowledge/soc-investigation` detail page, semantic-search box, and `knowledge_search` / `knowledge_list` agent tools were all built earlier and were waiting for a corpus. They now render 30 entries and return semantically-ranked results.
+
+### Files
+
+- `bundles/spark/kbs/soc-investigation/` — new: `schema.json`, `README.md`, `entries/*.md` (30 docs).
+- `bundles/spark/manifest.yaml` — `knowledge.bundled[]` declares `soc-investigation`.
+- `bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md` — KB-grounding as Step 3's first move; KB-first MITRE tagging in Step 5; `knowledge_search`/`knowledge_list` in the research-connectors list.
+- `mcp/agent/app/help/architecture/page.tsx` — Knowledge Pipeline section: shipped-corpus layout + *"Knowledge vs memory — the boundary"* subsection.
+- `mcp/agent/app/help/user/page.tsx` — `#knowledge`: *"Bundled KB — SOC Investigation"* subsection + KB-first research flow.
+- `mcp/agent/lib/journeys.ts` — `knowledge-browse` journey now walks the concrete 30-doc corpus with semantic-search assertions.
+
+---
+
 ## [v0.2.15] (unreleased) — *Harness documentation sync (post-campaign)*
 
 Documentation pass after a 20-incident end-to-end harness smoke campaign that validated the whole stack (investigations, hooks, subagents, skills, jobs, memory, observability) and shipped v0.2.10–v0.2.14. Brings the canonical docs up to date with the current harness.

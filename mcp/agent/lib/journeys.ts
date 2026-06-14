@@ -3003,9 +3003,9 @@ export const JOURNEYS: Journey[] = [
   {
     id: "knowledge-browse",
     category: "ops",
-    title: "Browse a knowledge base",
+    title: "Browse the SOC Investigation knowledge base",
     summary:
-      "Navigate to /knowledge, pick a KB, search semantically, and read an entry. Any KB the install ships (or that an operator imports) renders here.",
+      "Navigate to /knowledge, open the bundled soc-investigation KB (30 docs — 20 MITRE ATT&CK technique guides + 10 IR playbooks), search semantically, and read an entry.",
     difficulty: "starter",
     durationMin: 2,
     icon: "menu_book",
@@ -3025,19 +3025,19 @@ export const JOURNEYS: Journey[] = [
       },
     ],
     howToTest: [
-      "Open /knowledge. Each available KB renders as a card with its entry count.",
-      "Click a KB. Entry list renders, sorted by entry id.",
-      "Click any entry. Full markdown renders in a drawer.",
-      "Use the search bar at the top. Type a phrase from one of the entries. Results re-rank by similarity.",
+      "Open /knowledge. The soc-investigation KB renders as a card showing 30 entries.",
+      "Click it. The entry list renders, sorted by id (T1003.001 … T1566.002, pb-c2-beaconing … pb-web-shell).",
+      "Click any entry (e.g. T1071.004 — DNS C2). Full markdown renders.",
+      "Use the search bar. Type 'dns tunneling data exfiltration' — T1071.004 / T1041 / pb-data-exfiltration rank at the top by similarity, NOT by keyword.",
     ],
     expectedResult:
-      "KB browsing works without any Vertex calls (embeddings cached at boot); search calls Vertex once per query and reuses cached entry embeddings.",
+      "soc-investigation shows 30 entries; semantic search ranks conceptually-related docs first (proving Vertex embeddings, not keyword match). Browsing makes no Vertex calls (embeddings cached at boot); each search calls Vertex once and reuses cached entry embeddings.",
     verifyVia: [
-      "GET /api/agent/knowledge → each KB listed with entry_count",
-      "Search returns results ordered by descending score; each row carries kb + entry_id",
+      "GET /api/agent/knowledge → soc-investigation listed with doc_count: 30",
+      "Search 'kerberoasting service account' → T1558.003 ranks #1; each row carries kb + doc_id + score",
       "/observability/events?action=tool_call → no rows during browsing (only during search)",
     ],
-    related: ["chat-memory-recall"],
+    related: ["chat-memory-recall", "xsoar-investigate-case"],
     components: ["knowledge", "mcp"],
   },
 

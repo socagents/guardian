@@ -5595,20 +5595,53 @@ function KnowledgePipeline() {
  Knowledge bases are bundle-shipped, schema-validated, semantically
  searchable reference content. They differ from memory in three
  ways: read-only at the agent surface, sourced from the bundle
- (not chat), and indexed at boot rather than on-write.
+ (not chat), and indexed at boot rather than on-write. As of
+ v0.2.16 the bundle ships one KB —{" "}
+ <Code>soc-investigation</Code> — 30 curated docs (20 MITRE
+ ATT&amp;CK technique investigation guides + 10 IR playbooks) the
+ incident-investigation agent searches to <em>ground</em> its
+ analysis of Cortex XSOAR cases.
  </p>
+ <SubSection icon="compare_arrows" title="Knowledge vs memory — the boundary">
+ <p>
+ Same embedder (Vertex <Code>text-embedding-004</Code>, 768-dim),
+ deliberately opposite write paths.{" "}
+ <strong>Knowledge</strong> is curated tradecraft — &ldquo;how
+ do you investigate DNS-tunnelling C2?&rdquo; — authored in the
+ bundle, version-controlled, reviewed before release, immutable
+ from the agent. <strong>Memory</strong> is accumulated org fact —
+ &ldquo;host FIN-DB-01 is a crown-jewel asset; this IP was benign
+ last week&rdquo; — written by the agent via{" "}
+ <Code>memory_store</Code> as it works. The agent <em>reads</em>{" "}
+ knowledge to know the method; it <em>writes</em> memory to
+ remember this environment. The investigation skill
+ (<Code>xsoar_case_investigation</Code>) calls{" "}
+ <Code>knowledge_search</Code> as its <strong>first research
+ step</strong> on every case — <Code>category=attack-technique</Code>{" "}
+ by observed behavior, <Code>category=playbook</Code> by case
+ kind — and cites the matching doc id in the case Issue. There is
+ no <Code>knowledge_store</Code> tool (manifest{" "}
+ <Code>kbWrites: []</Code>); the corpus is edited only in the
+ bundle.
+ </p>
+ </SubSection>
  <SubSection icon="folder_open" title="Bundle layout">
- <Pre>{`bundles/spark/kbs/<name>/
-├── schema.json            # JSON-Schema for entry validation
-└── entries/
-    ├── 001-example.md
-    ├── 002-example.md
-    └── ...
+ <Pre>{`bundles/spark/kbs/soc-investigation/    # v0.2.16 — the shipped KB
+├── schema.json   # required [id,title,category]; category enum
+│                 #   ["attack-technique","playbook"]
+├── README.md
+└── entries/      # 30 docs, one per file, id = filename stem
+    ├── T1566.001.md   # attack-technique (id = ATT&CK id)
+    ├── T1071.004.md   # …20 MITRE technique investigation guides
+    ├── pb-ransomware.md   # playbook (id = pb-<slug>)
+    └── pb-phishing.md     # …10 IR playbooks
 
-# [guardian XSOAR pivot] No KB ships today. The former xql-examples
-# corpus was retired with the XSIAM/XDR connectors. The pipeline below
-# (reconcile + embed + knowledge_search) remains available for any
-# future bundle-shipped KB.`}</Pre>
+# Declared in bundles/spark/manifest.yaml:knowledge.bundled[]:
+#   - name: soc-investigation
+#     path: ./kbs/soc-investigation/
+#     schema: ./kbs/soc-investigation/schema.json
+# [guardian XSOAR pivot] The former xql-examples corpus was retired
+# with the XSIAM/XDR connectors; soc-investigation replaces it.`}</Pre>
  </SubSection>
  <SubSection icon="loop" title="Boot reconcile">
  <p>

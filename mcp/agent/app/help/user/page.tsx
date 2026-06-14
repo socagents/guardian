@@ -1918,35 +1918,79 @@ Networks documentation and returning evidence-backed, cited answers.
               boot rather than on-write.
             </p>
 
-            <SubSection icon="library_books" title="Bundled KBs">
+            <SubSection icon="library_books" title="Bundled KB — SOC Investigation (v0.2.16)">
               {/* [guardian v0.1.0] Retired: guardian-soc KB — simulation
                   subsystem removed. */}
               {/* [guardian XSOAR pivot] Retired: xql-examples KB — it
                   served XQL authoring against the now-removed XSIAM/XDR
-                  connectors. No KB ships with the bundle today. */}
+                  connectors. Replaced in v0.2.16 by soc-investigation. */}
               <p>
-                No knowledge base ships with the bundle today. The KB
-                pipeline (schema-validated, embedded, retrieved via{" "}
-                <Code>knowledge_search</Code>) remains available for any
-                future bundle-shipped or operator-added corpus. For case
-                research, the agent uses the <Term>cortex-docs</Term>{" "}
-                connector (live documentation search), not a baked KB.
+                Guardian ships one knowledge base —{" "}
+                <Link href="/knowledge/soc-investigation" className="link">
+                  soc-investigation
+                </Link>{" "}
+                — a curated corpus of <strong>30 reference docs</strong> the
+                investigation agent searches to <em>ground</em> its analysis:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 mt-2">
+                <li>
+                  <strong>20 MITRE ATT&amp;CK technique guides</strong>{" "}
+                  (category <Code>attack-technique</Code>, id = the ATT&amp;CK
+                  id, e.g. <Code>T1071.004</Code> DNS C2): how the technique
+                  manifests in telemetry, the ordered investigation steps, the
+                  data sources to pull, and pivot/related techniques.
+                </li>
+                <li>
+                  <strong>10 IR playbooks</strong> (category{" "}
+                  <Code>playbook</Code>, id = <Code>pb-&lt;slug&gt;</Code>,
+                  e.g. <Code>pb-ransomware</Code>): triage, blast-radius
+                  scoping, containment, evidence to collect, and the
+                  TRUE/FALSE-positive verdict criteria.
+                </li>
+              </ul>
+              <p className="mt-2">
+                <strong>How it differs from memory.</strong> Knowledge is{" "}
+                <em>curated reference material</em> — shipped in the image,
+                indexed at boot, read-only at the agent surface. Memory is the
+                agent&apos;s <em>accumulated, mutable org facts</em> (crown-jewel
+                hosts, prior incidents) it writes as it works. The agent{" "}
+                <em>reads</em> knowledge to know how to investigate;{" "}
+                it <em>writes</em> memory to remember your environment. Both use
+                the same Vertex <Code>text-embedding-004</Code> embedder, but
+                only knowledge is operator-curated and version-controlled in the
+                bundle.
+              </p>
+              <p className="mt-2">
+                The investigation skill consults the KB as its{" "}
+                <strong>first research step</strong> on every case — searching{" "}
+                <Code>category=&quot;attack-technique&quot;</Code> by the
+                observed behavior and <Code>category=&quot;playbook&quot;</Code>{" "}
+                by the case kind, then citing the matching doc in the case
+                Issue. To add or revise a doc, edit{" "}
+                <Code>bundles/spark/kbs/soc-investigation/entries/</Code> and
+                redeploy; the loader hash-detects changes and re-embeds only
+                what changed.
               </p>
             </SubSection>
 
             <SubSection icon="search" title="How the agent researches a case">
               <p>
                 When a case references something the agent can&apos;t
-                interpret from the record alone — a Cortex field, a
-                detection name, a playbook, a close reason — it researches
-                rather than guesses: (1)&nbsp;<Code>cortex_search</Code> /{" "}
-                <Code>cortex_suggest</Code> against the live Cortex docs to
-                find the authoritative topic; (2)&nbsp;<Code>cortex_fetch_topic</Code>{" "}
-                to read it; (3)&nbsp;for external context (IP/domain
-                reputation, CVE advisories), the <Code>web</Code> connector;
-                (4)&nbsp;it cites each source when it writes findings back
-                onto the case. The <Code>cortex_kb_search</Code> skill
-                governs the query discipline.
+                interpret from the record alone, it researches rather than
+                guesses, in priority order:{" "}
+                (1)&nbsp;<Code>knowledge_search</Code> against the bundled{" "}
+                <Term>soc-investigation</Term> KB <em>first</em> — the internal,
+                instant, curated tradecraft (technique manifestation signals,
+                ordered investigation steps, the matching response playbook);
+                (2)&nbsp;<Code>cortex_search</Code> / <Code>cortex_suggest</Code>{" "}
+                → <Code>cortex_fetch_topic</Code> against the live Cortex docs
+                for anything Cortex-specific the KB doesn&apos;t cover;
+                (3)&nbsp;for external context (IP/domain reputation, CVE
+                advisories), the <Code>web</Code> connector;
+                (4)&nbsp;it cites each source — KB doc id included — when it
+                writes findings back onto the case. The{" "}
+                <Code>cortex_kb_search</Code> skill governs the query
+                discipline.
               </p>
             </SubSection>
 
