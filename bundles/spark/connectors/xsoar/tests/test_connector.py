@@ -1233,3 +1233,79 @@ def test_summarize_indicator_first_source_scalar_and_missing():
     assert connector._first_source({"sourceBrands": "VT"}) == "VT"
     assert connector._first_source({"sourceInstances": []}) is None
     assert connector._first_source({}) is None
+
+
+# ═══════════════════════════════════════════════════════════════════
+# evidence flow — generation-aware save + compact search (v0.2.35, #49)
+# ═══════════════════════════════════════════════════════════════════
+
+
+def test_save_evidence_v6_uses_evidence_post(monkeypatch):
+    """XSOAR 6: save_evidence POSTs the formal /evidence create (which
+    round-trips into /evidence/search) — NOT /entry/tags."""
+    rf = _RecordingFetcher(
+        post_reply={"id": "1@223", "incidentId": "223", "entryId": "7@223"},
+        is_v8=False,
+    )
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_save_evidence(
+        incident_id="223", entry_id="7@223", description="why"))
+    assert out["ok"] is True
+    assert out["saved"] is True
+    assert out["via"] == "evidence-api"
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/evidence")
+    assert body == {"incidentId": "223", "entryId": "7@223", "description": "why"}
+
+
+def test_save_evidence_v8_falls_back_to_entry_tag(monkeypatch):
+    """XSOAR 8: /evidence POST isn't on the public API — tag the entry
+    `evidence` via /entry/tags instead."""
+    rf = _RecordingFetcher(post_reply={"id": "ok"}, is_v8=True)
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_save_evidence(incident_id="4051", entry_id="9@4051"))
+    assert out["ok"] is True
+    assert out["tagged"] is True
+    assert out["via"] == "entry-tag"
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/entry/tags")
+    assert body["tags"] == ["evidence"]
+    assert body["investigationId"] == "4051"
+
+
+def test_search_evidence_summarizes_compact(monkeypatch):
+    """Raw verbose evidence object -> compact summary; verbose keys dropped.
+    Shape grounded in a live XSOAR 6 /evidence/search object."""
+    rf = _RecordingFetcher(post_reply={"total": 1, "evidences": [{
+        "id": "1@223", "version": 1, "cacheVersn": 0, "sizeInBytes": 0,
+        "dbotCreatedBy": "admin", "fetched": "t", "taskId": "", "tagsRaw": [],
+        "CustomFields": None, "incidentId": "223", "entryId": "7@223",
+        "description": "phish proof", "occurred": "2026-01-01T00:00:00Z",
+        "markedBy": "admin", "markedDate": "2026-06-15T14:17:04Z",
+        "tags": ["evidence"],
+    }]})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_search_evidence(incident_id="223"))
+    assert out["ok"] is True
+    assert out["count"] == 1
+    ev = out["evidence"][0]
+    assert ev == {
+        "id": "1@223", "entry_id": "7@223", "incident_id": "223",
+        "description": "phish proof", "occurred": "2026-01-01T00:00:00Z",
+        "marked_by": "admin", "marked_date": "2026-06-15T14:17:04Z",
+        "tags": ["evidence"],
+    }
+    assert "version" not in ev and "dbotCreatedBy" not in ev and "tagsRaw" not in ev
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/evidence/search")
+    assert body == {"incidentID": "223"}
+
+
+def test_search_evidence_empty_returns_empty_list(monkeypatch):
+    """No evidence (bare `data` path) -> ok, empty list, zero count."""
+    rf = _RecordingFetcher(post_reply={"total": 0, "data": []})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_search_evidence(incident_id="999"))
+    assert out["ok"] is True
+    assert out["evidence"] == []
+    assert out["count"] == 0

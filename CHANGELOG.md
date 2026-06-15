@@ -10,6 +10,29 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.35] (unreleased) — *XSOAR evidence flow: save works on v6 + compact search*
+
+Closing the bug-family sibling from v0.2.34 (#49). Investigating it (a live in-container probe against the v6 + v8 tenants) uncovered that **`xsoar_save_evidence` was broken on XSOAR 6** — a bigger bug than the cosmetic one #49 originally tracked.
+
+### What ships
+
+- **`save_evidence` now works on XSOAR 6.** It used `/entry/tags` for both generations, but on v6 that returns `errOptimisticLock` on a fresh entry AND the tagged entry never round-trips into `/evidence/search`. Fix: v6 now uses the formal `POST /evidence` create endpoint — verified live (create → search returns it). XSOAR 8 keeps the tag path (its `/evidence` POST 303-redirects — not exposed on the public API).
+- **`search_evidence` returns a compact summary** per item `{id, entry_id, incident_id, description, occurred, marked_by, marked_date, tags}` — grounded in a live v6 evidence object — instead of the raw verbose record. Mirrors the v0.2.34 indicator + incident summarizers.
+- **Documented Cortex 8 limitation:** on v8, tag-based evidence is **not** returned by `/evidence/search` (a public-API constraint) — the entry is still marked on the case's Evidence board in the UI. The `save_evidence`/`search_evidence` docstrings + the connector card spell this out, so the agent doesn't treat an empty v8 result as a failure.
+
+### Operator impact
+
+- No installer change (Scenario 1). The connector image rebuilds on this tag; guardian-updater pulls the new digest.
+- Behavior change: v6 evidence saves now actually land on the evidence board + appear in `search_evidence` (previously they silently failed).
+
+### Files
+
+- `bundles/spark/connectors/xsoar/src/connector.py` — generation-aware `save_evidence` (v6 `POST /evidence`, v8 tag); `_summarize_evidence`; `search_evidence` compact output; docstrings.
+- `bundles/spark/connectors/xsoar/connector.yaml` — save/search_evidence descriptions.
+- `bundles/spark/connectors/xsoar/tests/test_connector.py` — 4 new tests (v6 save path, v8 save path, compact search, empty store).
+
+---
+
 ## [v0.2.34] (unreleased) — *XSOAR indicator search actually filters now (+ compact, scored results)*
 
 Follow-up to v0.2.33. The v6 harness smoke showed the agent flailing on "how many IP indicators / top by reputation" — `search_indicators` → `!findIndicators` → docs → timeout. Investigating it (a deterministic in-container probe against the live v6 tenant) uncovered a **real, long-standing bug**: `xsoar_search_indicators` sent its query wrapped in a `{"filter": {...}}` envelope (copied from the `/incidents/search` pattern), but `/indicators/search` takes a **flat** body — so XSOAR **silently ignored the query, size, AND page** and returned the full 1.18M-indicator store at the default page size, unsorted and unscored. Every indicator query (`type:IP`, `reputation:Bad`, …) was a no-op; the agent flailed because the tool genuinely returned arbitrary junk.

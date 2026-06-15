@@ -531,6 +531,28 @@ def _summarize_indicator(ind: dict) -> dict:
     }
 
 
+def _summarize_evidence(ev: dict) -> dict:
+    """Project a compact evidence-board entry.
+
+    Mirrors _summarize_incident/_summarize_indicator: the agent reviewing
+    a case's evidence board doesn't need the verbose XSOAR evidence record
+    (version, cacheVersn, sizeInBytes, fetched, taskId, tagsRaw,
+    dbotCreatedBy, CustomFields). Keep the load-bearing fields: which
+    war-room entry it points at, the note, who/when it was marked, and any
+    tags. Field shape grounded in a live XSOAR 6 /evidence/search object.
+    """
+    return {
+        "id": ev.get("id"),
+        "entry_id": ev.get("entryId"),
+        "incident_id": ev.get("incidentId"),
+        "description": ev.get("description"),
+        "occurred": ev.get("occurred"),
+        "marked_by": ev.get("markedBy"),
+        "marked_date": ev.get("markedDate"),
+        "tags": _as_list(ev.get("tags")),
+    }
+
+
 # ─── xsoar_list_incidents ────────────────────────────────────────────
 
 
@@ -1198,43 +1220,79 @@ async def xsoar_save_evidence(
     promote a specific entry (a command output, a screenshot, an
     analysis note) to evidence.
 
-    On Cortex 8 the `/evidence` POST endpoint is not exposed on the
-    public API (it redirects to the SPA 404); evidence is promoted by
-    tagging the war-room entry with the `evidence` tag, which is what
-    this tool does via POST /entry/tags.
+    Evidence promotion is generation-specific (verified live on both):
+      * XSOAR 6 (on-prem): POST /evidence creates an evidence-board
+        record that ROUND-TRIPS into xsoar_search_evidence. (The
+        /entry/tags path returns errOptimisticLock on a fresh entry AND
+        doesn't surface in /evidence/search on v6 — so it is NOT used.)
+      * XSOAR 8 / Cortex cloud: POST /evidence is NOT exposed on the
+        public API (303-redirects to the SPA), so this tags the war-room
+        entry `evidence` via POST /entry/tags. That marks the entry in
+        the UI, but Cortex 8's /evidence/search does NOT return tag-based
+        evidence (a public-API limitation) — so xsoar_search_evidence
+        won't list it on v8.
 
     Args:
         incident_id: The XSOAR incident id (the investigation id).
         entry_id: The war-room entry id to mark as evidence (from
             xsoar_add_entry's return or xsoar_get_war_room).
         description: Optional note describing why this is evidence
-            (added as an extra tag when provided).
+            (recorded on the v6 evidence record; ignored on v8's tag
+            path).
 
-    Example body POSTed to /entry/tags:
+    Example body POSTed to /evidence (v6):
+        {"incidentId": "123", "entryId": "456@123", "description": "..."}
+    Example body POSTed to /entry/tags (v8):
         {"investigationId": "123", "id": "456@123", "tags": ["evidence"]}
 
     Returns:
-        {ok, incident_id, entry_id, tagged: true}.
+        {ok, incident_id, entry_id, saved|tagged: true, via}.
     """
     if not incident_id:
         raise ValueError("incident_id is required")
     if not entry_id:
         raise ValueError("entry_id is required")
 
+    fetcher = _get_fetcher()
+
+    if not fetcher.is_v8:
+        # XSOAR 6: the formal /evidence POST creates an evidence-board
+        # record that round-trips into /evidence/search (verified live).
+        ev_body: dict[str, Any] = {
+            "incidentId": str(incident_id),
+            "entryId": str(entry_id),
+        }
+        if description:
+            ev_body["description"] = description
+        response = await fetcher.post("/evidence", ev_body)
+        return {
+            "incident_id": incident_id,
+            "entry_id": entry_id,
+            "saved": True,
+            "via": "evidence-api",
+            "raw_response": {
+                "id": response.get("id"),
+                "incidentId": response.get("incidentId"),
+                "entryId": response.get("entryId"),
+            } if isinstance(response, dict) else response,
+        }
+
+    # XSOAR 8 / Cortex cloud: /evidence POST 303-redirects (not on the
+    # public API) — tag the war-room entry `evidence` instead. Marks it
+    # in the UI; not returned by Cortex 8's /evidence/search (see
+    # xsoar_search_evidence's v8 note).
     tags = ["evidence"]
     body: dict[str, Any] = {
         "investigationId": str(incident_id),
         "id": str(entry_id),
         "tags": tags,
     }
-
-    fetcher = _get_fetcher()
     response = await fetcher.post("/entry/tags", body)
-
     return {
         "incident_id": incident_id,
         "entry_id": entry_id,
         "tagged": True,
+        "via": "entry-tag",
         "tags": tags,
         "raw_response": response,
     }
@@ -1250,6 +1308,12 @@ async def xsoar_search_evidence(incident_id: str) -> dict:
     Returns the entries promoted to the case's evidence board. Use to
     review what's already been flagged before drawing a conclusion.
 
+    **XSOAR 8 note:** Cortex 8's /evidence/search does NOT return
+    tag-based evidence, so entries marked via xsoar_save_evidence on v8
+    won't appear here (a public-API limitation — they're still visible on
+    the case's Evidence board in the UI). On XSOAR 6, evidence saved via
+    xsoar_save_evidence (POST /evidence) does round-trip and is listed.
+
     Args:
         incident_id: The XSOAR incident id whose evidence to list.
 
@@ -1257,7 +1321,9 @@ async def xsoar_search_evidence(incident_id: str) -> dict:
         {"incidentID": "123"}
 
     Returns:
-        {ok, evidence: [...], count}.
+        {ok, evidence: [...], count}. Each item is a COMPACT summary
+        {id, entry_id, incident_id, description, occurred, marked_by,
+        marked_date, tags} — not the raw verbose XSOAR evidence record.
     """
     if not incident_id:
         raise ValueError("incident_id is required")
@@ -1275,13 +1341,8 @@ async def xsoar_search_evidence(incident_id: str) -> dict:
     if evidence is None:
         evidence = response.get("data") or []
 
-    # NOTE (bug-family sibling of #48): this still passes the RAW verbose
-    # evidence objects through, the same raw-passthrough pattern that
-    # `xsoar_search_indicators` fixed via `_summarize_indicator` in
-    # v0.2.34. Deferred — a `_summarize_evidence()` helper is tracked in
-    # issue #49 (lower urgency: no competing !command the agent flails to).
     return {
-        "evidence": evidence,
+        "evidence": [_summarize_evidence(e) for e in evidence],
         "count": len(evidence),
         "incident_id": incident_id,
     }

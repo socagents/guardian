@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.35",
+    date: "2026-06-15",
+    title: "XSOAR evidence: save_evidence works on v6 + compact evidence search.",
+    highlights: [
+      "Fixed save_evidence on XSOAR 6 — it used the entry-tag path, which optimistic-locked and never round-tripped into the evidence board; v6 now uses the formal POST /evidence (verified create → search).",
+      "search_evidence returns a compact summary per item {id, entry_id, incident_id, description, marked_by, marked_date, tags} instead of the raw verbose record.",
+      "Cortex 8 keeps the tag path (its /evidence POST isn't on the public API); documented that v8 /evidence/search won't list tag-based evidence (it's UI-only there).",
+      "No installer change.",
+    ],
+  },
+  {
     version: "0.2.34",
     date: "2026-06-15",
     title: "XSOAR indicator search actually filters now (+ compact, scored results).",

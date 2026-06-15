@@ -225,29 +225,34 @@ spec:
       returns: { type: "object", description: "{ ok, indicators: [...], total }" }
 
     - name: "save_evidence"
-      method: "POST /entry/tags (tag entry as evidence)"
+      method: "POST /evidence (v6) | POST /entry/tags (v8)"
       description: |
-        Mark a war-room entry as evidence for an incident. XSOAR's evidence
-        board collects the key artifacts that justify a case's conclusion.
-        Use after xsoar_add_entry / xsoar_get_war_room to promote a specific
-        entry (command output, screenshot, analysis note) to evidence. On
-        Cortex 8 this tags the entry with the `evidence` tag (the `/evidence`
-        POST endpoint is not exposed on the public API).
+        Mark a war-room entry as evidence for an incident. Use after
+        xsoar_add_entry / xsoar_get_war_room to promote a specific entry
+        (command output, screenshot, analysis note) to the evidence board.
+        Generation-aware: XSOAR 6 uses the formal POST /evidence (which
+        round-trips into search_evidence); Cortex 8 tags the entry
+        `evidence` (its /evidence POST isn't on the public API — that marks
+        it in the UI but Cortex 8's /evidence/search won't return it).
       args:
         - { name: "incident_id", type: "string", description: "The XSOAR incident id (investigation id).", required: true }
         - { name: "entry_id",    type: "string", description: "The war-room entry id to mark as evidence (from xsoar_add_entry or xsoar_get_war_room).", required: true }
-        - { name: "description", type: "string", description: "Optional note describing why this is evidence.", required: false }
-      returns: { type: "object", description: "{ ok, incident_id, entry_id, tagged }" }
+        - { name: "description", type: "string", description: "Optional note describing why this is evidence (recorded on v6; ignored on v8's tag path).", required: false }
+      returns: { type: "object", description: "{ ok, incident_id, entry_id, saved|tagged, via }" }
 
     - name: "search_evidence"
       method: "POST /evidence/search"
       description: |
         List the evidence collected for one incident — the entries promoted
         to the case's evidence board. Use to review what's already been
-        flagged before drawing a conclusion.
+        flagged before drawing a conclusion. Returns a COMPACT summary per
+        item {id, entry_id, incident_id, description, occurred, marked_by,
+        marked_date, tags}. NOTE: on Cortex 8, tag-based evidence is not
+        returned by /evidence/search (a public-API limitation); on XSOAR 6
+        evidence saved via save_evidence does round-trip and is listed.
       args:
         - { name: "incident_id", type: "string", description: "The XSOAR incident id whose evidence to list.", required: true }
-      returns: { type: "object", description: "{ ok, evidence: [...], count }" }
+      returns: { type: "object", description: "{ ok, evidence: [compact...], count }" }
 
     # ─── Server probe (connector-test path) ──────────────────────
     - name: "health_check"
