@@ -59,10 +59,12 @@ class Instance:
     SecretStore and updates the rows in place to use paths.
 
     v0.1.15: `enabled` is per-instance (separate from connector_state's
-    enabled flag, which is per-CONNECTOR). The store enforces "at most
-    one enabled instance per connector_id" at create + update time —
-    operators can have multiple instances coexist (e.g. for testing
-    alternate config) but only one can be the live one at a time.
+    enabled flag, which is per-CONNECTOR). v0.2.29 (#43): multiple ENABLED
+    instances per connector are now supported (multi-active-instance) — e.g.
+    one XSOAR 6 + one XSOAR 8 tenant live at once. The agent picks which one
+    a tool call targets via the `instance` argument the connector_loader
+    adds when a connector has 2+ enabled instances. The only uniqueness rule
+    is UNIQUE(connector_id, name) — distinct names per connector.
     """
 
     id: str
@@ -302,11 +304,11 @@ class InstanceStore:
     ) -> Instance:
         """Insert a new instance. Raises ValueError on:
 
-        * (connector_id, name) collision
-        * `enabled=True` while another instance for the same connector_id
-          already has enabled=True (one-active-per-connector rule). The
-          error message is operator-friendly so the API handler can
-          surface it directly.
+        * (connector_id, name) collision (UNIQUE(connector_id, name))
+
+        v0.2.29 (#43): multiple ENABLED instances per connector_id are
+        allowed (multi-active-instance). The former one-active-per-connector
+        guard was removed in lockstep with the connector_loader change.
 
         Phase 5: when a SecretStore is wired (the production path),
         each secret VALUE is written to the store and the row holds
@@ -321,15 +323,15 @@ class InstanceStore:
         if not name or not isinstance(name, str):
             raise ValueError("name must be a non-empty string")
 
-        # v0.1.15: enforce one-active-per-connector before creating.
-        if enabled:
-            for other in self.list_for(connector_id):
-                if other.enabled:
-                    raise ValueError(
-                        f"connector {connector_id!r} already has an active "
-                        f"instance ({other.name!r}). Disable it first, or "
-                        f"create this one with enabled=False."
-                    )
+        # v0.2.29 (#43): multiple ENABLED instances per connector are now
+        # allowed (multi-active-instance support). The agent selects which
+        # instance a tool call targets via the `instance` argument the
+        # connector_loader adds when a connector has 2+ enabled instances.
+        # The only remaining uniqueness rule is the UNIQUE(connector_id, name)
+        # schema constraint (distinct names), enforced by the INSERT below.
+        # Pre-v0.2.29 a one-active-per-connector guard raised here; it was
+        # lifted in lockstep with the connector_loader change (single-active
+        # assumption removed).
 
         instance_id = str(uuid.uuid4())
         secrets_in = dict(secrets or {})
@@ -482,15 +484,10 @@ class InstanceStore:
         if existing is None:
             return None
 
-        # v0.1.15: enforce one-active-per-connector when enabling.
-        if enabled is True and not existing.enabled:
-            for other in self.list_for(existing.connector_id):
-                if other.id != instance_id and other.enabled:
-                    raise ValueError(
-                        f"connector {existing.connector_id!r} already has "
-                        f"an active instance ({other.name!r}). Disable it "
-                        f"first before enabling {existing.name!r}."
-                    )
+        # v0.2.29 (#43): multi-active-instance — enabling a second instance
+        # for the same connector is now permitted (the one-active guard was
+        # lifted here in lockstep with the connector_loader change). The
+        # agent disambiguates via the per-call `instance` argument.
 
         new_name = name if (name is not None and name != "") else existing.name
         new_config = (

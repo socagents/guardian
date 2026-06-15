@@ -726,6 +726,24 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
                     instance.connector_id, instance.name, instance.id,
                 )
 
+            # v0.2.29 (#43): toggling `enabled` changes the connector's set of
+            # ENABLED instances, which changes the tool catalog — single↔multi
+            # transitions add/remove the per-call `instance` selector argument,
+            # and an enabled instance's tools must (de)register. Reload so the
+            # agent's catalog reflects the new enabled set immediately (the
+            # container_url PUT callback reloads on container start, but a bare
+            # enable/disable toggle has no container event to ride on).
+            if "enabled" in update_kwargs:
+                try:
+                    from usecase.connector_loader import (  # noqa: PLC0415
+                        reload_tools_now,
+                    )
+                    reload_tools_now()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "tool reload after enabled-toggle failed: %s", exc
+                    )
+
             return JSONResponse(
                 {
                     "instance": _instance_to_dict(instance),

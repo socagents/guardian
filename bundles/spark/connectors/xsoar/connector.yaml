@@ -51,6 +51,10 @@ configSchema:
     api_id:
       type: "string"
       description: "XSOAR 8 / Cortex API key ID for the x-xdr-auth-id header; leave blank for XSOAR 6. Setting this switches the connector to v8 mode (adds the /xsoar/public/v1 path prefix + the x-xdr-auth-id header)."
+    version:
+      type: "string"
+      enum: ["v6", "v8"]
+      description: "XSOAR generation. v6 = on-prem (single API key in the Authorization header). v8 = Cortex cloud / XSOAR 8 (requires api_id for the x-xdr-auth-id header + the /xsoar/public/v1 path prefix). Leave unset to auto-detect from whether api_id is provided (legacy behavior)."
     verify_ssl:
       type: "boolean"
       description: "Verify the XSOAR server's TLS certificate. Default true. Set false only for on-prem XSOAR 6 servers with self-signed certs."

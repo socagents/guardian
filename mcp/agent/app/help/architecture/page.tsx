@@ -1073,6 +1073,68 @@ MCP read connector.yaml.runtimeMapping.style
                     container's MCP, returns the result`}</Pre>
  </SubSection>
 
+ <SubSection icon="alt_route" title="Multiple enabled instances per connector (v0.2.29)">
+ <p>
+ A connector can run <strong>N enabled instances at once</strong>,
+ each with its own per-instance container
+ (<Code>guardian-connector-&lt;id&gt;-&lt;name&gt;</Code>). The{" "}
+ <Code>instance_store</Code> schema has always been{" "}
+ <Code>UNIQUE(connector_id, name)</Code>, so multiple rows per
+ connector were allowed — but a guard in{" "}
+ <Code>create()</Code>/<Code>update()</Code> raised{" "}
+ <Code>ValueError</Code> (HTTP 409) on a second{" "}
+ <Code>enabled=True</Code> instance for the same connector.{" "}
+ <strong>v0.2.29 lifts that one-enabled-per-connector guard</strong>{" "}
+ (the <Code>UNIQUE(connector_id, name)</Code> constraint stays). The
+ advertise gate is now <em>≥1 ENABLED instance</em>, not just ≥1 row.
+ </p>
+ <p>
+ <strong>Tools register once per connector</strong> with their
+ existing names (the shared <Code>&lt;id&gt;.&lt;tool&gt;</Code> +{" "}
+ legacy <Code>&lt;id&gt;_&lt;tool&gt;</Code> alias). When 2+ instances
+ of a connector are enabled, the synthesized proxy signature gains a
+ trailing optional <Code>instance: str</Code> parameter; when exactly
+ one is enabled the signature is byte-identical to before (no{" "}
+ <Code>instance</Code> arg — single-instance connectors are
+ completely unchanged). The <Code>instance</Code> value is the tool
+ selector, not a forwarded argument — it is popped before the args
+ dict is POSTed to the container.
+ </p>
+ <p>
+ <strong>The loader resolves the target instance at call time.</strong>{" "}
+ <Code>connector_loader._wrap_connector_tool</Code> pops{" "}
+ <Code>instance</Code> from the call kwargs, resolves it against the
+ enabled instances (exact name, then case-insensitive), sets the
+ per-call <Code>container_url</Code> ContextVar to the resolved
+ instance&apos;s <Code>merged_config</Code>, computes the approval
+ gate per call (<Code>instance.config.trusted</Code>), and audits
+ with the resolved{" "}
+ <Code>instance_id</Code>/<Code>instance_name</Code>. Routing is per
+ call — never a baked-in <Code>instances[0]</Code> pick. The wrapper{" "}
+ <strong>errors, never silently guesses</strong>: an omitted{" "}
+ <Code>instance</Code> with 2+ enabled, an unknown name, or a tool
+ disabled for the chosen instance each return a structured error
+ listing the valid names (no cross-tenant leakage). When 2+ are
+ enabled the loader also appends the valid <Code>instance</Code>{" "}
+ values + role hints to the tool&apos;s description so the agent sees
+ them inline.
+ </p>
+ <p>
+ Toggling an instance enabled/disabled triggers{" "}
+ <Code>reload_tools_now()</Code> so the schemas update on a
+ single↔multi transition (the <Code>instance</Code> parameter
+ appears or disappears). The agent learns which <Code>instance</Code>{" "}
+ value maps to which tenant from a dynamic{" "}
+ <strong>&ldquo;Connected instances&rdquo;</strong> block in the
+ system prompt (see{" "}
+ <Code>lib/system-prompt.ts:buildSystemPromptText</Code>), which
+ lists each connector with 2+ enabled instances and a role hint.
+ First real user: XSOAR 6 (on-prem) + XSOAR 8 (cloud) live together
+ — see <a href="#xsoar-connector" className="link">XSOAR Connector</a>{" "}
+ for the per-version <Code>version</Code> field.
+ </p>
+ </SubSection>
+
  <SubSection icon="signature_pen" title="Synthesized proxy signatures">
  <p>
  FastMCP rejects callables with <Code>**kwargs</Code> — it
@@ -3628,11 +3690,17 @@ Edit:   git PR + new release            Edit:   POST upload of a new YAML
  <li>
  <strong>Tool call</strong> — operator runs a chat message that
  triggers a <Code>cortex-docs/cortex_search</Code> tool. MCP&apos;s{" "}
- <Code>connector_loader</Code> looks up the container_url for
- that instance, opens an MCP-over-HTTP session, forwards the
- tool call, returns the result. Per-tool latency adds the
- loopback HTTP cost (&lt;5ms) on top of the actual external API
- call.
+ <Code>connector_loader</Code> resolves the target instance (with
+ a single enabled instance there is no choice; with 2+ enabled it
+ reads the <Code>instance</Code> selector the agent passed — see{" "}
+ <a href="#connector-containers" className="link">
+ Multiple enabled instances per connector
+ </a>{" "}
+ — and errors if it is missing or unknown), looks up that
+ instance&apos;s container_url, opens an MCP-over-HTTP session,
+ forwards the tool call, returns the result. Per-tool latency adds
+ the loopback HTTP cost (&lt;5ms) on top of the actual external
+ API call.
  </li>
  <li>
  <strong>State transitions</strong> — failures (transport, 401/
@@ -6764,12 +6832,25 @@ function XsoarConnector() {
  </li>
  </ul>
  <p className="text-sm leading-relaxed mt-2">
- Detection rule: if an <Code>api_id</Code> (key id) is
- configured → v8 (add the path prefix +{" "}
- <Code>x-xdr-auth-id</Code> header); otherwise → v6. Guardian
- stores the credentials via the secret store envelope; the
- connector attaches the right headers per detected version on
- every call.
+ <strong>Explicit <Code>version</Code> field (v0.2.29).</strong>{" "}
+ The connector.yaml configSchema now declares an optional{" "}
+ <Code>version</Code> field —{" "}
+ <Code>enum: [&quot;v6&quot;, &quot;v8&quot;]</Code>, rendered as a
+ dropdown on the create-instance form. When set, it <em>forces</em>{" "}
+ the generation (<Code>v6</Code> → on-prem,{" "}
+ <Code>Authorization</Code> only; <Code>v8</Code> → cloud, adds the{" "}
+ <Code>/xsoar/public/v1</Code> prefix +{" "}
+ <Code>x-xdr-auth-id</Code> header). When left blank, the connector
+ falls back to the legacy inference: if an <Code>api_id</Code> (key
+ id) is configured → v8; otherwise → v6 (preserving existing
+ instances&apos; behaviour). Guardian stores the credentials via the
+ secret store envelope; the connector attaches the right headers per
+ resolved version on every call. The explicit field is what makes a
+ v6 instance and a v8 instance of the <em>same</em> connector
+ unambiguous when both are enabled side-by-side — see{" "}
+ <a href="#connector-containers" className="link">
+ Multiple enabled instances per connector
+ </a>.
  </p>
  </SubSection>
  </Section>

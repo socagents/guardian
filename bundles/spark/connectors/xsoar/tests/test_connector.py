@@ -169,6 +169,69 @@ def test_v8_does_not_double_prefix(monkeypatch):
     assert sent["url"] == "https://api-x.example.com/xsoar/public/v1/incidents/search"
 
 
+def test_version_v8_explicit_sets_prefix_and_auth_id(monkeypatch):
+    """version='v8' (with api_id) → is_v8, /xsoar/public/v1 prefix, x-xdr-auth-id."""
+    _patch_httpx(monkeypatch, _FakeResponse(200, {"total": 0, "data": []}))
+    f = XSOARFetcher(
+        "https://api-tenant.xdr.us.paloaltonetworks.com",
+        "KEY8",
+        api_id="42",
+        version="v8",
+    )
+    assert f.is_v8 is True
+
+    run(f.post("/incidents/search", {"filter": {}}))
+    sent = _FakeAsyncClient.last
+    assert sent["url"] == (
+        "https://api-tenant.xdr.us.paloaltonetworks.com"
+        "/xsoar/public/v1/incidents/search"
+    )
+    assert sent["headers"]["x-xdr-auth-id"] == "42"
+
+
+def test_version_v6_overrides_api_id_inference(monkeypatch):
+    """version='v6' with api_id ALSO set → v6: NO prefix, NO x-xdr-auth-id.
+
+    Explicit version pins the generation, overriding the legacy
+    api_id-presence inference even though an api_id is configured.
+    """
+    _patch_httpx(monkeypatch, _FakeResponse(200, {}))
+    f = XSOARFetcher(
+        "https://xsoar.example.com",
+        "KEY6",
+        api_id="42",
+        version="v6",
+    )
+    assert f.is_v8 is False
+
+    run(f.post("/incidents/search", {"filter": {}}))
+    sent = _FakeAsyncClient.last
+    assert sent["url"] == "https://xsoar.example.com/incidents/search"
+    assert "x-xdr-auth-id" not in sent["headers"]
+
+
+def test_version_unset_with_api_id_infers_v8(monkeypatch):
+    """version unset + api_id set → v8 (inference fallback unchanged)."""
+    _patch_httpx(monkeypatch, _FakeResponse(200, {}))
+    f = XSOARFetcher("https://api-x.example.com", "K", api_id="9")
+    assert f.is_v8 is True
+    run(f.post("/incidents/search", {}))
+    sent = _FakeAsyncClient.last
+    assert sent["url"] == "https://api-x.example.com/xsoar/public/v1/incidents/search"
+    assert sent["headers"]["x-xdr-auth-id"] == "9"
+
+
+def test_version_unset_blank_api_id_infers_v6(monkeypatch):
+    """version unset + api_id blank → v6 (inference fallback)."""
+    _patch_httpx(monkeypatch, _FakeResponse(200, {}))
+    f = XSOARFetcher("https://xsoar.example.com", "K", api_id="", version=None)
+    assert f.is_v8 is False
+    run(f.post("/incidents/search", {}))
+    sent = _FakeAsyncClient.last
+    assert sent["url"] == "https://xsoar.example.com/incidents/search"
+    assert "x-xdr-auth-id" not in sent["headers"]
+
+
 def test_verify_ssl_passed_to_client(monkeypatch):
     """verify_ssl=False must reach httpx.AsyncClient(verify=...)."""
     _patch_httpx(monkeypatch, _FakeResponse(200, {}))

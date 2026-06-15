@@ -532,7 +532,7 @@ async function loadLiveMeta(connectorId: string): Promise<LiveMeta | null> {
         version?: unknown;
         configSchema?: {
           required?: unknown;
-          properties?: Record<string, { type?: unknown; default?: unknown }>;
+          properties?: Record<string, { type?: unknown; default?: unknown; enum?: unknown[] }>;
         };
         secretSlots?: Array<{ name?: unknown; required?: unknown }>;
         spec?: { tools?: Array<Record<string, unknown>> };
@@ -589,13 +589,24 @@ async function loadLiveMeta(connectorId: string): Promise<LiveMeta | null> {
         : [];
       const props = doc?.configSchema?.properties ?? {};
       for (const [key, prop] of Object.entries(props)) {
+        // A JSON-Schema `string` property with a non-empty `enum` renders
+        // as a native dropdown (type:"select" + options[]), mirroring the
+        // web connector's curated extractor_mode field — but derived purely
+        // from connector.yaml with no hardcoding. mapConfigType() collapses
+        // every non-boolean/non-array type to "string", so enum-as-dropdown
+        // is the one shape it can't express on its own.
+        const propType = typeof prop?.type === "string" ? prop.type : "";
+        const enumValues = Array.isArray(prop?.enum) ? prop.enum : [];
+        const isEnumString =
+          (propType === "string" || propType === "") && enumValues.length > 0;
         config.push({
           display: humanizeFieldName(key),
           name: key,
-          type: mapConfigType(prop?.type),
+          type: isEnumString ? "select" : mapConfigType(prop?.type),
           required: required.includes(key),
           defaultValue:
             prop?.default !== undefined ? String(prop.default) : undefined,
+          ...(isEnumString ? { options: enumValues.map(String) } : {}),
         });
       }
       if (Array.isArray(doc?.secretSlots)) {

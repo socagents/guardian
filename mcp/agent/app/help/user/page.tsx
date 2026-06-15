@@ -2956,6 +2956,49 @@ Networks documentation and returning evidence-backed, cited answers.
               </ul>
             </SubSection>
 
+            <SubSection icon="alt_route" title="Running multiple instances (e.g. XSOAR v6 + v8) (v0.2.29)">
+              <p className="text-sm leading-relaxed">
+                You can now enable <strong>more than one instance of the
+                same connector at the same time</strong> — for example a
+                Cortex XSOAR 6 (on-prem) tenant and a Cortex XSOAR 8 (cloud)
+                tenant running side by side. Guardian routes each request to
+                the right tenant on its own; you just talk about the tenant
+                you mean.
+              </p>
+              <p className="text-sm leading-relaxed mt-2">
+                To set this up on XSOAR:
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm">
+                <li>
+                  Create an instance for your v6 tenant. Give it a
+                  distinct name (for example <Code>xsoar-v6</Code>) and pick{" "}
+                  <strong>v6</strong> from the new <strong>Version</strong>{" "}
+                  dropdown on the form.
+                </li>
+                <li>
+                  Create a second instance for your v8 tenant with a
+                  different name (for example <Code>xsoar-v8</Code>) and pick{" "}
+                  <strong>v8</strong> from the <strong>Version</strong>{" "}
+                  dropdown.
+                </li>
+                <li>
+                  <strong>Enable both</strong> instances. Each runs in its
+                  own container, so they don&apos;t interfere with each other.
+                </li>
+              </ul>
+              <p className="text-sm leading-relaxed mt-2">
+                Once two (or more) instances of a connector are enabled, the
+                agent picks the target tenant from your wording. Ask
+                &ldquo;investigate the v6 case 12345&rdquo; and it works
+                against your v6 tenant; ask about a v8 case and it targets v8.
+                If a request is <strong>ambiguous</strong> about which tenant
+                you mean, the agent asks which one rather than guessing — it
+                never silently picks the wrong tenant. Connectors with a
+                single enabled instance are unchanged: you keep talking to
+                them exactly as before.
+              </p>
+            </SubSection>
+
             <SubSection icon="cable" title="The three connectors">
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>

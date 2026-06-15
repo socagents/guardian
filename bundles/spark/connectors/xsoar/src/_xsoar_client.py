@@ -88,6 +88,7 @@ class XSOARFetcher:
         api_key: str,
         api_id: Optional[str] = None,
         verify_ssl: bool = True,
+        version: Optional[str] = None,
     ):
         # Normalize base url: strip trailing /. Do NOT bake the v8 prefix
         # into self.base here — we prepend it per-request in _full_url so
@@ -99,11 +100,26 @@ class XSOARFetcher:
         # may surface a blank api_id for v6 instances.
         self.api_id = str(api_id) if api_id not in (None, "") else None
         self.verify_ssl = bool(verify_ssl)
+        # Generation resolution precedence: an EXPLICIT version config field
+        # wins; otherwise fall back to the legacy api_id inference (api_id
+        # present → v8). This keeps existing instances (no version set)
+        # working while letting an operator pin the generation directly.
+        ver = str(version).strip().lower() if version not in (None, "") else None
+        if ver == "v8":
+            self._is_v8 = True
+        elif ver == "v6":
+            self._is_v8 = False
+        else:
+            self._is_v8 = self.api_id is not None
 
     @property
     def is_v8(self) -> bool:
-        """True when this instance is XSOAR 8 / Cortex cloud (api_id set)."""
-        return self.api_id is not None
+        """True when this instance is XSOAR 8 / Cortex cloud.
+
+        Resolved at construction: explicit `version` (v6/v8) wins, else
+        inferred from whether `api_id` is set (legacy behavior).
+        """
+        return self._is_v8
 
     def _headers(self) -> dict[str, str]:
         headers = {
@@ -111,8 +127,11 @@ class XSOARFetcher:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        # x-xdr-auth-id is attached ONLY for v8 — v6 on-prem rejects it.
-        if self.api_id is not None:
+        # x-xdr-auth-id is attached ONLY for v8 AND only when an api_id is
+        # present. Keying on the resolved generation (not api_id alone) lets
+        # an explicit version="v6" correctly suppress the v8 auth header even
+        # if an api_id happens to be configured. v6 on-prem rejects this header.
+        if self.is_v8 and self.api_id:
             headers["x-xdr-auth-id"] = self.api_id
         return headers
 

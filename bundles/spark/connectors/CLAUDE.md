@@ -29,6 +29,15 @@ Each connector is a subdirectory named after itself:
 
 Pre-v0.5.0 `module` style (in-process Python inside the agent) is removed.
 
+## Multi-active-instance (v0.2.29)
+
+A connector can have **2+ enabled instances at once**, each with its own container (`guardian-connector-<id>-<name>`). The `instance_store` schema is `UNIQUE(connector_id, name)`; v0.2.29 lifted the old guard that 409'd a second `enabled=True` instance for the same connector. The advertise gate is now ≥1 *enabled* instance.
+
+Authoring implications:
+- **Tools register once per connector** under their existing names — you do NOT add per-instance tool variants. When 2+ instances are enabled, `connector_loader` adds an optional `instance: str` selector to each tool's synthesized signature and resolves the target instance **at call time** (by name; errors — never silently — when the selection is missing/ambiguous/unknown, or the tool is disabled for the chosen instance). With a single enabled instance the signature is unchanged (no `instance` arg). Don't bake instance assumptions into a tool implementation — a tool body only sees its own instance's config via the container's env/`merged_config`.
+- **enum config fields render as dropdowns.** A `connector.yaml` configSchema field with a non-empty `enum` (string) is shown as a dropdown on the create-instance form automatically — no hardcoding in the agent's connector catalogue.
+- **xsoar's `version` field** is the reference example: an optional `enum: ["v6","v8"]` config field that *forces* the generation (v6 = on-prem, Authorization header only; v8 = cloud, `x-xdr-auth-id` header + `/xsoar/public/v1` prefix). When blank it falls back to inferring from whether `api_id` is present. This is what lets a v6 instance and a v8 instance of the same connector run unambiguously side by side.
+
 ## Catalog boundary (v0.5.0+)
 
 The agent has 4 MARKETPLACE tools available — these mutate catalog metadata:

@@ -455,6 +455,25 @@ the boundary: "That would let me alter my own contract — outside the
 self-modification surface. To make this kind of change, edit
 \`bundles/spark/manifest.yaml\` and redeploy the bundle."
 
+## Multiple connector instances (tenants / versions)
+
+A connector can have more than one instance configured at once — for example
+an XSOAR 6 (on-prem) tenant AND an XSOAR 8 (cloud) tenant live at the same
+time. When that happens, the connector's tools take an extra \`instance\`
+argument and the tool description lists the valid values (e.g. \`xsoar-v6\`,
+\`xsoar-v8\`).
+
+- When two or more instances of a connector are configured you MUST pass
+  \`instance\` on every call for that connector — choose the one the operator's
+  request refers to ("the v6 case" → the v6 instance; a request about the
+  cloud tenant → the v8 instance). Omitting it returns an error listing the
+  valid values, and you should retry with the right one.
+- Instance names encode their role; read the tool description for the exact
+  values. If the request doesn't make the target tenant/version clear, ask
+  which one rather than guessing — never silently default.
+- With a single instance configured the \`instance\` argument is absent; call
+  the tool exactly as before.
+
 ## CRITICAL - XSOAR Investigation Workflow
 
 This is the core loop. You work Cortex XSOAR cases end-to-end. When

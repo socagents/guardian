@@ -383,6 +383,7 @@ def _build_container_proxy(
     args_spec: list[dict[str, Any]],
     description: str,
     proxy_call_tool: Callable,
+    instance_names: list[str] | None = None,
 ) -> Callable:
     """Synthesize an async function whose signature mirrors a connector's
     `connector.yaml` tool args, then forwards the call to the connector's
@@ -446,6 +447,26 @@ def _build_container_proxy(
             # null) and can apply its own default.
             optional_decls.append(f"{name}=None")
         param_names.append(name)
+
+    # v0.2.29 (#43): when a connector has 2+ enabled instances, expose an
+    # optional `instance` selector so the agent routes the call to a specific
+    # tenant (e.g. XSOAR 6 vs XSOAR 8). It goes in the SIGNATURE (so FastMCP
+    # advertises it) but NOT in param_names — the call-time wrapper consumes
+    # it and never forwards it to the connector container. Single-instance
+    # connectors omit it entirely; their signature stays byte-identical to
+    # pre-v0.2.29.
+    if instance_names:
+        optional_decls.append("instance=None")
+        annotations["instance"] = str
+        _names = ", ".join(repr(n) for n in instance_names)
+        base_desc = description or f"Proxy to {connector_id} container for {tool_name}."
+        description = (
+            f"{base_desc}\n\nThis connector has multiple configured instances. "
+            f"Set the `instance` argument to choose which tenant to act on — one "
+            f"of: {_names}. Required while more than one instance is enabled; "
+            f"omitting it returns an error listing the valid values."
+        )
+
     param_decls = required_decls + optional_decls
 
     annotations["return"] = Any
@@ -499,6 +520,7 @@ def _resolve_callable(
     connector_dir: Path,
     spec_yaml: dict,
     instance_kwargs: dict | None = None,
+    instance_names: list[str] | None = None,
 ) -> tuple[list[tuple[str, Callable]], str]:
     """Resolve tool callables for a connector — v0.5.0 container-only path.
 
@@ -565,6 +587,7 @@ def _resolve_callable(
             args_spec=args_spec,
             description=tool.get("description") or "",
             proxy_call_tool=proxy_call_tool,
+            instance_names=instance_names,
         )
         pairs.append((tool_name, proxy_fn))
 
@@ -618,13 +641,22 @@ def _translate_keys(connector_id: str, source: dict[str, Any]) -> dict[str, Any]
 
 def _wrap_with_instance(
     fn: Callable,
-    instance: Instance,
+    instances: list[Instance],
     secret_store: SecretStore | None = None,
     tool_name: str | None = None,
     legacy_name: str | None = None,
     human_required: set[str] | None = None,
 ) -> Callable:
     """Return a wrapper that sets the instance contextvar around `fn`.
+
+    v0.2.29 (#43): `instances` is the connector's list of ENABLED instances.
+    When more than one is enabled the wrapper resolves the target at call
+    time from the `instance` argument the agent passes (added to the
+    synthesized signature by _build_container_proxy); a missing-but-ambiguous,
+    unknown, or per-instance-disabled selection raises a tool error instead
+    of silently routing to the wrong tenant. With a single enabled instance
+    the `instance` argument is absent and that one is used directly —
+    behavior identical to pre-v0.2.29.
 
     Phase 5: secret VALUES are read from the SecretStore on EVERY call
     (not at registration time) so live secret rotation works — change
@@ -673,25 +705,61 @@ def _wrap_with_instance(
         reset_current_actor,
     )
 
-    connector_id = instance.connector_id
+    if not instances:
+        raise ValueError("_wrap_with_instance requires at least one instance")
+    connector_id = instances[0].connector_id
     namespaced = f"{connector_id}.{tool_name}" if tool_name else connector_id
     bare_tool_name = tool_name or namespaced
-    # v0.1.20: per-instance `trusted: true` flag in the instance config
-    # bypasses the human-approval gate. Operators set this on lab/
-    # sandbox connectors where every action is intentional; production
-    # connectors leave it unset (default false) so the manifest's
-    # humanRequired list still fires. See approvals_bus.needs_human_approval.
-    instance_trusted = bool(instance.config.get("trusted", False))
-    require_approval = needs_human_approval(
+    multi = len(instances) > 1
+    _by_name = {i.name: i for i in instances}
+    _by_name_ci = {i.name.lower(): i for i in instances}
+    _valid_names = sorted(_by_name)
+
+    # v0.1.20: per-instance `trusted: true` config flag bypasses the human-
+    # approval gate (lab/sandbox connectors). v0.2.29 (#43): the BASE
+    # requirement is manifest-driven (instance-independent); the per-instance
+    # `trusted` bypass is applied per call against the RESOLVED target.
+    base_require_approval = needs_human_approval(
         tool_name=bare_tool_name,
         namespaced=namespaced,
         legacy_name=legacy_name,
         human_required=human_required or set(),
-        instance_trusted=instance_trusted,
+        instance_trusted=False,
     )
 
-    def _resolve_overrides() -> dict[str, Any]:
-        merged = instance.merged_config(secret_store=secret_store)
+    def _resolve_target(kwargs: dict[str, Any]) -> Instance:
+        """Pop `instance` from kwargs and return the target Instance.
+
+        Raises ValueError (surfaced to the agent as a tool error) when the
+        selection is missing-but-ambiguous, unknown, or the tool is disabled
+        for the chosen instance — never silently routes to the wrong tenant.
+        """
+        inst_arg = kwargs.pop("instance", None)
+        if inst_arg is not None and str(inst_arg) != "":
+            target = _by_name.get(str(inst_arg)) or _by_name_ci.get(
+                str(inst_arg).lower()
+            )
+            if target is None:
+                raise ValueError(
+                    f"unknown instance {inst_arg!r} for connector "
+                    f"{connector_id!r}; valid: {_valid_names}"
+                )
+        elif not multi:
+            target = instances[0]
+        else:
+            raise ValueError(
+                f"connector {connector_id!r} has multiple configured "
+                f"instances; pass instance= one of {_valid_names}"
+            )
+        if bare_tool_name in set(target.disabled_tools or []):
+            raise ValueError(
+                f"tool {bare_tool_name!r} is disabled for instance "
+                f"{target.name!r}"
+            )
+        return target
+
+    def _overrides_for(target: Instance) -> dict[str, Any]:
+        merged = target.merged_config(secret_store=secret_store)
         return _translate_keys(connector_id, merged)
 
     def _audit_arg_keys(args: tuple, kwargs: dict[str, Any]) -> list[str]:
@@ -702,7 +770,10 @@ def _wrap_with_instance(
             keys.append(f"<{len(args)} positional>")
         return keys
 
-    def _gate_request(args: tuple, kwargs: dict[str, Any]) -> str | None:
+    def _gate_request(
+        target: Instance, args: tuple, kwargs: dict[str, Any],
+        require_approval: bool,
+    ) -> str | None:
         """Open an approval request if needed; return id or None."""
         if not require_approval:
             return None
@@ -733,7 +804,7 @@ def _wrap_with_instance(
                 "approval_id": approval_id,
                 "tool": namespaced,
                 "connector_id": connector_id,
-                "instance_id": instance.id,
+                "instance_id": target.id,
                 "arg_keys": _audit_arg_keys(args, kwargs),
             },
         )
@@ -768,13 +839,14 @@ def _wrap_with_instance(
         )
 
     def _audit_meta(
-        args: tuple, kwargs: dict[str, Any], approval_id: str | None
+        target: Instance, args: tuple, kwargs: dict[str, Any],
+        approval_id: str | None,
     ) -> dict[str, Any]:
         meta: dict[str, Any] = {
             "tool": namespaced,
             "connector_id": connector_id,
-            "instance_id": instance.id,
-            "instance_name": instance.name,
+            "instance_id": target.id,
+            "instance_name": target.name,
             "arg_keys": _audit_arg_keys(args, kwargs),
         }
         if approval_id is not None:
@@ -788,7 +860,11 @@ def _wrap_with_instance(
     if inspect.iscoroutinefunction(fn):
         @functools.wraps(fn)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            token = set_current_instance(_resolve_overrides())
+            target = _resolve_target(kwargs)
+            require_approval = base_require_approval and not bool(
+                target.config.get("trusted", False)
+            )
+            token = set_current_instance(_overrides_for(target))
             actor_token = set_current_actor("agent")
             approval_id: str | None = None
             start = _time.perf_counter()
@@ -796,7 +872,7 @@ def _wrap_with_instance(
             error: str | None = None
             try:
                 # Phase 7: gate on human approval BEFORE running.
-                approval_id = _gate_request(args, kwargs)
+                approval_id = _gate_request(target, args, kwargs, require_approval)
                 if approval_id is not None:
                     bus = approvals_bus()
                     decision, reason = await bus.wait_async(approval_id)
@@ -808,7 +884,7 @@ def _wrap_with_instance(
                 raise
             finally:
                 duration_ms = int((_time.perf_counter() - start) * 1000)
-                meta = _audit_meta(args, kwargs, approval_id)
+                meta = _audit_meta(target, args, kwargs, approval_id)
                 if error is not None:
                     meta["error"] = error
                 record_event(
@@ -834,14 +910,18 @@ def _wrap_with_instance(
 
     @functools.wraps(fn)
     def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-        token = set_current_instance(_resolve_overrides())
+        target = _resolve_target(kwargs)
+        require_approval = base_require_approval and not bool(
+            target.config.get("trusted", False)
+        )
+        token = set_current_instance(_overrides_for(target))
         actor_token = set_current_actor("agent")
         approval_id: str | None = None
         start = _time.perf_counter()
         status = "success"
         error: str | None = None
         try:
-            approval_id = _gate_request(args, kwargs)
+            approval_id = _gate_request(target, args, kwargs, require_approval)
             if approval_id is not None:
                 bus = approvals_bus()
                 decision, reason = bus.wait_sync(approval_id)
@@ -948,36 +1028,52 @@ def iter_registrations(
         if not connector_yaml.is_file():
             raise ValueError(f"{connector_yaml} does not exist")
         spec = _load_yaml(connector_yaml)
-        pairs, function_prefix = _resolve_callable(cid, connector_dir, spec)
 
-        # For now Guardian uses single-instance-per-connector. Use the
-        # first (typically only) instance for the wrap. Multi-instance
-        # support is a follow-up — the platform's connector-manager
-        # registers tools per-instance with a discriminator in the
-        # tool name, which we'd mirror here.
+        # v0.2.29 (#43): register over the connector's ENABLED instances.
+        # Pre-v0.2.29 the loader hard-picked instances[0] and bound every
+        # tool to it (single-active assumption). Now: a connector with 2+
+        # enabled instances exposes an `instance` selector argument (added
+        # to the synthesized signature) and the wrapper routes each call to
+        # the chosen instance at call time. A connector with rows but none
+        # enabled advertises nothing.
         instances = store.list_for(cid)
-        primary = instances[0]
+        enabled = [i for i in instances if i.enabled]
+        if not enabled:
+            skipped.append(cid)
+            continue
+        multi = len(enabled) > 1
+        instance_names = [i.name for i in enabled]
 
-        # v0.14.0 R4.0 — per-instance disabled-tools filter. Operators
-        # disable individual tools via the /connectors Tools tab; we
-        # skip them at registration time so they never enter the
-        # agent's tool catalog. Opt-out default: empty list = all
-        # tools enabled. The filter matches against the BARE tool
-        # name (not the namespaced `<connector_id>.<tool>` form) so
+        pairs, function_prefix = _resolve_callable(
+            cid, connector_dir, spec,
+            instance_names=instance_names if multi else None,
+        )
+
+        # v0.14.0 R4.0 — per-instance disabled-tools filter. With multiple
+        # enabled instances the CATALOG hides a tool only if EVERY enabled
+        # instance disabled it (intersection); the wrapper enforces each
+        # instance's own disabled set at call time (a tool disabled for the
+        # SELECTED instance returns a clear error). Single-instance: the
+        # intersection is just that instance's disabled set — identical to
+        # pre-v0.2.29 behavior. The filter matches the BARE tool name so
         # operator-facing toggle strings stay readable.
-        disabled_set = set(primary.disabled_tools or [])
+        disabled_sets = [set(i.disabled_tools or []) for i in enabled]
+        catalog_disabled = (
+            set.intersection(*disabled_sets) if disabled_sets else set()
+        )
         original_count = len(pairs)
-        if disabled_set:
-            pairs = [(t, f) for (t, f) in pairs if t not in disabled_set]
+        if catalog_disabled:
+            pairs = [(t, f) for (t, f) in pairs if t not in catalog_disabled]
             logger.info(
-                "Connector %r instance %r: %d/%d tools enabled (operator disabled: %s)",
-                cid, primary.name, len(pairs), original_count,
-                sorted(disabled_set),
+                "Connector %r: %d/%d tools advertised (disabled across ALL "
+                "enabled instances: %s)",
+                cid, len(pairs), original_count, sorted(catalog_disabled),
             )
+        _names_str = ", ".join(instance_names)
         advertised.append(
-            f"{cid} ({primary.name}, {len(pairs)}/{original_count} tools)"
-            if disabled_set
-            else f"{cid} ({primary.name}, {len(pairs)} tools)"
+            f"{cid} ({_names_str}, {len(pairs)}/{original_count} tools)"
+            if catalog_disabled
+            else f"{cid} ({_names_str}, {len(pairs)} tools)"
         )
 
         for tool_name, raw_fn in pairs:
@@ -994,7 +1090,7 @@ def iter_registrations(
                 legacy = None
             wrapped = _wrap_with_instance(
                 raw_fn,
-                primary,
+                enabled,
                 secret_store=secret_store,
                 tool_name=tool_name,
                 legacy_name=legacy,

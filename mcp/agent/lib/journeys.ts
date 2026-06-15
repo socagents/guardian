@@ -4344,6 +4344,75 @@ export const JOURNEYS: Journey[] = [
   },
 
   {
+    id: "ops-xsoar-v6-v8-side-by-side",
+    category: "connectors",
+    title: "Run XSOAR v6 + v8 instances side by side",
+    summary:
+      "Enable two instances of the same connector at once — an on-prem XSOAR 6 tenant and a cloud XSOAR 8 tenant — and watch the agent route each request to the right tenant via the call-time `instance` selector. First real user of the v0.2.29 multi-active-instance capability.",
+    difficulty: "advanced",
+    durationMin: 8,
+    icon: "alt_route",
+    prompts: [
+      {
+        text: "List the active incidents on the v6 tenant.",
+        note: "With 2+ enabled xsoar instances, the agent must pass instance='xsoar-v6' to xsoar_list_incidents. The call routes to the v6 (on-prem) container; the audit row shows instance_name='xsoar-v6'.",
+      },
+      {
+        text: "Now show me the open cases on the v8 cloud tenant.",
+        note: "The agent passes instance='xsoar-v8'. The call routes to the v8 container (with the /xsoar/public/v1 prefix + x-xdr-auth-id header). instance_name='xsoar-v8' in the audit row — no cross-tenant leakage.",
+      },
+      {
+        text: "List the open XSOAR incidents.",
+        note: "Deliberately ambiguous about which tenant. With 2+ enabled, the agent must ASK which tenant (v6 or v8) rather than silently defaulting. A structured 'instance required' error backstops this if the agent guesses.",
+      },
+    ],
+    toolsExercised: ["xsoar_list_incidents", "xsoar_get_incident"],
+    apis: [
+      {
+        method: "POST",
+        path: "/api/agent/instances",
+        description:
+          "Create the v6 instance: {connector_id:'xsoar', name:'xsoar-v6', config:{version:'v6', api_url, ...}, secrets:{api_key}}. Pick Version=v6 in the create-instance dropdown (renders from connector.yaml enum, v0.2.29). guardian-updater starts guardian-connector-xsoar-xsoar-v6.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/instances",
+        description:
+          "Create the v8 instance: {connector_id:'xsoar', name:'xsoar-v8', config:{version:'v8', api_url, api_id}, secrets:{api_key}}. Pick Version=v8. With the one-enabled-per-connector guard lifted (v0.2.29), this no longer 409s when the v6 instance is already enabled.",
+      },
+      {
+        method: "PATCH",
+        path: "/api/agent/instances/{id}",
+        description:
+          "Ensure both instances are enabled. Toggling enabled triggers reload_tools_now() so the xsoar tools gain the optional `instance` parameter on the single→multi transition.",
+      },
+    ],
+    howToTest: [
+      "Open /connectors → Marketplace. Install Cortex XSOAR (operator ack — no instance yet).",
+      "Switch to Instances → Add Instance for XSOAR. Name='xsoar-v6'. In the Version dropdown pick 'v6'. Fill the on-prem api_url + api_key. Submit.",
+      "Add a second XSOAR instance. Name='xsoar-v8'. Version dropdown = 'v8'. Fill the cloud api_url + api_id (key id) + api_key. Submit. This succeeds with the v6 instance already enabled (the one-enabled-per-connector guard is lifted in v0.2.29).",
+      "Confirm both containers run: `docker ps` shows guardian-connector-xsoar-xsoar-v6 AND guardian-connector-xsoar-xsoar-v8 up.",
+      "In chat, paste prompt 1 (v6). Verify in /observability/events the xsoar_list_incidents call recorded instance_name='xsoar-v6'; the response is the on-prem tenant's incidents.",
+      "Paste prompt 2 (v8). Verify the call recorded instance_name='xsoar-v8'; the response is the cloud tenant's cases. No v6 data leaks into the v8 answer or vice versa.",
+      "Paste prompt 3 (ambiguous). Expected: the agent asks which tenant rather than guessing. If it does call the tool without `instance`, the connector_loader returns a structured error listing the valid instance names (xsoar-v6, xsoar-v8) — the agent surfaces that and asks you to disambiguate.",
+    ],
+    expectedResult:
+      "Two enabled XSOAR instances coexist, each in its own container. The agent reads the tenant you mean from your wording and passes the matching `instance` value (xsoar-v6 / xsoar-v8) on every xsoar tool call, so the right tenant is hit with no cross-tenant leakage. An ambiguous request makes the agent ask which tenant rather than silently defaulting. Single-instance connectors are unchanged — no `instance` argument appears for them.",
+    verifyVia: [
+      "`docker ps` shows both guardian-connector-xsoar-xsoar-v6 and guardian-connector-xsoar-xsoar-v8 running.",
+      "GET /api/agent/audit?action=tool_call (or /observability/events) → the v6 prompt's xsoar_list_incidents row carries instance_name='xsoar-v6'; the v8 prompt's row carries instance_name='xsoar-v8'.",
+      "Ask the agent 'what tools do you have for XSOAR, and what instances can they target?' → the xsoar tool descriptions list the valid `instance` values (xsoar-v6, xsoar-v8) with role hints.",
+      "Omitting the instance on an ambiguous request returns a structured 'instance required' error listing both valid names — never a silent wrong-tenant call.",
+    ],
+    related: [
+      "ops-create-web-container-instance",
+      "ops-marketplace-browse",
+    ],
+    prerequisites: ["ops-marketplace-browse"],
+    components: ["connectors", "xsoar", "marketplace", "secrets", "chat"],
+  },
+
+  {
     id: "ops-agent-marketplace-install",
     category: "connectors",
     title: "Ask the agent to install a connector",

@@ -10,6 +10,35 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.29] (unreleased) — *Two tenants, one connector — multi-active instances + XSOAR v6/v8*
+
+A connector can now run **multiple instances at the same time**, and the agent picks which one a tool acts on. First use: an **XSOAR 6** (on-prem) tenant and an **XSOAR 8** (cloud) tenant live simultaneously — ask the agent about a v6 case and it works the v6 tenant; ask about v8 and it targets v8.
+
+### What ships
+
+- **Multiple enabled instances per connector.** The old "one active instance per connector" limit is gone. Create as many as you need (distinct names); enable any number of them.
+- **The agent selects the tenant via an `instance` argument.** When 2+ instances of a connector are enabled, every tool for that connector gains an `instance` parameter; the agent sets it from your request. If it's ambiguous, the tool returns an error listing the valid instances instead of silently hitting the wrong tenant. With a single instance, nothing changes — tools look and behave exactly as before.
+- **Explicit XSOAR Version dropdown.** Creating an XSOAR instance now offers a **Version** dropdown (`v6` / `v8`) instead of inferring the generation from whether you filled in `api_id`. Existing instances keep working (the old inference is the fallback).
+- **connector.yaml `enum` fields render as dropdowns** automatically now — no UI hardcoding required.
+- The agent's guidance was updated so it knows to pass `instance` and infer the right tenant/version from your wording.
+
+### Operator impact
+
+- No installer change (Scenario 1). Re-run your existing installer; volumes preserved.
+- To run v6 + v8 together: create two XSOAR instances (e.g. `xsoar-v6`, `xsoar-v8`), pick the Version on each, enable both. Each gets its own connector container.
+
+### Files
+
+- `bundles/spark/mcp/src/usecase/instance_store.py` — lifted the one-enabled-per-connector guard (+ tests).
+- `bundles/spark/mcp/src/usecase/connector_loader.py` — register a shared tool set per connector; add the `instance` selector + call-time routing only when 2+ enabled (single-instance byte-identical) (+ tests).
+- `bundles/spark/mcp/src/api/instances.py` — enable/disable toggles a tool-catalog reload.
+- `bundles/spark/connectors/xsoar/` — explicit `version` field + generation override (+ tests).
+- `mcp/agent/app/api/marketplace/connectors/route.ts` — connector.yaml `enum` → dropdown.
+- `mcp/agent/lib/system-prompt.ts` — multi-instance routing guidance.
+- Architecture + user guide + journeys + connectors/CLAUDE.md.
+
+---
+
 ## [v0.2.28] (unreleased) — *Connector instances start reliably + tell you what happened*
 
 Creating a connector instance could "do nothing" — the dialog spun, then closed with no confirmation, and sometimes the connector's container never actually started and stayed down. This release makes instance creation self-healing and adds explicit feedback at every step.

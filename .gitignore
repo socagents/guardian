@@ -125,6 +125,7 @@ celerybeat.pid
 # Environments
 .env
 .env.vm
+.env.v*
 .guardian-agent/
 .venv
 env/

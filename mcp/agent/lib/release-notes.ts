@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.29",
+    date: "2026-06-15",
+    title: "Two tenants, one connector — multi-active instances + XSOAR v6/v8.",
+    highlights: [
+      "A connector can now run multiple enabled instances at once — e.g. an XSOAR 6 (on-prem) and an XSOAR 8 (cloud) tenant live simultaneously.",
+      "The agent picks which tenant a tool acts on via an 'instance' argument, inferred from your request; ambiguous calls error with the valid choices instead of hitting the wrong tenant.",
+      "Creating an XSOAR instance now has an explicit Version dropdown (v6 / v8) instead of inferring from api_id.",
+      "Single-instance connectors are unchanged. No installer change — re-run your existing installer.",
+    ],
+  },
+  {
     version: "0.2.28",
     date: "2026-06-15",
     title: "Connector instances start reliably + tell you what happened.",

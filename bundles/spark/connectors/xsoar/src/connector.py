@@ -143,6 +143,7 @@ def _get_xsoar_config() -> dict:
         "api_key": getattr(proxy, "api_key", None),
         "verify_ssl": getattr(proxy, "verify_ssl", True),
         "playground_id": getattr(proxy, "playground_id", None),
+        "version": getattr(proxy, "version", None),
     }
 
 
@@ -162,12 +163,14 @@ def _get_fetcher() -> XSOARFetcher:
         )
     api_id = cfg.get("api_id")
     verify_ssl = cfg.get("verify_ssl", True)
+    version = cfg.get("version")
 
     return XSOARFetcher(
         str(api_url),
         str(api_key),
         api_id=str(api_id) if api_id not in (None, "") else None,
         verify_ssl=bool(verify_ssl),
+        version=str(version) if version not in (None, "") else None,
     )
 
 
