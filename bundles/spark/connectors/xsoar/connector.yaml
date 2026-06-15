@@ -214,7 +214,10 @@ spec:
         Search the XSOAR threat-intel indicator store (IoCs — IPs, domains,
         hashes, URLs with reputation + relationship context). Use to enrich
         an investigation: "is this IP a known indicator?", "show malicious
-        domains seen this week".
+        domains seen this week". Returns a COMPACT summary per indicator
+        {id, type, value, score (0-3), reputation, source, …} — the score +
+        reputation are surfaced directly, so answer "how many bad IPs?" /
+        "top by reputation" from this result alone (no !findIndicators).
       args:
         - { name: "query", type: "string",  description: "XSOAR indicator-search query (e.g. 'type:IP and reputation:Bad', or a bare value '1.2.3.4'). Omit to list recent indicators.", required: false }
         - { name: "page",  type: "integer", description: "Zero-based page index (default 0).", required: false }

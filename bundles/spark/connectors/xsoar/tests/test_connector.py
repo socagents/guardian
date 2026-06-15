@@ -1134,3 +1134,97 @@ def test_import_playbook_other_4xx_is_normal_error(monkeypatch):
     assert out["ok"] is False
     assert out.get("import_unavailable") is None
     assert "request rejected" in out["error"]
+
+
+# ═══════════════════════════════════════════════════════════════════
+# search_indicators — compact summary projection (v0.2.34, issue #48)
+# ═══════════════════════════════════════════════════════════════════
+
+
+def test_search_indicators_summarizes_compact_keys_and_reputation(monkeypatch):
+    """Raw verbose IoC -> compact dict; score 3 -> 'Bad'; verbose keys
+    dropped; source prefers sourceBrands; query passed through."""
+    rf = _RecordingFetcher(post_reply={
+        "total": 1,
+        "iocObjects": [{
+            "id": "7a1", "version": 4, "cacheVersn": 0, "sizeInBytes": 99,
+            "sortValues": ["x"], "comments": [{"id": "c1"}],
+            "indicator_type": "IP", "value": "8.8.8.8", "score": 3,
+            "sourceBrands": ["VirusTotal"], "sourceInstances": ["VT_prod"],
+            "investigationIDs": ["221"], "expirationStatus": "active",
+            "created": "t0", "modified": "t1", "CustomFields": {"k": "v"},
+        }],
+    })
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_search_indicators(query="type:IP", size=10))
+    assert out["ok"] is True
+    assert out["total"] == 1
+    assert out["result_count"] == 1
+    ind = out["indicators"][0]
+    assert ind == {
+        "id": "7a1", "type": "IP", "value": "8.8.8.8", "score": 3,
+        "reputation": "Bad", "source": "VirusTotal",
+        "created": "t0", "modified": "t1",
+        "investigation_ids": ["221"], "expiration_status": "active",
+    }
+    # Verbose store fields must NOT leak through.
+    assert "version" not in ind and "CustomFields" not in ind
+    assert "sortValues" not in ind and "comments" not in ind
+    # Request shape: query forwarded to /indicators/search.
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/indicators/search")
+    assert body["filter"]["query"] == "type:IP"
+
+
+def test_search_indicators_missing_score_maps_to_unknown(monkeypatch):
+    """No score key -> no KeyError, score 0, reputation 'Unknown'."""
+    rf = _RecordingFetcher(post_reply={
+        "total": 1,
+        "iocObjects": [{
+            "id": "7a2", "indicator_type": "Domain",
+            "value": "evil.example.com", "sourceBrands": ["Manual"],
+        }],
+    })
+    _install_fetcher(monkeypatch, rf)
+    ind = run(connector.xsoar_search_indicators())["indicators"][0]
+    assert ind["score"] == 0
+    assert ind["reputation"] == "Unknown"
+    assert ind["type"] == "Domain"
+    assert ind["source"] == "Manual"
+
+
+def test_search_indicators_source_falls_back_to_source_instances(monkeypatch):
+    """Empty sourceBrands -> source from sourceInstances; score 2 ->
+    'Suspicious'; camelCase indicatorType also resolved."""
+    rf = _RecordingFetcher(post_reply={
+        "total": 1,
+        "iocObjects": [{
+            "id": "7a3", "indicatorType": "File", "value": "d41d8cd9",
+            "score": 2, "sourceBrands": [], "sourceInstances": ["Cortex XSOAR"],
+        }],
+    })
+    _install_fetcher(monkeypatch, rf)
+    ind = run(connector.xsoar_search_indicators(query="type:File"))["indicators"][0]
+    assert ind["score"] == 2
+    assert ind["reputation"] == "Suspicious"
+    assert ind["type"] == "File"
+    assert ind["source"] == "Cortex XSOAR"
+
+
+def test_search_indicators_empty_store_returns_empty_list(monkeypatch):
+    """No indicators (bare `data` path) -> ok, empty list, zero totals."""
+    rf = _RecordingFetcher(post_reply={"total": 0, "data": []})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_search_indicators(query="type:IP"))
+    assert out["ok"] is True
+    assert out["indicators"] == []
+    assert out["total"] == 0
+    assert out["result_count"] == 0
+
+
+def test_summarize_indicator_first_source_scalar_and_missing():
+    """_first_source: bare-string source, and both-missing -> None."""
+    assert connector._first_source({"sourceBrands": "VT"}) == "VT"
+    assert connector._first_source({"sourceInstances": []}) is None
+    assert connector._first_source({}) is None

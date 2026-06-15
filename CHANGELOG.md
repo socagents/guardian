@@ -10,6 +10,30 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.34] (unreleased) — *XSOAR indicator search returns a compact, scored result*
+
+Follow-up to v0.2.33. The v6 harness smoke showed the agent flailing on "how many IP indicators / top by reputation" — `search_indicators` → `!findIndicators` → docs → timeout. Root cause: `xsoar_search_indicators` returned **raw, verbose** XSOAR indicator objects (score/reputation buried under dozens of fields per object), while the `!findIndicators` command returned a clean scored table — so the agent abandoned the proper tool for the command.
+
+### What ships
+
+- **`xsoar_search_indicators` now returns a compact summary per indicator** — `{id, type, value, score (0-3), reputation (Unknown/Good/Suspicious/Bad), source, created, modified, investigation_ids, expiration_status}` — mirroring how `xsoar_list_incidents` summarizes cases. The score + reputation are surfaced directly, so "how many bad IPs?" / "top by reputation" is answerable from this result alone. Payloads shrink dramatically (no more `CustomFields`/`sortValues`/`comments` dumps).
+- **Bug-family audit** across all xsoar tools (the v0.2.33 retrospective discipline): exactly three returned raw upstream objects. `search_indicators` is fixed here; `xsoar_get_incident` is intentionally a full record (its drill-in contract — `version` must survive for `update_incident`); `xsoar_search_evidence` is the same pattern and is tracked for a follow-up (issue #49) with an inline code comment.
+- The `xsoar_platform_reference` skill now notes the connector surfaces score/reputation directly — closing the loop so the agent never reaches for `!findIndicators`.
+
+### Operator impact
+
+- No installer change (Scenario 1). Re-run your existing installer; volumes preserved.
+- The connector image rebuilds on this tag; guardian-updater pulls the new digest.
+
+### Files
+
+- `bundles/spark/connectors/xsoar/src/connector.py` — `_DBOT_SCORE_LABELS`, `_first_source`, `_summarize_indicator`; `search_indicators` returns the summarized list + updated docstring; inline deferral note at `search_evidence`.
+- `bundles/spark/connectors/xsoar/connector.yaml` — search_indicators description notes the compact scored shape.
+- `bundles/spark/connectors/xsoar/tests/test_connector.py` — 5 new tests (compact projection, missing-score, source fallback, empty store, `_first_source` units).
+- `bundles/spark/mcp/skills/foundation/xsoar_platform_reference.md` — note the direct score/reputation surfacing.
+
+---
+
 ## [v0.2.33] (unreleased) — *Sharper XSOAR investigations: platform reference skill + lighter read path*
 
 A 20-prompt live smoke against the XSOAR **v6** tenant (chat agent, deployed dev install) passed broadly — instance routing, full incident lifecycle, commands/enrich/lists, memory, ATT&CK knowledge, skills, and jobs all work. It surfaced one reproducible defect class: the agent had no authoritative XSOAR **platform** reference, so it burned turns probing query-syntax variants and flailed to the open web on concept questions.

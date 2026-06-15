@@ -474,6 +474,63 @@ def _summarize_incident(inc: dict) -> dict:
     }
 
 
+# DBotScore (0-3) → human reputation label. XSOAR's own vocabulary:
+# 0 Unknown · 1 Good · 2 Suspicious · 3 Bad. Matches the operator-facing
+# `reputation:Bad` query vocabulary so the agent reads a consistent label.
+_DBOT_SCORE_LABELS = {0: "Unknown", 1: "Good", 2: "Suspicious", 3: "Bad"}
+
+
+def _first_source(ind: dict) -> Optional[str]:
+    """Pick a single human-readable source brand for an indicator.
+
+    XSOAR carries provenance in `sourceBrands` (the integration brands that
+    contributed the indicator) and `sourceInstances` (the configured
+    instance names). v6's /indicators/search normally returns these as
+    lists, but a single-source indicator can come back as a bare string —
+    and either key can be missing. Prefer sourceBrands, fall back to
+    sourceInstances, and collapse to the first element so the summary
+    mirrors !findIndicators' single `Source` column instead of dumping the
+    whole array. Returns None when neither is populated.
+    """
+    for key in ("sourceBrands", "sourceInstances"):
+        raw = ind.get(key)
+        if raw is None or raw == "":
+            continue
+        if isinstance(raw, list):
+            if raw:
+                return raw[0]
+            continue
+        return raw  # bare scalar (single-source indicator)
+    return None
+
+
+def _summarize_indicator(ind: dict) -> dict:
+    """Project a compact indicator summary the agent can triage on.
+
+    Mirrors _summarize_incident: the agent doesn't need the full verbose
+    XSOAR IoC record (CustomFields, cacheVersn, sortValues, sizeInBytes,
+    comments, …) at the search level. This compact shape mirrors the
+    !findIndicators table (ID | IndicatorType | InvestigationIDs | Score |
+    Source | Value) plus a derived reputation label, so the agent reads the
+    score/reputation directly instead of falling back to !findIndicators or
+    the docs. Drill into the raw store with a value-scoped query when full
+    context is needed.
+    """
+    score = _norm_int(ind.get("score"), 0)
+    return {
+        "id": ind.get("id"),
+        "type": ind.get("indicator_type") or ind.get("indicatorType"),
+        "value": ind.get("value"),
+        "score": score,
+        "reputation": _DBOT_SCORE_LABELS.get(score, "Unknown"),
+        "source": _first_source(ind),
+        "created": ind.get("created"),
+        "modified": ind.get("modified"),
+        "investigation_ids": _as_list(ind.get("investigationIDs")),
+        "expiration_status": ind.get("expirationStatus"),
+    }
+
+
 # ─── xsoar_list_incidents ────────────────────────────────────────────
 
 
@@ -1080,7 +1137,15 @@ async def xsoar_search_indicators(
                     "page": 0, "size": 50}}
 
     Returns:
-        {ok, indicators: [...], total}.
+        {ok, indicators: [...], total, result_count}. Each indicator is a
+        COMPACT summary (not the raw verbose store record):
+        {id, type, value, score (0-3), reputation
+        (Unknown/Good/Suspicious/Bad), source, created, modified,
+        investigation_ids, expiration_status}. The `score`/`reputation`
+        are surfaced directly so you can answer "how many bad IPs?" /
+        "top by reputation" from this result alone — no need to fall back
+        to !findIndicators. `total` is XSOAR's reported total (may exceed
+        the page); `result_count` is this page's length.
     """
     filt: dict[str, Any] = {
         "page": _norm_int(page, 0),
@@ -1097,10 +1162,12 @@ async def xsoar_search_indicators(
     indicators = response.get("iocObjects")
     if indicators is None:
         indicators = response.get("data") or []
+    # `total`/`result_count` are computed off the RAW list (before
+    # summarizing) — summarizing preserves length, so the counts hold.
     total = response.get("total", len(indicators))
 
     return {
-        "indicators": indicators,
+        "indicators": [_summarize_indicator(i) for i in indicators],
         "total": total,
         "result_count": len(indicators),
     }
@@ -1199,6 +1266,11 @@ async def xsoar_search_evidence(incident_id: str) -> dict:
     if evidence is None:
         evidence = response.get("data") or []
 
+    # NOTE (bug-family sibling of #48): this still passes the RAW verbose
+    # evidence objects through, the same raw-passthrough pattern that
+    # `xsoar_search_indicators` fixed via `_summarize_indicator` in
+    # v0.2.34. Deferred — a `_summarize_evidence()` helper is tracked in
+    # issue #49 (lower urgency: no competing !command the agent flails to).
     return {
         "evidence": evidence,
         "count": len(evidence),

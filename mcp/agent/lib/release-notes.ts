@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.34",
+    date: "2026-06-15",
+    title: "XSOAR indicator search returns a compact, scored result.",
+    highlights: [
+      "xsoar_search_indicators now returns a compact summary per indicator {id, type, value, score, reputation, source, …} instead of raw verbose store objects.",
+      "Score + reputation are surfaced directly, so 'how many bad IPs / top by reputation' is answered from the search result alone — no fallback to !findIndicators.",
+      "Payloads shrink dramatically (no more CustomFields/sortValues/comments dumps in the result).",
+      "Bug-family audited all xsoar tools; search_evidence (same pattern) tracked as a follow-up. No installer change.",
+    ],
+  },
+  {
     version: "0.2.33",
     date: "2026-06-15",
     title: "Sharper XSOAR investigations — platform reference skill + lighter read path.",
