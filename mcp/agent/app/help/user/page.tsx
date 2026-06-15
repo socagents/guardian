@@ -1433,11 +1433,16 @@ aborted      ── operator clicked Cancel before completion`}</Pre>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
                   <Term>Foundation</Term> — reusable building blocks.
-                  Guardian ships four: the Cortex KB search discipline
+                  Guardian ships five: the Cortex KB search discipline
                   (<Code>cortex_kb_search</Code>), its query-patterns
-                  and raw-API companions, and the XSOAR case-triage
-                  reference (<Code>xsoar_case_triage</Code>). The agent
-                  draws on these to compose larger flows.
+                  and raw-API companions, the XSOAR case-triage
+                  reference (<Code>xsoar_case_triage</Code>), and the
+                  XSOAR platform reference
+                  (<Code>xsoar_platform_reference</Code>) — the War
+                  Room / <Code>!command</Code> / query-syntax card the
+                  agent consults before running an XSOAR command or
+                  filtering cases. The agent draws on these to compose
+                  larger flows.
                 </li>
                 <li>
                   <Term>Scenarios</Term> — operator-authored multi-step

@@ -2,7 +2,7 @@
 name: xsoar_case_investigation
 displayName: Investigate an XSOAR case end-to-end
 category: workflows
-description: '**LOAD-FIRST FOR ANY XSOAR CASE / INCIDENT INVESTIGATION REQUEST.** Whenever the operator asks to investigate, triage, summarize, enrich, document, work, or close a Cortex XSOAR case (incident) — call `skills_read({file_path: "workflows/xsoar_case_investigation.md"})` IMMEDIATELY as your first tool call, BEFORE invoking any `xsoar_*` tool. The skill body contains the mandatory investigation lifecycle: monitor (`xsoar_list_incidents`) → fetch (`xsoar_get_incident` + `xsoar_get_war_room`) → research (cortex-docs `cortex_*` + web `guardian_web_*`) → enrich (`xsoar_enrich_indicator` for reputation + `xsoar_search_indicators` for correlation) → document (`xsoar_add_note` / `xsoar_add_entry`, `xsoar_save_evidence`) → resolve (`xsoar_update_incident` — the connector resolves the version, `xsoar_close_incident` with reason + notes). Carries the status / severity code reference and the never-invent-IDs rule. The XSOAR connector talks to BOTH XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud — the tools auto-detect; you do not. Read-then-write — read the case fully before mutating it. THROUGHOUT the investigation, also keep a local Guardian Issue (`issue_create` right after fetch with `source_ref`=the XSOAR id, `issue_add_event` per step, `issue_update` for the verdict) and group related Issues into Cases (`case_create` / `case_add_issue`) — this is Guardian''s own investigation record shown in the Investigation UI.'
+description: '**LOAD-FIRST FOR ANY XSOAR CASE / INCIDENT INVESTIGATION REQUEST.** Whenever the operator asks to investigate, triage-and-decide, enrich, document, work, respond to, escalate, or close a Cortex XSOAR case (incident) — call `skills_read({file_path: "workflows/xsoar_case_investigation.md"})` IMMEDIATELY as your first tool call, BEFORE invoking any `xsoar_*` tool. The skill body contains the mandatory investigation lifecycle: monitor (`xsoar_list_incidents`) → fetch (`xsoar_get_incident` + `xsoar_get_war_room`) → research (cortex-docs `cortex_*` + web `guardian_web_*`) → enrich (`xsoar_enrich_indicator` for reputation + `xsoar_search_indicators` for correlation) → document (`xsoar_add_note` / `xsoar_add_entry`, `xsoar_save_evidence`) → resolve (`xsoar_update_incident` — the connector resolves the version, `xsoar_close_incident` with reason + notes). Carries the status / severity code reference and the never-invent-IDs rule. **For a PURE READ-ONLY request — list cases, show/summarize one case, count by severity, read the War Room, look up a value — you do NOT need the full lifecycle or a local Issue: answer from the read tools (`xsoar_list_incidents` / `xsoar_get_incident` / `xsoar_get_war_room` / `xsoar_search_indicators`), using `xsoar_platform_reference` for exact query syntax. The local Guardian Issue/Case record becomes mandatory the moment you enrich, decide a verdict, document onto the case, or mutate it.** The XSOAR connector talks to BOTH XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud — the tools auto-detect; you do not. Read-then-write — read the case fully before mutating it. For an actual investigation, keep a local Guardian Issue throughout (`issue_create` right after fetch with `source_ref`=the XSOAR id, `issue_add_event` per step, `issue_update` for the verdict) and group related Issues into Cases (`case_create` / `case_add_issue`) — Guardian''s own investigation record shown in the Investigation UI. Platform syntax/concepts/`!command` reference: `xsoar_platform_reference`.'
 icon: cases
 source: platform
 loadingMode: on-demand
@@ -66,6 +66,17 @@ Research connectors (read-only, no XSOAR writes):
 - `web` — `guardian_web_*` (navigate / evaluate / screenshot / get-cookies). Reach external reputation pages, vendor advisories, or any JS-gated source a REST tool can't.
 
 ---
+
+## Step 0 — Scope the request (read-only vs investigation)
+
+Before Step 1, decide which kind of request this is — it determines whether the full lifecycle + local Issue record applies:
+
+| Request | Path |
+|---|---|
+| **Read-only** — "list open cases", "show/summarize incident N", "how many high-severity cases?", "read the War Room", "is this IP a known indicator?", "what does `!Print` do?" | **Light path.** Answer directly from the read tools (`xsoar_list_incidents`, `xsoar_get_incident`, `xsoar_get_war_room`, `xsoar_search_indicators`) — use `xsoar_platform_reference` for the exact query syntax (don't probe variants; don't web-search XSOAR concepts). **Do NOT create a local Guardian Issue/Case** for a pure read. Stop when the question is answered. |
+| **Investigation / mutation** — "investigate", "triage and decide", "enrich the indicators", "document findings", "escalate", "respond", "close" — or the read above leads you to enrich, reach a verdict, write onto the case, or mutate it | **Full path.** Run the lifecycle below in order, and keep the local Guardian Issue record throughout (see § Record the investigation as a local Guardian Issue). |
+
+The boundary is **side effects + verdicts**: the moment you enrich an indicator, reach a disposition, write to the War Room, or change a field, you are investigating — open the local Issue and follow the full lifecycle. A pure "tell me what's there" answer does not need that overhead.
 
 ## The investigation lifecycle (mandatory order)
 
@@ -289,6 +300,7 @@ When the tenant's reasons differ, confirm via `cortex-docs` (search "incident cl
 
 ## Cross-references
 
+- **Platform reference**: `xsoar_platform_reference` — XSOAR concepts (War Room, playground + `playground_id`, indicator store, Lists), the `!command` catalog, and the exact incident + indicator query-syntax tables (incl. the per-severity count recipe + v6/v8 differences). Load it before guessing query syntax or running a raw `!command`.
 - **Reference skill**: `xsoar_case_triage` — the field/severity/status/close-reason lookup tables + when-to-escalate-vs-close heuristics. Load it when you need the codes or the triage decision rule without the full lifecycle.
 - **Research skill**: `cortex_kb_search` — query discipline for the `cortex-docs` lookups in Step 3.
 - **Connector**: `xsoar` — wraps the Cortex XSOAR API (v6 on-prem + v8 / Cortex cloud). See `bundles/spark/connectors/xsoar/`.

@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.33",
+    date: "2026-06-15",
+    title: "Sharper XSOAR investigations — platform reference skill + lighter read path.",
+    highlights: [
+      "New xsoar_platform_reference skill: the agent now has an authoritative War Room / !command catalog + exact incident & indicator query-syntax tables, so it stops probing syntax variants and stops web-searching XSOAR concepts.",
+      "'List active incidents + severity breakdown' now uses one query per severity bucket instead of a dozen syntax-variant calls; 'what is the War Room / what does !Print do' is answered from the skill, not a web search.",
+      "Read-only requests (list / show / summarize / count) take a lighter path — no full local Issue/Case is created unless you actually enrich, decide a verdict, or write to the case.",
+      "Skill content only — no installer change. Re-run your existing installer.",
+    ],
+  },
+  {
     version: "0.2.32",
     date: "2026-06-15",
     title: "XSOAR v8 one-click playbook import via the Core REST API.",

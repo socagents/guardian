@@ -10,6 +10,36 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.33] (unreleased) — *Sharper XSOAR investigations: platform reference skill + lighter read path*
+
+A 20-prompt live smoke against the XSOAR **v6** tenant (chat agent, deployed dev install) passed broadly — instance routing, full incident lifecycle, commands/enrich/lists, memory, ATT&CK knowledge, skills, and jobs all work. It surfaced one reproducible defect class: the agent had no authoritative XSOAR **platform** reference, so it burned turns probing query-syntax variants and flailed to the open web on concept questions.
+
+### What ships
+
+- **New `xsoar_platform_reference` foundation skill.** The agent now has a single authoritative reference for the XSOAR platform itself: War Room / playground / indicator-store / Lists concepts, the `!command` catalog (with the `xsoar_*` tool that wraps each), and the **definitive incident + indicator query-syntax tables** — including the per-severity **count recipe** (read `total` per bucket, don't page-scan) and the v6-vs-v8 differences. Cross-linked from `xsoar_case_triage` + `xsoar_case_investigation`.
+- **Lighter read-only path.** The `xsoar_case_investigation` workflow now scopes the request first: a pure read-only ask (list cases, show/summarize one, count by severity, read the War Room, look up a value) is answered from the read tools without spinning up a full local Guardian Issue/Case. The local Issue record becomes mandatory the moment you enrich, decide a verdict, document onto the case, or mutate it.
+
+### Why (from the smoke)
+
+- "List active incidents + severity breakdown" → the agent had the right per-bucket approach but fired `list_incidents` **14×** probing syntax variants (`severity:[1]` vs `severity:low` vs `severity:Low` vs `severity:1`).
+- "What is the XSOAR War Room / what does `!Print` do?" → no concept reference existed, so the agent flailed across docs/knowledge, hit the wrong tenant, tried a web search, and timed out with no answer.
+- "Summarize the highest-severity case" (read-only) → auto-created a full local Issue/Case for a request that only asked to read.
+
+### Operator impact
+
+- No installer change (Scenario 1). Re-run your existing installer; volumes preserved.
+- Skill content is image-baked and volume-seeded on boot — the new skill auto-appears on `/skills` after upgrade.
+
+### Files
+
+- `bundles/spark/mcp/skills/foundation/xsoar_platform_reference.md` — new skill.
+- `bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md` — Step 0 scope gate + read-only carve-out in the description; platform-reference cross-link.
+- `bundles/spark/mcp/skills/foundation/xsoar_case_triage.md` — syntax pointer + cross-link.
+- `mcp/agent/app/skills/page.tsx` — new skill card.
+- `mcp/agent/app/help/architecture/page.tsx`, `mcp/agent/app/help/user/page.tsx` — skill-catalogue + foundation-list updates.
+
+---
+
 ## [v0.2.32] (unreleased) — *XSOAR v8 one-click playbook import via the Core REST API*
 
 Importing a playbook into a **Cortex 8 (XSOAR v8)** tenant now works one-click when the Core REST API integration is installed — previously it always reported "import unavailable," because the connector only tried the v6 endpoint and never actually used the Core REST API integration it told you to enable.

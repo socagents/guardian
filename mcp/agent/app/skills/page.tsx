@@ -156,8 +156,9 @@ const DEFAULT_WORKSPACES: { name: string; slug: string; icon: string; enabled: b
 // ─── Guardian Skills (sourced from bundles/spark/mcp/skills/*) ─────────────
 //
 // 5 skills shipped with the bundle, organized by the on-disk layout:
-//   foundation/  — Cortex KB search family + XSOAR case-triage reference — 4 skills
+//   foundation/  — Cortex KB search family + XSOAR triage + platform reference — 5 skills
 //   workflows/   — multi-step orchestration (xsoar_case_investigation) — 1 skill
+//   (the array lists a curated display subset; the live /api/skills fetch is source of truth)
 //
 // Description text is paraphrased from the skill's MD frontmatter; the
 // `content` field is a one-line summary so the detail panel renders
@@ -244,6 +245,27 @@ const SKILLS: SkillDef[] = [
     agentCount: 1,
     calls7d: 0,
     content: "See bundles/spark/mcp/skills/foundation/xsoar_case_triage.md",
+    charCount: 0,
+    tokenCount: 0,
+    maxConcurrentAgents: 0,
+    eligibleAgents: "guardian-agent",
+    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
+  },
+  {
+    id: "foundation-xsoar-platform-reference",
+    name: "xsoar_platform_reference",
+    displayName: "XSOAR platform reference (War Room, commands, query syntax)",
+    category: "foundation",
+    description:
+      "Authoritative reference for the XSOAR platform itself — War Room / playground / indicator store / Lists concepts, the !command catalog (and which xsoar_* tool wraps each), and the definitive incident + indicator query-syntax tables incl. the per-severity count recipe and v6-vs-v8 differences. Load it before guessing query syntax or running a raw !command.",
+    icon: "quick_reference",
+    source: "platform",
+    loadingMode: "on-demand",
+    enabled: true,
+    locked: false,
+    agentCount: 1,
+    calls7d: 0,
+    content: "See bundles/spark/mcp/skills/foundation/xsoar_platform_reference.md",
     charCount: 0,
     tokenCount: 0,
     maxConcurrentAgents: 0,

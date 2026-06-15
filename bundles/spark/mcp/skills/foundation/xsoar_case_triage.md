@@ -66,6 +66,8 @@ If the tenant's reasons differ from these, confirm the exact label via the `cort
 
 `xsoar_list_incidents` takes a query string built from the field codes above. Filter on codes, not free text.
 
+> For the full incident + indicator query-syntax tables, the indicator query DSL (`type:IP and reputation:Bad`), the War Room `!command` catalog, and the per-severity **COUNT recipe** (read `total` per bucket — don't page-scan), load `xsoar_platform_reference`.
+
 ```
 # All open cases
 xsoar_list_incidents(query="status:active")
@@ -114,6 +116,7 @@ After reading a case (`xsoar_get_incident` + `xsoar_get_war_room`) and enriching
 
 ## Cross-references
 
+- **Platform reference**: `xsoar_platform_reference` — War Room / playground concepts, the `!command` catalog (and which `xsoar_*` tool wraps each), and the definitive incident + indicator query-syntax tables incl. the per-severity count recipe. Load it when you need the exact syntax, not just the codes.
 - **Workflow skill**: `xsoar_case_investigation` — the load-first end-to-end investigation procedure that uses these codes.
 - **Research skill**: `cortex_kb_search` — query discipline for confirming Cortex field/close-reason definitions in the docs.
 - **Connector**: `xsoar` — wraps the Cortex XSOAR API (v6 on-prem + v8 / Cortex cloud). See `bundles/spark/connectors/xsoar/`.

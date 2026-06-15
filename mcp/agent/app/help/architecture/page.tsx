@@ -5866,11 +5866,13 @@ function SkillCatalogue() {
  tools (which are runnable code), skills are{" "}
  <em>guidance</em> — they tell the agent &ldquo;when X, do
  Y&rdquo; in natural language. Two categories live under{" "}
- <Code>bundles/spark/mcp/skills/</Code>: foundation (4 skills —
- the Cortex KB-search family plus the{" "}
- <Code>xsoar_case_triage</Code> reference) and workflows
- (1 skill — <Code>xsoar_case_investigation</Code>) — 5 skills
- total. Each MD file carries optional YAML frontmatter declaring
+ <Code>bundles/spark/mcp/skills/</Code>: foundation (the Cortex
+ KB-search family, the <Code>xsoar_case_triage</Code> triage
+ card, and the <Code>xsoar_platform_reference</Code> War Room /{" "}
+ <Code>!command</Code> / query-syntax card) and workflows (the
+ load-first <Code>xsoar_case_investigation</Code> chain plus the
+ playbook-builder and diagram skills). Each MD file carries
+ optional YAML frontmatter declaring
  its category, activation triggers, locked state, and loading
  mode.
  </p>
