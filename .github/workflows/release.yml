@@ -938,9 +938,17 @@ jobs:
         #
         # No-op if dev-latest doesn't exist: either no dev build
         # ran between the last release and this one, or a prior
-        # release-cleanup already removed it. The `|| true` makes
-        # this idempotent so a missing prerelease doesn't fail the
-        # release run after the actual release has been published.
+        # release-cleanup already removed it.
+        #
+        # NON-FATAL: this cleanup runs AFTER all images + assets have
+        # published, so it must never fail the release job. The delete
+        # is guarded with `|| echo ::warning::` because the GitHub
+        # Releases API returns transient 5xx (we hit an HTTP 502 on the
+        # v0.2.33 release — every image + asset published fine, but the
+        # whole job went red on this cosmetic step). A failed delete is
+        # harmless: dev-latest is stale-but-superseded and the next dev
+        # build republishes it. See docs/CICD.md § dev-latest cleanup
+        # 5xx false-failure.
         #
         # Gated on success() rather than `event_name == 'push'`
         # because workflow_dispatch reruns (used for transient-
@@ -955,7 +963,8 @@ jobs:
               --yes \
               --cleanup-tag \
               --repo "${{ github.repository }}" \
-              && echo "::notice::dev-latest prerelease deleted (superseded by v${{ steps.ver.outputs.version }})"
+              && echo "::notice::dev-latest prerelease deleted (superseded by v${{ steps.ver.outputs.version }})" \
+              || echo "::warning::dev-latest cleanup failed (transient Releases API error?) — the v${{ steps.ver.outputs.version }} release itself succeeded; dev-latest is superseded and the next dev build will republish it"
           else
             echo "::notice::dev-latest not present — nothing to clean up"
           fi

@@ -2103,6 +2103,18 @@ curl -fsSL \
 
 **Prevention**: `--retry-all-errors` should be the default for ANY curl-against-GitHub-API call in a workflow. When adding new such calls, copy the v0.17.84 pattern (5 retries + 5s delay + `--retry-all-errors`).
 
+### 15. `release.yml` "Clean up dev-latest prerelease" 5xx → whole release job goes red (fixed v0.2.34)
+
+**Symptom**: `release.yml` reports `failure` on a tag push, but ALL images published to GHCR and ALL assets (installer + sha256 + tarball + manifest) are attached to the GitHub Release. The only failed step is the final **"Clean up dev-latest prerelease"**, with `HTTP 502: Server Error (…/releases/…)` on `gh release delete dev-latest`. Hit on the v0.2.33 release.
+
+**Cause**: the cleanup step runs `gh release delete dev-latest --cleanup-tag` chained as `gh release delete … && echo …`. Under GitHub Actions' default `bash -e`, a non-zero exit from `gh release delete` (a transient Releases-API 5xx) fails the `&&` chain → fails the step → fails the whole job. The step's comment *claimed* idempotency via `|| true`, but the guard was only an `if gh release view` "does it exist" check — it did NOT cover a 5xx on the DELETE itself when the prerelease *does* exist. The cleanup is purely cosmetic (dev-latest is stale-but-superseded the moment a real `vX.Y.Z` publishes; the next dev build republishes it), so it must never gate the release verdict.
+
+**Remediation (v0.2.34+)**: the `gh release delete` now ends with `|| echo "::warning::dev-latest cleanup failed …"` so a transient API error logs a warning instead of failing the job. The release verdict now reflects only the load-bearing steps (image push + asset publish).
+
+**If you see this on a pre-v0.2.34 release**: it's a false alarm — verify the release is actually complete (`gh release view vX.Y.Z` shows installer + sha256 + tarball + manifest; `release-manifest-vX.Y.Z.env` has all `DIGEST_*`), then proceed with the closure report. Optionally delete the stale `dev-latest` by hand (`gh release delete dev-latest --yes --cleanup-tag`); it's harmless to leave — the next dev build overwrites it.
+
+**Prevention**: any cleanup/notification step that runs AFTER the load-bearing publish steps must be non-fatal (`|| echo ::warning::` or `continue-on-error: true`). A cosmetic post-step should never be able to turn a successful release red.
+
 ### Quick-reference table
 
 | Failure | Workflow | First diagnostic | Remediation |
