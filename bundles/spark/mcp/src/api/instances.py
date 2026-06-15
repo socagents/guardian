@@ -251,11 +251,22 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
 
     async def _updater_start(
         connector_id: str, instance_name: str, instance_id: str,
-    ) -> dict[str, Any] | None:
-        """Call guardian-updater to start a connector container. Returns
-        the response body on success; None on failure (logged, not
-        re-raised — the instance row is created either way; operators
-        can retry the start via UI/API).
+    ) -> dict[str, Any]:
+        """Call guardian-updater to start a connector container.
+
+        Returns a structured outcome the UI can act on (issue #42):
+
+            {"started": bool, "container_url": str | None, "error": str | None}
+
+        Never raises and never returns None — the instance row is created/
+        updated regardless, and a start failure is recoverable: guardian-
+        updater's boot + periodic reconcile self-heals a missing container,
+        and the operator can retry via POST
+        /connectors/<id>/instances/<name>/start. Pre-#42 this returned the
+        raw response body on success and None on failure, which the create
+        UI never read — so a failed start looked like "nothing happened".
+        The structured shape lets the UI tell the operator whether the
+        container came up immediately or is still starting.
 
         v0.5.0: passes an optional `image_ref` body field for
         user-uploaded connectors. Guardian-updater uses the explicit
@@ -296,14 +307,33 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
                     "(body=%.300s)",
                     resp.status_code, connector_id, instance_name, resp.text,
                 )
-                return None
-            return resp.json()
+                return {
+                    "started": False,
+                    "container_url": None,
+                    "error": (
+                        f"guardian-updater returned HTTP {resp.status_code}: "
+                        f"{resp.text[:300]}"
+                    ),
+                }
+            try:
+                data = resp.json()
+            except Exception:  # noqa: BLE001 — non-JSON 2xx is unexpected but non-fatal
+                data = {}
+            return {
+                "started": True,
+                "container_url": data.get("container_url"),
+                "error": None,
+            }
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "could not call guardian-updater start for %s/%s: %s",
                 connector_id, instance_name, exc,
             )
-            return None
+            return {
+                "started": False,
+                "container_url": None,
+                "error": f"could not reach guardian-updater: {exc}",
+            }
 
     async def _updater_stop(
         connector_id: str, instance_name: str,
@@ -432,14 +462,16 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
 
             # v0.1.31 (Phase 2): if this connector has style: container,
             # also start the per-instance container via guardian-updater.
-            # Returns the updater response (with container_url) on
-            # success; None on failure — we still return 201 because
-            # the row was created. Operators can retry the start via
-            # POST /api/v1/connectors/<id>/instances/<name>/start.
-            updater_response: dict[str, Any] | None = None
+            # Returns a structured {started, container_url, error} (issue
+            # #42); None for non-container connectors. We always return 201
+            # because the row was created — a start failure is recoverable
+            # (guardian-updater's boot + periodic reconcile self-heals a
+            # missing container; the operator can also retry via POST
+            # /api/v1/connectors/<id>/instances/<name>/start).
+            container_start: dict[str, Any] | None = None
             style = _connector_runtime_style(connector_id)
             if style == "container":
-                updater_response = await _updater_start(
+                container_start = await _updater_start(
                     connector_id, name, instance.id,
                 )
 
@@ -448,10 +480,10 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
                     "instance": _instance_to_dict(instance),
                     "requires_mcp_restart": True,
                     # Echo container-mode start outcome when applicable.
-                    # UI can surface "container starting…" / "container
-                    # start failed — see logs" based on this.
+                    # The create UI reads container_start.started to show
+                    # "container starting…" vs "ready" vs the error string.
                     "runtime_style": style,
-                    "container_start": updater_response,
+                    "container_start": container_start,
                 },
                 status_code=201,
             )

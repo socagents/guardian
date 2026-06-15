@@ -10,6 +10,34 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.28] (unreleased) — *Connector instances start reliably + tell you what happened*
+
+Creating a connector instance could "do nothing" — the dialog spun, then closed with no confirmation, and sometimes the connector's container never actually started and stayed down. This release makes instance creation self-healing and adds explicit feedback at every step.
+
+### What ships
+
+- **Create-instance feedback (`/connectors`).** The form now reports the outcome instead of silently closing: it closes and shows the new instance card on success, a **red banner** if the create itself fails (e.g. a duplicate name), and an **amber "still starting" notice** when the instance was created but its container needs a moment. The button reads **"Creating…"** while it works.
+- **Containers self-heal.** guardian-updater now reconciles *missing* connector containers — not just stale ones — at boot and every ~5 minutes. If a container fails to start at create time (a transient docker/registry hiccup), it is started automatically within one reconcile interval instead of staying down until the next updater restart.
+- **Hyphenated connector ids fixed.** Container-name parsing now round-trips ids that contain a hyphen (`cortex-docs`), so those containers are no longer dropped from the digests listing and digest-drift reconcile.
+- The MCP create response now carries a structured `container_start` (`{started, container_url, error}`) so the UI can react precisely.
+
+### Operator impact
+
+- No installer change (Scenario 1). Re-run your existing installer; volumes preserved.
+- Instances whose containers went missing recover automatically after upgrade — or immediately via `POST /api/v1/connectors/reconcile`.
+
+### Files
+
+- `updater/src/main.py` — boot + periodic missing-container reconcile; `_split_connector_container_name` longest-prefix parser; xsiam added to the connector roster.
+- `updater/tests/test_periodic_reconcile.py`, `updater/tests/test_connector_name_parse.py` — coverage for the self-heal loop + the parser.
+- `bundles/spark/mcp/src/api/instances.py` — `_updater_start` / `create_instance` return structured `container_start`.
+- `mcp/agent/lib/api/marketplace.ts` — `CreateInstanceResponse` type.
+- `mcp/agent/app/connectors/page.tsx` — create-outcome banners + Done button + "Creating…" state.
+- `mcp/agent/app/help/architecture/page.tsx` — guardian-updater reconciliation section rewritten (missing-container self-heal + digest drift).
+- `mcp/agent/app/help/user/page.tsx` — "What happens when you click Create" subsection.
+
+---
+
 ## [v0.2.27] (unreleased) — *Cortex XSIAM connector — investigation + EDR response*
 
 Guardian can now connect to a **Cortex XSIAM** tenant the same way it does Cortex XSOAR — create an instance, then investigate and respond from chat. Ported back from Phantom and adapted to Guardian, minus the simulation-only pieces.

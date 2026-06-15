@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.28",
+    date: "2026-06-15",
+    title: "Connector instances start reliably + tell you what happened.",
+    highlights: [
+      "Creating an instance now shows explicit feedback: success closes the dialog, an error gets a red banner, and a container that needs a moment shows a 'still starting' notice.",
+      "Connector containers self-heal — a container that failed to start is restarted automatically within ~5 minutes, instead of staying down.",
+      "Fixed hyphenated connector ids (cortex-docs) being dropped from container reconcile + the digests listing.",
+      "No installer change — re-run your existing installer; volumes preserved.",
+    ],
+  },
+  {
     version: "0.2.27",
     date: "2026-06-15",
     title: "Cortex XSIAM connector — investigation + EDR response.",

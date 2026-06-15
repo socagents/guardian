@@ -1,10 +1,14 @@
-"""v0.17.128 (#123) — the connector digest-drift reconcile must run on a
-timer, not only at updater startup.
+"""The connector reconcile must run on a timer, not only at updater startup.
 
-The v0.6.66 reconcile fired once ~30s after boot. But guardian-updater rarely
-restarts (its image isn't rebuilt on the dev cycle), so a connector pin that
-changed between restarts never reconciled into the running container — the
-cortex-xdr container went stale twice this way. The periodic loop closes that.
+v0.17.128 (#123) added the periodic digest-drift pass. Issue #42 extends the
+loop to ALSO start missing containers each tick (self-heal): a create-time
+start failure used to leave an instance container-less until the next updater
+restart, because nothing started the missing container after the fact.
+
+The loop fires once ~30s after boot (one-shot) AND every
+PERIODIC_RECONCILE_INTERVAL_S thereafter — guardian-updater rarely restarts,
+so a startup-only reconcile would never recover state that drifts between
+restarts.
 """
 
 import asyncio
@@ -16,14 +20,31 @@ os.environ.setdefault("MCP_TOKEN", "test-mcp-token")
 
 from src import main as updater_main  # noqa: E402
 
+_EMPTY_DRIFT = {"drifted": [], "recreated": [], "unchanged": [], "failed": []}
+_EMPTY_CONTAINERS = {"reconciled": [], "skipped": [], "failed": []}
 
-def test_periodic_drift_reconcile_loops_repeatedly(monkeypatch):
+
+def _patch_container_reconcile(monkeypatch, sink=None):
+    """Stub the missing-container self-heal pass so the loop doesn't make real
+    HTTP calls to a (non-existent) agent during the test."""
+    async def _fake_containers():
+        if sink is not None:
+            sink.append(1)
+        return dict(_EMPTY_CONTAINERS)
+
+    monkeypatch.setattr(
+        updater_main, "reconcile_connector_containers", _fake_containers
+    )
+
+
+def test_periodic_reconcile_loops_repeatedly(monkeypatch):
     """The loop must keep invoking the reconcile, not fire once."""
     calls = []
+    _patch_container_reconcile(monkeypatch)
 
     async def _fake_reconcile():
         calls.append(1)
-        return {"drifted": [], "recreated": [], "unchanged": [], "failed": []}
+        return dict(_EMPTY_DRIFT)
 
     monkeypatch.setattr(
         updater_main, "_reconcile_connector_digest_drift", _fake_reconcile
@@ -31,7 +52,7 @@ def test_periodic_drift_reconcile_loops_repeatedly(monkeypatch):
 
     async def _run_briefly():
         task = asyncio.create_task(
-            updater_main._periodic_drift_reconcile(0.001)
+            updater_main._periodic_reconcile(0.001)
         )
         await asyncio.sleep(0.05)
         task.cancel()
@@ -46,15 +67,44 @@ def test_periodic_drift_reconcile_loops_repeatedly(monkeypatch):
     )
 
 
+def test_periodic_loop_self_heals_missing_containers(monkeypatch):
+    """Issue #42 — each tick must invoke the missing-container reconcile, not
+    only the digest-drift pass."""
+    container_calls = []
+    _patch_container_reconcile(monkeypatch, sink=container_calls)
+
+    async def _fake_drift():
+        return dict(_EMPTY_DRIFT)
+
+    monkeypatch.setattr(
+        updater_main, "_reconcile_connector_digest_drift", _fake_drift
+    )
+
+    async def _run_briefly():
+        task = asyncio.create_task(updater_main._periodic_reconcile(0.001))
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(_run_briefly())
+    assert len(container_calls) >= 2, (
+        "periodic loop did not run the missing-container self-heal each tick"
+    )
+
+
 def test_periodic_reconcile_survives_a_failing_tick(monkeypatch):
     """A reconcile that raises must not kill the loop — the next tick runs."""
     calls = []
+    _patch_container_reconcile(monkeypatch)
 
     async def _flaky_reconcile():
         calls.append(1)
         if len(calls) == 1:
             raise RuntimeError("boom")  # first tick fails
-        return {"drifted": [], "recreated": [], "unchanged": [], "failed": []}
+        return dict(_EMPTY_DRIFT)
 
     monkeypatch.setattr(
         updater_main, "_reconcile_connector_digest_drift", _flaky_reconcile
@@ -62,7 +112,7 @@ def test_periodic_reconcile_survives_a_failing_tick(monkeypatch):
 
     async def _run_briefly():
         task = asyncio.create_task(
-            updater_main._periodic_drift_reconcile(0.001)
+            updater_main._periodic_reconcile(0.001)
         )
         await asyncio.sleep(0.05)
         task.cancel()

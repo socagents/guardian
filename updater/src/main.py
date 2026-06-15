@@ -1045,19 +1045,38 @@ PERIODIC_RECONCILE_INTERVAL_S = float(
 )
 
 
-async def _periodic_drift_reconcile(interval_s: float) -> None:
-    """Run `_reconcile_connector_digest_drift()` forever on a timer.
+async def _periodic_reconcile(interval_s: float) -> None:
+    """Run the full connector reconcile forever on a timer.
 
-    The v0.6.66 startup reconcile only catches drift present at boot. This
-    loop picks up pin changes that happen WHILE the updater keeps running
-    (a dev-cycle install or an installer run that doesn't recreate the
-    updater container), so running connector containers track their pinned
-    digest without needing an updater restart. Same reconcile function,
-    same safety (only recreates on digest mismatch); a failure in one tick
-    is logged and the loop continues.
+    Two complementary passes per tick (issue #42 — the v0.6.66/v0.17.128
+    loop only did the first):
+
+      1. ``reconcile_connector_containers()`` — ensure every enabled
+         instance in the agent's store has a RUNNING container. This is the
+         self-heal: a create-time start failure (transient docker/registry
+         hiccup) used to leave the instance container-less forever because
+         nothing started the missing container after the fact. Idempotent —
+         already-running instances are skipped.
+      2. ``_reconcile_connector_digest_drift()`` — recreate any RUNNING
+         container whose image digest diverged from its pin.
+
+    Order matters: start missing containers first (on the pinned digest, so
+    they're born current), then digest-reconcile the rest. Each pass is
+    error-isolated; a failure in one tick is logged and the loop continues.
     """
     while True:
         await asyncio.sleep(interval_s)
+        try:
+            cresult = await reconcile_connector_containers()
+            started = cresult.get("reconciled") or []
+            cfailed = cresult.get("failed") or []
+            if started or cfailed:
+                log.info(
+                    "periodic container reconcile: started=%d skipped=%d failed=%d",
+                    len(started), len(cresult.get("skipped") or []), len(cfailed),
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("periodic container reconcile errored: %s", exc)
         try:
             result = await _reconcile_connector_digest_drift()
             if result["recreated"] or result["failed"]:
@@ -1095,14 +1114,28 @@ async def lifespan(app: FastAPI):
     """
     _docker_login()
 
-    # v0.6.66 — fire-and-forget digest-drift reconcile after a delay.
+    # v0.6.66 — fire-and-forget reconcile after a delay.
     # asyncio.create_task without awaiting lets us yield immediately.
-    async def _delayed_drift_reconcile() -> None:
+    async def _delayed_boot_reconcile() -> None:
         try:
             await asyncio.sleep(30.0)  # let the agent finish booting
-            log.info(
-                "v0.6.66 startup: running auto digest-drift reconcile",
-            )
+            # issue #42 — start any missing per-instance container first.
+            # A create-time start failure used to leave the instance
+            # container-less until the next updater restart; reconciling at
+            # boot recovers it. Idempotent (running instances are skipped).
+            log.info("startup: reconciling connector containers (start missing)")
+            try:
+                cresult = await reconcile_connector_containers()
+                log.info(
+                    "startup container reconcile: started=%d skipped=%d failed=%d",
+                    len(cresult.get("reconciled") or []),
+                    len(cresult.get("skipped") or []),
+                    len(cresult.get("failed") or []),
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("startup container reconcile errored: %s", exc)
+
+            log.info("startup: running auto digest-drift reconcile")
             result = await _reconcile_connector_digest_drift()
             log.info(
                 "digest-drift reconcile finished: "
@@ -1114,16 +1147,17 @@ async def lifespan(app: FastAPI):
             )
         except Exception as exc:  # noqa: BLE001
             log.warning(
-                "v0.6.66 startup digest-drift reconcile errored: %s",
+                "startup reconcile errored: %s",
                 exc,
             )
 
-    asyncio.create_task(_delayed_drift_reconcile())
+    asyncio.create_task(_delayed_boot_reconcile())
 
     # v0.17.128 (#123) — and keep reconciling on a timer. The one-shot above
-    # only catches drift present at boot; the updater rarely restarts, so
-    # pin changes between restarts need a periodic sweep to land.
-    asyncio.create_task(_periodic_drift_reconcile(PERIODIC_RECONCILE_INTERVAL_S))
+    # only catches state present at boot; the updater rarely restarts, so a
+    # periodic sweep lands both missing-container recovery (#42) and pin
+    # changes that happen between restarts.
+    asyncio.create_task(_periodic_reconcile(PERIODIC_RECONCILE_INTERVAL_S))
 
     yield
 
@@ -1620,12 +1654,40 @@ async def restart_service(service: str):
 # new-connector checklist in docs/CICD.md lists this file).
 #
 # Guardian XSOAR pivot: roster is xsoar + cortex-docs + web. The former
-# xsiam / cortex-xdr / cortex-content connectors were removed.
+# cortex-xdr / cortex-content connectors were removed; xsiam was re-added
+# in v0.2.27 (Cortex XSIAM investigation + EDR response).
 KNOWN_CONNECTORS = {
     "xsoar",
     "cortex-docs",
     "web",
+    "xsiam",
 }
+
+
+def _split_connector_container_name(name: str) -> tuple[str, str] | None:
+    """Parse ``guardian-connector-<id>-<instance>`` → (connector_id, instance_name).
+
+    A connector_id may itself contain hyphens (``cortex-docs``), so we
+    can't naively split on the first hyphen — ``str.partition("-")`` yielded
+    connector_id ``cortex`` for a ``guardian-connector-cortex-docs-<inst>``
+    container, which then failed the KNOWN_CONNECTORS check and was silently
+    dropped from digest reconcile + the digests listing (issue #42). Match
+    against KNOWN_CONNECTORS by longest id-prefix instead; connector ids are
+    a closed set, so the longest-prefix match is unambiguous. Returns None
+    for non-connector names, malformed names, or unknown connector ids.
+    """
+    if not name.startswith("guardian-connector-"):
+        return None
+    rest = name[len("guardian-connector-"):]
+    # Longest id first so e.g. "cortex-docs" wins over any shorter id that
+    # might be a prefix of it.
+    for cid in sorted(KNOWN_CONNECTORS, key=len, reverse=True):
+        prefix = f"{cid}-"
+        if rest.startswith(prefix):
+            instance_name = rest[len(prefix):]
+            if instance_name:
+                return cid, instance_name
+    return None
 
 
 def _connector_image_ref(connector_id: str, version: str | None = None) -> str:
@@ -2208,22 +2270,17 @@ async def list_connector_digests():
         all=True, filters={"name": "guardian-connector-"}
     ):
         name = container.name or ""
-        # Strip the prefix and split into <id>-<instance>. The split
-        # only handles the FIRST hyphen, so only single-word
-        # connector_ids ("xsiam", "web") round-trip here; hyphenated
-        # ids ("cortex-docs") fall into the KNOWN_CONNECTORS skip
-        # below.
-        if not name.startswith("guardian-connector-"):
+        # Parse <id>-<instance> robustly: connector ids can contain hyphens
+        # (cortex-docs), so longest-known-prefix match rather than a naive
+        # first-hyphen split (issue #42 — cortex-docs containers used to be
+        # dropped here).
+        parsed = _split_connector_container_name(name)
+        if parsed is None:
+            # Non-connector name, malformed, or an unknown connector_id
+            # (likely a legacy container from a past install). Skip rather
+            # than misreport.
             continue
-        rest = name[len("guardian-connector-"):]
-        if "-" not in rest:
-            log.warning("Skipping malformed connector container name: %s", name)
-            continue
-        connector_id, _, instance_name = rest.partition("-")
-        if connector_id not in KNOWN_CONNECTORS:
-            # Unknown connector_id — likely a legacy container from a
-            # past install. Skip rather than misreport.
-            continue
+        connector_id, instance_name = parsed
 
         # The instance_id is set as a container env var when we start
         # the container (see _start_connector_instance). Read it back
@@ -2338,14 +2395,12 @@ async def _reconcile_connector_digest_drift() -> dict:
 
     for container in containers:
         name = container.name or ""
-        if not name.startswith("guardian-connector-"):
+        # Longest-known-prefix parse so hyphenated ids (cortex-docs) round-trip
+        # instead of being dropped by a first-hyphen split (issue #42).
+        parsed = _split_connector_container_name(name)
+        if parsed is None:
             continue
-        rest = name[len("guardian-connector-"):]
-        if "-" not in rest:
-            continue
-        connector_id, _, instance_name = rest.partition("-")
-        if connector_id not in KNOWN_CONNECTORS:
-            continue
+        connector_id, instance_name = parsed
 
         # Read pinned digest from /host/connector-digests.env.
         pinned = _connector_digest(connector_id)

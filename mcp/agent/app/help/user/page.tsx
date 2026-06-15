@@ -2929,6 +2929,33 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
+            <SubSection icon="check_circle" title="What happens when you click Create">
+              <p className="text-sm leading-relaxed">
+                The instance is saved immediately. For container-style
+                connectors, guardian-updater then starts a dedicated
+                container for that instance. Whatever happens, the form now
+                tells you (v0.2.28):
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm">
+                <li>
+                  <strong>Success</strong> — the dialog closes and the new
+                  instance appears in the <strong>Instances</strong> tab.
+                </li>
+                <li>
+                  <strong>Couldn&apos;t create</strong> — a red banner
+                  explains why (for example a duplicate name) and the form
+                  stays open so you can fix it.
+                </li>
+                <li>
+                  <strong>Still starting</strong> — an amber notice means the
+                  instance was created but its container hasn&apos;t come up
+                  yet. This is not an error: Guardian retries on its own
+                  every few minutes, so the container comes online shortly.
+                  Click <strong>Done</strong> to dismiss.
+                </li>
+              </ul>
+            </SubSection>
+
             <SubSection icon="cable" title="The three connectors">
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>

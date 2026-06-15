@@ -936,12 +936,12 @@ GET    /api/v1/connectors/{id}/instances/{name}/status
 POST   /api/v1/connectors/reconcile`}</Pre>
  </SubSection>
 
- <SubSection icon="sync" title="Digest-drift reconciliation (startup + periodic)">
+ <SubSection icon="sync" title="Connector reconciliation (startup + periodic)">
  <p>
- Per-instance connector containers are managed dynamically by guardian-updater — they are NOT in <Code>docker-compose.yml</Code>, so a <Code>docker compose up -d</Code> never touches them. When an install or dev cycle updates a connector&apos;s pinned digest in <Code>/host/connector-digests.env</Code>, the already-running container keeps its old image until guardian-updater recreates it.
+ Per-instance connector containers are managed dynamically by guardian-updater — they are NOT in <Code>docker-compose.yml</Code>, so a <Code>docker compose up -d</Code> never touches them. Two kinds of state can drift after a container is first created: it can go <em>missing</em> (a create-time start failed, or the container was removed), or it can go <em>stale</em> (the connector&apos;s pinned digest in <Code>/host/connector-digests.env</Code> changed but the running container keeps its old image).
  </p>
  <p>
- guardian-updater reconciles that drift automatically: once ~30s after startup, and (v0.17.128) <strong>on a periodic loop</strong> (default every 5 minutes, override via <Code>GUARDIAN_UPDATER_RECONCILE_INTERVAL_S</Code>). Each pass compares every <Code>guardian-connector-*</Code> container&apos;s running digest to its pin and recreates only the divergent ones (sequential, per-container error isolation). The periodic loop matters because guardian-updater rarely restarts — its own image isn&apos;t rebuilt on the dev cycle — so a startup-only reconcile would leave a pin that changes between restarts unapplied. Operators can force a synchronous pass with <Code>POST /api/v1/connectors/reconcile/digests</Code>.
+ guardian-updater reconciles both automatically — once ~30s after startup, and <strong>on a periodic loop</strong> (default every 5 minutes, override via <Code>GUARDIAN_UPDATER_RECONCILE_INTERVAL_S</Code>). Each tick runs two passes: <strong>(1) missing-container self-heal</strong> (issue #42) — it asks the agent for every enabled instance and starts a container for any that lacks a running one, so a transient create-time start failure recovers on its own instead of leaving the instance permanently container-less; <strong>(2) digest-drift</strong> — it compares each running <Code>guardian-connector-*</Code> container&apos;s digest to its pin and recreates only the divergent ones. Both passes are sequential with per-container error isolation. The periodic loop matters because guardian-updater seldom restarts between installs, so state that drifts after boot needs a sweep to land. Operators can force a synchronous digest pass with <Code>POST /api/v1/connectors/reconcile/digests</Code>, or a full container reconcile with <Code>POST /api/v1/connectors/reconcile</Code>.
  </p>
  </SubSection>
 

@@ -3200,10 +3200,21 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
   }, [instanceName, selectedConnector, configValues]);
 
   const [saving, setSaving] = useState(false);
+  // issue #42 — explicit create outcome. Pre-fix, handleSave only acted on
+  // success and silently no-op'd on failure, so a failed create OR a
+  // container that didn't start immediately looked like "nothing happened".
+  // createError: the create call itself failed (shown as a red banner, modal
+  // stays open). startNotice: the row was created but the connector container
+  // isn't up yet — NOT a failure (guardian-updater self-heals), shown as an
+  // amber notice with a Done button.
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [startNotice, setStartNotice] = useState<string | null>(null);
 
   const handleSave = useCallback(async () => {
     if (!selectedConnector || !instanceName.trim()) return;
     setSaving(true);
+    setCreateError(null);
+    setStartNotice(null);
     try {
       // v0.5.73 (issue #46): split form values into config vs secrets
       // buckets by the ConfigParam.type discriminator. Pre-v0.5.73
@@ -3241,6 +3252,25 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
         disabled_tools: Array.from(disabledToolsSet),
       });
       if (result.ok) {
+        // Refresh the list so the new instance card shows regardless of
+        // container-start state.
+        onCreated();
+        const cs = result.data.container_start;
+        const isContainer = result.data.runtime_style === "container";
+        if (isContainer && cs && cs.started === false) {
+          // issue #42 — the row was created but the connector container
+          // didn't come up immediately (transient docker/registry hiccup).
+          // This is NOT a failure: guardian-updater's boot + periodic
+          // reconcile starts the missing container within a few minutes.
+          // Keep the modal open with an amber notice + a Done button so the
+          // operator gets explicit feedback instead of a silent close.
+          setStartNotice(
+            cs.error
+              ? `Instance created. Its connector container hasn't started yet (${cs.error}). Guardian retries automatically every few minutes, so it should come online shortly.`
+              : "Instance created. Its connector container is still starting and will come online within a few minutes.",
+          );
+          return;
+        }
         // v0.5.58 (issue #33): close on success. Pre-fix, the modal
         // stayed open with an in-modal Test Connection panel — that
         // panel routinely misled operators when the connector had no
@@ -3249,8 +3279,12 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
         // Verify your credentials." even though the create itself
         // succeeded). The probe still works post-create from the
         // instance card on /connectors.
-        onCreated();
         onClose();
+      } else {
+        // issue #42 — surface the failure instead of silently no-op'ing.
+        setCreateError(
+          result.error.message || "Could not create the instance. Please try again.",
+        );
       }
     } finally {
       setSaving(false);
@@ -4078,18 +4112,65 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
 
         {/* ── Sticky Footer ───────────────────────────────────── */}
         <div
-          className="absolute bottom-0 left-0 right-0 px-8 py-6 flex items-center justify-between"
+          className="absolute bottom-0 left-0 right-0 px-8 py-5 flex flex-col gap-3"
           style={{
             background: "var(--glass-bg-strong)",
             backdropFilter: "blur(12px)",
             borderTop: "0.5px solid var(--glass-border)",
           }}
         >
-          <div className="flex items-center gap-2 text-on-surface-variant">
-            <span className="material-symbols-outlined text-xl">info</span>
-            <span className="text-xs">Platform instance</span>
-          </div>
-          <div className="flex gap-4">
+          {/* issue #42 — explicit create outcome. Red = the create call
+              failed; amber = created but the container is still starting
+              (guardian-updater self-heals). */}
+          {createError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm"
+              style={{
+                background: "rgba(186, 26, 26, 0.12)",
+                border: "0.5px solid rgba(186, 26, 26, 0.55)",
+                color: "rgb(255, 180, 171)",
+              }}
+            >
+              <span className="material-symbols-outlined text-lg">error</span>
+              <span>{createError}</span>
+            </div>
+          )}
+          {startNotice && (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm"
+              style={{
+                background: "rgba(240, 170, 40, 0.12)",
+                border: "0.5px solid rgba(240, 170, 40, 0.5)",
+                color: "rgb(245, 196, 81)",
+              }}
+            >
+              <span className="material-symbols-outlined text-lg">hourglass_top</span>
+              <span>{startNotice}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-on-surface-variant">
+              <span className="material-symbols-outlined text-xl">info</span>
+              <span className="text-xs">Platform instance</span>
+            </div>
+            <div className="flex gap-4">
+            {startNotice ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-8 py-3 rounded-xl font-headline font-bold transition-all"
+                style={{
+                  background: "linear-gradient(to right, #1963b3, #2D8DF0)",
+                  color: "white",
+                  boxShadow: "0px 0px 20px rgba(25, 99, 179, 0.3)",
+                }}
+              >
+                Done
+              </button>
+            ) : (
+              <>
             <button
               type="button"
               onClick={onClose}
@@ -4112,8 +4193,11 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
                   : "none",
               }}
             >
-              Create Instance
+              {saving ? "Creating…" : "Create Instance"}
             </button>
+              </>
+            )}
+            </div>
           </div>
         </div>
       </div>

@@ -139,6 +139,25 @@ export interface ConnectorInstance {
   disabled_tools?: string[];
 }
 
+/**
+ * The POST /api/v1/instances 201 envelope. The instance row is always
+ * created; `container_start` reports whether the per-instance connector
+ * container came up immediately (issue #42). It is null for non-container
+ * connectors. When `started` is false the instance still exists — guardian-
+ * updater's boot + periodic reconcile self-heals the missing container, so
+ * the UI shows a "starting…" notice rather than treating it as a failure.
+ */
+export interface CreateInstanceResponse {
+  instance: ConnectorInstance;
+  requires_mcp_restart?: boolean;
+  runtime_style?: string | null;
+  container_start?: {
+    started: boolean;
+    container_url?: string | null;
+    error?: string | null;
+  } | null;
+}
+
 export async function createInstance(data: {
   name: string;
   connector_id: string;
@@ -167,7 +186,7 @@ export async function createInstance(data: {
    */
   disabled_tools?: string[];
 }) {
-  return apiRequest<ConnectorInstance>("/api/v1/instances", {
+  return apiRequest<CreateInstanceResponse>("/api/v1/instances", {
     method: "POST",
     body: data,
   });
