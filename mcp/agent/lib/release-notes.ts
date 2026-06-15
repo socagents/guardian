@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.30",
+    date: "2026-06-15",
+    title: "Smarter XSOAR create form — Version first, version-aware fields.",
+    highlights: [
+      "The XSOAR instance form now leads with the Version dropdown; the fields below adapt to your choice.",
+      "API key ID appears only for v8 (v6 uses the API key alone) — it's hidden, not-required, and not submitted for v6.",
+      "Added the previously-missing Playground / War Room ID field — needed to run commands + the list tools on both versions.",
+      "No installer change — re-run your existing installer.",
+    ],
+  },
+  {
     version: "0.2.29",
     date: "2026-06-15",
     title: "Two tenants, one connector — multi-active instances + XSOAR v6/v8.",

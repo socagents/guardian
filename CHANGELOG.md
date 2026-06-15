@@ -10,6 +10,30 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.30] (unreleased) — *Smarter XSOAR create form — Version first, version-aware fields*
+
+The XSOAR instance-create form now leads with the **Version** dropdown, and the fields below adapt to it: **API key ID** appears only for **v8** (v6 uses the API key alone). The form also exposes the previously-missing **Playground / War Room ID** field — you need it to run commands.
+
+### What ships
+
+- **Version is the first field.** Pick v6 or v8 up front; the rest of the form follows.
+- **`API key ID` is v8-only.** Selecting **v6** hides it (and doesn't require or submit it); selecting **v8** shows + requires it.
+- **`Playground / War Room ID` field added.** It was missing from the form entirely — it's optional, but required to run `run_command` and the list tools (`get_list`/`set_list`/`append_to_list`) on **both** v6 and v8. The field help explains where to find it.
+- Generic, reusable form mechanics: config fields now support an `order` (render position) and a `showWhen` (conditional visibility) hint — any connector can use them.
+
+### Operator impact
+
+- No installer change (Scenario 1). Re-run your existing installer; volumes preserved.
+
+### Files
+
+- `mcp/agent/app/api/marketplace/connectors/route.ts` — reordered XSOAR fields; `order` + `showWhen` on the fields; added `playground_id`.
+- `mcp/agent/app/connectors/page.tsx` — `ConfigParam` gains `order`/`showWhen`; `visibleConfig` sorts + conditionally filters; required-check + submit payload honor visibility; field descriptions render as help text.
+- `mcp/agent/lib/api/marketplace.ts` — config type carries the new hints.
+- User guide.
+
+---
+
 ## [v0.2.29] (unreleased) — *Two tenants, one connector — multi-active instances + XSOAR v6/v8*
 
 A connector can now run **multiple instances at the same time**, and the agent picks which one a tool acts on. First use: an **XSOAR 6** (on-prem) tenant and an **XSOAR 8** (cloud) tenant live simultaneously — ask the agent about a v6 case and it works the v6 tenant; ask about v8 and it targets v8.

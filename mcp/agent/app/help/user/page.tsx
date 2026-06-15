@@ -2927,6 +2927,17 @@ Networks documentation and returning evidence-backed, cited answers.
                 render masked with an eye-toggle to reveal; non-sensitive
                 fields (URLs, IDs, hostnames) render in clear text.
               </p>
+              <p className="text-sm leading-relaxed mt-2">
+                <strong>Version-aware fields (v0.2.30):</strong> some connectors
+                show fields that depend on an earlier choice. The XSOAR form
+                leads with a <strong>Version</strong> dropdown — pick{" "}
+                <Term>v6</Term> (on-prem) or <Term>v8</Term> (Cortex cloud) and
+                the fields below adapt: the <Term>API key ID</Term> appears only
+                for v8 (v6 authenticates with the API key alone). The form also
+                exposes <Term>Playground / War Room ID</Term> — optional, but
+                required to run commands (<Code>run_command</Code>) and the
+                get/set/append list tools on either version.
+              </p>
             </SubSection>
 
             <SubSection icon="check_circle" title="What happens when you click Create">

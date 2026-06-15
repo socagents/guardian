@@ -45,6 +45,10 @@ export interface MarketplaceConnector {
     required: boolean;
     defaultValue?: string;
     options?: string[];
+    // v0.2.30 (#44): explicit render order + conditional visibility.
+    order?: number;
+    showWhen?: { field: string; in: string[] };
+    description?: string;
   }>;
   versions: Array<{ version: string; date: string; changes: string[] }>;
   setupGuide: string;

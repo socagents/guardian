@@ -103,6 +103,15 @@ interface ConfigParam {
    *  connectors-page InstanceModal didn't surface it before this
    *  change. Optional so existing fields without docs stay clean. */
   description?: string;
+  /** v0.2.30 (#44): explicit render order. Fields sort ascending by
+   *  `order`; fields without it keep their array position AFTER ordered
+   *  ones (stable). Lets a connector pin e.g. a Version selector first. */
+  order?: number;
+  /** v0.2.30 (#44): conditional visibility. The field renders only when
+   *  the current value of `field` is in `in`. A hidden field is not
+   *  required and is excluded from the submit payload. Drives the XSOAR
+   *  form's "api_id only for v8" behavior generically. */
+  showWhen?: { field: string; in: string[] };
 }
 
 interface VersionEntry {
@@ -3170,10 +3179,27 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
     });
   }, [selectedConnector]);
 
-  const visibleConfig = useMemo(
-    () => (selectedConnector ? selectedConnector.config.filter(() => true) : []),
-    [selectedConnector],
-  );
+  // v0.2.30 (#44): order + conditional visibility. Fields sort ascending by
+  // `order` (undefined → after ordered ones, stable via original index); a
+  // field with `showWhen` renders only when the CURRENT value of its trigger
+  // field is in the allowed set. Depends on configValues so toggling e.g.
+  // Version immediately re-filters (XSOAR: api_id shows only when version=v8).
+  const visibleConfig = useMemo(() => {
+    if (!selectedConnector) return [];
+    const shown = selectedConnector.config.filter((p) => {
+      if (!p.showWhen) return true;
+      const current = configValues[p.showWhen.field] ?? "";
+      return p.showWhen.in.includes(current);
+    });
+    return shown
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => {
+        const ao = a.p.order ?? Number.MAX_SAFE_INTEGER;
+        const bo = b.p.order ?? Number.MAX_SAFE_INTEGER;
+        return ao !== bo ? ao - bo : a.i - b.i;
+      })
+      .map((x) => x.p);
+  }, [selectedConnector, configValues]);
 
   // v0.5.70 (issue #45): deleted the pre-v0.5.70 standardConfig /
   // advancedConfig slice() hack. Pre-v0.5.70 the last field was
@@ -3194,10 +3220,12 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
     // POST body still gets the default through the seed effect; this
     // just keeps the button enable-state in sync with what the user
     // sees on screen.
-    return selectedConnector.config
+    // v0.2.30 (#44): only VISIBLE required fields gate the button — a field
+    // hidden by `showWhen` (e.g. api_id on a v6 XSOAR instance) is not required.
+    return visibleConfig
       .filter((p) => p.required)
       .every((p) => (configValues[p.name] ?? p.defaultValue ?? "").trim());
-  }, [instanceName, selectedConnector, configValues]);
+  }, [instanceName, selectedConnector, visibleConfig, configValues]);
 
   const [saving, setSaving] = useState(false);
   // issue #42 — explicit create outcome. Pre-fix, handleSave only acted on
@@ -3232,7 +3260,10 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
       // the key name — schema is authoritative.
       const configBucket: Record<string, string> = {};
       const secretsBucket: Record<string, string> = {};
-      for (const param of selectedConnector.config) {
+      // v0.2.30 (#44): iterate VISIBLE fields only — a field hidden by
+      // `showWhen` (e.g. api_id when version=v6) must not be submitted even
+      // if the operator typed a value before switching the version.
+      for (const param of visibleConfig) {
         const value = configValues[param.name];
         if (value === undefined || value === "") continue;
         if (param.type === "secret" || param.type === "password") {
@@ -3289,7 +3320,7 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
     } finally {
       setSaving(false);
     }
-  }, [selectedConnector, instanceName, configValues, disabledToolsSet, onCreated, onClose]);
+  }, [selectedConnector, visibleConfig, instanceName, configValues, disabledToolsSet, onCreated, onClose]);
 
   const handleConfigChange = useCallback((name: string, value: string) => {
     setConfigValues((prev) => ({ ...prev, [name]: value }));
@@ -3945,7 +3976,9 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
                       </label>
                       {renderConfigField(param)}
                       <p className="text-[10px] text-on-surface-variant/60 italic ml-1">
-                        {param.type === "secret" || param.type === "password"
+                        {param.description
+                          ? param.description
+                          : param.type === "secret" || param.type === "password"
                           ? `Encrypted credentials for ${selectedConnector.name}`
                           : `Parameter: ${param.name}`}
                       </p>

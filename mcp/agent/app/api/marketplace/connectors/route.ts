@@ -38,6 +38,12 @@ interface ConfigField {
   required: boolean;
   defaultValue?: string;
   options?: string[];
+  // v0.2.30 (#44): explicit render order + conditional visibility (drives
+  // the XSOAR form's "Version first; api_id only for v8"). Carried verbatim
+  // to the client where CreateInstancePanel sorts + conditionally renders.
+  order?: number;
+  showWhen?: { field: string; in: string[] };
+  description?: string;
 }
 
 interface MarketplaceConnector {
@@ -96,10 +102,15 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
     authType: "XSOAR API key (v6 or v8/Cortex)",
     tools: [],
     config: [
-      { display: "API URL", name: "api_url", type: "url", required: true },
-      { display: "API key", name: "api_key", type: "secret", required: true },
-      { display: "API key ID", name: "api_id", type: "string", required: false },
-      { display: "Verify SSL", name: "verify_ssl", type: "boolean", required: false, defaultValue: "true" },
+      // v0.2.30 (#44): Version is the FIRST field; selecting it drives which
+      // other fields apply. v6 = on-prem (API key only); v8 = Cortex cloud
+      // (also needs the API key ID). api_id is shown + required ONLY for v8.
+      { display: "Version", name: "version", type: "select", required: true, options: ["v6", "v8"], defaultValue: "v8", order: 0, description: "XSOAR generation. v6 = on-prem (single API key in the Authorization header). v8 = Cortex cloud / XSOAR 8 (also needs the API key ID below)." },
+      { display: "API URL", name: "api_url", type: "url", required: true, order: 1 },
+      { display: "API key ID", name: "api_id", type: "string", required: true, order: 2, showWhen: { field: "version", in: ["v8"] }, description: "Cortex API key ID (sent as x-xdr-auth-id) — XSOAR 8 / cloud only." },
+      { display: "API key", name: "api_key", type: "secret", required: true, order: 3 },
+      { display: "Playground / War Room ID", name: "playground_id", type: "string", required: false, order: 4, description: "Investigation ID used to execute commands. Required for run_command and the get/set/append-list tools (both v6 and v8). Find it in the XSOAR UI: open the Playground (or any War Room) and copy the investigation ID from the URL." },
+      { display: "Verify SSL", name: "verify_ssl", type: "boolean", required: false, defaultValue: "true", order: 5 },
     ],
     versions: [
       {
