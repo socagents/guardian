@@ -9,18 +9,23 @@
 # (api_key + key id via x-xdr-auth-id, /xsoar/public/v1 prefix);
 # detection is config-driven via api_id.
 #
-# Zero extra Python dependencies — only httpx, which is already in the
-# guardian-connector-runtime base image. The connector's source is pure
-# stdlib + httpx; no compiled binaries, no bundled payloads. Talks only
-# to the configured XSOAR tenant's REST API.
+# One declared dependency (PyYAML — see requirements.txt) on top of the
+# guardian-connector-runtime base (httpx + pydantic). PyYAML parses the
+# playbook YAML for the v8 Core REST API import path (issue #46); it is
+# already present transitively in the base, declared here for robustness.
+# No compiled binaries, no bundled payloads. Talks only to the configured
+# XSOAR tenant's REST API.
 
 ARG GUARDIAN_RUNTIME_VERSION=latest
 FROM ghcr.io/kite-production/guardian-connector-runtime:${GUARDIAN_RUNTIME_VERSION}
 
 LABEL org.opencontainers.image.source="https://github.com/kite-production/guardian"
-LABEL org.opencontainers.image.description="Guardian xsoar connector container — Cortex XSOAR REST API wrapper. Tools: xsoar_list_incidents, xsoar_get_incident, xsoar_get_war_room, xsoar_add_entry, xsoar_add_note, xsoar_update_incident, xsoar_close_incident, xsoar_list_incident_types, xsoar_get_incident_fields, xsoar_search_indicators, xsoar_save_evidence, xsoar_search_evidence, xsoar_health_check."
+LABEL org.opencontainers.image.description="Guardian xsoar connector container — Cortex XSOAR REST API wrapper. Tools: xsoar_list_incidents, xsoar_get_incident, xsoar_get_war_room, xsoar_add_entry, xsoar_add_note, xsoar_update_incident, xsoar_close_incident, xsoar_list_incident_types, xsoar_get_incident_fields, xsoar_search_indicators, xsoar_save_evidence, xsoar_search_evidence, xsoar_import_playbook, xsoar_health_check."
 
-# No extra deps. httpx + pydantic are in the base runtime.
+# PyYAML is declared in requirements.txt (parses the playbook YAML for the
+# Cortex 8 Core REST API import path). httpx + pydantic come from the base.
+COPY bundles/spark/connectors/xsoar/requirements.txt /tmp/xsoar-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/xsoar-requirements.txt
 
 COPY bundles/spark/connectors/xsoar/src /app/connectors/xsoar/src
 

@@ -47,6 +47,7 @@ from __future__ import annotations
 import functools
 import json
 import re
+import yaml
 from typing import Any, Optional
 
 from ._xsoar_client import (
@@ -1751,6 +1752,71 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
 
 
 # ─── xsoar_import_playbook ───────────────────────────────────────────
+#
+# Cortex 8 import path (issue #46). The v6 `POST /playbook/import` (multipart
+# YAML) is NOT proxied by the Cortex 8 public API gateway (405). When the Core
+# REST API integration is installed AND the instance has a playground_id, we
+# import via that integration's command engine instead:
+#
+#   !core-api-post uri=/playbook/save body=`[<playbook-as-json>]`
+#
+# run in the playground war room. /playbook/save takes a JSON ARRAY of
+# playbooks (verified live on Cortex 8: a single object → 400 "cannot
+# unmarshal object into []domain.Playbook"; the array form creates the
+# playbook). yaml.safe_load also accepts JSON, so a JSON playbook works too.
+
+
+async def _import_via_core_api(fetcher: XSOARFetcher, playbook_yaml: str) -> Optional[dict]:
+    """Cortex 8 fallback: import a playbook through the Core REST API
+    integration (core-api-post → /playbook/save), executed in the instance's
+    playground. Returns a success/error envelope, or None when no playground_id
+    is configured (the caller then surfaces the guided-manual message)."""
+    cfg = _get_xsoar_config()
+    playground_id = cfg.get("playground_id")
+    if not playground_id:
+        return None
+    try:
+        pb = yaml.safe_load(playbook_yaml)
+    except yaml.YAMLError as exc:
+        return _err(f"playbook_yaml is not valid YAML/JSON: {exc}")
+    if not isinstance(pb, dict):
+        return _err("playbook_yaml must define a single playbook object (mapping)")
+    # /playbook/save expects a JSON ARRAY of playbooks.
+    body = json.dumps([pb], separators=(",", ":"))
+    if "`" in body:
+        return _err(
+            "playbook content contains a backtick, which the war-room command "
+            "engine can't pass safely — import this playbook manually via "
+            "Playbooks → Import.",
+            import_unavailable=True,
+        )
+    command = f"!core-api-post uri=/playbook/save body=`{body}`"
+    result = await _execute_command(fetcher, str(playground_id), command)
+    output = result.get("output", "") or ""
+    if _command_reported_error(output):
+        return _err(
+            "Core REST API import failed (core-api-post /playbook/save).",
+            reason="core_api_save_failed",
+            detail=output[:600],
+        )
+    # Success — best-effort extract the saved playbook id/name from the
+    # {"response":[{...}]} body; fall back to the YAML's own id/name.
+    playbook_id = pb.get("id")
+    playbook_name = pb.get("name")
+    try:
+        saved = json.loads(output).get("response")
+        if isinstance(saved, list) and saved and isinstance(saved[0], dict):
+            playbook_id = saved[0].get("id", playbook_id)
+            playbook_name = saved[0].get("name", playbook_name)
+    except (ValueError, AttributeError):
+        pass
+    return {
+        "playbook_id": playbook_id,
+        "playbook_name": playbook_name,
+        "imported": True,
+        "via": "core-api",
+        "raw_response": output[:600],
+    }
 
 
 @_wrap_xsoar_call
@@ -1770,13 +1836,21 @@ async def xsoar_import_playbook(
     validate structure first with playbook_validate. This WRITES to the tenant
     — it is approval-gated like every connector action.
 
+    Path by generation: XSOAR 6 uses the direct `POST /playbook/import`
+    (multipart). Cortex 8's public API doesn't proxy that (405), so — when the
+    Core REST API integration is installed AND the instance has a playground_id
+    — Guardian imports via that integration (core-api-post → /playbook/save).
+    Without the integration/playground, returns a guided-manual message
+    (import_unavailable=True).
+
     Args:
-        playbook_yaml: The full playbook definition as a YAML string.
-        filename: Optional upload filename (default 'guardian-playbook.yml').
+        playbook_yaml: The full playbook definition as a YAML (or JSON) string.
+        filename: Optional upload filename (default 'guardian-playbook.yml';
+            used only on the direct v6 multipart path).
 
     Returns:
-        {ok, playbook_id, playbook_name, imported, raw_response} or
-        {ok:false, error}.
+        {ok, playbook_id, playbook_name, imported, raw_response} (with `via:
+        "core-api"` on the Cortex 8 path) or {ok:false, error}.
     """
     if not playbook_yaml or not playbook_yaml.strip():
         raise ValueError("playbook_yaml is required")
@@ -1790,23 +1864,27 @@ async def xsoar_import_playbook(
         response = await fetcher.post_multipart("/playbook/import", files=files)
     except XSOARRequestError as exc:
         # Cortex 8's public API gateway doesn't proxy /playbook/import (405),
-        # and v6 REST endpoints 303-redirect on Cortex 8. Either way the tenant
-        # has no DIRECT import path. Surface a structured, actionable signal so
-        # the skill + UI branch to guided manual import (or the operator enables
-        # the Core REST API integration for one-click) — rather than a raw HTTP
-        # error. Direct import works on XSOAR 6 and on Cortex 8 + Core REST API.
+        # and v6 REST endpoints 303-redirect on Cortex 8. When the direct path
+        # is unavailable, try the Core REST API integration path (issue #46):
+        # core-api-post → /playbook/save run in the playground. That needs the
+        # integration installed AND a playground_id; if either is missing we
+        # fall through to the guided-manual message (still correct behavior).
         msg = str(exc)
         _markers = ("405", "method not allowed", "redirect", "not served")
         if any(m in msg.lower() for m in _markers):
+            via_core_api = await _import_via_core_api(fetcher, playbook_yaml)
+            if via_core_api is not None:
+                return via_core_api  # Core REST API import succeeded (or its own error)
             return _err(
-                "Direct playbook import isn't available on this XSOAR tenant. "
-                "On Cortex 8 the public API doesn't expose /playbook/import — "
-                "either enable the Core REST API integration for one-click "
-                "import, or import the downloaded YAML manually via "
-                "Playbooks → Import. The test-run still works once the "
-                "playbook exists in the tenant.",
+                "Direct playbook import isn't available on this tenant's public "
+                "API. For one-click import, install the Core REST API "
+                "integration AND set this instance's playground_id (the "
+                "Playground / War Room investigation ID) at /connectors — "
+                "Guardian then imports via that integration. Otherwise import "
+                "the YAML manually via Playbooks → Import. The test-run still "
+                "works once the playbook exists in the tenant.",
                 import_unavailable=True,
-                reason="import_endpoint_unavailable_on_tenant",
+                reason="import_endpoint_unavailable_and_no_core_api_path",
                 detail=msg,
             )
         raise

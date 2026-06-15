@@ -10,6 +10,29 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.32] (unreleased) — *XSOAR v8 one-click playbook import via the Core REST API*
+
+Importing a playbook into a **Cortex 8 (XSOAR v8)** tenant now works one-click when the Core REST API integration is installed — previously it always reported "import unavailable," because the connector only tried the v6 endpoint and never actually used the Core REST API integration it told you to enable.
+
+### What ships
+
+- **Cortex 8 playbook import works.** When the direct `POST /playbook/import` 405s (Cortex 8's public API doesn't expose it), the connector now imports through the **Core REST API integration** — `core-api-post` → `/playbook/save` (a JSON array of playbooks), run in the instance's playground. Verified live on a Cortex 8 tenant.
+- **Requirements:** the Core REST API integration installed on the tenant **and** the instance's `playground_id` set (the v0.2.30 form field). Without either, you get a clear guided-manual message — no longer the misleading "enable the Core REST API integration" suggestion the connector couldn't act on.
+- XSOAR 6 import is unchanged (direct multipart upload).
+
+### Operator impact
+
+- No installer change (Scenario 1). Re-run your existing installer; volumes preserved.
+- This completes the Playbook Builder's deploy + test-run loop on Cortex 8.
+
+### Files
+
+- `bundles/spark/connectors/xsoar/src/connector.py` — `_import_via_core_api` fallback (parses YAML→dict, array-wraps, `core-api-post /playbook/save` via the playground); `import_playbook` calls it on 405.
+- `bundles/spark/connectors/xsoar/{requirements.txt,Dockerfile}` — declare PyYAML (used to parse the playbook).
+- `bundles/spark/connectors/xsoar/{connector.yaml,tests/test_connector.py}` — tool description + Core-API fallback tests.
+
+---
+
 ## [v0.2.31] (unreleased) — *Fix: XSOAR list tools now actually create lists*
 
 `set_list` and `append_to_list` reported success but didn't create a new XSOAR list — so the value silently went nowhere and a later `get_list` returned "not found." Fixed.

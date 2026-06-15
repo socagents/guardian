@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.32",
+    date: "2026-06-15",
+    title: "XSOAR v8 one-click playbook import via the Core REST API.",
+    highlights: [
+      "Playbook import into a Cortex 8 tenant now works one-click when the Core REST API integration is installed (previously always reported 'import unavailable').",
+      "The connector imports via core-api-post /playbook/save (run in the instance's playground) when the direct v6 endpoint 405s; verified live on Cortex 8.",
+      "Requires the Core REST API integration + the instance's playground_id; otherwise a clear guided-manual message. XSOAR 6 import is unchanged.",
+    ],
+  },
+  {
     version: "0.2.31",
     date: "2026-06-15",
     title: "Fix: XSOAR list tools now actually create lists.",

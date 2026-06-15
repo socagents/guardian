@@ -1,0 +1,9 @@
+# Direct Python dependencies for the Cortex XSOAR connector, layered on top of
+# the guardian-connector-runtime base (which already provides httpx + pydantic).
+#
+# PyYAML: the v8 Core REST API playbook-import path (issue #46) parses the
+# playbook YAML into a dict before posting it to /playbook/save. PyYAML is
+# already present transitively in the base (via uvicorn[standard]), but the
+# connector imports it directly, so it is declared here to stay robust if the
+# base's transitive set ever changes.
+PyYAML>=6,<7

@@ -1064,18 +1064,64 @@ def test_import_playbook_requires_yaml(monkeypatch):
     assert out["ok"] is False and "playbook_yaml" in out["error"]
 
 
-def test_import_playbook_unavailable_on_405(monkeypatch):
-    # Cortex 8 public gateway returns 405 — surface a structured signal.
+def test_import_playbook_unavailable_on_405_no_playground(monkeypatch):
+    # Cortex 8 public gateway 405s AND no playground_id → guided-manual message.
     rf = _RecordingFetcher(
         multipart_exc=XSOARRequestError(
             "HTTP 405 from /playbook/import: Method Not Allowed"
         )
     )
     _install_fetcher(monkeypatch, rf)
+    monkeypatch.setattr(connector, "_get_xsoar_config", lambda: {"playground_id": None})
     out = run(connector.xsoar_import_playbook(playbook_yaml="id: z\nname: Z\n"))
     assert out["ok"] is False
     assert out["import_unavailable"] is True
-    assert out["reason"] == "import_endpoint_unavailable_on_tenant"
+    assert out["reason"] == "import_endpoint_unavailable_and_no_core_api_path"
+
+
+def test_import_playbook_via_core_api_on_405(monkeypatch):
+    # issue #46: Cortex 8 405 + Core REST API integration + playground_id →
+    # import via core-api-post /playbook/save (a JSON ARRAY of playbooks).
+    rf = _RecordingFetcher(
+        multipart_exc=XSOARRequestError(
+            "HTTP 405 from /playbook/import: Method Not Allowed"
+        )
+    )
+    _install_fetcher(monkeypatch, rf)
+    monkeypatch.setattr(connector, "_get_xsoar_config", lambda: {"playground_id": "PG-8"})
+    seen = {}
+
+    async def _fake_exec(fetcher, inv, command, return_context_keys=None):
+        seen["inv"] = inv
+        seen["command"] = command
+        return {"output": '{"response":[{"id":"z","name":"Z"}]}'}
+
+    monkeypatch.setattr(connector, "_execute_command", _fake_exec)
+    out = run(connector.xsoar_import_playbook(playbook_yaml="id: z\nname: Z\n"))
+    assert out["ok"] is True and out["imported"] is True and out["via"] == "core-api"
+    assert out["playbook_id"] == "z" and out["playbook_name"] == "Z"
+    # Ran in the playground, as a JSON ARRAY body via core-api-post.
+    assert seen["inv"] == "PG-8"
+    assert seen["command"].startswith("!core-api-post uri=/playbook/save body=`[")
+    assert '"id":"z"' in seen["command"] and seen["command"].endswith("]`")
+
+
+def test_import_playbook_core_api_save_error(monkeypatch):
+    # The core-api call ran but the server rejected it → clean ok=false.
+    rf = _RecordingFetcher(
+        multipart_exc=XSOARRequestError(
+            "HTTP 405 from /playbook/import: Method Not Allowed"
+        )
+    )
+    _install_fetcher(monkeypatch, rf)
+    monkeypatch.setattr(connector, "_get_xsoar_config", lambda: {"playground_id": "PG-8"})
+
+    async def _fake_exec(fetcher, inv, command, return_context_keys=None):
+        return {"output": "Error: Error from Core REST API ... Status code: 400. Bad Request"}
+
+    monkeypatch.setattr(connector, "_execute_command", _fake_exec)
+    out = run(connector.xsoar_import_playbook(playbook_yaml="id: z\nname: Z\n"))
+    assert out["ok"] is False and out["reason"] == "core_api_save_failed"
 
 
 def test_import_playbook_other_4xx_is_normal_error(monkeypatch):
