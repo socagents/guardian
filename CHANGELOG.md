@@ -10,27 +10,29 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
-## [v0.2.34] (unreleased) — *XSOAR indicator search returns a compact, scored result*
+## [v0.2.34] (unreleased) — *XSOAR indicator search actually filters now (+ compact, scored results)*
 
-Follow-up to v0.2.33. The v6 harness smoke showed the agent flailing on "how many IP indicators / top by reputation" — `search_indicators` → `!findIndicators` → docs → timeout. Root cause: `xsoar_search_indicators` returned **raw, verbose** XSOAR indicator objects (score/reputation buried under dozens of fields per object), while the `!findIndicators` command returned a clean scored table — so the agent abandoned the proper tool for the command.
+Follow-up to v0.2.33. The v6 harness smoke showed the agent flailing on "how many IP indicators / top by reputation" — `search_indicators` → `!findIndicators` → docs → timeout. Investigating it (a deterministic in-container probe against the live v6 tenant) uncovered a **real, long-standing bug**: `xsoar_search_indicators` sent its query wrapped in a `{"filter": {...}}` envelope (copied from the `/incidents/search` pattern), but `/indicators/search` takes a **flat** body — so XSOAR **silently ignored the query, size, AND page** and returned the full 1.18M-indicator store at the default page size, unsorted and unscored. Every indicator query (`type:IP`, `reputation:Bad`, …) was a no-op; the agent flailed because the tool genuinely returned arbitrary junk.
 
 ### What ships
 
-- **`xsoar_search_indicators` now returns a compact summary per indicator** — `{id, type, value, score (0-3), reputation (Unknown/Good/Suspicious/Bad), source, created, modified, investigation_ids, expiration_status}` — mirroring how `xsoar_list_incidents` summarizes cases. The score + reputation are surfaced directly, so "how many bad IPs?" / "top by reputation" is answerable from this result alone. Payloads shrink dramatically (no more `CustomFields`/`sortValues`/`comments` dumps).
+- **Request-shape fix (the real bug): `xsoar_search_indicators` now POSTs a flat `{query, size, page}` body.** Queries actually filter now — `type:IP` returns IPs, `reputation:Bad` / `verdict:Malicious` returns the score-3 indicators, `size` is honored. Verified live on v6 (probe: filter-nested returned 100 unscored Certificate IDs ignoring `size:5`; flat returned 5 score-3 IPs). The correct reputation field is `reputation:`/`verdict:` — there is no `score:N` query field.
+- **Compact, scored output: `xsoar_search_indicators` returns a summary per indicator** — `{id, type, value, score (0-3), reputation (Unknown/Good/Suspicious/Bad), source, created, modified, investigation_ids, expiration_status}` — mirroring `xsoar_list_incidents`. Payloads shrink dramatically (no more `CustomFields`/`sortValues`/`comments` dumps); the score/reputation are surfaced directly.
 - **Bug-family audit** across all xsoar tools (the v0.2.33 retrospective discipline): exactly three returned raw upstream objects. `search_indicators` is fixed here; `xsoar_get_incident` is intentionally a full record (its drill-in contract — `version` must survive for `update_incident`); `xsoar_search_evidence` is the same pattern and is tracked for a follow-up (issue #49) with an inline code comment.
-- The `xsoar_platform_reference` skill now notes the connector surfaces score/reputation directly — closing the loop so the agent never reaches for `!findIndicators`.
+- The `xsoar_platform_reference` skill now documents the correct query (`reputation:Bad`/`verdict:Malicious`, no `score:N`) + that `search_indicators` returns score/reputation directly.
 
 ### Operator impact
 
 - No installer change (Scenario 1). Re-run your existing installer; volumes preserved.
 - The connector image rebuilds on this tag; guardian-updater pulls the new digest.
+- **Behavior change:** any prior workflow that relied on `search_indicators` returning the whole store (because the filter was a no-op) will now get a correctly-filtered, smaller result. This is the intended fix.
 
 ### Files
 
-- `bundles/spark/connectors/xsoar/src/connector.py` — `_DBOT_SCORE_LABELS`, `_first_source`, `_summarize_indicator`; `search_indicators` returns the summarized list + updated docstring; inline deferral note at `search_evidence`.
+- `bundles/spark/connectors/xsoar/src/connector.py` — flat `/indicators/search` body (was `{"filter": {...}}`); `_DBOT_SCORE_LABELS`, `_first_source`, `_summarize_indicator`; updated docstring; inline deferral note at `search_evidence`.
 - `bundles/spark/connectors/xsoar/connector.yaml` — search_indicators description notes the compact scored shape.
-- `bundles/spark/connectors/xsoar/tests/test_connector.py` — 5 new tests (compact projection, missing-score, source fallback, empty store, `_first_source` units).
-- `bundles/spark/mcp/skills/foundation/xsoar_platform_reference.md` — note the direct score/reputation surfacing.
+- `bundles/spark/connectors/xsoar/tests/test_connector.py` — 5 new tests incl. a flat-body regression guard (`"filter" not in body`).
+- `bundles/spark/mcp/skills/foundation/xsoar_platform_reference.md` — correct reputation query + direct score/reputation surfacing.
 
 ---
 

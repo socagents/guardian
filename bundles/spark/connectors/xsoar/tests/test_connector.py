@@ -1171,10 +1171,15 @@ def test_search_indicators_summarizes_compact_keys_and_reputation(monkeypatch):
     # Verbose store fields must NOT leak through.
     assert "version" not in ind and "CustomFields" not in ind
     assert "sortValues" not in ind and "comments" not in ind
-    # Request shape: query forwarded to /indicators/search.
+    # Request shape: FLAT body — query/size/page at the TOP level, NOT
+    # nested under "filter". /indicators/search ignores a "filter" envelope
+    # entirely (unlike /incidents/search), so nesting silently disables the
+    # query, size and page. Lock the flat shape against regression.
     method, path, body = rf.calls[0]
     assert (method, path) == ("POST", "/indicators/search")
-    assert body["filter"]["query"] == "type:IP"
+    assert body["query"] == "type:IP"
+    assert "filter" not in body
+    assert body["size"] == 10
 
 
 def test_search_indicators_missing_score_maps_to_unknown(monkeypatch):

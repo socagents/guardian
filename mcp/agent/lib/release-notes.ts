@@ -39,11 +39,11 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "0.2.34",
     date: "2026-06-15",
-    title: "XSOAR indicator search returns a compact, scored result.",
+    title: "XSOAR indicator search actually filters now (+ compact, scored results).",
     highlights: [
-      "xsoar_search_indicators now returns a compact summary per indicator {id, type, value, score, reputation, source, …} instead of raw verbose store objects.",
-      "Score + reputation are surfaced directly, so 'how many bad IPs / top by reputation' is answered from the search result alone — no fallback to !findIndicators.",
-      "Payloads shrink dramatically (no more CustomFields/sortValues/comments dumps in the result).",
+      "Fixed a real bug: xsoar_search_indicators sent its query in a {filter:{…}} envelope, but /indicators/search takes a flat body — so XSOAR ignored the query, size AND page and returned the whole unfiltered store. Queries now actually filter.",
+      "type:IP returns IPs, reputation:Bad / verdict:Malicious returns malicious indicators, size is honored. Verified live on the v6 tenant.",
+      "Results are now a compact summary per indicator {id, type, value, score, reputation, source, …} instead of raw verbose store objects — much smaller payloads, score/reputation surfaced directly.",
       "Bug-family audited all xsoar tools; search_evidence (same pattern) tracked as a follow-up. No installer change.",
     ],
   },

@@ -1128,13 +1128,16 @@ async def xsoar_search_indicators(
     Args:
         query: Optional XSOAR indicator-search query (e.g.
             'type:IP and reputation:Bad', or a bare value like
-            '1.2.3.4'). Omit to list recent indicators.
+            '1.2.3.4'). Reputation uses `reputation:Bad|Suspicious|Good`
+            (equivalently `verdict:Malicious|Suspicious|Good`); there is
+            NO `score:N` query field. Omit to list recent indicators.
         page: Zero-based page index (default 0).
         size: Page size (default 50, max 200).
 
-    Example body POSTed to /indicators/search:
-        {"filter": {"query": "type:IP and reputation:Bad",
-                    "page": 0, "size": 50}}
+    Example body POSTed to /indicators/search (a FLAT body — NOT nested
+    under "filter" like /incidents/search; wrapping it in "filter" makes
+    XSOAR ignore query/size/page and return the whole store):
+        {"query": "type:IP and reputation:Bad", "page": 0, "size": 50}
 
     Returns:
         {ok, indicators: [...], total, result_count}. Each indicator is a
@@ -1147,15 +1150,21 @@ async def xsoar_search_indicators(
         to !findIndicators. `total` is XSOAR's reported total (may exceed
         the page); `result_count` is this page's length.
     """
-    filt: dict[str, Any] = {
+    # /indicators/search takes a FLAT body ({query, size, page}) — NOT the
+    # {"filter": {...}} envelope that /incidents/search uses. Wrapping it in
+    # "filter" makes XSOAR silently ignore query + size + page entirely and
+    # return the full unfiltered, unsorted store at the default page size
+    # (the indicator-search bug fixed in v0.2.34: queries like
+    # `reputation:Bad` / `type:IP` did nothing). Send the flat shape.
+    body: dict[str, Any] = {
         "page": _norm_int(page, 0),
         "size": _clamp_int(size, 50, 1, 200),
     }
     if query:
-        filt["query"] = query
+        body["query"] = query
 
     fetcher = _get_fetcher()
-    response = await fetcher.post("/indicators/search", {"filter": filt})
+    response = await fetcher.post("/indicators/search", body)
 
     # XSOAR returns indicators under `iocObjects` (or `data` on the bare-
     # array path the fetcher normalized).
