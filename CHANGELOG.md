@@ -10,6 +10,27 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.31] (unreleased) — *Fix: XSOAR list tools now actually create lists*
+
+`set_list` and `append_to_list` reported success but didn't create a new XSOAR list — so the value silently went nowhere and a later `get_list` returned "not found." Fixed.
+
+### What ships
+
+- **`set_list` / `append_to_list` now create the list** if it doesn't exist (they use the XSOAR `!createList` create-or-overwrite command instead of `!setList`, which only *updates* an existing list).
+- **List writes report real failures.** The connector previously returned `ok: true` even when the underlying command errored; it now inspects the command output and returns a clean `ok: false` with the error detail when a write fails.
+- Found during the live XSOAR v6 smoke (on-prem tenant). Affected both v6 and v8 — not version-specific.
+
+### Operator impact
+
+- No installer change (Scenario 1). Re-run your existing installer; volumes preserved.
+
+### Files
+
+- `bundles/spark/connectors/xsoar/src/connector.py` — `set_list` + `append_to_list` use `!createList`; new `_command_reported_error()` surfaces failed writes.
+- `bundles/spark/connectors/xsoar/tests/test_connector.py` — updated command assertions + a regression test for the silent-success path.
+
+---
+
 ## [v0.2.30] (unreleased) — *Smarter XSOAR create form — Version first, version-aware fields*
 
 The XSOAR instance-create form now leads with the **Version** dropdown, and the fields below adapt to it: **API key ID** appears only for **v8** (v6 uses the API key alone). The form also exposes the previously-missing **Playground / War Room ID** field — you need it to run commands.

@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.31",
+    date: "2026-06-15",
+    title: "Fix: XSOAR list tools now actually create lists.",
+    highlights: [
+      "set_list / append_to_list now create a list if it doesn't exist (use !createList instead of !setList, which only updates existing lists).",
+      "List writes now report real failures instead of returning ok=true when the underlying command errored.",
+      "Found during the live XSOAR v6 smoke; affected both v6 and v8. No installer change.",
+    ],
+  },
+  {
     version: "0.2.30",
     date: "2026-06-15",
     title: "Smarter XSOAR create form — Version first, version-aware fields.",

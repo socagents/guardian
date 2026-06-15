@@ -760,8 +760,10 @@ def test_complete_task_requires_ids(monkeypatch):
 # ─── get_list / set_list / append_to_list ────────────────────────────
 
 
-# Lists route through the command engine (!getList / !setList) on Cortex 8 —
-# the v6 GET /lists/ REST endpoint 500s there. They need playground_id.
+# Lists route through the command engine (!getList read / !createList write)
+# on Cortex 8 — the v6 GET /lists/ REST endpoint 500s there. They need
+# playground_id. Issue #45: writes use !createList (create-or-overwrite); the
+# old !setList only updated EXISTING lists and masked failures as ok=True.
 
 _GETLIST_OK = "Done: list bl was succesfully loaded:\n\n1.1.1.1"
 
@@ -800,7 +802,22 @@ def test_set_list_via_command(monkeypatch):
     out = run(connector.xsoar_set_list("blocklist", "1.1.1.1\n2.2.2.2"))
     assert out["ok"] is True and out["name"] == "blocklist"
     exec_call = [b for (_m, p, b) in f.calls if p == "/entry/execute/sync"][0]
-    assert exec_call["data"] == '!setList listName="blocklist" listData="1.1.1.1\n2.2.2.2"'
+    # issue #45: writes use !createList (create-or-overwrite), not !setList.
+    assert exec_call["data"] == '!createList listName="blocklist" listData="1.1.1.1\n2.2.2.2"'
+
+
+def test_set_list_reports_error_on_failure(monkeypatch):
+    # issue #45 regression: a command that returns "Error: Item not found"
+    # must surface as ok=False — not the previous silent ok=True.
+    monkeypatch.setattr(connector, "_get_playground_id", lambda: "PG-1")
+    f = _ScriptedFetcher(replies={
+        "/entry/execute/sync": {
+            "data": [{"type": 4, "contents": "Error: Item not found (8) on list [bl]"}]
+        },
+    })
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
+    out = run(connector.xsoar_set_list("bl", "x"))
+    assert out["ok"] is False and "could not create" in out["error"]
 
 
 def test_append_to_list_via_command(monkeypatch):
@@ -814,17 +831,24 @@ def test_append_to_list_via_command(monkeypatch):
     # two execute calls: !getList then !setList with the merged data
     datas = [b["data"] for (_m, p, b) in f.calls if p == "/entry/execute/sync"]
     assert datas[0] == '!getList listName="bl"'
-    assert datas[1] == '!setList listName="bl" listData="1.1.1.1\n2.2.2.2"'
+    assert datas[1] == '!createList listName="bl" listData="1.1.1.1\n2.2.2.2"'
 
 
 def test_append_to_list_creates_when_absent(monkeypatch):
     monkeypatch.setattr(connector, "_get_playground_id", lambda: "PG-1")
+    # The path-keyed fake serves both calls (!getList then !createList) the same
+    # reply. A "Done: ... was updated" entry has no "loaded:" read-marker, so
+    # _parse_getlist_output treats getList as no-current-data (current=None →
+    # new_data="first"); and it's not an error, so the createList write succeeds.
     f = _ScriptedFetcher(replies={
-        "/entry/execute/sync": {"data": [{"type": 4, "contents": "list new does not exist"}]},
+        "/entry/execute/sync": {"data": [{"type": 1, "contents": "Done: list new was updated"}]},
     })
     monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
     out = run(connector.xsoar_append_to_list("new", "first"))
     assert out["ok"] is True and out["data"] == "first"
+    # the WRITE went through !createList, not !setList
+    datas = [b["data"] for (_m, p, b) in f.calls if p == "/entry/execute/sync"]
+    assert datas[-1] == '!createList listName="new" listData="first"'
 
 
 # ─── create_incident / run_playbook ──────────────────────────────────

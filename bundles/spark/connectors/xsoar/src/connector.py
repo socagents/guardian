@@ -259,6 +259,21 @@ def _parse_getlist_output(output: str) -> Optional[str]:
     return output[idx + len(marker):].strip()
 
 
+def _command_reported_error(output: str) -> bool:
+    """True when a war-room `!command` output signals failure, not success.
+
+    XSOAR renders command errors as a leading `Error:` (e.g. `!setList` /
+    `!createList` on a problem return `Error: Item not found`). Successful
+    list writes return `Done: list <name> was updated`. The list-write tools
+    previously returned ok=True regardless of the output, so a failed write
+    looked successful — see the set_list/append_to_list fix (issue #45).
+    Only the WRITE tools use this; get_list's "not found" is a legitimate
+    result handled by _parse_getlist_output returning None.
+    """
+    s = (output or "").strip().lower()
+    return s.startswith("error") or "item not found" in s
+
+
 async def _execute_command(
     fetcher: XSOARFetcher,
     investigation_id: str,
@@ -1506,10 +1521,15 @@ async def xsoar_complete_task(
 #
 # Cortex XSOAR 8 / Cortex cloud does NOT serve the v6 `GET /lists/` REST
 # endpoint (it returns HTTP 500). The reliable cross-generation path is the
-# war-room list commands run via the playground: `!getList` / `!setList`
-# (verified on a live Cortex 8 tenant, multi-line data round-trips). So the
-# three list tools route through the command engine and require the
-# instance's playground_id — same as run_command / enrich_indicator.
+# war-room list commands run via the playground: `!getList` (read) +
+# `!createList` (create-or-overwrite write). So the three list tools route
+# through the command engine and require the instance's playground_id — same
+# as run_command / enrich_indicator.
+#
+# Issue #45: writes use `!createList`, NOT `!setList`. `!setList` only UPDATES
+# an EXISTING list — on a new list it returns `Error: Item not found`, so the
+# list was never created (and the connector used to mask that as ok=True).
+# `!createList` creates the list if missing and overwrites it if present.
 
 
 @_wrap_xsoar_call
@@ -1546,42 +1566,50 @@ async def xsoar_get_list(name: str) -> dict:
 async def xsoar_set_list(name: str, data: str) -> dict:
     """Create or overwrite a Cortex XSOAR list.
 
-    Writes the full contents (creating the list if it doesn't exist) via the
-    `!setList` war-room command, so the instance's playground_id must be
-    configured. To add a single value without clobbering the rest, use
-    xsoar_append_to_list.
+    Writes the full contents — CREATING the list if it doesn't exist — via the
+    `!createList` war-room command, so the instance's playground_id must be
+    configured. (Issue #45: `!setList` only UPDATES an existing list and
+    returns `Error: Item not found` for a new one; `!createList` is the
+    create-or-overwrite command.) To add a single value without clobbering the
+    rest, use xsoar_append_to_list.
 
     Args:
         name: The list name.
         data: The full list contents (often newline-separated lines).
 
     Returns:
-        {ok, name, output}.
+        {ok, name, output} on success, or {ok: false, error, detail} when the
+        list write fails.
     """
     if not name:
         raise ValueError("name is required")
     playground_id = _get_playground_id()
     fetcher = _get_fetcher()
-    command = f"!setList listName={_quote_arg(name)} listData={_quote_arg(data if data is not None else '')}"
+    command = f"!createList listName={_quote_arg(name)} listData={_quote_arg(data if data is not None else '')}"
     result = await _execute_command(fetcher, playground_id, command)
-    return {"name": name, "output": result.get("output")}
+    output = result.get("output", "")
+    if _command_reported_error(output):
+        return _err(f"could not create or update list '{name}'", name=name, detail=output)
+    return {"name": name, "output": output}
 
 
 @_wrap_xsoar_call
 async def xsoar_append_to_list(name: str, value: str) -> dict:
     """Append a value (as a new line) to a Cortex XSOAR list.
 
-    Read-modify-write via the `!getList` + `!setList` war-room commands, so the
-    instance's playground_id must be configured. Creates the list with `value`
-    if it doesn't exist yet. Use to add an IoC to a block/allow list during
-    response without overwriting the rest.
+    Read-modify-write via the `!getList` + `!createList` war-room commands, so
+    the instance's playground_id must be configured. CREATES the list with
+    `value` if it doesn't exist yet (issue #45: `!createList`, not `!setList`,
+    is the create-or-overwrite command). Use to add an IoC to a block/allow
+    list during response without overwriting the rest.
 
     Args:
         name: The list name.
         value: The value to append (added on its own line).
 
     Returns:
-        {ok, name, data} with the post-append contents.
+        {ok, name, data} with the post-append contents, or
+        {ok: false, error, detail} when the write fails.
     """
     if not name:
         raise ValueError("name is required")
@@ -1594,9 +1622,12 @@ async def xsoar_append_to_list(name: str, value: str) -> dict:
         (await _execute_command(fetcher, playground_id, f"!getList listName={_quote_arg(name)}")).get("output", "")
     )
     new_data = f"{current}\n{value}" if current else str(value)
-    await _execute_command(
-        fetcher, playground_id, f"!setList listName={_quote_arg(name)} listData={_quote_arg(new_data)}"
+    result = await _execute_command(
+        fetcher, playground_id, f"!createList listName={_quote_arg(name)} listData={_quote_arg(new_data)}"
     )
+    output = result.get("output", "")
+    if _command_reported_error(output):
+        return _err(f"could not append to list '{name}'", name=name, detail=output)
     return {"name": name, "data": new_data}
 
 
