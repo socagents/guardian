@@ -102,6 +102,8 @@ xsoar_list_incidents(status=[1], severity=[4], page_size=1)   # -> total = # Cri
 
 Four calls, one per severity — not a page-scan, and not a dozen syntax variants. Use the **structured `severity=[N]` form** here (the free-text `query="severity:low"` form is for the search box, and its label spelling varies by tenant — the numeric code does not).
 
+**The structured per-bucket count is authoritative.** Do NOT then re-run the same buckets in the free-text `query` form to "double-check" — that just doubles the calls for the same answer. One call per bucket (plus, if you want it, one `status=[1]` call for the total) IS the complete breakdown. Report it and stop.
+
 ---
 
 ## Indicator query syntax (`xsoar_search_indicators`)
@@ -121,9 +123,10 @@ xsoar_search_indicators(query="type:File and reputation:Bad")     # malicious ha
 | **reputation** | `Good` · `Suspicious` · `Bad` · `None`/`Unknown`. |
 | **value** | An exact IoC value — `value:8.8.8.8`. |
 
+- The reputation field is **`reputation:`** with values `Good` / `Suspicious` / `Bad` / `None`. That is the correct field — do **NOT** try `verdict:`, `score:`, or `dbotscore:` (those are not indicator-search query fields), and do not go to cortex-docs to "find the right field." `reputation:Bad` is it.
+- **An empty result means the store is empty for that filter — NOT that your syntax is wrong.** If `type:IP` or `reputation:Bad` returns 0, report "no such indicators in the store" and STOP. Do not retry with `verdict:` / `score:` / `!findIndicators` variants or fall back to docs — the syntax above is correct; the store simply holds none.
+- "Top by reputation" = filter `reputation:Bad` and read the list — there is **no server-side reputation sort**, so neither `search_indicators` nor `!findIndicators` can rank for you. If the stored indicators aren't reputation-scored, say so rather than hunting for a ranking that doesn't exist.
 - For a **live verdict on a specific IoC**, use `xsoar_enrich_indicator` (DBotScore) — `search_indicators` tells you what's already in the store + cross-case correlation, not a fresh verdict.
-- "Top by reputation" = filter `reputation:Bad` and read the result list; there is no server-side reputation sort, so don't reach for `!findIndicators` to get one — it has none either.
-- If a `type:IP` search returns nothing, the **store may simply hold no IP indicators** — say so; don't escalate to three `!findIndicators` variants assuming the syntax is wrong.
 
 ---
 
