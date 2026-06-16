@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.36",
+    date: "2026-06-16",
+    title: "Connector read-path polish: leaner XSIAM results + XSOAR v8 evidence read.",
+    highlights: [
+      "XSIAM tools no longer attach the full raw API response to every result (44 sites) — pure token bloat nothing consumed; results are now just the projected fields.",
+      "xsoar_search_evidence now works on XSOAR 8: since Cortex 8's /evidence/search doesn't return tag-based evidence, it reads the war room filtered to the 'evidence' tag. Evidence is now listable on both v6 and v8.",
+      "No installer change; xsiam + xsoar connector images rebuild.",
+    ],
+  },
+  {
     version: "0.2.35",
     date: "2026-06-15",
     title: "XSOAR evidence: save_evidence works on v6 + compact evidence search.",

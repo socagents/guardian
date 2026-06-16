@@ -247,12 +247,13 @@ spec:
         to the case's evidence board. Use to review what's already been
         flagged before drawing a conclusion. Returns a COMPACT summary per
         item {id, entry_id, incident_id, description, occurred, marked_by,
-        marked_date, tags}. NOTE: on Cortex 8, tag-based evidence is not
-        returned by /evidence/search (a public-API limitation); on XSOAR 6
-        evidence saved via save_evidence does round-trip and is listed.
+        marked_date, tags}. Generation-aware: XSOAR 6 lists via
+        /evidence/search; Cortex 8 (whose /evidence/search doesn't return
+        tag-based evidence) reads the war room filtered to the `evidence`
+        tag — so evidence saved via save_evidence is listed on BOTH.
       args:
         - { name: "incident_id", type: "string", description: "The XSOAR incident id whose evidence to list.", required: true }
-      returns: { type: "object", description: "{ ok, evidence: [compact...], count }" }
+      returns: { type: "object", description: "{ ok, evidence: [compact...], count, via }" }
 
     # ─── Server probe (connector-test path) ──────────────────────
     - name: "health_check"

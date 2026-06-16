@@ -1309,3 +1309,42 @@ def test_search_evidence_empty_returns_empty_list(monkeypatch):
     assert out["ok"] is True
     assert out["evidence"] == []
     assert out["count"] == 0
+    assert out["via"] == "evidence-api"  # v6 path (default is_v8=False)
+
+
+def test_search_evidence_v8_reads_war_room_tag(monkeypatch):
+    """XSOAR 8: /evidence/search doesn't return tag-based evidence, so
+    search_evidence reads the war room filtered to the `evidence` tag and
+    projects each tagged entry into the evidence shape."""
+    rf = _RecordingFetcher(post_reply={"entries": [
+        {"id": "7@4068", "type": 1, "contents": "phish proof",
+         "created": "2026-06-15T00:00:00Z", "user": "admin", "tags": ["evidence"]},
+        {"id": "8@4068", "type": 1, "contents": "unrelated note",
+         "created": "2026-06-15T00:01:00Z", "user": "admin", "tags": ["note"]},
+    ]}, is_v8=True)
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_search_evidence(incident_id="4068"))
+    assert out["ok"] is True
+    assert out["via"] == "war-room-tag"
+    assert out["count"] == 1  # the 'note'-tagged entry is filtered out
+    assert out["evidence"][0] == {
+        "id": "7@4068", "entry_id": "7@4068", "incident_id": "4068",
+        "description": "phish proof", "occurred": "2026-06-15T00:00:00Z",
+        "marked_by": "admin", "marked_date": "2026-06-15T00:00:00Z",
+        "tags": ["evidence"],
+    }
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/investigation/4068")
+    assert body["tags"] == ["evidence"]
+
+
+def test_summarize_evidence_entry_maps_war_room_fields():
+    """_summarize_evidence_entry maps a war-room entry to the evidence shape."""
+    ev = connector._summarize_evidence_entry(
+        {"id": "9@1", "contents": "c", "created": "t", "user": "u", "tags": ["evidence"]},
+        "1",
+    )
+    assert ev == {
+        "id": "9@1", "entry_id": "9@1", "incident_id": "1", "description": "c",
+        "occurred": "t", "marked_by": "u", "marked_date": "t", "tags": ["evidence"],
+    }

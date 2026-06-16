@@ -10,6 +10,33 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.36] (unreleased) — *Connector read-path output: xsiam compact + XSOAR v8 evidence read*
+
+Closes the last two items from the post-arc gap sweep — both connector read-tool output correctness.
+
+### What ships
+
+- **XSIAM tools no longer dump the full raw API response.** All 44 XSIAM tool returns carried `raw_response: <entire PAPI response>` next to their projected fields — pure token bloat on every call. A repo-wide check confirmed **nothing** consumed it (not the agent, skills, UI, connector.yaml, or tests), so it's removed across the board; tools now return only their projected fields (`incidents`/`alerts`/`endpoints`/`action_id`/…). Extends the v0.2.34/35 compact-output discipline to xsiam.
+- **`xsoar_search_evidence` now works on XSOAR 8.** Cortex 8's `/evidence/search` doesn't return tag-based evidence (documented in v0.2.35). On v8 the tool now reads the war room filtered to the `evidence` tag — the same entries `save_evidence` tags on v8 — and projects them into the same compact shape. **Verified live:** a tagged entry round-trips. Evidence is now listable on BOTH generations (v6 via `/evidence/search`, v8 via the war-room tag); returns carry `via` (`evidence-api` | `war-room-tag`).
+
+### Operator impact
+
+- No installer change (Scenario 1). The xsiam + xsoar connector images rebuild on this tag; guardian-updater pulls the new digests.
+- Behavior change: xsiam tool results are smaller (no `raw_response`); v8 `search_evidence` now returns results where it previously returned empty.
+
+### Files
+
+- `bundles/spark/connectors/xsiam/src/connector.py` — dropped `raw_response` from all 44 tool returns.
+- `bundles/spark/connectors/xsoar/src/connector.py` — `_summarize_evidence_entry`; `search_evidence` v8 war-room-tag branch; `save_evidence`/`search_evidence` docstrings.
+- `bundles/spark/connectors/xsoar/connector.yaml` — search_evidence description.
+- `bundles/spark/connectors/xsoar/tests/test_connector.py` — v8 evidence-read + entry-projector tests (83 pass); xsiam suite 12 pass.
+
+### Not shipped here (verification outcome)
+
+- The hooks gap from the same sweep was **verified, not a bug**: all current scheduled jobs are `prompt`-type → they route through `/api/chat` → PreToolUse/PostToolUse hooks fire (the autonomous investigation loop, 195 runs, included). `tool_call`-type jobs would bypass the TS-layer hooks, but none are registered (latent, cross-layer) — documented, no code change.
+
+---
+
 ## [v0.2.35] (unreleased) — *XSOAR evidence flow: save works on v6 + compact search*
 
 Closing the bug-family sibling from v0.2.34 (#49). Investigating it (a live in-container probe against the v6 + v8 tenants) uncovered that **`xsoar_save_evidence` was broken on XSOAR 6** — a bigger bug than the cosmetic one #49 originally tracked.

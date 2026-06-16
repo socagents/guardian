@@ -553,6 +553,28 @@ def _summarize_evidence(ev: dict) -> dict:
     }
 
 
+def _summarize_evidence_entry(entry: dict, incident_id: object) -> dict:
+    """Project a war-room entry tagged `evidence` into the compact
+    evidence shape — the Cortex 8 evidence-read path.
+
+    On XSOAR 8 the evidence board is NOT exposed via /evidence/search, so
+    xsoar_save_evidence promotes by TAGGING the war-room entry `evidence`.
+    A tagged entry therefore IS the evidence record on v8; map its fields
+    (id / contents / created / user) to the same shape `_summarize_evidence`
+    emits so the two generations return a uniform result.
+    """
+    return {
+        "id": entry.get("id"),
+        "entry_id": entry.get("id"),
+        "incident_id": str(incident_id),
+        "description": entry.get("contents"),
+        "occurred": entry.get("created"),
+        "marked_by": entry.get("user"),
+        "marked_date": entry.get("created"),
+        "tags": _as_list(entry.get("tags")),
+    }
+
+
 # ─── xsoar_list_incidents ────────────────────────────────────────────
 
 
@@ -1227,10 +1249,9 @@ async def xsoar_save_evidence(
         doesn't surface in /evidence/search on v6 — so it is NOT used.)
       * XSOAR 8 / Cortex cloud: POST /evidence is NOT exposed on the
         public API (303-redirects to the SPA), so this tags the war-room
-        entry `evidence` via POST /entry/tags. That marks the entry in
-        the UI, but Cortex 8's /evidence/search does NOT return tag-based
-        evidence (a public-API limitation) — so xsoar_search_evidence
-        won't list it on v8.
+        entry `evidence` via POST /entry/tags. Cortex 8's /evidence/search
+        doesn't return tag-based evidence, so xsoar_search_evidence reads
+        it back on v8 via the war-room `evidence` tag instead.
 
     Args:
         incident_id: The XSOAR incident id (the investigation id).
@@ -1308,43 +1329,73 @@ async def xsoar_search_evidence(incident_id: str) -> dict:
     Returns the entries promoted to the case's evidence board. Use to
     review what's already been flagged before drawing a conclusion.
 
-    **XSOAR 8 note:** Cortex 8's /evidence/search does NOT return
-    tag-based evidence, so entries marked via xsoar_save_evidence on v8
-    won't appear here (a public-API limitation — they're still visible on
-    the case's Evidence board in the UI). On XSOAR 6, evidence saved via
-    xsoar_save_evidence (POST /evidence) does round-trip and is listed.
+    Generation-aware read (verified live on both):
+      * XSOAR 6: lists the evidence board via POST /evidence/search
+        (the formal records xsoar_save_evidence creates on v6).
+      * XSOAR 8 / Cortex cloud: /evidence/search does NOT return
+        tag-based evidence (public-API limitation), so this reads the war
+        room filtered to the `evidence` tag — the same entries
+        xsoar_save_evidence tags on v8 — and returns them in the same
+        shape. (Previously these were invisible to the agent on v8.)
 
     Args:
         incident_id: The XSOAR incident id whose evidence to list.
 
-    Example body POSTed to /evidence/search:
-        {"incidentID": "123"}
+    Example body POSTed (v6): /evidence/search {"incidentID": "123"}
+    Example body POSTed (v8): /investigation/123 {"pageSize": 200,
+                                                   "tags": ["evidence"]}
 
     Returns:
-        {ok, evidence: [...], count}. Each item is a COMPACT summary
+        {ok, evidence: [...], count, via}. Each item is a COMPACT summary
         {id, entry_id, incident_id, description, occurred, marked_by,
-        marked_date, tags} — not the raw verbose XSOAR evidence record.
+        marked_date, tags} — not the raw verbose XSOAR record. `via` is
+        "evidence-api" (v6) or "war-room-tag" (v8).
     """
     if not incident_id:
         raise ValueError("incident_id is required")
 
-    # Cortex 8 requires the incident id as a top-level `incidentID`
-    # field (NOT nested under `filter`) — a missing/nested id returns
-    # HTTP 400 "Incident ID must be specified in the request body".
-    body = {"incidentID": str(incident_id)}
     fetcher = _get_fetcher()
-    response = await fetcher.post("/evidence/search", body)
 
-    # XSOAR returns the evidence list under `evidences` (or the
-    # normalized `data` bare-array path).
+    if fetcher.is_v8:
+        # Cortex 8: /evidence/search does NOT return tag-based evidence
+        # (verified live — it returns 0 even for a freshly-tagged entry).
+        # Read the war room filtered to the `evidence` tag — the same
+        # promotion xsoar_save_evidence performs on v8 — and project each
+        # tagged entry into the evidence shape.
+        wr = await fetcher.post(
+            f"/investigation/{incident_id}",
+            {"pageSize": 200, "tags": ["evidence"]},
+        )
+        entries = wr.get("entries")
+        if entries is None:
+            entries = wr.get("data") or []
+        # Belt + suspenders: also filter client-side in case the server
+        # tag filter is permissive.
+        evidence = [
+            _summarize_evidence_entry(e, incident_id)
+            for e in entries
+            if "evidence" in (e.get("tags") or [])
+        ]
+        return {
+            "evidence": evidence,
+            "count": len(evidence),
+            "incident_id": incident_id,
+            "via": "war-room-tag",
+        }
+
+    # XSOAR 6: the formal /evidence/search returns the evidence board.
+    # incidentID is a top-level field (NOT nested under `filter`) — a
+    # missing/nested id returns HTTP 400 "Incident ID must be specified".
+    response = await fetcher.post("/evidence/search", {"incidentID": str(incident_id)})
+    # XSOAR returns the list under `evidences` (or the normalized `data`).
     evidence = response.get("evidences")
     if evidence is None:
         evidence = response.get("data") or []
-
     return {
         "evidence": [_summarize_evidence(e) for e in evidence],
         "count": len(evidence),
         "incident_id": incident_id,
+        "via": "evidence-api",
     }
 
 

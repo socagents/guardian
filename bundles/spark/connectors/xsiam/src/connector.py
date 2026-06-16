@@ -655,7 +655,7 @@ async def xsiam_incidents_list(
         filters.append({"field": "status", "operator": "eq", "value": status})
     body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
     resp = await fetcher.send_request("/incidents/get_incidents/", data=body)
-    return _xsiam_ok({"incidents": (resp.get("reply") or {}).get("incidents", []), "raw_response": resp})
+    return _xsiam_ok({"incidents": (resp.get("reply") or {}).get("incidents", [])})
 
 
 @_xsiam_wrap
@@ -669,7 +669,7 @@ async def xsiam_incidents_get_extra_data(
     fetcher = _get_fetcher()
     body = {"request_data": {"incident_id": incident_id, "alerts_limit": alerts_limit}}
     resp = await fetcher.send_request("/incidents/get_incident_extra_data/", data=body)
-    return _xsiam_ok({"incident": resp.get("reply"), "raw_response": resp})
+    return _xsiam_ok({"incident": resp.get("reply")})
 
 
 @_xsiam_wrap
@@ -680,7 +680,7 @@ async def xsiam_incidents_update(incident_id: str, update_data: dict) -> dict:
     fetcher = _get_fetcher()
     body = {"request_data": {"incident_id": incident_id, "update_data": update_data}}
     resp = await fetcher.send_request("/incidents/update_incident/", data=body)
-    return _xsiam_ok({"incident_id": incident_id, "updated": True, "raw_response": resp})
+    return _xsiam_ok({"incident_id": incident_id, "updated": True})
 
 
 # ─── Alerts ───────────────────────────────────────────────────────
@@ -702,7 +702,7 @@ async def xsiam_alerts_list(
         filters.append({"field": "status", "operator": "in", "value": status})
     body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
     resp = await fetcher.send_request("/alerts/get_alerts_multi_events/", data=body)
-    return _xsiam_ok({"alerts": (resp.get("reply") or {}).get("alerts", []), "raw_response": resp})
+    return _xsiam_ok({"alerts": (resp.get("reply") or {}).get("alerts", [])})
 
 
 @_xsiam_wrap
@@ -713,7 +713,7 @@ async def xsiam_alerts_update(alert_id_list: list[str], update_data: dict) -> di
     fetcher = _get_fetcher()
     body = {"request_data": {"alert_id_list": alert_id_list, "update_data": update_data}}
     resp = await fetcher.send_request("/alerts/update_alerts/", data=body)
-    return _xsiam_ok({"updated_count": len(alert_id_list), "alert_id_list": alert_id_list, "raw_response": resp})
+    return _xsiam_ok({"updated_count": len(alert_id_list), "alert_id_list": alert_id_list})
 
 
 # ─── IoC management ───────────────────────────────────────────────
@@ -730,7 +730,6 @@ async def xsiam_ioc_insert_json(indicators: list[dict], validate: bool = True) -
     return _xsiam_ok({
         "inserted_count": len(indicators),
         "errors": (resp.get("reply") or {}).get("errors") or [],
-        "raw_response": resp,
     })
 
 
@@ -742,7 +741,7 @@ async def xsiam_ioc_disable(indicators: list[str]) -> dict:
     fetcher = _get_fetcher()
     body = {"request_data": {"indicators": indicators}}
     resp = await fetcher.send_request("/indicators/disable_iocs/", data=body)
-    return _xsiam_ok({"disabled_count": len(indicators), "indicators": indicators, "raw_response": resp})
+    return _xsiam_ok({"disabled_count": len(indicators), "indicators": indicators})
 
 
 @_xsiam_wrap
@@ -753,7 +752,7 @@ async def xsiam_ioc_enable(indicators: list[str]) -> dict:
     fetcher = _get_fetcher()
     body = {"request_data": {"indicators": indicators}}
     resp = await fetcher.send_request("/indicators/enable_iocs/", data=body)
-    return _xsiam_ok({"enabled_count": len(indicators), "indicators": indicators, "raw_response": resp})
+    return _xsiam_ok({"enabled_count": len(indicators), "indicators": indicators})
 
 
 # ─── File download ────────────────────────────────────────────────
@@ -843,7 +842,7 @@ async def xsiam_endpoints_list_all() -> dict:
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/endpoints/get_endpoints/", data={"request_data": {}})
     endpoints = (resp.get("reply") or {}).get("endpoints") or resp.get("reply") or []
-    return _xsiam_ok({"endpoints": endpoints, "total": len(endpoints) if isinstance(endpoints, list) else 0, "raw_response": resp})
+    return _xsiam_ok({"endpoints": endpoints, "total": len(endpoints) if isinstance(endpoints, list) else 0})
 
 
 @_xsiam_wrap
@@ -866,7 +865,7 @@ async def xsiam_endpoints_get(
     body = {"request_data": {"filters": filters} if filters else {}}
     resp = await fetcher.send_request("/endpoints/get_endpoint/", data=body)
     endpoints = (resp.get("reply") or {}).get("endpoints") or []
-    return _xsiam_ok({"endpoints": endpoints, "total": len(endpoints), "raw_response": resp})
+    return _xsiam_ok({"endpoints": endpoints, "total": len(endpoints)})
 
 
 @_xsiam_wrap
@@ -882,7 +881,7 @@ async def xsiam_endpoints_isolate(
         return _xsiam_err("at least one filter required")
     resp = await fetcher.send_request("/endpoints/isolate/", data={"request_data": {"filters": filters}})
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_affected": reply.get("endpoints_count", 0), "raw_response": resp})
+    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_affected": reply.get("endpoints_count", 0)})
 
 
 @_xsiam_wrap
@@ -898,7 +897,7 @@ async def xsiam_endpoints_unisolate(
         return _xsiam_err("at least one filter required")
     resp = await fetcher.send_request("/endpoints/unisolate/", data={"request_data": {"filters": filters}})
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_affected": reply.get("endpoints_count", 0), "raw_response": resp})
+    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_affected": reply.get("endpoints_count", 0)})
 
 
 @_xsiam_wrap
@@ -914,7 +913,7 @@ async def xsiam_endpoints_scan(
         return _xsiam_err("at least one filter required")
     resp = await fetcher.send_request("/endpoints/scan/", data={"request_data": {"filters": filters}})
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_affected": reply.get("endpoints_count", 0), "raw_response": resp})
+    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_affected": reply.get("endpoints_count", 0)})
 
 
 @_xsiam_wrap
@@ -923,7 +922,7 @@ async def xsiam_endpoints_scan_all() -> dict:
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/endpoints/scan/", data={"request_data": {"filters": []}})
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": reply.get("action_id"), "raw_response": resp})
+    return _xsiam_ok({"action_id": reply.get("action_id")})
 
 
 @_xsiam_wrap
@@ -937,7 +936,7 @@ async def xsiam_endpoints_set_alias(endpoint_id_list: list[str], alias_name: str
         "alias": alias_name,
     }}
     resp = await fetcher.send_request("/endpoints/update_agent_name/", data=body)
-    return _xsiam_ok({"endpoint_id_list": endpoint_id_list, "alias_name": alias_name, "raw_response": resp})
+    return _xsiam_ok({"endpoint_id_list": endpoint_id_list, "alias_name": alias_name})
 
 
 @_xsiam_wrap
@@ -952,7 +951,7 @@ async def xsiam_endpoints_retrieve_file(endpoint_id_list: list[str], files: dict
     }}
     resp = await fetcher.send_request("/endpoints/file_retrieval/", data=body)
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_count": reply.get("endpoints_count", 0), "raw_response": resp})
+    return _xsiam_ok({"action_id": reply.get("action_id"), "endpoints_count": reply.get("endpoints_count", 0)})
 
 
 @_xsiam_wrap
@@ -967,7 +966,7 @@ async def xsiam_endpoints_quarantine_file(endpoint_id_list: list[str], file_path
     }}
     resp = await fetcher.send_request("/endpoints/quarantine/", data=body)
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": reply.get("action_id"), "file_path": file_path, "raw_response": resp})
+    return _xsiam_ok({"action_id": reply.get("action_id"), "file_path": file_path})
 
 
 # ─── Response action status ───────────────────────────────────────
@@ -982,7 +981,7 @@ async def xsiam_response_get_action_status(action_id: str) -> dict:
     resp = await fetcher.send_request("/actions/get_action_status/",
                                        data={"request_data": {"group_action_id": action_id}})
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": action_id, "status_per_endpoint": reply.get("data", {}), "raw_response": resp})
+    return _xsiam_ok({"action_id": action_id, "status_per_endpoint": reply.get("data", {})})
 
 
 @_xsiam_wrap
@@ -994,7 +993,7 @@ async def xsiam_response_get_file_retrieval_details(action_id: str) -> dict:
     resp = await fetcher.send_request("/actions/file_retrieval_details/",
                                        data={"request_data": {"group_action_id": action_id}})
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": action_id, "files": reply.get("data", []), "raw_response": resp})
+    return _xsiam_ok({"action_id": action_id, "files": reply.get("data", [])})
 
 
 # ─── Scripts library ─────────────────────────────────────────────
@@ -1022,7 +1021,7 @@ async def xsiam_scripts_list(
     resp = await fetcher.send_request("/scripts/get_scripts/", data=body)
     reply = resp.get("reply") or {}
     scripts = reply.get("scripts") or (reply if isinstance(reply, list) else [])
-    return _xsiam_ok({"scripts": scripts, "raw_response": resp})
+    return _xsiam_ok({"scripts": scripts})
 
 
 @_xsiam_wrap
@@ -1033,7 +1032,7 @@ async def xsiam_scripts_get_metadata(script_uid: str) -> dict:
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/scripts/get_script_metadata/",
                                        data={"request_data": {"script_uid": script_uid}})
-    return _xsiam_ok({"script": (resp.get("reply") or {}).get("script"), "raw_response": resp})
+    return _xsiam_ok({"script": (resp.get("reply") or {}).get("script")})
 
 
 @_xsiam_wrap
@@ -1052,7 +1051,7 @@ async def xsiam_scripts_run_script(
     }}
     resp = await fetcher.send_request("/scripts/run_script/", data=body)
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": reply.get("action_id"), "raw_response": resp})
+    return _xsiam_ok({"action_id": reply.get("action_id")})
 
 
 @_xsiam_wrap
@@ -1068,7 +1067,7 @@ async def xsiam_scripts_run_snippet(snippet_code: str, endpoint_id_list: list[st
     }}
     resp = await fetcher.send_request("/scripts/run_snippet_code_script/", data=body)
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": reply.get("action_id"), "raw_response": resp})
+    return _xsiam_ok({"action_id": reply.get("action_id")})
 
 
 @_xsiam_wrap
@@ -1079,7 +1078,7 @@ async def xsiam_scripts_get_execution_status(action_id: str) -> dict:
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/scripts/get_script_execution_status/",
                                        data={"request_data": {"action_id": action_id}})
-    return _xsiam_ok({"action_id": action_id, "status_per_endpoint": resp.get("reply") or {}, "raw_response": resp})
+    return _xsiam_ok({"action_id": action_id, "status_per_endpoint": resp.get("reply") or {}})
 
 
 @_xsiam_wrap
@@ -1090,7 +1089,7 @@ async def xsiam_scripts_get_execution_results(action_id: str) -> dict:
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/scripts/get_script_execution_results/",
                                        data={"request_data": {"action_id": action_id}})
-    return _xsiam_ok({"action_id": action_id, "results": resp.get("reply") or {}, "raw_response": resp})
+    return _xsiam_ok({"action_id": action_id, "results": resp.get("reply") or {}})
 
 
 @_xsiam_wrap
@@ -1102,7 +1101,7 @@ async def xsiam_scripts_get_execution_result_files(action_id: int, endpoint_id: 
     resp = await fetcher.send_request("/scripts/get_script_execution_result_files/",
                                        data={"request_data": {"action_id": action_id, "endpoint_id": endpoint_id}})
     reply = resp.get("reply") or {}
-    return _xsiam_ok({"action_id": action_id, "endpoint_id": endpoint_id, "file_link": reply.get("DATA"), "raw_response": resp})
+    return _xsiam_ok({"action_id": action_id, "endpoint_id": endpoint_id, "file_link": reply.get("DATA")})
 
 
 # ───────────────────────────────────────────────────────────────────
@@ -1143,7 +1142,7 @@ async def xsiam_audit_list_management_logs(
         filters.append({"field": "timestamp", "operator": "lte", "value": timestamp_lte})
     body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
     resp = await fetcher.send_request("/audits/management_logs/", data=body)
-    return _xsiam_ok({"audit_entries": (resp.get("reply") or {}).get("data", []), "raw_response": resp})
+    return _xsiam_ok({"audit_entries": (resp.get("reply") or {}).get("data", [])})
 
 
 @_xsiam_wrap
@@ -1177,7 +1176,7 @@ async def xsiam_audit_list_agent_logs(
         filters.append({"field": "timestamp", "operator": "lte", "value": timestamp_lte})
     body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
     resp = await fetcher.send_request("/audits/agents_reports/", data=body)
-    return _xsiam_ok({"audit_entries": (resp.get("reply") or {}).get("data", []), "raw_response": resp})
+    return _xsiam_ok({"audit_entries": (resp.get("reply") or {}).get("data", [])})
 
 
 # ─── Distribution lists ──────────────────────────────────────────
@@ -1188,7 +1187,7 @@ async def xsiam_distribution_list() -> dict:
     """List XSIAM distribution lists (agent installer bundles)."""
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/distributions/get_distributions/", data={"request_data": {}})
-    return _xsiam_ok({"distributions": (resp.get("reply") or {}).get("distributions", []), "raw_response": resp})
+    return _xsiam_ok({"distributions": (resp.get("reply") or {}).get("distributions", [])})
 
 
 @_xsiam_wrap
@@ -1206,7 +1205,7 @@ async def xsiam_distribution_create(
     if description:
         rd["description"] = description
     resp = await fetcher.send_request("/distributions/create/", data={"request_data": rd})
-    return _xsiam_ok({"distribution_id": (resp.get("reply") or {}).get("distribution_id"), "raw_response": resp})
+    return _xsiam_ok({"distribution_id": (resp.get("reply") or {}).get("distribution_id")})
 
 
 @_xsiam_wrap
@@ -1217,7 +1216,7 @@ async def xsiam_distribution_get_url(distribution_id: str) -> dict:
     fetcher = _get_fetcher()
     body = {"request_data": {"distribution_id": distribution_id, "package_type": "standalone"}}
     resp = await fetcher.send_request("/distributions/get_dist_url/", data=body)
-    return _xsiam_ok({"download_url": (resp.get("reply") or {}).get("distribution_url"), "raw_response": resp})
+    return _xsiam_ok({"download_url": (resp.get("reply") or {}).get("distribution_url")})
 
 
 @_xsiam_wrap
@@ -1225,7 +1224,7 @@ async def xsiam_distribution_versions() -> dict:
     """List XSIAM agent versions per platform."""
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/distributions/get_versions/", data={"request_data": {}})
-    return _xsiam_ok({"versions": resp.get("reply") or {}, "raw_response": resp})
+    return _xsiam_ok({"versions": resp.get("reply") or {}})
 
 
 # ─── Alert exclusions ────────────────────────────────────────────
@@ -1242,7 +1241,7 @@ async def xsiam_alert_exclusions_list(
     if tenant_id:
         rd["tenant_id"] = tenant_id
     resp = await fetcher.send_request("/alerts_exclusion/get_alert_exclusion/", data={"request_data": rd})
-    return _xsiam_ok({"exclusions": (resp.get("reply") or {}).get("alert_exclusions", []), "raw_response": resp})
+    return _xsiam_ok({"exclusions": (resp.get("reply") or {}).get("alert_exclusions", [])})
 
 
 @_xsiam_wrap
@@ -1257,7 +1256,7 @@ async def xsiam_alert_exclusions_create(
     if comment:
         rd["comment"] = comment
     resp = await fetcher.send_request("/alerts_exclusion/create_alert_exclusion/", data={"request_data": rd})
-    return _xsiam_ok({"exclusion_id": (resp.get("reply") or {}).get("alert_exclusion_id"), "raw_response": resp})
+    return _xsiam_ok({"exclusion_id": (resp.get("reply") or {}).get("alert_exclusion_id")})
 
 
 @_xsiam_wrap
@@ -1268,7 +1267,7 @@ async def xsiam_alert_exclusions_delete(alert_exclusion_id: str) -> dict:
     fetcher = _get_fetcher()
     body = {"request_data": {"alert_exclusion_id": alert_exclusion_id}}
     resp = await fetcher.send_request("/alerts_exclusion/delete_alert_exclusion/", data=body)
-    return _xsiam_ok({"alert_exclusion_id": alert_exclusion_id, "deleted": True, "raw_response": resp})
+    return _xsiam_ok({"alert_exclusion_id": alert_exclusion_id, "deleted": True})
 
 
 # ─── Hash analytics ──────────────────────────────────────────────
@@ -1282,7 +1281,7 @@ async def xsiam_hash_get_analytics(file_hash: str) -> dict:
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/hash_exceptions/get_hash_analytics/",
                                        data={"request_data": {"hash": file_hash}})
-    return _xsiam_ok({"hash": file_hash, "analytics": resp.get("reply"), "raw_response": resp})
+    return _xsiam_ok({"hash": file_hash, "analytics": resp.get("reply")})
 
 
 @_xsiam_wrap
@@ -1295,7 +1294,7 @@ async def xsiam_hash_blocklist(file_hashes: list[str], comment: Optional[str] = 
     if comment:
         rd["comment"] = comment
     resp = await fetcher.send_request("/hash_exceptions/blocklist/", data={"request_data": rd})
-    return _xsiam_ok({"blocked_count": len(file_hashes), "file_hashes": file_hashes, "raw_response": resp})
+    return _xsiam_ok({"blocked_count": len(file_hashes), "file_hashes": file_hashes})
 
 
 # ─── Exploits ────────────────────────────────────────────────────
@@ -1316,7 +1315,7 @@ async def xsiam_exploits_list(
         filters.append({"field": "cve_id", "operator": "in", "value": cve_id})
     body = {"request_data": {"filters": filters, "search_from": search_from, "search_to": search_to}}
     resp = await fetcher.send_request("/exploits/get_exploits/", data=body)
-    return _xsiam_ok({"exploits": (resp.get("reply") or {}).get("exploits", []), "raw_response": resp})
+    return _xsiam_ok({"exploits": (resp.get("reply") or {}).get("exploits", [])})
 
 
 @_xsiam_wrap
@@ -1327,7 +1326,7 @@ async def xsiam_exploits_get_details(exploit_id: str) -> dict:
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/exploits/get_exploit_details/",
                                        data={"request_data": {"exploit_id": exploit_id}})
-    return _xsiam_ok({"exploit": (resp.get("reply") or {}).get("exploit"), "raw_response": resp})
+    return _xsiam_ok({"exploit": (resp.get("reply") or {}).get("exploit")})
 
 
 # ─── XSIAM-unique: Parsers ──────────────────────────────────────
@@ -1353,7 +1352,7 @@ async def xsiam_parsers_list(
         filters.append({"field": "enabled", "operator": "eq", "value": enabled})
     body = {"request_data": {"filters": filters} if filters else {}}
     resp = await fetcher.send_request("/parser/get_parsers/", data=body)
-    return _xsiam_ok({"parsers": (resp.get("reply") or {}).get("parsers", []), "raw_response": resp})
+    return _xsiam_ok({"parsers": (resp.get("reply") or {}).get("parsers", [])})
 
 
 @_xsiam_wrap
@@ -1364,7 +1363,7 @@ async def xsiam_parsers_get(parser_id: str) -> dict:
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/parser/get_parser/",
                                        data={"request_data": {"parser_id": parser_id}})
-    return _xsiam_ok({"parser": (resp.get("reply") or {}).get("parser"), "raw_response": resp})
+    return _xsiam_ok({"parser": (resp.get("reply") or {}).get("parser")})
 
 
 # ─── XSIAM-unique: Datamodel ────────────────────────────────────
@@ -1401,7 +1400,6 @@ async def xsiam_datamodel_describe(dataset: str) -> dict:
             return _xsiam_ok({
                 "dataset": dataset,
                 "fields": (reply.get("results") or {}).get("data", []),
-                "raw_response": poll,
             })
         if status in ("FAIL", "FAILED", "CANCELLED"):
             return _xsiam_err(
@@ -1420,7 +1418,7 @@ async def xsiam_broker_list() -> dict:
     """List XSIAM Broker VMs (on-prem data collectors)."""
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/broker/list_brokers/", data={"request_data": {}})
-    return _xsiam_ok({"brokers": (resp.get("reply") or {}).get("brokers", []), "raw_response": resp})
+    return _xsiam_ok({"brokers": (resp.get("reply") or {}).get("brokers", [])})
 
 
 @_xsiam_wrap
@@ -1431,4 +1429,4 @@ async def xsiam_broker_get(broker_id: str) -> dict:
     fetcher = _get_fetcher()
     resp = await fetcher.send_request("/broker/get_broker/",
                                        data={"request_data": {"broker_id": broker_id}})
-    return _xsiam_ok({"broker": (resp.get("reply") or {}).get("broker"), "raw_response": resp})
+    return _xsiam_ok({"broker": (resp.get("reply") or {}).get("broker")})
