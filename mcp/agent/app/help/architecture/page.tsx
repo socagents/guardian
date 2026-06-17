@@ -4721,6 +4721,20 @@ function RestApi() {
  The endpoints below are the surfaces unique to Guardian&apos;s
  control plane.
  </p>
+ <p>
+ The hand-picked list below is a curated subset. The{" "}
+ <strong>complete, machine-verified reference</strong> — every{" "}
+ <Code>/api/agent/*</Code> endpoint with its request body,
+ query/path params, response shapes, and risk tier — lives at{" "}
+ <Link href="/help/api" className="link">/help/api</Link>, and is
+ exported as an OpenAPI 3.0 document at{" "}
+ <Code>GET /api/agent/openapi</Code>. As of v0.2.38 the catalog
+ covers 138 endpoints across 8 categories, including a dedicated{" "}
+ <strong>Investigation</strong> group for the cases / issues /
+ indicators surface. Each entry&apos;s body and response schema was
+ reconciled against its actual route handler and the embedded-MCP
+ handler it forwards to.
+ </p>
  <SubSection icon="api" title="Audit">
  <ul className="list-disc pl-5 space-y-0.5 font-mono text-[12px]">
  <li>POST /api/v1/audit — write a generic audit row</li>

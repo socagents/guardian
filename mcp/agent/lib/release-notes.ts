@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.38",
+    date: "2026-06-17",
+    title: "API reference completed — every endpoint now fully documented.",
+    highlights: [
+      "Filled 65 placeholder ('schema is a follow-up') entries with real request bodies, params, response shapes, and risk tiers on /help/api.",
+      "Added 28 endpoints that weren't listed at all — including the full Investigation surface (cases, issues, indicators) under a new 'Investigation' API category.",
+      "Every entry was reconciled against its actual route handler + the embedded-MCP handler it forwards to — no guessed schemas.",
+      "Fixed providers/config: was mislabeled POST; it's GET (read, secrets redacted) + PUT (write credentials, now flagged credential-tier).",
+      "The OpenAPI 3.0 export (GET /api/agent/openapi) now reflects the complete 138-endpoint catalog. Docs only — no behavior change.",
+    ],
+  },
+  {
     version: "0.2.37",
     date: "2026-06-16",
     title: "Help docs reconciled — architecture, user guide, journeys, API caught up.",

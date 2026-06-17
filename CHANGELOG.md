@@ -10,6 +10,26 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.38] (unreleased) — *API reference completed: 65 stub endpoints filled + 28 uncataloged endpoints added*
+
+The in-product API reference (`/help/api`, the try-it-out tool, and the generated OpenAPI 3.0 spec) was ~62% complete — 65 entries carried the placeholder text *"Auto-added v0.7.1. Full request/response schema is a follow-up"* and ~28 real endpoints weren't listed at all. This release finishes the catalog: every entry's request body, query/path params, response shapes, and risk tier was reconciled against its actual Next.js route handler **and** the embedded-MCP handler it forwards to — no guessed schemas.
+
+### What ships
+- **65 stub descriptions replaced** with grounded documentation (sessions fork/messages/delete, skills CRUD, hooks CRUD, marketplace, plugins, tasks, bench, agent-definitions, operator-state, backup/restore, auth, providers, tool/call, openapi, and more) — full body schemas + realistic examples + the actual success/error status codes each handler emits.
+- **28 uncataloged endpoints added**, including the entire **Investigation** surface (cases, issues, indicators with their `/events` and `/issues` sub-resources), `POST /api/agent/instances`, `GET/PUT /api/agent/providers/config`, `POST /api/chat/cli`, `GET /api/agent/connectors/{id}/tools`, and the global `POST /api/agent/knowledge/search`.
+- **New "Investigation" API category** for the cases / issues / indicators endpoints — a first-class group on `/help/api` alongside Cognitive, Configuration, Operations, Observability, Identity, Workflows, and Self-Modification.
+- **Bug fix:** the `providers/config` entry was cataloged as `POST` but the route exposes `GET` (read, secrets redacted) + `PUT` (write provider credentials). Corrected, and the PUT is now flagged credential-tier.
+- **Risk tiers + redaction** are now accurate throughout: credential-bearing routes (instance create, provider config write, auth, backup/restore) are tagged `credential`; destructive deletes are tagged `destructive`.
+- The architecture page `#rest-api` section now points to the comprehensive catalog (138 endpoints across 8 categories) and the `GET /api/agent/openapi` export.
+
+### Known gap (tracked separately)
+- The 5 `/detections` endpoints were **deliberately left as stubs**. The Detection Inventory backend (`detections.py`, `detection_inventory.py`) was removed in the v0.1.0 carve-out, but the UI page, sidebar entry, agent routes, and docs were left behind — so `/observability/detections` has 404'd since v0.1.0. Cataloging those endpoints (or deleting them) pre-judges a restore-vs-retire product decision, which ships as its own contained release.
+
+### Files
+- `mcp/agent/lib/api-catalog.ts` (the catalog + the new `investigation` category + `INVESTIGATION` array), `mcp/agent/app/help/architecture/page.tsx` (`#rest-api` note).
+
+---
+
 ## [v0.2.37] (unreleased) — *Documentation reconciliation: architecture · user guide · journeys · API*
 
 A dedicated docs catch-up: the in-product help surfaces had drifted behind ~10 releases of shipped features (v0.2.27–v0.2.36). This release reconciles all four the operator reviews — no behavior change, help-page content only.
