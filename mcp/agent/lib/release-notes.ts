@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.37",
+    date: "2026-06-16",
+    title: "Help docs reconciled — architecture, user guide, journeys, API caught up.",
+    highlights: [
+      "Architecture: restored the XSIAM connector section (it was wrongly marked retired but returned in v0.2.27 as a 54-tool connector); fixed false 'no bundled KB' claims (6 KBs ship); documented the v0.2.31–36 XSOAR connector refinements.",
+      "User guide: new 'Evidence on XSOAR 6 vs 8' explainer; corrected connector count/wording.",
+      "Journeys: added starter 'Create an XSOAR instance' and 'Create a Cortex XSIAM instance' walkthroughs.",
+      "API reference: fixed mislabeled catalog entries (instance test, connector lifecycle action, get-single-instance) + a real /api/chat schema. No behavior change — docs only.",
+    ],
+  },
+  {
     version: "0.2.36",
     date: "2026-06-16",
     title: "Connector read-path polish: leaner XSIAM results + XSOAR v8 evidence read.",

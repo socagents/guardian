@@ -398,9 +398,12 @@ export default function ArchitectureGuide() {
  <Investigation />
  {/* External Connectors */}
  {/* [guardian v0.1.0] Retired: XlogConnector + CalderaConnector — simulation subsystem removed */}
- {/* [guardian XSOAR pivot] Retired: XsiamConnector + CortexXdrConnector + CortexContentConnector
-     — log-simulation/telemetry-era connectors, out of scope. Roster is xsoar + cortex-docs + web. */}
+ {/* [guardian XSOAR pivot] Retired: CortexXdrConnector + CortexContentConnector
+     — log-simulation/telemetry-era connectors, out of scope.
+     [v0.2.27] XsiamConnector RESTORED — the Cortex XSIAM connector returned as an
+     investigation + EDR-response surface (54 tools). Roster: xsoar + xsiam + cortex-docs + web. */}
  <XsoarConnector />
+ <XsiamConnector />
  <CortexDocsConnector />
  <WebConnector />
  {/* Auth & Security */}
@@ -1199,8 +1202,7 @@ function Manifest() {
 │ │ └── usecase/ # Stores + loaders + business logic
 │ ├── skills/ # Bundle-default skills (markdown)
 │ └── tests/
-# [guardian XSOAR pivot] Retired: kbs/xql-examples — the XQL example
-# corpus went away with the XSIAM/XDR connectors. No bundled KB ships today.
+├── kbs/ # 6 bundled knowledge bases (v0.2.16+, see Knowledge Pipeline)
 ├── plugins/ # Filesystem-discovered plugin tree
 │ └── example-vendor/
 │ ├── manifest.yaml # Plugin contract — agents, skills, seeds
@@ -5664,7 +5666,7 @@ function KnowledgePipeline() {
  searchable reference content. They differ from memory in three
  ways: read-only at the agent surface, sourced from the bundle
  (not chat), and indexed at boot rather than on-write. The bundle
- ships four complementary KBs:{" "}
+ ships six complementary KBs:{" "}
  <Code>soc-investigation</Code> (v0.2.16) — 30 hand-written{" "}
  <em>narrative</em> investigation guides + IR playbooks;{" "}
  <Code>mitre-attack-enterprise</Code> (v0.2.18) — the{" "}
@@ -6853,6 +6855,139 @@ function XsoarConnector() {
  <a href="#connector-containers" className="link">
  Multiple enabled instances per connector
  </a>.
+ </p>
+ </SubSection>
+
+ <SubSection icon="tune" title="Generation-specific read/write refinements (v0.2.31–v0.2.36)">
+ <p>
+ Several XSOAR REST shapes differ between v6 and Cortex 8; the
+ connector resolves each per call so the agent calls one tool name
+ regardless. The notable ones, all verified live:
+ </p>
+ <ul className="list-disc pl-5 space-y-1 text-sm">
+ <li>
+ <strong>Indicator search (v0.2.34).</strong>{" "}
+ <Code>xsoar_search_indicators</Code> POSTs a <em>flat</em>{" "}
+ <Code>{`{query, size, page}`}</Code> body to{" "}
+ <Code>/indicators/search</Code> — the earlier{" "}
+ <Code>{`{"filter": {…}}`}</Code> envelope made XSOAR silently
+ ignore the query/size/page and return the whole store. Results
+ are a compact, scored projection{" "}
+ (<Code>{`{id, type, value, score, reputation, …}`}</Code>), so
+ &quot;how many bad IPs / top by reputation&quot; is answerable
+ from one call.
+ </li>
+ <li>
+ <strong>Evidence save (v0.2.35).</strong>{" "}
+ <Code>xsoar_save_evidence</Code> uses the formal{" "}
+ <Code>POST /evidence</Code> on v6 (the entry-tag path
+ optimistic-locked and never round-tripped there); on Cortex 8,
+ where <Code>POST /evidence</Code> 303-redirects, it tags the
+ war-room entry <Code>evidence</Code>.
+ </li>
+ <li>
+ <strong>Evidence search (v0.2.36).</strong>{" "}
+ <Code>xsoar_search_evidence</Code> reads{" "}
+ <Code>/evidence/search</Code> on v6; on Cortex 8 — whose{" "}
+ <Code>/evidence/search</Code> doesn&apos;t return tag-based
+ evidence — it reads the war room filtered to the{" "}
+ <Code>evidence</Code> tag. Compact summary either way; the{" "}
+ <Code>via</Code> field records which path served it.
+ </li>
+ <li>
+ <strong>Playbook import (v0.2.32).</strong>{" "}
+ <Code>xsoar_import_playbook</Code> uploads directly on v6; on
+ Cortex 8 (where the import endpoint 405s) it imports through the
+ Core REST API integration (<Code>core-api-post</Code> →{" "}
+ <Code>/playbook/save</Code>, a JSON array), run in the
+ instance&apos;s playground.
+ </li>
+ <li>
+ <strong>Lists (v0.2.31).</strong>{" "}
+ <Code>xsoar_set_list</Code> / <Code>xsoar_append_to_list</Code>{" "}
+ use <Code>!createList</Code> (create-or-overwrite) — the prior{" "}
+ <Code>!setList</Code> only updated existing lists, so a new list
+ silently went nowhere — and surface real command failures
+ instead of reporting <Code>ok</Code> blindly.
+ </li>
+ </ul>
+ </SubSection>
+ </Section>
+);
+}
+
+function XsiamConnector() {
+ return (
+ <Section id="xsiam-connector" icon="security" title="XSIAM Connector">
+ <p>
+ The Cortex XSIAM connector (<Code>xsiam</Code>, restored in
+ v0.2.27) wraps the Cortex public API (<Code>/public_api/v1</Code>)
+ to add a second investigation surface plus EDR response. Where
+ the xsoar connector works <em>cases</em>, xsiam works the{" "}
+ <strong>XSIAM platform</strong> directly: XQL hunts, incidents,
+ alerts, issues, assets, and endpoint response actions (tool
+ prefix <Code>xsiam_</Code>). It is the largest connector —{" "}
+ <strong>54 tools</strong> — ported from the Phantom lineage,
+ minus that era&apos;s simulation-only webhook-log + XQL-examples-RAG
+ tools.
+ </p>
+
+ <SubSection icon="hub" title="Dispatch + container">
+ <p>
+ Identical pattern to every Guardian connector: xsiam runs as a
+ per-instance container on port <Code>9000</Code>. The embedded
+ MCP dispatches each <Code>xsiam_*</Code> tool over
+ MCP-over-HTTP via <Code>connector_proxy</Code> to{" "}
+ <Code>http://guardian-connector-xsiam-&lt;instance&gt;:9000</Code>,
+ which holds the tenant credentials and makes the upstream Cortex
+ public-API call. Multiple enabled xsiam instances run side by
+ side (one container each) and the agent picks the target with
+ the <Code>instance</Code> selector — see{" "}
+ <a href="#connector-containers" className="link">
+ Multiple enabled instances per connector
+ </a>.
+ </p>
+ </SubSection>
+
+ <SubSection icon="api" title="Tool families (54 tools)">
+ <ul className="list-disc pl-5 space-y-1 text-sm">
+ <li>
+ <strong>Investigation</strong> — XQL query (start +
+ poll-to-results), incidents (list / get / update), alerts
+ (list / update), issues, assets / endpoints inventory,
+ audit-log search, and datamodel queries. These are the
+ read/hunt surface the agent uses to triage XSIAM detections.
+ </li>
+ <li>
+ <strong>EDR response</strong> — endpoint{" "}
+ <Code>isolate</Code> / <Code>unisolate</Code>,{" "}
+ <Code>scan</Code>, <Code>quarantine</Code>, run a script on
+ an endpoint, and manage the IOC + hash blocklists. These are
+ the containment actions a responder reaches for once a
+ detection is confirmed.
+ </li>
+ </ul>
+ <p className="text-sm leading-relaxed mt-2">
+ The response/write tools are <strong>destructive-tier</strong>{" "}
+ and approval-gated (an operator confirms before an endpoint is
+ isolated or a hash is blocked). <Code>xsiam_remove_lookup_data</Code>{" "}
+ is <strong>manifest-denied</strong> — not advertised to the agent
+ at all. Each tool returns its projected fields only (v0.2.36
+ dropped the verbose <Code>raw_response</Code> echo).
+ </p>
+ </SubSection>
+
+ <SubSection icon="lock" title="Authentication (Cortex public API)">
+ <p>
+ xsiam authenticates with the Cortex <strong>API-key pair</strong>:
+ the key id goes in the <Code>x-xdr-auth-id</Code> header and the
+ key in <Code>Authorization</Code>; the base is the tenant&apos;s
+ API host with the <Code>/public_api/v1</Code> suffix. Credentials
+ are held in the secret-store envelope and attached per call. Call
+ path: <Code>guardian-agent</Code> → embedded MCP (bearer{" "}
+ <Code>MCP_TOKEN</Code>) →{" "}
+ <Code>guardian-connector-xsiam-&lt;instance&gt;:9000</Code> →
+ Cortex public API.
  </p>
  </SubSection>
  </Section>

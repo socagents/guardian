@@ -10,6 +10,31 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.37] (unreleased) — *Documentation reconciliation: architecture · user guide · journeys · API*
+
+A dedicated docs catch-up: the in-product help surfaces had drifted behind ~10 releases of shipped features (v0.2.27–v0.2.36). This release reconciles all four the operator reviews — no behavior change, help-page content only.
+
+### Architecture (the spec)
+- **Restored the XSIAM connector section.** The page had *retired* XSIAM during the XSOAR pivot, but v0.2.27 brought it back as a live 54-tool connector (investigation + EDR response). New `#xsiam-connector` section (dispatch/container, tool families, Cortex public-API auth) + added to the render list.
+- **Fixed false KB claims.** The bundle-layout said "No bundled KB ships today" (6 ship) and the pipeline lead-in said "four KBs" (it's six: soc-investigation, mitre-attack-{enterprise,ics,mobile}, mitre-atlas, soar-playbooks).
+- **Added a `#xsoar-connector` refinements subsection** for the v0.2.31–v0.2.36 generation-specific behavior (indicator flat-body fix + compact scored output, evidence v6 POST vs v8 war-room-tag, playbook import Core-API path, list create-or-overwrite).
+
+### User guide
+- New "Evidence on XSOAR 6 vs 8" subsection (how save/search evidence differs by generation, in operator language).
+- Corrected the connectors subsection ("the three connectors" → the xsoar/cortex-docs/web trio, XSIAM noted above; XSOAR tool count 21 → 23).
+
+### Journeys
+- Two new starter flows: `ops-create-xsoar-instance` (version-aware create form) and `ops-create-xsiam-instance` (the prerequisite the XSIAM hunt-and-respond journey assumed).
+
+### API reference
+- Fixed verifiably-wrong catalog entries: `instances/{id}/test` ("Create a new connector instance" → "Test connectivity"), `connectors/{id}/{action}` ("Create connectors" → enable/disable/probe), `GET instances/{id}` ("List" → "Get a single"), and a real `/api/chat` SSE body/response schema.
+- **Known debt (tracked separately):** ~69 inherited "Auto-added" catalog entries still carry placeholder descriptions and ~90 endpoints aren't cataloged. Filling those is a dedicated pass — not faked here.
+
+### Files
+- `mcp/agent/app/help/architecture/page.tsx`, `mcp/agent/app/help/user/page.tsx`, `mcp/agent/lib/journeys.ts`, `mcp/agent/lib/api-catalog.ts`.
+
+---
+
 ## [v0.2.36] (unreleased) — *Connector read-path output: xsiam compact + XSOAR v8 evidence read*
 
 Closes the last two items from the post-arc gap sweep — both connector read-tool output correctness.

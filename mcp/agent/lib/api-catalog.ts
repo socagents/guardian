@@ -713,8 +713,20 @@ const CONFIGURATION: ApiEndpoint[] = [
     path: "/api/chat",
     summary: "Start or continue a chat session (SSE streaming response)",
     description:
-      "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
-    responses: [{ status: "200", description: "OK" }],
+      "The agent turn endpoint. Body: { message, session_id? } (omit session_id to start a new session). Responds with a Server-Sent Events stream whose `event:` types include meta (session id), model, thinking, text_delta (assistant text), tool_call + tool_result (each agent tool invocation), turn_cost, and done. Bearer-auth with a GUARDIAN_API_KEY works (agent:write scope); the same hook lifecycle (PreToolUse/PostToolUse) fires as for interactive chat.",
+    body: {
+      contentType: "application/json",
+      schema: {
+        type: "object",
+        required: ["message"],
+        properties: {
+          message: { type: "string", description: "The user turn." },
+          session_id: { type: "string", description: "Omit to start a new session." },
+        },
+      },
+      example: { message: "List active incidents on the v6 tenant", session_id: "<existing-session-id>" },
+    },
+    responses: [{ status: "200", description: "text/event-stream — meta · model · thinking · text_delta · tool_call · tool_result · turn_cost · done." }],
   },
   {
     id: "connectors",
@@ -731,20 +743,27 @@ const CONFIGURATION: ApiEndpoint[] = [
     category: "configuration",
     method: "POST",
     path: "/api/agent/connectors/{id}/{action}",
-    summary: "Create connectors",
+    summary: "Connector lifecycle action (enable / disable / probe)",
     description:
-      "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
-    responses: [{ status: "200", description: "OK" }],
+      "Drives a connector's lifecycle by action. {action} is one of: enable (mark active, pending re-probe), disable (deregister its tools), or probe (force a health-check now). Toggling state re-catalogs the agent's tools. Not a create — instances are created via POST /api/agent/instances.",
+    pathParams: [
+      { name: "id", type: "string", description: "The connector id (e.g. xsoar, xsiam).", required: true },
+      { name: "action", type: "string", description: "enable | disable | probe", required: true, enum: ["enable", "disable", "probe"] },
+    ],
+    responses: [{ status: "200", description: "Updated connector state." }],
   },
   {
     id: "instances-by-id",
     category: "configuration",
     method: "GET",
     path: "/api/agent/instances/{id}",
-    summary: "List configured connector instances",
+    summary: "Get a single connector instance",
     description:
-      "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
-    responses: [{ status: "200", description: "OK" }],
+      "Fetches ONE connector instance by id — its connector_id, name, config (with secrets redacted as ***), enabled flag, and container/health state. To LIST all instances, GET /api/agent/instances.",
+    pathParams: [
+      { name: "id", type: "string", description: "The instance UUID.", required: true },
+    ],
+    responses: [{ status: "200", description: "The instance record (secrets redacted)." }],
   },
   {
     id: "instances-by-id-delete",
@@ -771,10 +790,13 @@ const CONFIGURATION: ApiEndpoint[] = [
     category: "configuration",
     method: "POST",
     path: "/api/agent/instances/{id}/test",
-    summary: "Create a new connector instance",
+    summary: "Test a connector instance's connectivity",
     description:
-      "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
-    responses: [{ status: "200", description: "OK" }],
+      "Runs the connector's health-check probe for an EXISTING instance against its configured tenant — it does NOT create an instance. Returns a reachability result (clean success or a structured error: auth failure, bad host, timeout). Backs the Test button on /connectors and confirms credentials after a create or rotate.",
+    pathParams: [
+      { name: "id", type: "string", description: "The instance UUID.", required: true },
+    ],
+    responses: [{ status: "200", description: "Probe result, e.g. { ok, reachable, detail? }." }],
   },
   {
     id: "internal-fire-hook-post",

@@ -4344,6 +4344,93 @@ export const JOURNEYS: Journey[] = [
   },
 
   {
+    id: "ops-create-xsoar-instance",
+    category: "connectors",
+    title: "Create an XSOAR instance (v6 or v8)",
+    summary:
+      "Install the Cortex XSOAR connector and create one instance via the version-aware create form (v0.2.30): pick the Version first, then fill only the fields that version needs — API key alone for v6, API key + key id for v8 — plus the optional Playground / War Room id that powers the command tools.",
+    difficulty: "starter",
+    durationMin: 3,
+    icon: "add_box",
+    prompts: [
+      {
+        text: "List the active incidents on my XSOAR tenant.",
+        note: "After the instance is created + enabled, the agent can reach the tenant. With a single enabled instance, no `instance` argument is needed — the tool targets it directly.",
+      },
+    ],
+    toolsExercised: ["xsoar_list_incidents"],
+    apis: [
+      {
+        method: "POST",
+        path: "/api/agent/instances",
+        description:
+          "Create the instance: {connector_id:'xsoar', name, config:{version:'v6'|'v8', api_url, api_id?(v8 only), playground_id?}, secrets:{api_key}, enabled:true}. The create form is credential-bearing so it's REST/UI-only — the chat agent cannot create instances (credential guardrail).",
+      },
+    ],
+    howToTest: [
+      "Open /connectors → Marketplace. Install Cortex XSOAR (operator ack — no instance yet).",
+      "Switch to Instances → Add Instance for XSOAR. The Version dropdown is FIRST (v0.2.30); pick v6 (on-prem) or v8 (Cortex cloud).",
+      "Fill the fields the form shows for that version: v6 → api_url + api_key (no key id); v8 → api_url + API key ID (api_id) + api_key. The api_id field only appears for v8.",
+      "Optional: set Playground / War Room ID — needed only to run commands (run_command), enrich_indicator, complete_task, and the list tools. Leave blank for read-only/lifecycle use.",
+      "Submit. guardian-updater starts guardian-connector-xsoar-<name>; the card shows 'Creating…' then healthy.",
+      "In chat, paste the prompt. The agent lists the tenant's incidents.",
+    ],
+    expectedResult:
+      "One XSOAR instance is created, its per-instance container is running, and the agent can read the tenant. The create form showed only the fields the chosen version needs (api_id hidden for v6). Command tools work if you set playground_id; otherwise read/lifecycle tools work and the command tools return a clear 'playground_id not configured' message.",
+    verifyVia: [
+      "`docker ps` shows guardian-connector-xsoar-<name> running (healthy).",
+      "GET /api/agent/instances → the new instance with config.version set and the secret redacted as ***.",
+      "POST /api/agent/instances/{id}/test → a clean reachability result.",
+    ],
+    related: ["ops-xsoar-v6-v8-side-by-side", "ops-marketplace-browse", "xsoar-investigate-case"],
+    prerequisites: ["ops-marketplace-browse"],
+    components: ["connectors", "xsoar", "marketplace", "secrets"],
+  },
+
+  {
+    id: "ops-create-xsiam-instance",
+    category: "connectors",
+    title: "Create a Cortex XSIAM instance",
+    summary:
+      "Install the Cortex XSIAM connector (v0.2.27, 54 tools — investigation + EDR response) and create an instance with the Cortex public-API key pair (key id → x-xdr-auth-id, key → Authorization). Prerequisite for the XSIAM hunt-and-respond journey.",
+    difficulty: "starter",
+    durationMin: 3,
+    icon: "security",
+    prompts: [
+      {
+        text: "Run an XQL query for the last 10 critical alerts on my XSIAM tenant.",
+        note: "After the instance is enabled, the agent can hunt + read XSIAM. EDR response tools (isolate/scan/quarantine) are approval-gated.",
+      },
+    ],
+    toolsExercised: ["xsiam_run_xql_query", "xsiam_alerts_list"],
+    apis: [
+      {
+        method: "POST",
+        path: "/api/agent/instances",
+        description:
+          "Create the instance: {connector_id:'xsiam', name, config:{api_url}, secrets:{api_id, api_key}, enabled:true}. The api_id is sent as x-xdr-auth-id and api_key as Authorization; the connector appends /public_api/v1. REST/UI-only (credential-bearing).",
+      },
+    ],
+    howToTest: [
+      "Open /connectors → Marketplace. Install Cortex XSIAM (operator ack).",
+      "Switch to Instances → Add Instance for XSIAM. Fill the tenant API host (api_url), the API key ID (api_id), and the API key.",
+      "Submit. guardian-updater starts guardian-connector-xsiam-<name>; the card goes healthy.",
+      "In chat, paste the prompt. The agent runs an XQL hunt and returns alerts.",
+      "Optionally try a response prompt ('isolate endpoint X') — Guardian raises an approval before the destructive action.",
+    ],
+    expectedResult:
+      "One XSIAM instance is created and running; the agent can hunt (XQL, incidents, alerts, assets) and stage EDR response actions (approval-gated). Multiple XSIAM instances can run side by side and the agent routes via the `instance` selector, exactly like XSOAR.",
+    verifyVia: [
+      "`docker ps` shows guardian-connector-xsiam-<name> running (healthy).",
+      "GET /api/agent/instances → the xsiam instance with secrets redacted as ***.",
+      "POST /api/agent/instances/{id}/test → a clean reachability result.",
+    ],
+    related: ["xsiam-investigate-respond", "ops-marketplace-browse"],
+    prerequisites: ["ops-marketplace-browse"],
+    components: ["connectors", "marketplace", "secrets"],
+  },
+
+  {
     id: "ops-xsoar-v6-v8-side-by-side",
     category: "connectors",
     title: "Run XSOAR v6 + v8 instances side by side",

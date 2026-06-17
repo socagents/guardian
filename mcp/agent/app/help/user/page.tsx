@@ -3015,11 +3015,16 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="cable" title="The three connectors">
+            <SubSection icon="cable" title="The other connectors (xsoar · cortex-docs · web)">
+              <p className="text-sm mb-2">
+                Alongside the Cortex XSIAM connector (above), Guardian bundles
+                three more — the XSOAR investigation gateway plus two read-only
+                research surfaces:
+              </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
                   <Term>xsoar</Term> — Cortex XSOAR gateway, the
-                  investigation surface (21 tools). Read/lifecycle:{" "}
+                  investigation surface (23 tools). Read/lifecycle:{" "}
                   <Code>list_incidents</Code>, <Code>get_incident</Code>,{" "}
                   <Code>get_war_room</Code>,{" "}
                   <Code>search_indicators</Code>, <Code>add_note</Code>,{" "}
@@ -3103,6 +3108,34 @@ Networks documentation and returning evidence-backed, cited answers.
                 URL. The field is <strong>optional</strong> — the other 18
                 tools work without it; if it&apos;s blank, the command tools
                 return a clear &quot;playground_id not configured&quot; message.
+              </p>
+            </SubSection>
+
+            <SubSection icon="inventory_2" title="Evidence on XSOAR 6 vs 8 (v0.2.35/36)">
+              <p>
+                When the agent pins proof to a case&apos;s Evidence Board
+                (<Code>save_evidence</Code>) and lists it back
+                (<Code>search_evidence</Code>), the mechanics differ by XSOAR
+                generation — but you call the same tools and the agent handles
+                it. Both now work end-to-end on both versions:
+              </p>
+              <ul className="list-disc pl-6 space-y-1 text-sm">
+                <li>
+                  <strong>XSOAR 6</strong> — evidence is saved as a formal
+                  evidence record and listed straight from the evidence board.
+                </li>
+                <li>
+                  <strong>XSOAR 8 / Cortex cloud</strong> — the public API
+                  doesn&apos;t expose the evidence board the same way, so
+                  Guardian marks the war-room entry with an{" "}
+                  <Code>evidence</Code> tag and lists evidence by reading those
+                  tagged entries. The result looks identical to you.
+                </li>
+              </ul>
+              <p className="text-sm mt-2">
+                Either way you get a compact list — id, the war-room entry it
+                points at, who marked it, when, and any tags — so a reviewer can
+                see what justified the verdict without scrolling the timeline.
               </p>
             </SubSection>
 
