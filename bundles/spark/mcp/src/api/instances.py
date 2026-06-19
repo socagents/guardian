@@ -210,6 +210,23 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
             return image.strip()
         return None
 
+    def _connector_service_meta(
+        connector_id: str,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Read kind + service.ports from a connector.yaml (v0.2.42).
+
+        A kind:"service" connector (e.g. the Splunk mimic) is started
+        with PUBLISHED host ports so external systems reach it. Returns
+        (kind, service_ports); kind defaults to "connector" and
+        service_ports to [] for a normal connector.
+        """
+        doc = _load_connector_spec(connector_id) or {}
+        kind = doc.get("kind") or "connector"
+        ports = (doc.get("service") or {}).get("ports") or []
+        if not isinstance(ports, list):
+            ports = []
+        return kind, ports
+
     def _slug_instance_name(name: str) -> str:
         """Slug an instance name for safe use in URL paths + docker
         container names.
@@ -294,6 +311,16 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
         image_ref = _connector_image_ref(connector_id)
         if image_ref is not None:
             body["image_ref"] = image_ref
+        # v0.2.42 — a service-kind connector is started with PUBLISHED
+        # host ports so external systems (e.g. an XSOAR server) reach it.
+        # Pass kind + service_ports through to guardian-updater, which
+        # maps them to client.containers.run(..., ports=...). Connectors
+        # send neither and stay internal-only.
+        kind, service_ports = _connector_service_meta(connector_id)
+        if kind == "service":
+            body["kind"] = "service"
+            if service_ports:
+                body["service_ports"] = service_ports
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
                 resp = await client.post(

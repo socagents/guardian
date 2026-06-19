@@ -1663,6 +1663,83 @@ KNOWN_CONNECTORS = {
     "xsiam",
 }
 
+# v0.2.42 — emulated services (kind:service). Unlike connectors, a
+# service container PUBLISHES a host port so an EXTERNAL system (e.g.
+# an XSOAR server) reaches it; the agent never calls it. The start
+# endpoint accepts these ids the same way it accepts KNOWN_CONNECTORS,
+# and publishes the ports from the request body's `service_ports`.
+KNOWN_SERVICES = {
+    "splunk-mimic",
+}
+
+# Fallback published ports for a service when the start request carries
+# no `service_ports` AND no existing container exists to inherit from —
+# e.g. a boot-time reconcile spawning a MISSING service container. The
+# updater has no connector.yaml to read, so this mirrors the well-known
+# default. connector.yaml's service.ports stays the source of truth for
+# the operator-create path (which passes service_ports through the body);
+# this map only covers the paths where ports aren't otherwise available.
+SERVICE_DEFAULT_PORTS: dict[str, list[dict]] = {
+    "splunk-mimic": [
+        {"container_port": 8089, "host_port": 8089, "protocol": "tcp"},
+    ],
+}
+
+
+def _is_known_id(connector_id: str) -> bool:
+    """True for any bundle connector OR emulated service id (v0.2.42)."""
+    return connector_id in KNOWN_CONNECTORS or connector_id in KNOWN_SERVICES
+
+
+def _ports_kwarg_from_spec(service_ports: list) -> dict | None:
+    """Build a docker-py ``ports`` kwarg from a connector.yaml
+    ``service.ports`` list ([{container_port, host_port?, protocol?}]).
+
+    Returns None when empty so non-service starts pass ``ports=None``
+    (Docker publishes nothing — connectors stay internal-only).
+    """
+    ports: dict[str, int] = {}
+    for p in service_ports or []:
+        if not isinstance(p, dict):
+            continue
+        cport = p.get("container_port")
+        if cport is None:
+            continue
+        proto = str(p.get("protocol") or "tcp").lower()
+        hport = p.get("host_port", cport)
+        try:
+            ports[f"{cport}/{proto}"] = int(hport)
+        except (TypeError, ValueError):
+            continue
+    return ports or None
+
+
+def _published_ports_of(container) -> dict | None:
+    """Read a running container's published-port bindings into a docker-py
+    ``ports`` kwarg, so a recreate re-publishes the SAME host ports.
+
+    The digest-drift reconcile path POSTs only {instance_id} to the start
+    endpoint, so a service container would otherwise lose its published
+    port on every dev-cycle recreate. Inheriting the bindings keeps the
+    recreate idempotent w.r.t. the published port.
+    """
+    try:
+        bindings = (container.attrs or {}).get("HostConfig", {}).get(
+            "PortBindings"
+        ) or {}
+    except Exception:  # noqa: BLE001 — defensive; inspect shouldn't fail
+        return None
+    ports: dict[str, int] = {}
+    for cport, host_list in bindings.items():
+        if isinstance(host_list, list) and host_list:
+            hp = host_list[0].get("HostPort")
+            if hp:
+                try:
+                    ports[cport] = int(hp)
+                except (TypeError, ValueError):
+                    continue
+    return ports or None
+
 
 def _split_connector_container_name(name: str) -> tuple[str, str] | None:
     """Parse ``guardian-connector-<id>-<instance>`` → (connector_id, instance_name).
@@ -1680,8 +1757,10 @@ def _split_connector_container_name(name: str) -> tuple[str, str] | None:
         return None
     rest = name[len("guardian-connector-"):]
     # Longest id first so e.g. "cortex-docs" wins over any shorter id that
-    # might be a prefix of it.
-    for cid in sorted(KNOWN_CONNECTORS, key=len, reverse=True):
+    # might be a prefix of it. v0.2.42 — include KNOWN_SERVICES so a
+    # service container (guardian-connector-splunk-mimic-<inst>) is also
+    # parsed + covered by the digest-drift reconcile loop.
+    for cid in sorted(KNOWN_CONNECTORS | KNOWN_SERVICES, key=len, reverse=True):
         prefix = f"{cid}-"
         if rest.startswith(prefix):
             instance_name = rest[len(prefix):]
@@ -2008,11 +2087,11 @@ async def start_connector_instance(
     if isinstance(explicit_image, str) and explicit_image.strip():
         image = explicit_image.strip()
     else:
-        if connector_id not in KNOWN_CONNECTORS:
+        if not _is_known_id(connector_id):
             raise HTTPException(
                 400,
                 f"unknown connector_id {connector_id!r}; "
-                f"allowed bundle ids: {sorted(KNOWN_CONNECTORS)}. "
+                f"allowed bundle ids: {sorted(KNOWN_CONNECTORS | KNOWN_SERVICES)}. "
                 f"For user-uploaded connectors, pass image_ref in the "
                 f"body — see api/marketplace.py upload route.",
             )
@@ -2021,11 +2100,25 @@ async def start_connector_instance(
 
     client = _docker_client()
 
+    # v0.2.42 — service-kind starts PUBLISH host ports so external systems
+    # reach the container. The primary path (operator create) carries
+    # `service_ports` (from connector.yaml) in the body. The reconcile
+    # path POSTs only {instance_id}, so for a service we inherit the
+    # published ports from the existing container (below) — keeping the
+    # recreate idempotent w.r.t. the published port. Connectors stay
+    # internal-only: ports is None and Docker publishes nothing.
+    is_service = (body.get("kind") == "service") or (connector_id in KNOWN_SERVICES)
+    ports = _ports_kwarg_from_spec(body.get("service_ports") or [])
+
     # Remove any existing container with the same name (idempotent
     # restart). The Docker SDK raises NotFound if none exists; that's
     # the happy first-time-start case.
     try:
         existing = client.containers.get(container_name)
+        if is_service and ports is None:
+            # Reconcile path: re-publish whatever the running container
+            # already had so a digest-drift recreate doesn't drop the port.
+            ports = _published_ports_of(existing)
         log.info("removing existing container %s before start", container_name)
         try:
             existing.stop(timeout=10)
@@ -2034,6 +2127,12 @@ async def start_connector_instance(
         existing.remove(force=True)
     except NotFound:
         pass
+
+    # Boot-reconcile of a MISSING service container: no body ports and no
+    # existing container to inherit from. Fall back to the well-known
+    # default so a reboot re-publishes the port.
+    if is_service and ports is None:
+        ports = _ports_kwarg_from_spec(SERVICE_DEFAULT_PORTS.get(connector_id) or [])
 
     # Pull image with exponential backoff (P1.10). Returns "pulled"
     # on fresh pull success or "cached" when the registry was
@@ -2093,6 +2192,11 @@ async def start_connector_instance(
                 },
             },
             network=_compose_network_name(),
+            # v0.2.42 — publish host ports for service-kind containers
+            # (None for connectors → nothing published). This is the one
+            # genuinely new lifecycle capability services need: an
+            # external system reaches the container on the host port.
+            ports=ports,
             restart_policy={"Name": "unless-stopped"},
             detach=True,
             labels={
@@ -2104,6 +2208,9 @@ async def start_connector_instance(
                 "guardian.instance_id": instance_id,
                 "guardian.instance_name": instance_name,
                 "guardian.role": "connector-runtime",
+                # v0.2.42 — distinguishes an emulated service (published
+                # host port, no agent tools) from a normal connector.
+                "guardian.kind": "service" if is_service else "connector",
             },
         )
     except DockerException as exc:
@@ -2142,11 +2249,11 @@ async def stop_connector_instance(connector_id: str, instance_name: str):
     # operator UI accepts spaces. See _normalize_instance_name docstring.
     instance_name = _normalize_instance_name(instance_name)
     _validate_path_segments(connector_id, instance_name)
-    if connector_id not in KNOWN_CONNECTORS:
+    if not _is_known_id(connector_id):
         raise HTTPException(
             400,
             f"unknown connector_id {connector_id!r}; "
-            f"allowed: {sorted(KNOWN_CONNECTORS)}",
+            f"allowed: {sorted(KNOWN_CONNECTORS | KNOWN_SERVICES)}",
         )
 
     container_name = _connector_container_name(connector_id, instance_name)
@@ -2187,11 +2294,11 @@ async def status_connector_instance(connector_id: str, instance_name: str):
     # operator UI accepts spaces. See _normalize_instance_name docstring.
     instance_name = _normalize_instance_name(instance_name)
     _validate_path_segments(connector_id, instance_name)
-    if connector_id not in KNOWN_CONNECTORS:
+    if not _is_known_id(connector_id):
         raise HTTPException(
             400,
             f"unknown connector_id {connector_id!r}; "
-            f"allowed: {sorted(KNOWN_CONNECTORS)}",
+            f"allowed: {sorted(KNOWN_CONNECTORS | KNOWN_SERVICES)}",
         )
 
     container_name = _connector_container_name(connector_id, instance_name)
@@ -2607,14 +2714,14 @@ async def reconcile_connector_containers():
         iid = inst.get("id")
         existing_url = inst.get("container_url")
 
-        if cid not in KNOWN_CONNECTORS:
-            # Not a connector we have a guardian-connector-<id> image
-            # for (e.g. a user-uploaded connector) — skip silently.
+        if not _is_known_id(cid):
+            # Not a connector/service we have a guardian-connector-<id>
+            # image for (e.g. a user-uploaded connector) — skip silently.
             # Module-style connectors don't get per-instance
             # containers; only container-style ones (e.g. web) do.
             skipped.append({
                 "connector_id": cid, "instance_name": name,
-                "reason": "connector_id not in KNOWN_CONNECTORS",
+                "reason": "connector_id not in KNOWN_CONNECTORS|KNOWN_SERVICES",
             })
             continue
 
@@ -2695,11 +2802,11 @@ async def restart_connector_instance(
     # operator UI accepts spaces. See _normalize_instance_name docstring.
     instance_name = _normalize_instance_name(instance_name)
     _validate_path_segments(connector_id, instance_name)
-    if connector_id not in KNOWN_CONNECTORS:
+    if not _is_known_id(connector_id):
         raise HTTPException(
             400,
             f"unknown connector_id {connector_id!r}; "
-            f"allowed: {sorted(KNOWN_CONNECTORS)}",
+            f"allowed: {sorted(KNOWN_CONNECTORS | KNOWN_SERVICES)}",
         )
 
     container_name = _connector_container_name(connector_id, instance_name)
