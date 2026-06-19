@@ -147,6 +147,11 @@ interface InstanceDef {
   // v0.14.0 R4.0: tools disabled at this instance — empty = all
   // tools enabled (opt-out). Drives the Tools panel toggle state.
   disabledTools: string[];
+  // v0.2.42 — true when the parent connector is an emulated service
+  // (kind:service). Suppresses agent-tool + Test-Connection affordances
+  // on the instance card; a service is reached by external systems, not
+  // probed by the agent over MCP.
+  isService: boolean;
 }
 
 type ConnectorType = "all" | "channels" | "tools" | "services" | "search" | "devices";
@@ -205,7 +210,10 @@ function mapToConnectorDef(mc: MarketplaceConnector): ConnectorDefinition {
   return {
     id: mc.id,
     name: CONNECTOR_NAME_OVERRIDES[mc.id] ?? mc.name,
-    type: mc.type ?? "",
+    // v0.2.42 — a kind:"service" entry maps to the local "service" type
+    // so the Services filter tab + the card's Service badge pick it up.
+    // Everything else keeps its declared type (e.g. "tool").
+    type: mc.kind === "service" ? "service" : (mc.type ?? ""),
     version: mc.version,
     publisher: mc.publisher,
     description: mc.description,
@@ -274,6 +282,9 @@ function mapApiInstance(
     // v0.14.0 R4.0 — surface disabled_tools to the UI for the
     // per-instance Tools toggle panel
     disabledTools: inst.disabled_tools ?? [],
+    // v0.2.42 — emulated-service instances suppress agent-tool +
+    // Test-Connection affordances (derived from the connector's type).
+    isService: connector?.type === "service",
   };
 }
 
@@ -411,6 +422,10 @@ function ConnectorCard({
   onSelect: (c: ConnectorDefinition) => void;
   onInstall: (connectorId: string, version: string) => void;
 }) {
+  // v0.2.42 — emulated services (kind:service) advertise no agent tools
+  // and are reached by external systems. The card badges them + hides
+  // the misleading "Tools: 0" stat.
+  const isService = connector.type === "service";
   return (
     <div
       className="rounded-2xl p-6 group transition-all duration-300 hover:translate-y-[-4px] cursor-pointer"
@@ -439,6 +454,16 @@ function ConnectorCard({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {isService && (
+            <span
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-label uppercase tracking-wide text-tertiary"
+              style={{ background: "rgba(255, 184, 108, 0.12)", border: "0.5px solid rgba(255, 184, 108, 0.25)" }}
+              title="Emulated service — reached by external systems, not called by the agent"
+            >
+              <span className="material-symbols-outlined text-xs">dns</span>
+              Service
+            </span>
+          )}
           <StatusBadge status={connector.status} latestVersion={connector.latestVersion} />
           {connector.status === "installed" && (
             <span
@@ -474,10 +499,17 @@ function ConnectorCard({
       {/* Footer */}
       <div className="flex items-center justify-between pt-4 border-t border-white/5">
         <div className="flex gap-4">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-label uppercase text-on-surface-variant">Tools</span>
-            <span className="text-sm font-bold text-on-surface">{connector.toolCount}</span>
-          </div>
+          {isService ? (
+            <div className="flex flex-col">
+              <span className="text-[10px] font-label uppercase text-on-surface-variant">Type</span>
+              <span className="text-sm font-bold text-on-surface">Emulated</span>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              <span className="text-[10px] font-label uppercase text-on-surface-variant">Tools</span>
+              <span className="text-sm font-bold text-on-surface">{connector.toolCount}</span>
+            </div>
+          )}
           <div className="flex flex-col">
             <span className="text-[10px] font-label uppercase text-on-surface-variant">Installs</span>
             <span className="text-sm font-bold text-on-surface">{connector.installs}</span>
@@ -2512,7 +2544,16 @@ function InstancesTab({
                           labels for clarity (was "Agent Ready" /
                           "Not Available" — operator confusion about what
                           was "not available" prompted the rename). */}
-                      {inst.status === "connected" && inst.enabled ? (
+                      {inst.isService ? (
+                        <div
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                          style={{ background: "rgba(255, 184, 108, 0.1)", border: "0.5px solid rgba(255, 184, 108, 0.2)" }}
+                          title="Emulated service — reached by external systems (e.g. an XSOAR server), not called by the agent over MCP"
+                        >
+                          <span className="material-symbols-outlined text-xs text-tertiary">dns</span>
+                          <span className="text-[10px] font-medium text-tertiary">Service endpoint</span>
+                        </div>
+                      ) : inst.status === "connected" && inst.enabled ? (
                         <div
                           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
                           style={{ background: "rgba(3, 115, 33, 0.1)", border: "0.5px solid rgba(123, 220, 123, 0.15)" }}
@@ -2561,7 +2602,7 @@ function InstancesTab({
                       )}
 
                       <div className={`flex gap-2 ${inst.status === "not_tested" ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity`}>
-                        {inst.status === "not_tested" && (
+                        {!inst.isService && inst.status === "not_tested" && (
                           <button
                             type="button"
                             className="text-primary px-4 py-1.5 rounded-lg text-xs font-headline font-bold transition-all flex items-center gap-1.5"
@@ -2592,7 +2633,7 @@ function InstancesTab({
                             {testingId === inst.id ? "Testing..." : "Test Connection"}
                           </button>
                         )}
-                        {inst.status !== "not_tested" && (
+                        {!inst.isService && inst.status !== "not_tested" && (
                           <button
                             type="button"
                             className="p-2 hover:bg-surface-bright rounded-lg text-on-surface-variant hover:text-primary transition-colors"

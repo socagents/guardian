@@ -50,6 +50,10 @@ interface MarketplaceConnector {
   id: string;
   name: string;
   type: string;
+  // v0.2.42 — "service" marks an emulated service (e.g. the Splunk
+  // mimic) reached by external systems rather than the agent. Absent
+  // (or "connector") = a normal tool-calling integration.
+  kind?: string;
   version: string;
   publisher: string;
   description: string;

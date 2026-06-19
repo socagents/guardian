@@ -10,6 +10,10 @@ export interface MarketplaceConnector {
   id: string;
   name: string;
   type: string;
+  // v0.2.42 — marketplace entry kind. "service" = an emulated service
+  // (e.g. the Splunk mimic) reached by external systems, not the agent;
+  // absent / "connector" = a normal tool-calling integration.
+  kind?: string;
   version: string;
   publisher: string;
   description: string;
