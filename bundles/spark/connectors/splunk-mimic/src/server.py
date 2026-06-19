@@ -187,21 +187,33 @@ async def create_search_job(request: Request) -> Response:
 
     search = str(params.get("search", "") or params.get("q", ""))
     exec_mode = str(params.get("exec_mode", "normal")).lower()
-    earliest = params.get("earliest_time")
-    latest = params.get("latest_time")
+    # Honour both creation-time (earliest_time/latest_time) AND index-time
+    # (index_earliest/index_latest) windows — SplunkPy sends the latter when
+    # notable_time_source='index time'. Without this it would silently fall
+    # back to the default 24h window and change rotation/dedup semantics.
+    earliest = params.get("earliest_time") or params.get("index_earliest")
+    latest = params.get("latest_time") or params.get("index_latest")
     count = _int(params, "count", _DEFAULT_NOTABLE_COUNT)
+    offset = _int(params, "offset", 0)
     output_mode = str(params.get("output_mode", "")).lower()
 
     if exec_mode == "oneshot":
         # oneshot returns the results directly (no sid). splunklib reads them
-        # via JSONResultsReader off this response.
+        # via JSONResultsReader off this response. offset is load-bearing:
+        # SplunkPy paginates a >FETCH_LIMIT window by re-issuing oneshot with
+        # an advancing offset — ignoring it loops on the first slice forever.
         from src.splunk_state import run_query
 
-        rows = run_query(search, earliest, latest, count)
-        log.info("oneshot search -> %d rows (search=%.80s)", len(rows), search)
+        rows = run_query(search, earliest, latest, count, offset=offset)
+        log.info(
+            "oneshot search -> %d rows (offset=%d count=%d search=%.80s)",
+            len(rows), offset, count, search,
+        )
         return JSONResponse(responses.results_json(rows))
 
-    sid = _JOBS.create(search, earliest, latest, count)
+    # Non-oneshot: the job holds the FULL in-window set (count=None) so the
+    # create->poll->results path paginates via get_job_results.
+    sid = _JOBS.create(search, earliest, latest, count=None)
     log.info("created job %s (search=%.80s)", sid, search)
     # splunklib's _load_sid parses JSON when the request set output_mode=json,
     # else XML (<response><sid>). Honour both.

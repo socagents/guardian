@@ -46,8 +46,8 @@ configSchema:
       default: "admin"
     notable_count:
       type: "integer"
-      title: "Notables per fetch window"
-      description: "How many notable events the mimic generates per search/fetch window."
+      title: "Default result page size"
+      description: "Default number of notables returned when a client doesn't specify a count. The mimic generates a CONTINUOUS rotating stream of notables (one every SPLUNK_MIMIC_NOTABLE_INTERVAL_S seconds, default 60), so each advancing fetch window picks up NEW events — this just caps a single page."
       default: 25
   required: []
 

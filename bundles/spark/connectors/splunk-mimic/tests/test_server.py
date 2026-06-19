@@ -90,6 +90,61 @@ def test_run_query_unmatched_returns_empty():
     assert splunk_state.run_query("search index=empty someuniquetokenxyz") == []
 
 
+# ── rotation contract: fixed grid, count-independent, disjoint windows ───
+#
+# These guard the SplunkPy fetch+dedup contract: a fetch must see NEW
+# incidents as its window advances (rotation), and must NOT see duplicates
+# when the same window is re-queried (stability). Both hinge on notable
+# identity being a pure function of the absolute grid instant.
+
+_T = 1_700_000_000  # fixed window anchor for the grid tests
+
+
+def test_generate_notables_count_independent():
+    # Same window, different count → the smaller set is a PREFIX of the
+    # larger (count selects from the grid; it does not redefine it).
+    a = splunk_state.generate_notables(5, earliest=_T, latest=_T + 3600)
+    b = splunk_state.generate_notables(12, earliest=_T, latest=_T + 3600)
+    ids_a = [n["event_id"] for n in a]
+    ids_b = [n["event_id"] for n in b]
+    assert len(ids_a) == 5
+    assert ids_a == ids_b[:5], "count must SELECT, not redefine, the grid"
+
+
+def test_generate_notables_window_advance_disjoint():
+    # Adjacent non-overlapping windows MUST yield disjoint event_id sets —
+    # half-open intervals → no boundary double-emit → genuine rotation.
+    w = 1800
+    a = {n["event_id"] for n in splunk_state.generate_notables(None, earliest=_T, latest=_T + w)}
+    b = {n["event_id"] for n in splunk_state.generate_notables(None, earliest=_T + w, latest=_T + 2 * w)}
+    assert a and b
+    assert a.isdisjoint(b), f"advancing-window double-emit: {a & b}"
+
+
+def test_generate_notables_stable_on_requery():
+    # Re-querying an identical window returns byte-identical (id,_time,_raw)
+    # so SplunkPy's found_incidents_ids dedup drops the re-fetch.
+    a = splunk_state.generate_notables(None, earliest=_T, latest=_T + 600)
+    b = splunk_state.generate_notables(None, earliest=_T, latest=_T + 600)
+    key = lambda rows: [(n["event_id"], n["_time"], n["_raw"]) for n in rows]
+    assert key(a) == key(b)
+
+
+def test_generate_notables_offset_paginates():
+    full = splunk_state.generate_notables(None, earliest=_T, latest=_T + 3600)
+    assert len(full) > 6
+    page1 = splunk_state.generate_notables(3, earliest=_T, latest=_T + 3600, offset=0)
+    page2 = splunk_state.generate_notables(3, earliest=_T, latest=_T + 3600, offset=3)
+    assert [n["event_id"] for n in page1] == [n["event_id"] for n in full[:3]]
+    assert [n["event_id"] for n in page2] == [n["event_id"] for n in full[3:6]]
+    assert {n["event_id"] for n in page1}.isdisjoint({n["event_id"] for n in page2})
+
+
+def test_generate_notables_includes_indextime():
+    n = splunk_state.generate_notables(1, earliest=_T, latest=_T + 600)[0]
+    assert n["_indextime"] and n["_indextime"].isdigit()
+
+
 # ── responses: byte shapes ───────────────────────────────────────────────
 
 def test_auth_xml_has_session_key():

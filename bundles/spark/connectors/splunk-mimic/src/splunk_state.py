@@ -25,6 +25,8 @@ execute arbitrary SPL — it sends a small, known set of queries:
 from __future__ import annotations
 
 import hashlib
+import math
+import os
 import re
 import threading
 import time
@@ -96,6 +98,29 @@ _URGENCIES = ["critical", "high", "medium", "low", "informational"]
 
 _OWNERS = ["unassigned", "analyst1", "analyst2", "soc_lead"]
 
+# ── notable time grid (the rotation keystone) ───────────────────────────
+#
+# Notables live on a FIXED ABSOLUTE TIME GRID: one notable every
+# GRID_INTERVAL seconds since a fixed EPOCH_ANCHOR. Identity AND content
+# derive purely from the grid instant — never from a request's count or
+# loop position. Consequences (verified against the SplunkPy fetch+dedup
+# contract):
+#   * re-querying the SAME [earliest, latest) window returns byte-identical
+#     events (same event_id/_time/_raw) → SplunkPy's found_incidents_ids
+#     dedup drops them, no duplicate incidents;
+#   * an ADVANCING window (latest=now moving forward) exposes fresh grid
+#     instants with brand-new event_ids → XSOAR fetches NEW incidents each
+#     cycle. Rotation is purely the time-window filter; no server state.
+# `count`/`offset` only SELECT how many in-window grid points are returned.
+#
+# EPOCH_ANCHOR is a fixed historical constant so the grid is identical
+# across deployments + restarts. GRID_INTERVAL (one notable / minute by
+# default) is the rate knob.
+EPOCH_ANCHOR = 1_600_000_000  # 2020-09-13T12:26:40Z — fixed grid origin
+GRID_INTERVAL = max(1, int(os.environ.get("SPLUNK_MIMIC_NOTABLE_INTERVAL_S", "60")))
+# Safety cap so a very wide window can't materialise an unbounded result set.
+MAX_NOTABLES = max(1, int(os.environ.get("SPLUNK_MIMIC_MAX_NOTABLES", "5000")))
+
 
 def splunk_time(epoch: float) -> str:
     """Format an epoch as the `_time` string SplunkPy can parse."""
@@ -140,70 +165,109 @@ def _resolve_window(earliest: Any, latest: Any) -> tuple[float, float]:
     return et, lt
 
 
-def _det(prefix: str, i: int) -> str:
-    """Deterministic short hex derived from an index — stable across runs."""
-    return hashlib.md5(f"{prefix}:{i}".encode()).hexdigest()  # noqa: S324
+def _det(prefix: str, seed: Any) -> str:
+    """Deterministic short hex derived from a seed — stable across runs."""
+    return hashlib.md5(f"{prefix}:{seed}".encode()).hexdigest()  # noqa: S324
+
+
+def _grid_instants(earliest_epoch: float, latest_epoch: float) -> list[tuple[int, int]]:
+    """Return (grid_index, grid_epoch) for every grid point in the HALF-OPEN
+    window [earliest, latest), newest first.
+
+    Half-open is deliberate: SplunkPy advances ``next earliest = old latest``,
+    so a closed upper bound would emit a boundary instant in two adjacent
+    windows (a duplicate-looking-but-new id at the seam). With [earliest,
+    latest) each instant lives in exactly one window → advancing windows are
+    disjoint.
+    """
+    # First grid index whose epoch is >= earliest (and >= the anchor).
+    start_idx = max(0, math.ceil((earliest_epoch - EPOCH_ANCHOR) / GRID_INTERVAL))
+    out: list[tuple[int, int]] = []
+    idx = start_idx
+    epoch = EPOCH_ANCHOR + idx * GRID_INTERVAL
+    while epoch < latest_epoch and len(out) < MAX_NOTABLES + 1:
+        out.append((idx, epoch))
+        idx += 1
+        epoch = EPOCH_ANCHOR + idx * GRID_INTERVAL
+    out.reverse()  # newest first
+    return out[:MAX_NOTABLES]
+
+
+def _notable_at(grid_index: int, grid_epoch: int) -> dict[str, Any]:
+    """Build one notable derived ENTIRELY from its absolute grid instant.
+
+    event_id, _time, _raw, rule/urgency/owner, and the src/dest/user/host
+    entities are all pure functions of (grid_index, grid_epoch). So the same
+    instant is byte-identical on every re-query (dedup-stable), while
+    different instants vary (rotation + realistic mix). NOTHING here depends
+    on the request's count or loop position.
+    """
+    rule = _RULES[grid_index % len(_RULES)]
+    urgency = _URGENCIES[grid_index % len(_URGENCIES)]
+    owner = _OWNERS[grid_index % len(_OWNERS)]
+    seed = str(grid_epoch)  # absolute grid epoch — the identity anchor
+    src = f"10.0.{grid_index % 256}.{(grid_index * 7) % 256}"
+    dest = f"172.16.{(grid_index * 3) % 256}.{(grid_index * 13) % 256}"
+    user = f"user{grid_index % 50:02d}"
+    host = f"host-{grid_index % 30:02d}"
+    when = splunk_time(grid_epoch)
+    # ES event_id format: <hex>@@notable@@<hex>, keyed off the grid epoch.
+    event_id = f"{_det('eid', seed)[:24].upper()}@@notable@@{_det('n', seed)}"
+    raw = (
+        f"{grid_epoch}, search_name=\"{rule['rule_name']}\" "
+        f"src={src} dest={dest} user={user} host={host} "
+        f'urgency={urgency} signature="{rule["rule_title"]}"'
+    )
+    return {
+        "event_id": event_id,
+        "_time": when,
+        "_raw": raw,
+        # _indextime: stable per instant; SplunkPy custom_id fallback material.
+        "_indextime": str(grid_epoch),
+        "_cd": f"{grid_index % 1000}:{grid_epoch % 100000}",
+        "rule_id": _det("rid", seed),
+        "rule_name": rule["rule_name"],
+        "rule_title": rule["rule_title"],
+        "rule_description": rule["rule_description"],
+        "security_domain": rule["security_domain"],
+        "urgency": urgency,
+        "severity": urgency,
+        "status": "1",
+        "status_label": "New",
+        "owner": owner,
+        "src": src,
+        "dest": dest,
+        "user": user,
+        "host": host,
+        "drilldown_name": f"View all {rule['rule_title']} events",
+        "drilldown_search": (
+            f'search `notable` rule_name="{rule["rule_name"]}" src={src}'
+        ),
+        "source": rule["rule_name"],
+        "index": "notable",
+    }
 
 
 def generate_notables(
-    count: int, earliest: Any = None, latest: Any = None
+    count: int | None = None,
+    earliest: Any = None,
+    latest: Any = None,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
-    """Generate `count` deterministic ES notable events within [earliest, latest].
+    """Return ES notable events on the fixed time grid within [earliest, latest).
 
-    Each event carries the fields SplunkPy reads. Events are spread evenly
-    across the window, newest first (descending _time) — the order real
-    Splunk returns for a notable search.
+    The set of notables is defined by the grid (count-INDEPENDENT). `count`
+    caps how many of the in-window grid points are returned (None = all, up
+    to MAX_NOTABLES); `offset` skips the first N (SplunkPy paginates large
+    windows by re-issuing with an advancing offset). Newest first.
     """
-    count = max(0, int(count))
     et, lt = _resolve_window(earliest, latest)
-    span = max(1.0, lt - et)
-    out: list[dict[str, Any]] = []
-    for i in range(count):
-        rule = _RULES[i % len(_RULES)]
-        urgency = _URGENCIES[i % len(_URGENCIES)]
-        owner = _OWNERS[i % len(_OWNERS)]
-        # newest first: event 0 is the most recent
-        ts = lt - (i + 0.5) * (span / count)
-        src = f"10.0.{i % 256}.{(i * 7) % 256}"
-        dest = f"172.16.{(i * 3) % 256}.{(i * 13) % 256}"
-        user = f"user{i % 50:02d}"
-        host = f"host-{i % 30:02d}"
-        # ES event_id format: <hex>@@notable@@<hex>
-        event_id = f"{_det('eid', i)[:24].upper()}@@notable@@{_det('n', i)}"
-        raw = (
-            f'{splunk_time(ts)} rule_name="{rule["rule_name"]}" '
-            f'src={src} dest={dest} user={user} host={host} '
-            f'urgency={urgency} signature="{rule["rule_title"]}"'
-        )
-        out.append(
-            {
-                "event_id": event_id,
-                "_time": splunk_time(ts),
-                "_raw": raw,
-                "rule_id": _det("rid", i),
-                "rule_name": rule["rule_name"],
-                "rule_title": rule["rule_title"],
-                "rule_description": rule["rule_description"],
-                "security_domain": rule["security_domain"],
-                "urgency": urgency,
-                "severity": urgency,
-                "status": "1",
-                "status_label": "New",
-                "owner": owner,
-                "src": src,
-                "dest": dest,
-                "user": user,
-                "host": host,
-                "drilldown_name": f"View all {rule['rule_title']} events",
-                "drilldown_search": (
-                    f'search `notable` rule_name="{rule["rule_name"]}" '
-                    f"src={src}"
-                ),
-                "source": rule["rule_name"],
-                "index": "notable",
-            }
-        )
-    return out
+    rows = [_notable_at(idx, epoch) for (idx, epoch) in _grid_instants(et, lt)]
+    if offset:
+        rows = rows[max(0, int(offset)):]
+    if count is not None and int(count) >= 0:
+        rows = rows[: int(count)]
+    return rows
 
 
 # Indicator literals the Indicator Hunting playbook may search for.
@@ -229,41 +293,56 @@ def _find_indicator(spl: str) -> str | None:
 
 
 def run_query(
-    spl: str, earliest: Any = None, latest: Any = None, count: int = 25
+    spl: str,
+    earliest: Any = None,
+    latest: Any = None,
+    count: int | None = 25,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Interpret a SplunkPy-issued SPL query into mimic results.
 
-    * contains the `notable` macro / word → generated notable events;
+    * contains the `notable` macro / word → generated notable events on the
+      fixed time grid (count/offset select; window filters → rotation);
     * else contains an indicator literal → rows echoing that indicator (so
       the Indicator Hunting playbook's search task returns a hit);
     * else → no results.
+
+    `offset` is honoured on BOTH paths — SplunkPy's fetch paginates a window
+    that holds more than FETCH_LIMIT notables by re-issuing with an advancing
+    offset; ignoring it would re-return the same first slice forever.
     """
     spl = spl or ""
     low = spl.lower()
     if "notable" in low or "`notable`" in spl:
-        return generate_notables(count, earliest, latest)
+        return generate_notables(count, earliest, latest, offset=offset)
 
     indicator = _find_indicator(spl)
     if indicator:
         et, lt = _resolve_window(earliest, latest)
+        # Echo rows are also placed on a coarse absolute grid so re-query is
+        # stable; capped small (the playbook only needs a hit, not volume).
+        instants = _grid_instants(et, lt)[:3]
         rows: list[dict[str, Any]] = []
-        n = max(1, min(3, int(count) if count else 3))
-        for i in range(n):
-            ts = lt - (i + 0.5) * ((lt - et) / n)
+        for idx, epoch in instants:
+            when = splunk_time(epoch)
             rows.append(
                 {
-                    "_time": splunk_time(ts),
+                    "_time": when,
                     "_raw": (
-                        f"{splunk_time(ts)} indicator={indicator} "
-                        f"action=allowed bytes={(i + 1) * 2048}"
+                        f"{epoch} indicator={indicator} "
+                        f"action=allowed bytes={(idx % 8 + 1) * 2048}"
                     ),
                     "indicator": indicator,
-                    "src": indicator if _IPV4.fullmatch(indicator) else f"10.0.0.{i + 1}",
-                    "dest": f"203.0.113.{i + 10}",
-                    "count": str((i + 1) * 3),
+                    "src": indicator if _IPV4.fullmatch(indicator) else f"10.0.0.{idx % 254 + 1}",
+                    "dest": f"203.0.113.{idx % 240 + 10}",
+                    "count": str((idx % 5 + 1) * 3),
                     "index": "main",
                 }
             )
+        if offset:
+            rows = rows[max(0, int(offset)):]
+        if count is not None and int(count) >= 0:
+            rows = rows[: int(count)]
         return rows
     return []
 
@@ -300,9 +379,12 @@ class JobStore:
         spl: str,
         earliest: Any = None,
         latest: Any = None,
-        count: int = 25,
+        count: int | None = None,
     ) -> str:
-        results = run_query(spl, earliest, latest, count)
+        # Hold the FULL in-window result set (count=None) so the create→
+        # poll→results path (splunk-search) can paginate via get_job_results'
+        # offset/count slicing. resultCount then reflects the true total.
+        results = run_query(spl, earliest, latest, count=count, offset=0)
         with self._lock:
             self._counter += 1
             # Splunk sids look like "<epoch>.<counter>"; keep that shape so

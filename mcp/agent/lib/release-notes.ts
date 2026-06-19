@@ -44,6 +44,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       "New marketplace kind: emulated SERVICES (alongside connectors). A service runs as a container Guardian publishes on a host port so an EXTERNAL system reaches it — the agent never calls it.",
       "Splunk (Emulated) ships as the first one: it speaks the splunkd REST API the XSOAR SplunkPy integration uses, returning simulated notable events. Point a real SplunkPy instance at it (host = your Guardian host, port 8089, unsecure=true).",
       "splunk-search + fetch-incidents + the Indicator Hunting playbook run end-to-end against the mimic with no real Splunk server.",
+      "The mimic emits a rotating stream of notables on a fixed time grid (~1/min), so each XSOAR fetch picks up NEW simulated incidents (varied rules/urgencies/domains) while re-queries dedup cleanly.",
       "Services show a 'Service' badge + a Services filter on /connectors; they advertise zero agent tools and skip the agent's Test Connection (they're reached by external systems, not the agent).",
     ],
   },
