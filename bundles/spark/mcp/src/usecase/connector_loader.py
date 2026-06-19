@@ -1029,6 +1029,19 @@ def iter_registrations(
             raise ValueError(f"{connector_yaml} does not exist")
         spec = _load_yaml(connector_yaml)
 
+        # v0.2.42 — emulated services (kind:service) advertise ZERO agent
+        # tools. They run as containers that EXTERNAL systems (e.g. an
+        # XSOAR server) reach over a published host port; the agent never
+        # calls them. Skipping here preserves the credential/catalog
+        # boundary — the agent gets no handle to a service, the same way
+        # it gets no handle to a credential.
+        if (spec.get("kind") or "connector") == "service":
+            logger.info(
+                "connector %r is kind=service; advertising no agent tools", cid
+            )
+            skipped.append(cid)
+            continue
+
         # v0.2.29 (#43): register over the connector's ENABLED instances.
         # Pre-v0.2.29 the loader hard-picked instances[0] and bound every
         # tool to it (single-active assumption). Now: a connector with 2+

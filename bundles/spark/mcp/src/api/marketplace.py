@@ -154,6 +154,11 @@ def _connector_summary(
     logo = raw_logo if isinstance(raw_logo, str) and raw_logo.startswith("data:image/") else None
     return {
         "id": connector_id,
+        # v0.2.42 — kind discriminates a tool-calling connector from an
+        # emulated service (e.g. the Splunk mimic). Default "connector"
+        # so every pre-existing connector.yaml keeps its meaning. The UI
+        # renders a "Service" badge + the services filter tab off this.
+        "kind": spec.get("kind") or "connector",
         "version": spec.get("version", "0.0.0"),
         "display_name": spec.get("displayName") or connector_id.replace("-", " ").title(),
         "description": spec.get("description") or spec.get("displayName") or "",
