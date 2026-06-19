@@ -4285,6 +4285,52 @@ export const JOURNEYS: Journey[] = [
   },
 
   {
+    id: "ops-install-emulated-service",
+    category: "connectors",
+    title: "Install an emulated service (Splunk mimic) + wire it to XSOAR",
+    summary:
+      "v0.2.42 — the marketplace has a second entry kind: emulated SERVICES (badged 'Service', under the Services filter). A service advertises ZERO agent tools and runs as a container Guardian publishes on a HOST port so an EXTERNAL system reaches it. Splunk (Emulated) speaks the splunkd REST API the XSOAR SplunkPy integration uses — point a real SplunkPy instance at it.",
+    difficulty: "intermediate",
+    durationMin: 8,
+    icon: "lan",
+    prompts: [],
+    toolsExercised: [],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/agent/marketplace",
+        description:
+          "Catalogue now carries kind per entry. splunk-mimic returns kind:'service', tools_count:0. The UI maps kind:'service' → the Services filter + a 'Service' badge; the card shows 'Emulated' instead of a tool count.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/instances",
+        description:
+          "Create a service instance (username/notable_count config; optional password secret). The MCP reads service.ports from connector.yaml and passes kind + service_ports to guardian-updater, which runs client.containers.run(..., ports={'8089/tcp': 8089}) — the one new lifecycle capability services need.",
+      },
+    ],
+    howToTest: [
+      "Open /connectors → Marketplace → Services filter. 'Splunk (Emulated)' shows a 'Service' badge and an 'Emulated' type stat (not 'Tools: 0').",
+      "Install it, then Instances → Add Instance → pick Splunk (Emulated). Set the accepted username (default admin); password optional (blank = accept any). Save.",
+      "guardian-updater starts guardian-connector-splunk-mimic-<name>; the instance card shows a 'Service endpoint' chip (no agent-tools chip, no Test Connection — a service isn't called by the agent).",
+      "On the Guardian VM: docker ps shows 0.0.0.0:8089->8089/tcp; curl -k https://localhost:8089/services/server/info returns a version entry.",
+      "On your Cortex XSOAR server, configure the SplunkPy integration: host = <guardian-host>, port = 8089, username/password matching the instance, unsecure = true. Test → green.",
+      "Run !splunk-search query=\"search `notable`\" → generated notable rows. Enable fetch → XSOAR creates Splunk Notable incidents. The Indicator Hunting playbook's splunk-search tasks now succeed.",
+    ],
+    expectedResult:
+      "An emulated service installs + enables through the same marketplace flow as a connector, but advertises no agent tools and publishes a host port. An external XSOAR server runs the unmodified SplunkPy integration against it end-to-end (auth → search → fetch → playbook) with no real Splunk.",
+    verifyVia: [
+      "GET /api/agent/marketplace → splunk-mimic entry with kind:'service', tools_count:0",
+      "tools/list after enabling → NO splunk-mimic tools advertised (services are zero-tool)",
+      "docker ps on the Guardian VM → guardian-connector-splunk-mimic-<name> with 0.0.0.0:8089->8089/tcp",
+      "curl -k https://localhost:8089/services/server/info → <feed> with version entry",
+      "From XSOAR: !splunk-search query=\"search `notable`\" → notable rows",
+    ],
+    related: ["ops-marketplace-browse", "ops-create-web-container-instance", "ops-recover-connector-needs-auth"],
+    components: ["marketplace", "connectors"],
+  },
+
+  {
     id: "ops-upload-user-connector",
     category: "connectors",
     title: "Upload your own connector to the marketplace",

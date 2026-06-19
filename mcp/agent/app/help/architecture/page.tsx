@@ -6309,8 +6309,38 @@ Agent's tool catalogue: <id>/<tool_name> entries appear`}</Pre>
  </ul>
  </SubSection>
 
+ <SubSection icon="dns" title="Emulated services (kind:service) — v0.2.42">
+ <p>
+ The marketplace has a <strong>second entry kind</strong>. A
+ <Code>connector.yaml</Code> carries an optional{" "}
+ <Code>kind: &quot;connector&quot; | &quot;service&quot;</Code> (default{" "}
+ <Code>connector</Code> — purely additive). A <strong>service</strong> is
+ an <em>emulated</em> upstream (the first: <Code>splunk-mimic</Code>,
+ &quot;Splunk (Emulated)&quot;). It differs from a connector in three
+ load-bearing ways:
+ </p>
+ <ul className="list-disc pl-6 space-y-1">
+ <li><strong>Zero agent tools.</strong> <Code>connector_loader.iter_registrations()</Code> skips <Code>kind:service</Code> entirely — the agent never gets a handle to a service, the same boundary that keeps it away from credentials. The validator inverts the tool rule: a connector needs ≥1 tool; a service needs ≥1 <Code>service.ports[]</Code> entry.</li>
+ <li><strong>Published host port.</strong> Connectors are internal-only (the agent reaches them at <Code>http://guardian-connector-&lt;id&gt;-&lt;name&gt;:9000</Code> over the compose network). A service instead PUBLISHES a host port so an <em>external</em> system reaches it. guardian-updater runs <Code>client.containers.run(..., ports=&#123;&quot;8089/tcp&quot;: 8089&#125;)</Code> for service starts.</li>
+ <li><strong>External caller, not the agent.</strong> The splunk-mimic is a standalone <Code>python:3.12-slim</Code> HTTPS server (NOT the connector-runtime base) that speaks the slice of the splunkd REST API the XSOAR SplunkPy integration&apos;s <Code>splunklib</Code> SDK uses: <Code>auth/login</Code>, <Code>search/jobs</Code> (oneshot + create), job status, results, <Code>notable_update</Code> — backed by a deterministic notable-event generator + a small SPL interpreter.</li>
+ </ul>
+ <p className="mt-2"><strong>Inter-service wiring</strong> (the connection that matters):</p>
+ <ul className="list-disc pl-6 space-y-1">
+ <li><strong>External Cortex XSOAR server (SplunkPy integration) → guardian host :8089</strong> — HTTPS, <Code>Authorization: Splunk &lt;sessionKey&gt;</Code> after <Code>POST /services/auth/login</Code>; TLS self-signed by default (operator sets SplunkPy <Code>unsecure=true</Code>, mirroring on-prem splunkd) or a mounted operator cert (<Code>SPLUNK_MIMIC_TLS_CERT/_KEY</Code>); synchronous request/response; the mimic completes search jobs instantly. <strong>This is inbound to the guardian host</strong> — it requires a firewall rule allowing the XSOAR host to reach tcp/8089 (the one environmental dependency).</li>
+ <li><strong>guardian-agent MCP → guardian-updater :8090</strong> — on service-instance create, the MCP (<Code>instances.py</Code>) reads <Code>kind</Code> + <Code>service.ports</Code> from <Code>connector.yaml</Code> and passes them in the start-request body; bearer <Code>MCP_TOKEN</Code>; the updater maps them to the published-port kwarg. Reconcile re-publishes the same port (inherits the running container&apos;s bindings; a known-default fallback on boot-spawn).</li>
+ <li><strong>guardian-agent (chat) → splunk-mimic</strong> — <em>none.</em> The agent has no tool for a service; it is reached only by the external system.</li>
+ </ul>
+ <p className="mt-2 text-sm text-on-surface-variant">
+ Use case: run the unmodified XSOAR SplunkPy integration (fetch-incidents,{" "}
+ <Code>splunk-search</Code>, the Indicator Hunting playbook) end-to-end with
+ no real Splunk server — companion to the <Code>simulate_splunk_incidents</Code>{" "}
+ skill, which creates Splunk-shaped incidents <em>inside</em> XSOAR.
+ </p>
+ </SubSection>
+
  <SubSection icon="construction" title="Implementation references">
  <ul className="list-disc pl-6 space-y-1">
+ <li><strong>Service kind</strong>: <Code>kind</Code> + <Code>service.ports[]</Code> in connector.schema.json; <Code>iter_registrations</Code> skip + <Code>KNOWN_SERVICES</Code> port-publish in updater; <Code>bundles/spark/connectors/splunk-mimic/</Code> (the first service).</li>
  <li><strong>Schema</strong>: <Code>bundles/spark/connectors/connector.schema.json</Code> (JSON Schema Draft 2020-12).</li>
  <li><strong>Validator</strong>: <Code>bundles/spark/mcp/src/usecase/connector_schema.py</Code> — boot-time + upload-time.</li>
  <li><strong>Store</strong>: <Code>bundles/spark/mcp/src/usecase/marketplace_store.py</Code> — SQLite, JSON migration, upgrade migration, singleton accessor.</li>

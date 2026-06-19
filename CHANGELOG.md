@@ -10,6 +10,34 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.42] (unreleased) — *Emulated services marketplace kind + Splunk mimic*
+
+Guardian's marketplace gains a second entry **kind** — **emulated services** — alongside connectors, and ships the first one: **Splunk (Emulated)**. A service is *not* an agent integration: it runs as a container that Guardian publishes on a **host port** so an **external** system reaches it, and it advertises **zero agent tools**. The Splunk mimic speaks the slice of the splunkd REST API the XSOAR **SplunkPy** integration's `splunklib` SDK actually uses, returning simulated notable events — so SplunkPy commands run end-to-end with no real Splunk server. This is the companion to the `simulate_splunk_incidents` skill (v0.2.41): that one creates Splunk-shaped incidents *inside* XSOAR; this one lets SplunkPy's **fetch** and **playbooks** actually call "Splunk".
+
+### What ships
+- **Service marketplace kind** — `connector.yaml` gains an optional `kind: "connector" | "service"` (default `connector`) + a `service.ports[]` block. Purely additive; no existing connector changes meaning. Schema + `validate_connector_spec` enforce it (a connector needs ≥1 tool; a service needs ≥1 port). `bundles/spark/connectors/connector.schema.json`, `bundles/spark/mcp/src/usecase/connector_schema.py`.
+- **Zero-tool dispatch** — `connector_loader.iter_registrations()` skips `kind:service`, so the agent never gets a handle to a service (the same boundary that keeps it away from credentials). The marketplace catalogue surfaces `kind`. `bundles/spark/mcp/src/usecase/connector_loader.py`, `bundles/spark/mcp/src/api/marketplace.py`.
+- **UI** — a **Service** badge + the existing **Services** filter on `/connectors`; service cards show an "Emulated" type instead of a misleading "Tools: 0"; service instances show a "Service endpoint" chip and suppress the agent's Test Connection (a service is reached by external systems, not the agent). `mcp/agent/app/connectors/page.tsx`.
+- **Published host port lifecycle** — guardian-updater publishes a host port for `kind:service` container starts (connectors stay internal-only). Port resolution covers all three paths: operator-create (from `connector.yaml`), digest-drift reconcile (inherit the running container's bindings), and boot-spawn of a missing container (a known-default fallback). `updater/src/main.py`, `bundles/spark/mcp/src/api/instances.py`.
+- **Splunk (Emulated) service** — `bundles/spark/connectors/splunk-mimic/`: a standalone `python:3.12-slim` HTTPS server on `:8089` (self-signed TLS by default, mountable operator cert) that emulates `auth/login`, `search/jobs` (oneshot + create), job status, results, and `notable_update`, backed by a deterministic notable-event generator + a small SPL interpreter. Byte-compatibility with the real `splunklib` SDK is proven by a live round-trip test.
+- **CI + catalogue** — manifest entry, a standalone image build (`guardian-connector-splunk-mimic`), dev-installer + release digest pinning, and a marketplace card.
+
+### Capability acceptance criteria (tag only when ALL pass on the deployed install)
+- [ ] Install + enable **Splunk (Emulated)** from the marketplace; guardian-updater starts `guardian-connector-splunk-mimic-<name>` with `0.0.0.0:8089->8089/tcp` published on the Guardian VM.
+- [ ] From the Guardian VM: `curl -k https://localhost:8089/services/server/info` returns a version entry; from the XSOAR host: `curl -k https://<guardian-host>:8089/services/auth/login -d username=admin -d password=x` returns `<sessionKey>`.
+- [ ] A SplunkPy instance on xsoar-v6 (host = Guardian host, port 8089, `unsecure=true`) runs `!splunk-search query="search \`notable\`"` → returns generated notable rows.
+- [ ] fetch-incidents on that instance → XSOAR creates Splunk Notable incidents from the mimic's notables.
+- [ ] The Indicator Hunting playbook runs to completion on a sim incident (its `splunk-search` tasks succeed against the mimic).
+
+### Forbidden going forward
+- A `kind:service` connector MUST advertise zero agent tools — never `mcp.tool()`-register a service.
+- Never hard-code TLS-verification-off inside the mimic's own code; verification-off is purely the XSOAR-side `unsecure` toggle.
+- Service containers publish a host port; connectors stay internal-only.
+
+Refs #56.
+
+---
+
 ## [v0.2.41] (unreleased) — *New skill: simulate Splunk incidents in XSOAR*
 
 A new workflow skill, **`simulate_splunk_incidents`**, lets the agent create synthetic Splunk incidents in Cortex XSOAR *as if the SplunkPy integration had fetched and mapped them from Splunk Enterprise Security* — useful for testing layouts/playbooks, exercising the Guardian investigation loop, or demos.

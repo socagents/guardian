@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.42",
+    date: "2026-06-19",
+    title: "Emulated services in the marketplace — first up: Splunk.",
+    highlights: [
+      "New marketplace kind: emulated SERVICES (alongside connectors). A service runs as a container Guardian publishes on a host port so an EXTERNAL system reaches it — the agent never calls it.",
+      "Splunk (Emulated) ships as the first one: it speaks the splunkd REST API the XSOAR SplunkPy integration uses, returning simulated notable events. Point a real SplunkPy instance at it (host = your Guardian host, port 8089, unsecure=true).",
+      "splunk-search + fetch-incidents + the Indicator Hunting playbook run end-to-end against the mimic with no real Splunk server.",
+      "Services show a 'Service' badge + a Services filter on /connectors; they advertise zero agent tools and skip the agent's Test Connection (they're reached by external systems, not the agent).",
+    ],
+  },
+  {
     version: "0.2.41",
     date: "2026-06-19",
     title: "New skill: simulate Splunk incidents in XSOAR.",

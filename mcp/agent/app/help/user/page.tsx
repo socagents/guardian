@@ -3385,6 +3385,40 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </p>
             </SubSection>
 
+            <SubSection icon="dns" title="Emulated services (v0.2.42+)">
+              <p>
+                The marketplace has two kinds of entry: <Term>connectors</Term>{" "}
+                (integrations the agent calls) and <Term>services</Term>{" "}
+                (emulated upstreams reached by an <em>external</em> system, not
+                the agent). Services carry a <Term>Service</Term> badge and live
+                under the <Term>Services</Term> filter. They advertise no agent
+                tools — their card shows &quot;Emulated&quot; instead of a tool
+                count, and a service instance has no Test Connection (the agent
+                never calls it).
+              </p>
+              <p className="text-sm">
+                The first service is <Term>Splunk (Emulated)</Term>. It speaks
+                the splunkd REST API the Cortex XSOAR <Code>SplunkPy</Code>{" "}
+                integration uses, returning simulated notable events — so you can
+                run SplunkPy <em>fetch-incidents</em>, <Code>!splunk-search</Code>,
+                and the Indicator Hunting playbook end-to-end with no real Splunk
+                server. To wire it up:
+              </p>
+              <ol className="list-decimal pl-5 space-y-1.5 text-sm">
+                <li>Install <Term>Splunk (Emulated)</Term>, then create an instance (accepted username, default <Code>admin</Code>; password optional — blank accepts any).</li>
+                <li>Guardian starts the service container and publishes host port <Code>8089</Code> on the Guardian host.</li>
+                <li>On your Cortex XSOAR server, configure the standard SplunkPy integration: host = your Guardian host, port = <Code>8089</Code>, the matching username/password, and <Code>unsecure=true</Code> (the mimic serves a self-signed cert by default, just like an on-prem splunkd).</li>
+                <li>Test the SplunkPy instance (green), then run <Code>!splunk-search query=&quot;search `notable`&quot;</Code> or enable fetch to pull simulated Splunk notable incidents.</li>
+              </ol>
+              <p className="text-sm">
+                Note: the XSOAR host must be able to reach tcp/8089 on the
+                Guardian host (a firewall rule may be required). For a
+                production-faithful TLS posture, mount an operator cert via{" "}
+                <Code>SPLUNK_MIMIC_TLS_CERT</Code> / <Code>SPLUNK_MIMIC_TLS_KEY</Code>{" "}
+                and leave SplunkPy verifying.
+              </p>
+            </SubSection>
+
             <SubSection icon="upload_file" title="Upload your own connector">
               <p>
                 You can upload custom <Code>connector.yaml</Code> files
