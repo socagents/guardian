@@ -1,0 +1,65 @@
+# Splunk (Emulated) — the first Guardian "emulated service" (kind:service).
+#
+# Unlike a connector, a service advertises ZERO agent tools and is reached by
+# an EXTERNAL system (here: an XSOAR server running the SplunkPy integration),
+# not by the agent. The container PUBLISHES a host port (8089, splunkd) which
+# guardian-updater opens on the Docker host.
+#
+# It speaks only the slice of the splunkd REST API the SplunkPy integration's
+# splunklib SDK actually exercises — auth/login, search/jobs (create + oneshot),
+# job status, results, notable_update — returning generated notable events. The
+# source of truth is the SplunkPy integration; this is NOT a full Splunk.
+id: "splunk-mimic"
+kind: "service"
+version: "0.1.0"
+displayName: "Splunk (Emulated)"
+description: "Emulated Splunk — speaks the splunkd REST API the XSOAR SplunkPy integration uses, returning simulated notable events. For testing/demos; not a real Splunk."
+tags: ["siem", "splunk", "emulated", "testing", "soar"]
+logo: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMwMDFhMTAiLz48cGF0aCBkPSJNMjQgMjBsMTYgMTJsLTE2IDEyeiIgZmlsbD0iIzY1YTYzNyIgZmlsbC1vcGFjaXR5PSIwLjkiLz48cmVjdCB4PSIyMCIgeT0iNDQiIHdpZHRoPSIyNCIgaGVpZ2h0PSIzIiByeD0iMS41IiBmaWxsPSIjOGRjNjNmIi8+PC9zdmc+"
+
+source:
+  language: "python"
+  entrypoint: "src.server"
+
+# Container-style like every connector, but with a published port (below).
+# This is NOT the connector-runtime base image — it's a standalone HTTPS
+# server (see Dockerfile). guardian-updater starts it the same way it starts
+# connectors, but publishes the host port from `service.ports`.
+runtimeMapping:
+  style: "container"
+
+# v0.2.42 — published host ports. guardian-updater maps these to
+# client.containers.run(..., ports={"8089/tcp": 8089}) so the external XSOAR
+# host can reach the mimic at https://<guardian-host>:8089.
+service:
+  ports:
+    - { container_port: 8089, host_port: 8089, protocol: "tcp" }
+
+# Per-instance config the operator fills in on Create Instance.
+configSchema:
+  type: "object"
+  properties:
+    username:
+      type: "string"
+      title: "Accepted username"
+      description: "The username the mimic accepts at /services/auth/login. Match this in the SplunkPy instance config."
+      default: "admin"
+    notable_count:
+      type: "integer"
+      title: "Notables per fetch window"
+      description: "How many notable events the mimic generates per search/fetch window."
+      default: 25
+  required: []
+
+# The password the mimic accepts for splunkd auth. Optional — when unset the
+# mimic accepts any password for the configured username (lab default).
+secretSlots:
+  - name: "password"
+    description: "Password the mimic accepts for splunkd auth. Leave empty to accept any password (lab default)."
+    required: false
+
+# A service advertises NO agent tools. connector_loader.iter_registrations()
+# skips kind:service, so the agent never gets a handle to this — only the
+# external XSOAR server calls it.
+spec:
+  tools: []

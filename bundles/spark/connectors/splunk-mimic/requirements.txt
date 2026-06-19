@@ -1,0 +1,8 @@
+# Standalone Splunk-mimic HTTPS server deps. NOT the connector-runtime base —
+# this image is a plain splunkd emulator, so it pins its own minimal stack.
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0
+# FastAPI Form(...) parsing — splunklib POSTs form-urlencoded bodies.
+python-multipart>=0.0.9
+# Self-signed TLS cert generation at boot (splunkd is HTTPS on 8089).
+cryptography>=42.0
