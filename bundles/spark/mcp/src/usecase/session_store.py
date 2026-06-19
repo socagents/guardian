@@ -415,6 +415,60 @@ class SqliteSessionStore:
             return True
         return False
 
+    # Title-prefix signatures of Guardian's bundled autonomous jobs.
+    # A session whose title starts with one of these was created by the
+    # job dispatcher (the seeder / investigation-loop / judge prompts),
+    # not by an operator typing in the chat box. Used by the v0.2.40
+    # backfill to tag legacy sessions that escaped create-time tagging.
+    _AUTONOMOUS_JOB_TITLE_SIGNATURES = (
+        '<skill name="xsoar_case_investigation"',
+        "Seed the autonomous investigation loop",
+        "You are the autonomous investigation-judge",
+    )
+
+    def backfill_scheduled_by_from_titles(
+        self, *, job_name: str = "autonomous-loop"
+    ) -> int:
+        """Tag legacy autonomous-job sessions that escaped tagging.
+
+        Job-driven sessions are now stamped ``meta.scheduled_by`` at
+        create time (v0.2.40), but sessions created before that fix —
+        especially turns that timed out before the old turn-end tag
+        ran — carry empty meta and flood the operator's chat sidebar
+        (``exclude_scheduled`` can't hide an untagged row). This
+        idempotent boot migration stamps ``scheduled_by`` on any
+        still-untagged session whose title begins with a known
+        bundled-job prompt signature. It only fills NULL tags (never
+        overwrites an existing value) and is reversible — the operator
+        can still surface these via the sidebar's "show automated"
+        toggle. Returns the number of rows tagged.
+        """
+        sigs = self._AUTONOMOUS_JOB_TITLE_SIGNATURES
+        if not sigs:
+            return 0
+        like = " OR ".join(["title LIKE ?"] * len(sigs))
+        params: list[Any] = [job_name]
+        params.extend(f"{s}%" for s in sigs)
+        with self._lock, self._conn() as c:
+            cur = c.execute(
+                f"""
+                UPDATE sessions
+                   SET meta_json = json_set(
+                         COALESCE(NULLIF(meta_json, ''), '{{}}'),
+                         '$.scheduled_by', ?)
+                 WHERE json_extract(meta_json, '$.scheduled_by') IS NULL
+                   AND ({like})
+                """,
+                params,
+            )
+            n = cur.rowcount
+        if n:
+            logger.info(
+                "SessionStore.backfill_scheduled_by_from_titles tagged %d "
+                "legacy autonomous-job session(s)", n,
+            )
+        return n
+
     # ─── Message append ────────────────────────────────────────
 
     def append_message(

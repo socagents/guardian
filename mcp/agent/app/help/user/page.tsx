@@ -967,6 +967,24 @@ sudo ./guardian-installer`}
               </p>
             </SubSection>
 
+            <SubSection
+              icon="smart_toy"
+              title="Automated sessions are hidden by default (v0.2.40)"
+            >
+              <p>
+                The autonomous investigation loop runs on a schedule and
+                creates its own chat sessions every tick — on a busy
+                install those can vastly outnumber your own conversations.
+                The session rail <strong>hides scheduled-job sessions by
+                default</strong> so your conversations are easy to find.
+                Use the <strong>Automated sessions</strong> toggle under
+                the New Chat button to switch between{" "}
+                <Code>HIDDEN</Code> (your sessions only) and{" "}
+                <Code>SHOWN</Code> (everything, including loop runs you
+                want to inspect). The choice is remembered per browser.
+              </p>
+            </SubSection>
+
             <SubSection icon="bolt" title="Tool calls in chat">
               <p>
                 When the agent decides to call a tool, you see an inline

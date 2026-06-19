@@ -3914,6 +3914,16 @@ export async function POST(request: NextRequest) {
         // for that turn (and a warning is logged server-side).
         let sessionId: string;
         let isNewSession = false;
+        // v0.2.40 — tag job-driven sessions as scheduled AT CREATE TIME.
+        // Previously `meta.scheduled_by` was only stamped by the
+        // auto-title PATCH at turn END (see ~the isNewSession block
+        // below), so a turn that timed out / errored mid-flight never
+        // got tagged — leaving ~200 untagged orphan loop sessions that
+        // the sidebar's exclude_scheduled filter couldn't hide. Stamping
+        // it on the create call closes that gap: the tag lands before
+        // any turn work, independent of how the turn ends.
+        const jobTriggerMatch = trigger?.match(/^job:(.+)$/);
+        const scheduledByAtCreate = jobTriggerMatch ? jobTriggerMatch[1] : null;
         if (incomingSessionId) {
           sessionId = incomingSessionId;
         } else {
@@ -3922,7 +3932,13 @@ export async function POST(request: NextRequest) {
               session?: { id?: string };
             }>('/api/v1/sessions', {
               method: 'POST',
-              body: { user: 'operator', title: null, meta: {} },
+              body: {
+                user: 'operator',
+                title: null,
+                meta: scheduledByAtCreate
+                  ? { scheduled_by: scheduledByAtCreate }
+                  : {},
+              },
               headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
             });
             const id = created?.session?.id;
@@ -5515,32 +5531,21 @@ export async function POST(request: NextRequest) {
         // Auto-title brand-new sessions from the first user message.
         // 60 chars matches the column width Spark uses in the sidebar.
         //
-        // For job-driven runs (trigger=`job:<name>`), also tag
-        // `meta.scheduled_by=<name>`. The chat sidebar filters those
-        // sessions out so a scheduled run doesn't pollute the human
-        // conversation list — chat sessions stay reserved for
-        // operator decisions, job runs surface only on /jobs/[id].
+        // NOTE (v0.2.40): `meta.scheduled_by` is now stamped at session
+        // CREATE (see scheduledByAtCreate above) so job sessions are
+        // tagged even when the turn fails before reaching this point.
+        // This block only auto-titles; it no longer carries the tag.
         if (isNewSession) {
           const trimmed = message.trim();
           const preview =
             trimmed.length > 60 ? `${trimmed.slice(0, 60).trimEnd()}…` : trimmed;
-          // Extract the job name from `job:<name>` trigger headers; we
-          // want metadata regardless of whether there's a preview.
-          const jobMatch = trigger?.match(/^job:(.+)$/);
-          const scheduledBy = jobMatch ? jobMatch[1] : null;
-          // Skip the call only if we'd send neither a title nor metadata.
-          if (preview || scheduledBy) {
+          if (preview) {
             try {
               await callMcpServer(
                 `/api/v1/sessions/${encodeURIComponent(sessionId)}`,
                 {
                   method: 'PATCH',
-                  body: {
-                    ...(preview ? { title: preview } : {}),
-                    ...(scheduledBy
-                      ? { metadata: { scheduled_by: scheduledBy } }
-                      : {}),
-                  },
+                  body: { title: preview },
                   headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
                 },
               );

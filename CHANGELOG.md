@@ -10,6 +10,23 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.40] (unreleased) — *Chat sidebar: hide autonomous-loop sessions so your own conversations are findable*
+
+Follow-up to v0.2.39. With the loop now reliable, the remaining problem was discoverability: the chat session rail was dominated by autonomous-loop sessions (skill-tick + seeder + judge runs — hundreds of them on a busy install), burying the operator's own conversations.
+
+### Root cause
+The sidebar already filtered out scheduled-job sessions (`meta.scheduled_by`), but that tag was only stamped by the auto-title PATCH at **turn end** — so any tick that failed/timed out mid-turn never got tagged and slipped through the filter (~200 untagged orphans flooding the list).
+
+### What ships
+- **`scheduled_by` is now stamped at session creation**, not turn end — so every job-driven session is tagged the moment it's created, even if the turn later fails. The auto-title step at turn end now only titles.
+- **Boot backfill for legacy sessions** — an idempotent, reversible migration tags pre-v0.2.40 autonomous-job sessions (matched by the bundled seeder/investigation-loop/judge prompt signatures) that escaped tagging, so the existing flood clears too.
+- **"Automated sessions" sidebar toggle** — under the New Chat button, defaults to `HIDDEN` (your conversations only). Flip to `SHOWN` to inspect loop runs. Remembered per browser (localStorage).
+
+### Files
+- `mcp/agent/app/api/chat/route.ts` (tag at create), `bundles/spark/mcp/src/usecase/session_store.py` + `bundles/spark/mcp/src/main.py` (backfill), `mcp/agent/app/page.tsx` + `mcp/agent/components/chat/session-sidebar.tsx` (toggle), `bundles/spark/mcp/tests/test_session_store_backfill.py`, `mcp/agent/app/help/user/page.tsx` (`#chat`).
+
+---
+
 ## [v0.2.39] (unreleased) — *Autonomous loop: stop the silent timeouts + mark interrupted sessions*
 
 The autonomous investigation loop was silently failing ~60% of its ticks. Clicking those sessions in the chat sidebar showed only the seed prompt and nothing else — which read as "previous sessions won't load."

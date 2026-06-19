@@ -39,6 +39,11 @@ export interface SessionSidebarProps {
    *  history. Parent POSTs to /api/agent/sessions/{id}/fork, then
    *  switches to the new session. */
   onForkSession?: (id: string) => void;
+  /** v0.2.40 — when false (default), autonomous-loop (scheduled-job)
+   *  sessions are filtered out server-side so the list shows operator
+   *  conversations. The toggle below flips it for inspection. */
+  showAutomated?: boolean;
+  onToggleAutomated?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -404,6 +409,8 @@ export function SessionSidebar({
   onExportSession,
   onRenameSession,
   onForkSession,
+  showAutomated = false,
+  onToggleAutomated,
   collapsed = false,
   onToggleCollapse,
 }: SessionSidebarProps) {
@@ -480,6 +487,38 @@ export function SessionSidebar({
           New Chat
         </button>
       </div>
+
+      {/* v0.2.40 — show/hide autonomous-loop (scheduled-job) sessions.
+          Hidden by default so the operator's own conversations aren't
+          drowned by investigation-loop churn; toggle to inspect them. */}
+      {onToggleAutomated && (
+        <div className="px-4 pb-1">
+          <button
+            type="button"
+            onClick={onToggleAutomated}
+            aria-pressed={showAutomated}
+            title="Autonomous-loop (scheduled-job) sessions are hidden by default so your own conversations are easy to find. Toggle to show them."
+            className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-[11px] text-on-surface-variant hover:bg-white/5 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[14px]">
+                smart_toy
+              </span>
+              Automated sessions
+            </span>
+            <span
+              className={cn(
+                "px-1.5 py-0.5 rounded text-[9px] font-mono tracking-wide",
+                showAutomated
+                  ? "bg-primary/20 text-primary"
+                  : "bg-white/5 text-on-surface-variant/60",
+              )}
+            >
+              {showAutomated ? "SHOWN" : "HIDDEN"}
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Session List */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-4 custom-scrollbar">

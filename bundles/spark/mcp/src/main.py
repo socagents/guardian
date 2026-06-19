@@ -428,6 +428,21 @@ async def async_main(transport: str):
     session_store = SqliteSessionStore(retention_days=retention_days)
     set_session_store(session_store)
 
+    # v0.2.40 — one-time, idempotent backfill: tag legacy autonomous-job
+    # sessions (created before create-time scheduled_by tagging) so the
+    # chat sidebar's exclude_scheduled filter can hide them. Safe to run
+    # every boot — it only fills NULL tags on titles matching bundled-job
+    # prompt signatures.
+    try:
+        _bf = session_store.backfill_scheduled_by_from_titles()
+        if _bf:
+            logger.info(
+                "Backfilled scheduled_by on %d legacy autonomous-job "
+                "session(s)", _bf,
+            )
+    except Exception:  # noqa: BLE001 - best-effort boot migration
+        logger.warning("scheduled_by backfill skipped", exc_info=True)
+
     # Choose the embedder.
     #
     # POLICY: Vertex is authoritative for memory + KB embedding. Operator

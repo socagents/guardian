@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.40",
+    date: "2026-06-19",
+    title: "Chat sidebar: your own conversations are findable again.",
+    highlights: [
+      "Autonomous-loop sessions are hidden from the chat session rail by default, so operator conversations aren't buried under scheduled-job churn.",
+      "Scheduled-job sessions are now tagged at create time (not turn end), so even failed/timed-out ticks are correctly hidden.",
+      "A boot backfill tags pre-existing loop sessions too, so the historical flood clears — reversible + idempotent.",
+      "New 'Automated sessions' toggle under New Chat: HIDDEN (default) vs SHOWN to inspect loop runs. Remembered per browser.",
+    ],
+  },
+  {
     version: "0.2.39",
     date: "2026-06-19",
     title: "Autonomous loop: fixed the silent timeouts behind empty sessions.",

@@ -17,6 +17,11 @@ import { useChat } from "@/components/chat/use-chat";
 // scope so the constant doesn't re-allocate per render and stays
 // trivially greppable from elsewhere.
 const DEBUG_PANEL_KEY = "guardian.chat.debug-panel.open";
+// v0.2.40 — sidebar "show automated sessions" toggle. Device-local UI
+// preference (per CLAUDE.md it's localStorage, not operator_state):
+// default OFF so the operator's own conversations aren't drowned by
+// autonomous-loop (scheduled-job) sessions. ON shows everything.
+const SHOW_AUTOMATED_KEY = "guardian.chat.show-automated";
 import type { ChatMessage } from "@/lib/api/chat";
 import {
   listChatSessions,
@@ -202,6 +207,24 @@ export default function ChatPage() {
     });
   }, []);
 
+  // v0.2.40 — "show automated sessions" sidebar toggle. Defaults OFF so
+  // the session list shows operator conversations, not autonomous-loop
+  // (scheduled-job) churn. Persisted to localStorage; toggling it
+  // re-fetches the list (loadSessions depends on this state).
+  const [showAutomated, setShowAutomated] = useState(false);
+  useEffect(() => {
+    if (localStorage.getItem(SHOW_AUTOMATED_KEY) === "true") {
+      setShowAutomated(true);
+    }
+  }, []);
+  const toggleShowAutomated = useCallback(() => {
+    setShowAutomated((prev) => {
+      const next = !prev;
+      localStorage.setItem(SHOW_AUTOMATED_KEY, String(next));
+      return next;
+    });
+  }, []);
+
   // v0.6.6 — subagent toggle. Defaults to true; persisted to
   // operator_state.db (NOT localStorage) per CLAUDE.md three-category
   // state model: this is operator-personal progress (a workflow
@@ -273,19 +296,25 @@ export default function ChatPage() {
   // in history. The server-side variant uses sqlite's json_extract
   // (`json_extract(meta_json, '$.scheduled_by') IS NULL`) so the 500-
   // row cap is filled with operator-relevant rows, not scheduler churn.
+  //
+  // v0.2.40 — `excludeScheduled` is now driven by the showAutomated
+  // toggle (default hides autonomous-loop sessions). loadSessions is a
+  // single source of truth used by mount, the toggle, and post-mutation
+  // refreshes; it re-runs whenever showAutomated flips.
+  const loadSessions = useCallback(async () => {
+    const result = await listChatSessions({ excludeScheduled: !showAutomated });
+    if (result.ok) {
+      const sorted = [...result.data].sort(
+        (a, b) =>
+          new Date(b.last_active_at || b.created_at).getTime() -
+          new Date(a.last_active_at || a.created_at).getTime()
+      );
+      setSessions(sorted.map((s) => toSessionSummary(s, "auto")));
+    }
+  }, [showAutomated]);
   useEffect(() => {
-    void (async () => {
-      const result = await listChatSessions({ excludeScheduled: true });
-      if (result.ok) {
-        const sorted = [...result.data].sort(
-          (a, b) =>
-            new Date(b.last_active_at || b.created_at).getTime() -
-            new Date(a.last_active_at || a.created_at).getTime()
-        );
-        setSessions(sorted.map((s) => toSessionSummary(s, "auto")));
-      }
-    })();
-  }, []);
+    void loadSessions();
+  }, [loadSessions]);
 
   // Track current sessionId
   useEffect(() => {
@@ -411,22 +440,12 @@ export default function ChatPage() {
     [sessionId],
   );
 
-  // Refresh sessions. Uses the same server-side `exclude_scheduled`
-  // filter as the initial mount fetch above — see that hook's comment
-  // for the v0.3.6 architectural background.
+  // Refresh sessions after a mutation (create/delete/rename/fork).
+  // Delegates to loadSessions so the showAutomated filter stays
+  // consistent with the mount fetch + the toggle.
   const refreshSessions = useCallback(() => {
-    void (async () => {
-      const result = await listChatSessions({ excludeScheduled: true });
-      if (result.ok) {
-        const sorted = [...result.data].sort(
-          (a, b) =>
-            new Date(b.last_active_at || b.created_at).getTime() -
-            new Date(a.last_active_at || a.created_at).getTime()
-        );
-        setSessions(sorted.map((s) => toSessionSummary(s, "auto")));
-      }
-    })();
-  }, []);
+    void loadSessions();
+  }, [loadSessions]);
 
   // Auto-save session title on first user message. The server already
   // does this on lazy-create (see /api/chat route), but doing it client-
@@ -761,6 +780,8 @@ export default function ChatPage() {
         onExportSession={handleExportSession}
         onRenameSession={handleRenameSession}
         onForkSession={handleForkSession}
+        showAutomated={showAutomated}
+        onToggleAutomated={toggleShowAutomated}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
       />
