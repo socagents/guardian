@@ -10,6 +10,20 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.41] (unreleased) — *New skill: simulate Splunk incidents in XSOAR*
+
+A new workflow skill, **`simulate_splunk_incidents`**, lets the agent create synthetic Splunk incidents in Cortex XSOAR *as if the SplunkPy integration had fetched and mapped them from Splunk Enterprise Security* — useful for testing layouts/playbooks, exercising the Guardian investigation loop, or demos.
+
+### What ships
+- **`bundles/spark/mcp/skills/workflows/simulate_splunk_incidents.md`** — carries the SplunkPy content-pack schema baked in: the three Splunk incident **types** (`Splunk Notable Generic`, `Splunk Finding`, `Splunk Investigation`) and, per type, the **post-mapping** XSOAR incident-field `cliName`s + valid select values (e.g. `splunkurgency`, `splunkstatus`, `splunkdisposition`, `notableid`, `splunksecuritydomain`). The agent creates each incident with `xsoar_create_incident` populating `custom_fields` with the *mapped* field names — never the raw Splunk fields — so the cases render in the Splunk layouts and drive the Splunk playbooks identically to real fetched events.
+- The skill enforces: post-mapping cliNames only; singleSelect values from the allowed lists; pass `instance=` (the connector is multi-instance — `primary-xsoar` v8, `xsoar-v6` v6); and a one-incident install probe (if the `splunk*`/`notable*` fields don't persist on read-back, SplunkPy isn't installed on that tenant).
+- No code/tool change — the existing `xsoar_create_incident` tool already supports `incident_type` + `custom_fields`. Verified live on `xsoar-v6`: a `Splunk Finding` created with the mapped fields round-tripped cleanly (type + all `splunk*` CustomFields persisted).
+
+### Files
+- `bundles/spark/mcp/skills/workflows/simulate_splunk_incidents.md` (new skill; auto-seeded to `/skills` on boot, live on the Skills page).
+
+---
+
 ## [v0.2.40] (unreleased) — *Chat sidebar: hide autonomous-loop sessions so your own conversations are findable*
 
 Follow-up to v0.2.39. With the loop now reliable, the remaining problem was discoverability: the chat session rail was dominated by autonomous-loop sessions (skill-tick + seeder + judge runs — hundreds of them on a busy install), burying the operator's own conversations.

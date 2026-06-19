@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.41",
+    date: "2026-06-19",
+    title: "New skill: simulate Splunk incidents in XSOAR.",
+    highlights: [
+      "Added the simulate_splunk_incidents workflow skill — creates synthetic Splunk incidents in XSOAR as if SplunkPy fetched + mapped them from Splunk ES.",
+      "Covers all three Splunk incident types (Notable Generic, Finding, Investigation) with the exact post-mapping field names + valid select values baked in.",
+      "Creates incidents with the MAPPED XSOAR fields (splunkurgency, splunkstatus, splunkdisposition, notableid, …), not the raw Splunk fields — so cases drive the Splunk layouts/playbooks.",
+      "Requires the SplunkPy pack installed on the target tenant; the skill probes once and tells you if it isn't. Verified live on the v6 tenant.",
+    ],
+  },
+  {
     version: "0.2.40",
     date: "2026-06-19",
     title: "Chat sidebar: your own conversations are findable again.",
