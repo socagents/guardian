@@ -461,6 +461,85 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
     },
     topAgents: [{ name: "guardian-agent", color: "#fa582d" }],
   },
+  {
+    // v0.2.42 — the first EMULATED SERVICE (kind:service). NOT an agent
+    // connector: it advertises zero agent tools and runs a standalone
+    // splunkd-emulating HTTPS server on a PUBLISHED host port (8089) that
+    // an external XSOAR server reaches via the SplunkPy integration.
+    id: "splunk-mimic",
+    name: "Splunk (Emulated)",
+    type: "service",
+    kind: "service",
+    version: "0.1.0",
+    publisher: "Guardian",
+    description:
+      "Emulated Splunk — speaks the splunkd REST API the XSOAR SplunkPy integration uses, returning simulated notable events. For testing/demos; not a real Splunk.",
+    longDescription:
+      "An emulated service (kind:service), not an agent connector. Guardian runs it as a standalone container that publishes splunkd's port 8089 on the Docker host so an EXTERNAL Cortex XSOAR server — running the standard SplunkPy integration — can point at it as if it were a real Splunk. It implements only the slice of the splunkd REST API splunklib exercises: auth/login, search/jobs (oneshot + create), job status, results, and notable_update, backed by a deterministic notable-event generator and a small SPL interpreter (the `notable` macro returns notable events; an indicator literal returns matching rows for the Indicator Hunting playbook). The agent never calls this service — it advertises zero tools. Wire your SplunkPy instance to host <guardian-host>, port 8089, username matching the service config, unsecure=true (the mimic serves a self-signed cert by default, mirroring on-prem splunkd).",
+    category: "Services" as MarketplaceConnector["category"],
+    tags: ["siem", "splunk", "emulated", "testing", "soar"],
+    icon: "lan",
+    iconColor: "#8dc63f",
+    iconBg: "rgba(141, 198, 63, 0.12)",
+    toolCount: 0,
+    installs: "—",
+    installCount: 0,
+    status: "installed",
+    reliability: "Lab",
+    authType: "Username/Password (emulated)",
+    tools: [],
+    config: [
+      {
+        display: "Accepted username",
+        name: "username",
+        type: "string",
+        required: false,
+        defaultValue: "admin",
+        order: 0,
+        description: "Username the mimic accepts at /services/auth/login. Match this in the SplunkPy instance config.",
+      },
+      {
+        display: "Notables per fetch window",
+        name: "notable_count",
+        type: "string",
+        required: false,
+        defaultValue: "25",
+        order: 1,
+        description: "How many notable events the mimic generates per search/fetch window.",
+      },
+      {
+        display: "Password",
+        name: "password",
+        type: "secret",
+        required: false,
+        order: 2,
+        description: "Password the mimic accepts. Leave empty to accept any password (lab default).",
+      },
+    ],
+    versions: [
+      {
+        version: "0.1.0",
+        date: "2026-06-19",
+        changes: [
+          "Initial release — emulated Splunk service (kind:service) speaking the splunkd REST API SplunkPy uses",
+          "Deterministic notable-event generator + minimal SPL interpreter; auth/login, search/jobs (oneshot + create), results, notable_update",
+          "Self-signed TLS on :8089 by default; mountable operator cert via SPLUNK_MIMIC_TLS_CERT/_KEY",
+        ],
+      },
+    ],
+    setupGuide:
+      "1) Install the Splunk (Emulated) service from the marketplace. 2) Click 'Add instance' — set the accepted username (default admin) and notable count; the password is optional (blank = accept any). 3) Save: guardian-updater starts the service container and publishes host port 8089. 4) On your Cortex XSOAR server, configure the SplunkPy integration with host=<guardian-host>, port=8089, the matching username/password, and unsecure=true. 5) Run !splunk-search query=\"search `notable`\" or enable fetch to pull simulated Splunk notable incidents.",
+    dockerImage: "ghcr.io/kite-production/guardian-connector-splunk-mimic:latest",
+    runtime: "python",
+    sdkLanguage: "Python",
+    sdkPackage: "guardian-spark-splunk-mimic-service",
+    ingestion: {
+      enabled: false,
+      mode: "pull",
+      description: "Notables are generated on demand per search/fetch — no continuous ingestion.",
+    },
+    topAgents: [],
+  },
 ];
 
 /** Title-case a snake_case field name, upper-casing known acronyms so a

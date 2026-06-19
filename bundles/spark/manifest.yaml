@@ -229,6 +229,18 @@ toolConnectors:
     version: "0.2.0"
     required: false
 
+  # splunk-mimic — the first EMULATED SERVICE (kind:service, v0.2.42).
+  # NOT an agent connector: it advertises ZERO tools (connector_loader
+  # skips kind:service) and instead runs a standalone splunkd-emulating
+  # HTTPS server on a PUBLISHED host port (8089) that an EXTERNAL XSOAR
+  # server reaches via the SplunkPy integration. Listed here so the
+  # marketplace catalogue surfaces it (with kind:"service") and so the
+  # dev-installer + release flows pin its image digest.
+  - id: "splunk-mimic"
+    path: "./connectors/splunk-mimic/"
+    version: "0.1.0"
+    required: false
+
 # Model providers (per spec v1.2 §7.6). Parallel to toolConnectors[]
 # but contributes models the modelRequirements: resolver picks from,
 # rather than tools the agent calls. At least one provider instance

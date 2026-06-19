@@ -205,3 +205,29 @@ jobs:
           owner: ${{ github.repository_owner }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-actor: ${{ github.actor }}
+
+  # splunk-mimic (v0.2.42) — the first EMULATED SERVICE. Unlike the
+  # connectors above it is NOT FROM guardian-connector-runtime; it builds
+  # standalone FROM python:3.12-slim (a splunkd-emulating HTTPS server).
+  # So: no `needs: build-runtime`, no GUARDIAN_RUNTIME_VERSION build-arg,
+  # and default pull-policy (its base is a public Docker Hub image, which
+  # benefits from CVE-fresh pulls — same rationale as build-runtime).
+  build-splunk-mimic-connector:
+    name: Build guardian-connector-splunk-mimic
+    runs-on: [self-hosted, Linux, X64, guardian]
+    steps:
+      - name: Reset workspace ownership (pre-checkout)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: actions/checkout@v4
+      - name: Fix bind-mount perms
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+      - uses: ./.github/actions/build-and-push-dev-image
+        with:
+          service-name: guardian-connector-splunk-mimic
+          build-context: '.'
+          dockerfile-path: bundles/spark/connectors/splunk-mimic/Dockerfile
+          owner: ${{ github.repository_owner }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-actor: ${{ github.actor }}

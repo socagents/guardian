@@ -241,13 +241,18 @@ jobs:
             CONNECTOR_CORTEX_DOCS=$(changed bundles/spark/connectors/cortex-docs/)
             # v0.2.27+ — Cortex XSIAM connector
             CONNECTOR_XSIAM=$(changed bundles/spark/connectors/xsiam/)
+            # v0.2.42+ — Splunk emulated service (kind:service). STANDALONE
+            # image (FROM python:3.12-slim, not the runtime base), so it is
+            # NOT force-rebuilt when the runtime base changes.
+            CONNECTOR_SPLUNK_MIMIC=$(changed bundles/spark/connectors/splunk-mimic/)
             # OR with runtime base — if it rebuilt, every connector
             # image's FROM resolves to a new digest, so they all need
-            # a fresh build to inherit the new layer.
+            # a fresh build to inherit the new layer. (splunk-mimic is
+            # excluded — it doesn't build FROM the runtime base.)
             if [ "$CONNECTOR_RUNTIME" = "1" ]; then
               CONNECTOR_XSOAR=1; CONNECTOR_WEB=1
               CONNECTOR_CORTEX_DOCS=1; CONNECTOR_XSIAM=1
-              echo "::notice::guardian-connector-runtime rebuilt — forcing rebuild of all 4 per-connector images (FROM dependency)"
+              echo "::notice::guardian-connector-runtime rebuilt — forcing rebuild of all 4 runtime-based per-connector images (FROM dependency)"
             fi
           fi
 
@@ -260,6 +265,7 @@ jobs:
             echo "connector_web=$CONNECTOR_WEB"
             echo "connector_cortex_docs=$CONNECTOR_CORTEX_DOCS"
             echo "connector_xsiam=$CONNECTOR_XSIAM"
+            echo "connector_splunk_mimic=$CONNECTOR_SPLUNK_MIMIC"
             echo "prev_version=$PREV_VERSION"
           } >> "$GITHUB_OUTPUT"
 
@@ -312,6 +318,13 @@ jobs:
               cd_action="🏷️  retag $PREV_VERSION"
             fi
             echo "| guardian-connector-cortex-docs | $CONNECTOR_CORTEX_DOCS | $cd_action |"
+            # splunk-mimic (hyphenated, standalone): explicit row.
+            if [ "$CONNECTOR_SPLUNK_MIMIC" = "1" ]; then
+              sm_action="🔨 rebuild"
+            else
+              sm_action="🏷️  retag $PREV_VERSION"
+            fi
+            echo "| guardian-connector-splunk-mimic | $CONNECTOR_SPLUNK_MIMIC | $sm_action |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Log in to GHCR
@@ -628,6 +641,48 @@ jobs:
           .github/scripts/push-with-retry.sh \
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
+      - name: Build or retag guardian-connector-splunk-mimic
+        # v0.2.42+ — emulated Splunk service (kind:service). STANDALONE
+        # image (FROM python:3.12-slim, NOT the runtime base), so there's
+        # no GUARDIAN_RUNTIME_VERSION build-arg and no force-rebuild on a
+        # runtime-base change.
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          MM: ${{ steps.ver.outputs.minor }}
+          CHANGED: ${{ steps.changed.outputs.connector_splunk_mimic }}
+          PREV_V: ${{ steps.changed.outputs.prev_version }}
+        run: |
+          IMG="$REGISTRY/$OWNER/guardian-connector-splunk-mimic"
+          if [ "$CHANGED" = "1" ]; then
+            echo "::notice::guardian-connector-splunk-mimic rebuilding (source changed)"
+            docker build \
+              -f bundles/spark/connectors/splunk-mimic/Dockerfile \
+              -t "$IMG:$V" \
+              -t "$IMG:$MM" \
+              -t "$IMG:latest" \
+              .
+          else
+            # First release with splunk-mimic in the manifest has no
+            # $PREV_V tag — build from source if the PREV pull fails so
+            # this release has a tagged image to pin.
+            echo "::notice::guardian-connector-splunk-mimic source unchanged — retagging $PREV_V → $V/$MM/latest (or building if PREV pull fails)"
+            if docker pull "$IMG:$PREV_V"; then
+              docker tag  "$IMG:$PREV_V" "$IMG:$V"
+              docker tag  "$IMG:$PREV_V" "$IMG:$MM"
+              docker tag  "$IMG:$PREV_V" "$IMG:latest"
+            else
+              echo "::warning::guardian-connector-splunk-mimic has no $PREV_V tag (first release with splunk-mimic in the manifest). Building from source instead."
+              docker build \
+                -f bundles/spark/connectors/splunk-mimic/Dockerfile \
+                -t "$IMG:$V" \
+                -t "$IMG:$MM" \
+                -t "$IMG:latest" \
+                .
+            fi
+          fi
+          .github/scripts/push-with-retry.sh \
+            "$IMG:$V" "$IMG:$MM" "$IMG:latest"
+
       # ──────────────────────────────────────────────────────────────
       # v0.3.0 — Image digest manifest.
       #
@@ -674,6 +729,7 @@ jobs:
             guardian-connector-web
             guardian-connector-cortex-docs
             guardian-connector-xsiam
+            guardian-connector-splunk-mimic
           )
 
           {
@@ -894,6 +950,7 @@ jobs:
             echo "- ghcr.io/$OWNER/guardian-connector-web:$V (dormant unless a web instance is created)"
             echo "- ghcr.io/$OWNER/guardian-connector-cortex-docs:$V (dormant unless a cortex-docs instance is created)"
             echo "- ghcr.io/$OWNER/guardian-connector-xsiam:$V (dormant unless a Cortex XSIAM instance is created)"
+            echo "- ghcr.io/$OWNER/guardian-connector-splunk-mimic:$V (emulated Splunk service; dormant unless a splunk-mimic instance is created)"
           } > "$NOTES"
 
           # v0.4.0 — reset-ui-password.sh standalone asset retired. The
@@ -982,7 +1039,8 @@ jobs:
           for img in guardian-agent guardian-updater guardian-browser \
                      guardian-connector-runtime \
                      guardian-connector-xsoar guardian-connector-web \
-                     guardian-connector-cortex-docs guardian-connector-xsiam; do
+                     guardian-connector-cortex-docs guardian-connector-xsiam \
+                     guardian-connector-splunk-mimic; do
             docker image rm -f \
               "$REGISTRY/$OWNER/$img:$V" \
               "$REGISTRY/$OWNER/$img:$MM" 2>/dev/null || true

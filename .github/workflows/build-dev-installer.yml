@@ -207,12 +207,17 @@ jobs:
             ["DIGEST_GUARDIAN_CONNECTOR_XSOAR"]="guardian-connector-xsoar"
             ["DIGEST_GUARDIAN_CONNECTOR_WEB"]="guardian-connector-web"
             ["DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS"]="guardian-connector-cortex-docs"
+            # v0.2.42 — emulated Splunk service (kind:service). Standalone
+            # image (not FROM the runtime base); pinned here so guardian-
+            # updater pulls a digest, not a tag.
+            ["DIGEST_GUARDIAN_CONNECTOR_SPLUNK_MIMIC"]="guardian-connector-splunk-mimic"
           )
           for KEY in \
             DIGEST_GUARDIAN_CONNECTOR_RUNTIME \
             DIGEST_GUARDIAN_CONNECTOR_XSOAR \
             DIGEST_GUARDIAN_CONNECTOR_WEB \
-            DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS; do
+            DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS \
+            DIGEST_GUARDIAN_CONNECTOR_SPLUNK_MIMIC; do
             SVC="${CONN_IMGS[$KEY]}"
             IMG="$REGISTRY/$OWNER/$SVC"
             DIGEST=""
