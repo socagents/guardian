@@ -426,7 +426,7 @@ class SqliteSessionStore:
         "You are the autonomous investigation-judge",
     )
 
-    def backfill_scheduled_by_from_titles(
+    def backfill_scheduled_by_for_autonomous_jobs(
         self, *, job_name: str = "autonomous-loop"
     ) -> int:
         """Tag legacy autonomous-job sessions that escaped tagging.
@@ -435,20 +435,38 @@ class SqliteSessionStore:
         create time (v0.2.40), but sessions created before that fix —
         especially turns that timed out before the old turn-end tag
         ran — carry empty meta and flood the operator's chat sidebar
-        (``exclude_scheduled`` can't hide an untagged row). This
-        idempotent boot migration stamps ``scheduled_by`` on any
-        still-untagged session whose title begins with a known
-        bundled-job prompt signature. It only fills NULL tags (never
-        overwrites an existing value) and is reversible — the operator
-        can still surface these via the sidebar's "show automated"
-        toggle. Returns the number of rows tagged.
+        (``exclude_scheduled`` can't hide an untagged row).
+
+        This idempotent boot migration stamps ``scheduled_by`` on any
+        still-untagged session that is identifiably a bundled-job run,
+        matched two ways against the known prompt signatures:
+          1. by ``title`` prefix (titled runs), AND
+          2. by the FIRST message's content prefix — this catches the
+             untitled ``message_count=1`` orphans whose turn timed out
+             before the auto-title step ever ran (the bulk of the
+             residue; their one message is the raw skill/seeder/judge
+             prompt).
+
+        Only fills NULL tags (never overwrites) and is reversible — the
+        operator can still surface these via the sidebar's "show
+        automated" toggle. Returns the number of rows tagged.
         """
         sigs = self._AUTONOMOUS_JOB_TITLE_SIGNATURES
         if not sigs:
             return 0
-        like = " OR ".join(["title LIKE ?"] * len(sigs))
+        like_title = " OR ".join(["title LIKE ?"] * len(sigs))
+        # First message = earliest by ts. Correlated subquery per row;
+        # the messages(session_id) access is index-covered and this runs
+        # once at boot, so the cost is negligible.
+        first_msg = (
+            "(SELECT m.content FROM messages m "
+            "WHERE m.session_id = sessions.id "
+            "ORDER BY m.ts ASC LIMIT 1)"
+        )
+        like_first = " OR ".join([f"{first_msg} LIKE ?"] * len(sigs))
         params: list[Any] = [job_name]
-        params.extend(f"{s}%" for s in sigs)
+        params.extend(f"{s}%" for s in sigs)  # title matches
+        params.extend(f"{s}%" for s in sigs)  # first-message matches
         with self._lock, self._conn() as c:
             cur = c.execute(
                 f"""
@@ -457,15 +475,15 @@ class SqliteSessionStore:
                          COALESCE(NULLIF(meta_json, ''), '{{}}'),
                          '$.scheduled_by', ?)
                  WHERE json_extract(meta_json, '$.scheduled_by') IS NULL
-                   AND ({like})
+                   AND (({like_title}) OR ({like_first}))
                 """,
                 params,
             )
             n = cur.rowcount
         if n:
             logger.info(
-                "SessionStore.backfill_scheduled_by_from_titles tagged %d "
-                "legacy autonomous-job session(s)", n,
+                "SessionStore.backfill_scheduled_by_for_autonomous_jobs "
+                "tagged %d legacy autonomous-job session(s)", n,
             )
         return n
 
@@ -606,11 +624,18 @@ class SqliteSessionStore:
         if active_only:
             clauses.append("ended_at IS NULL")
         if exclude_scheduled:
-            # `meta_json` is NOT NULL by schema, but defensive against
-            # historic rows where it might be the literal string "{}":
-            # `json_extract` on a missing key returns NULL, which is
-            # what we want.
-            clauses.append("json_extract(meta_json, '$.scheduled_by') IS NULL")
+            # Hide machine-driven sessions from the operator's sidebar:
+            #   - scheduled-job runs (`meta.scheduled_by`), AND
+            #   - subagent sessions (`meta.subagent_origin`) spawned by a
+            #     parent turn (v0.2.40) — these aren't operator
+            #     conversations either and otherwise flood the list.
+            # A FORK keeps `parent_session_id` but NOT `subagent_origin`,
+            # so operator forks stay visible. `json_extract` on a missing
+            # key returns NULL, which is what we want.
+            clauses.append(
+                "json_extract(meta_json, '$.scheduled_by') IS NULL "
+                "AND json_extract(meta_json, '$.subagent_origin') IS NULL"
+            )
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         # v0.6.6 — no default cap. `limit=None` (the new default) returns
         # everything. SQLite's LIMIT -1 means unlimited. Pagination via

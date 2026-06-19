@@ -19,8 +19,9 @@ The sidebar already filtered out scheduled-job sessions (`meta.scheduled_by`), b
 
 ### What ships
 - **`scheduled_by` is now stamped at session creation**, not turn end — so every job-driven session is tagged the moment it's created, even if the turn later fails. The auto-title step at turn end now only titles.
-- **Boot backfill for legacy sessions** — an idempotent, reversible migration tags pre-v0.2.40 autonomous-job sessions (matched by the bundled seeder/investigation-loop/judge prompt signatures) that escaped tagging, so the existing flood clears too.
-- **"Automated sessions" sidebar toggle** — under the New Chat button, defaults to `HIDDEN` (your conversations only). Flip to `SHOWN` to inspect loop runs. Remembered per browser (localStorage).
+- **Boot backfill for legacy sessions** — an idempotent, reversible migration tags pre-v0.2.40 autonomous-job sessions that escaped tagging. It matches the bundled seeder/investigation-loop/judge prompt signatures against **both the title AND the first message's content** — the latter catches the untitled `message_count=1` orphans (timed-out ticks whose auto-title never ran), which are the bulk of the residue.
+- **Subagent sessions are hidden too.** `exclude_scheduled` now also drops sessions tagged `meta.subagent_origin` (spawned by a parent turn). Operator forks keep `parent_session_id` but not `subagent_origin`, so they stay visible.
+- **"Automated sessions" sidebar toggle** — under the New Chat button, defaults to `HIDDEN` (your conversations only). Flip to `SHOWN` to inspect loop + subagent runs. Remembered per browser (localStorage).
 
 ### Files
 - `mcp/agent/app/api/chat/route.ts` (tag at create), `bundles/spark/mcp/src/usecase/session_store.py` + `bundles/spark/mcp/src/main.py` (backfill), `mcp/agent/app/page.tsx` + `mcp/agent/components/chat/session-sidebar.tsx` (toggle), `bundles/spark/mcp/tests/test_session_store_backfill.py`, `mcp/agent/app/help/user/page.tsx` (`#chat`).

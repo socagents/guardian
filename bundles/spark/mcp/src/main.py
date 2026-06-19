@@ -434,7 +434,7 @@ async def async_main(transport: str):
     # every boot — it only fills NULL tags on titles matching bundled-job
     # prompt signatures.
     try:
-        _bf = session_store.backfill_scheduled_by_from_titles()
+        _bf = session_store.backfill_scheduled_by_for_autonomous_jobs()
         if _bf:
             logger.info(
                 "Backfilled scheduled_by on %d legacy autonomous-job "
