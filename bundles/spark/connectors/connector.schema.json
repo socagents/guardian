@@ -41,6 +41,44 @@
       "items": { "type": "string" },
       "description": "Marketplace filter tags (e.g. \"siem\", \"red-team\", \"web\")."
     },
+    "kind": {
+      "type": "string",
+      "enum": ["connector", "service"],
+      "default": "connector",
+      "description": "Marketplace entry kind (v0.2.42+). 'connector' (the implicit default when absent) is an integration the agent calls — it advertises ≥1 tool and is reached internally over the compose network. 'service' is an emulated service (e.g. the Splunk mimic): it advertises ZERO agent tools and instead publishes a host port (see `service.ports`) so an EXTERNAL system (e.g. an XSOAR server) connects to it as if it were the real product. connector_loader.iter_registrations() skips kind:service so the agent never gets a handle to a service — preserving the credential/catalog boundary. Optional + additive: omitting it means 'connector', so no existing connector.yaml changes meaning."
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Service-kind runtime block (v0.2.42+). Only meaningful when `kind` is 'service'. Declares the host ports guardian-updater publishes for the service container so external systems can reach it (connectors are internal-only and never publish ports).",
+      "properties": {
+        "ports": {
+          "type": "array",
+          "description": "Ports the service container publishes on the Docker host. Each entry maps a container port to a host port (defaults to the same number) over tcp/udp. guardian-updater passes these to client.containers.run(..., ports=...).",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["container_port"],
+            "properties": {
+              "container_port": {
+                "type": "integer",
+                "description": "Port the service listens on inside the container (e.g. 8089 for splunkd)."
+              },
+              "host_port": {
+                "type": "integer",
+                "description": "Port published on the Docker host. Defaults to container_port when omitted."
+              },
+              "protocol": {
+                "type": "string",
+                "enum": ["tcp", "udp"],
+                "default": "tcp",
+                "description": "Transport protocol for the published port."
+              }
+            }
+          }
+        }
+      }
+    },
     "image": {
       "type": "string",
       "minLength": 1,
@@ -126,8 +164,8 @@
       "properties": {
         "tools": {
           "type": "array",
-          "minItems": 1,
-          "description": "Declared tools the connector exposes. Each entry becomes a registered MCP tool when an instance of the connector is configured + the connector is installed via the marketplace.",
+          "minItems": 0,
+          "description": "Declared tools the connector exposes. Each entry becomes a registered MCP tool when an instance of the connector is configured + the connector is installed via the marketplace. Connectors (kind:connector) MUST declare ≥1 tool — enforced in usecase.connector_schema.validate_connector_spec, not by minItems here, so that services (kind:service) may legitimately declare zero.",
           "items": {
             "type": "object",
             "additionalProperties": true,

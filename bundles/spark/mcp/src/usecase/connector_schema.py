@@ -186,6 +186,26 @@ def validate_connector_spec(
             msg += f" [+{len(errors) - 1} more issue(s)]"
         raise ConnectorSpecError(msg, source_path=source_path)
 
+    # Kind-conditional rules (v0.2.42+). The JSON schema relaxed
+    # spec.tools minItems to 0 so a service (kind:service) may declare
+    # none; we enforce the original "connector needs ≥1 tool" rule
+    # here so connectors still fail loudly, and we require a service to
+    # publish at least one port — a service with no ports is
+    # unreachable by the external systems that are its whole purpose.
+    kind = spec.get("kind") or "connector"
+    tools = (spec.get("spec") or {}).get("tools") or []
+    if kind == "connector" and len(tools) == 0:
+        raise ConnectorSpecError(
+            "connector kind requires at least one tool in spec.tools "
+            "(use `kind: service` for a tool-less emulated service)",
+            source_path=source_path,
+        )
+    if kind == "service" and not (spec.get("service") or {}).get("ports"):
+        raise ConnectorSpecError(
+            "service kind requires service.ports with at least one port",
+            source_path=source_path,
+        )
+
     if expected_id is not None and spec.get("id") != expected_id:
         raise ConnectorSpecError(
             f"connector.yaml id mismatch: declared id={spec.get('id')!r} "
