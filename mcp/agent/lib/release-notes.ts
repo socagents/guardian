@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.39",
+    date: "2026-06-19",
+    title: "Autonomous loop: fixed the silent timeouts behind empty sessions.",
+    highlights: [
+      "Root cause: the investigation loop's chat turn hit a hard 300s timeout (~60% of ticks), saving the prompt but not the assistant turn — so the session opened to just the seed prompt.",
+      "The chat-action timeout is now configurable (JOB_CHAT_ACTION_TIMEOUT_S) and defaults to 20 min, so long investigations actually finish.",
+      "Interrupted ticks no longer leave silent empty sessions: the session is closed and shows a '⚠️ Investigation interrupted' banner explaining it'll resume next tick.",
+      "Next up: filtering autonomous-loop sessions out of the chat sidebar so your own conversations are easy to find.",
+    ],
+  },
+  {
     version: "0.2.38",
     date: "2026-06-17",
     title: "API reference completed — every endpoint now fully documented.",

@@ -250,6 +250,18 @@ export async function getSessionTranscript(
       ) {
         return true;
       }
+      // v0.2.39 — keep `interrupted` system rows. The job scheduler
+      // appends these when an autonomous-loop turn is aborted (e.g.
+      // exceeded the chat-action timeout) so the operator opening the
+      // session sees WHY it stops at the seed prompt, instead of a
+      // silent message_count=1 orphan. Rendered as a warning banner.
+      if (
+        m.role === "system" &&
+        m.meta &&
+        m.meta["kind"] === "interrupted"
+      ) {
+        return true;
+      }
       return false;
     })
     .map((m) => ({

@@ -547,6 +547,24 @@ export function MessageList({
               />
             );
           }
+          // v0.2.39 — interrupted: the job scheduler appends this when
+          // an autonomous-loop turn was aborted (e.g. exceeded the
+          // chat-action timeout). Render a warning banner so the
+          // operator sees why the session stops at the seed prompt.
+          if (msg.meta?.["kind"] === "interrupted") {
+            return (
+              <div
+                key={`system-${idx}-${msg.timestamp}`}
+                role="status"
+                className="flex items-start gap-2 rounded-xl border border-outline-variant bg-error/10 px-4 py-3 text-xs leading-relaxed text-error"
+              >
+                <span className="material-symbols-outlined text-base shrink-0">
+                  warning
+                </span>
+                <span>{msg.content}</span>
+              </div>
+            );
+          }
           return null;
         }
 

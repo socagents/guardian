@@ -7803,6 +7803,47 @@ function JobsSubsystem() {
  </ul>
  </SubSection>
 
+ <SubSection
+ icon="timer"
+ title="Prompt-job timeout + interrupted sessions (v0.2.39)"
+ >
+ <p>
+ A <Code>prompt</Code> job streams the agent&apos;s{" "}
+ <Code>/api/chat</Code> SSE response. The scheduler bounds that
+ stream with a <strong>read timeout</strong> —{" "}
+ <Code>config.job_chat_action_timeout_s</Code> (env{" "}
+ <Code>JOB_CHAT_ACTION_TIMEOUT_S</Code>, default{" "}
+ <strong>1200s</strong>), applied as the inter-event gap via{" "}
+ <Code>{`httpx.Timeout(read=…, connect=15, write=60, pool=15)`}</Code>.
+ The default sits under the <Code>*/30</Code> autonomous-loop cron
+ so runs don&apos;t overlap.
+ </p>
+ <p className="mt-2">
+ <Term>Why it&apos;s configurable + generous.</Term> A full{" "}
+ <Code>xsoar_case_investigation</Code> turn makes 30–47 tool calls
+ plus diagram generation and can legitimately run for minutes. The
+ pre-v0.2.39 hard-coded <Code>300s</Code> aborted ~60% of loop
+ ticks <em>after</em> the user prompt persisted but{" "}
+ <em>before</em> the assistant turn — leaving silent{" "}
+ <Code>message_count=1</Code>, <Code>ended_at=null</Code> orphan
+ sessions that looked like &quot;the session won&apos;t load.&quot;
+ </p>
+ <p className="mt-2">
+ <Term>Orphan-marking.</Term> On timeout (or a chat-error event
+ with no completion), the scheduler&apos;s{" "}
+ <Code>_mark_interrupted_session</Code> reaches the session-store
+ singleton, appends a <Code>system</Code> message tagged{" "}
+ <Code>{`meta.kind="interrupted"`}</Code>, and calls{" "}
+ <Code>end_session</Code>. The session_id is known because the SSE{" "}
+ <Code>meta</Code> event arrives at turn start. The chat thread
+ renders that row as a warning banner (the transcript loader keeps{" "}
+ <Code>interrupted</Code> system rows alongside compaction +
+ plan-proposed), so opening a failed tick explains itself instead
+ of showing only the seed prompt. Best-effort — marking never
+ raises into the run-record path.
+ </p>
+ </SubSection>
+
  <SubSection icon="database" title="Schema">
  <Pre>{`jobs (
   name              TEXT PRIMARY KEY,        -- 'daily-soc-coverage'

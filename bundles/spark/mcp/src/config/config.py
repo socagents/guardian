@@ -78,6 +78,23 @@ class Settings(BaseSettings):
         ),
     )
 
+    # --- v0.2.39 — autonomous-job chat-action timeout ---
+    job_chat_action_timeout_s: int = Field(
+        1200,
+        validation_alias="JOB_CHAT_ACTION_TIMEOUT_S",
+        description=(
+            "Read timeout (seconds) the job scheduler applies to a "
+            "prompt-job's POST /api/chat stream. A long autonomous "
+            "investigation (the xsoar_case_investigation skill makes "
+            "30-47 tool calls + diagram generation) routinely exceeds "
+            "the old hard-coded 300s, which aborted the turn AFTER the "
+            "user prompt persisted but BEFORE the assistant turn — "
+            "leaving silent message_count=1 orphan sessions. Default "
+            "1200s (20 min) sits comfortably under the */30 cron so "
+            "runs don't overlap. Tune per install via the env var."
+        ),
+    )
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

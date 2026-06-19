@@ -10,6 +10,26 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.39] (unreleased) — *Autonomous loop: stop the silent timeouts + mark interrupted sessions*
+
+The autonomous investigation loop was silently failing ~60% of its ticks. Clicking those sessions in the chat sidebar showed only the seed prompt and nothing else — which read as "previous sessions won't load."
+
+### Root cause
+The `guardian-investigation-loop` job streams the agent's `/api/chat` response with a hard-coded **300-second** read timeout. A full `xsoar_case_investigation` turn makes 30–47 tool calls plus diagram generation and routinely runs longer than 5 minutes. When the timeout fired, the turn was aborted **after** the user prompt was persisted but **before** the assistant turn — leaving a silent `message_count=1`, `ended_at=null` orphan session. 24 of 40 recent loop runs failed this way (every one: `RuntimeError: agent /api/chat timed out after 300s`).
+
+### What ships
+- **The chat-action read timeout is now configurable and generous.** `JOB_CHAT_ACTION_TIMEOUT_S` (default **1200s / 20 min**, comfortably under the `*/30` cron) replaces the hard-coded 300s. The timeout is applied as the inter-event read gap (`connect`/`write`/`pool` stay short so a genuinely unreachable agent still fails fast). This alone lets long investigations actually finish.
+- **Failed ticks no longer leave silent orphans.** On timeout (or a chat-error event), the scheduler appends a `system` "⚠️ Investigation interrupted — …" message and **closes the session** (`ended_at` set). Opening one now shows a warning banner explaining it was interrupted (and that the loop resumes the partial investigation on its next tick), instead of a bare seed prompt.
+- The chat thread renders the new `interrupted` system row as a warning banner (the transcript loader keeps it alongside compaction-checkpoint + plan-proposed rows).
+
+### Not in this release
+- The chat sidebar is still dominated by autonomous-loop sessions (loop machinery floods the 500-row window). Hiding/grouping those + a source filter is the next change (the operator-experience pass).
+
+### Files
+- `bundles/spark/mcp/src/config/config.py`, `bundles/spark/mcp/src/usecase/job_scheduler.py`, `bundles/spark/mcp/tests/test_job_scheduler_interrupted.py`, `mcp/agent/lib/api/sessions.ts`, `mcp/agent/components/chat/message-list.tsx`, `mcp/agent/app/help/architecture/page.tsx` (`#jobs-subsystem`).
+
+---
+
 ## [v0.2.38] (unreleased) — *API reference completed: 65 stub endpoints filled + 28 uncataloged endpoints added*
 
 The in-product API reference (`/help/api`, the try-it-out tool, and the generated OpenAPI 3.0 spec) was ~62% complete — 65 entries carried the placeholder text *"Auto-added v0.7.1. Full request/response schema is a follow-up"* and ~28 real endpoints weren't listed at all. This release finishes the catalog: every entry's request body, query/path params, response shapes, and risk tier was reconciled against its actual Next.js route handler **and** the embedded-MCP handler it forwards to — no guessed schemas.

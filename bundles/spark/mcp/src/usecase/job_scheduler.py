@@ -123,11 +123,14 @@ MAX_CONSECUTIVE_FAILURES = 10
 # agent's lib/api/client.ts uses for SSR calls.
 DEFAULT_AGENT_INTERNAL_URL = "http://localhost:3000"
 
-# Per-job timeout when firing a chat action. The model loop can take
-# minutes to converge across multiple tool calls; 5 min is the same
-# cap operators see in `gh run watch` for CI smoke tests, generous
-# for any reasonable scheduled prompt without being unbounded.
-CHAT_ACTION_TIMEOUT_S = 300
+# Per-job read timeout when firing a chat action, in seconds. Fallback
+# default only — the live value comes from
+# `config.job_chat_action_timeout_s` (env JOB_CHAT_ACTION_TIMEOUT_S),
+# read at dispatch time. The old hard-coded 300s aborted long autonomous
+# investigations (30-47 tool calls) AFTER the user prompt persisted but
+# BEFORE the assistant turn, leaving silent message_count=1 orphans;
+# the config default is now 1200s. See _dispatch_chat.
+CHAT_ACTION_TIMEOUT_S = 1200
 
 
 ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[Any]]
@@ -1157,7 +1160,15 @@ class CroniterJobScheduler:
         # middleware-gated /api/chat. Same MCP_TOKEN the agent uses to reach
         # the embedded MCP; read from the canonical pydantic-settings source.
         from config.config import get_config  # noqa: PLC0415
-        mcp_token = (get_config().mcp_token or "").strip()
+        _cfg = get_config()
+        mcp_token = (_cfg.mcp_token or "").strip()
+        # v0.2.39 — read timeout is configurable (env
+        # JOB_CHAT_ACTION_TIMEOUT_S); the module constant is only a
+        # fallback if the field is somehow absent.
+        timeout_s = int(
+            getattr(_cfg, "job_chat_action_timeout_s", CHAT_ACTION_TIMEOUT_S)
+            or CHAT_ACTION_TIMEOUT_S
+        )
 
         text_parts: list[str] = []
         tool_calls: list[dict[str, Any]] = []
@@ -1211,7 +1222,13 @@ class CroniterJobScheduler:
 
         try:
             async with httpx.AsyncClient(
-                timeout=httpx.Timeout(CHAT_ACTION_TIMEOUT_S),
+                # read=timeout_s (the inter-event gap an autonomous
+                # investigation can legitimately need); connect/write/
+                # pool stay short so a genuinely unreachable agent fails
+                # fast instead of hanging for the full read budget.
+                timeout=httpx.Timeout(
+                    timeout_s, connect=15.0, write=60.0, pool=15.0,
+                ),
             ) as client:
                 async with client.stream(
                     "POST",
@@ -1289,13 +1306,28 @@ class CroniterJobScheduler:
                                     else json.dumps(data)
                                 )
         except httpx.TimeoutException as exc:
+            # The turn was aborted AFTER the user prompt persisted but
+            # (almost always) before the assistant turn did. Close the
+            # orphan session so it isn't a silent message_count=1 /
+            # ended_at=null row in the sidebar. The SSE `meta` event
+            # carrying session_id arrives at turn start, so it's known
+            # here even though the stream later stalled.
+            self._mark_interrupted_session(
+                meta.get("session_id"),
+                f"the chat turn exceeded the {timeout_s}s scheduler timeout",
+            )
             raise RuntimeError(
-                f"agent /api/chat timed out after {CHAT_ACTION_TIMEOUT_S}s"
+                f"agent /api/chat timed out after {timeout_s}s"
             ) from exc
 
         if last_error and not final_response:
             # Stream emitted an `error` event without a `done` —
-            # surface it as the run's failure.
+            # surface it as the run's failure. Same orphan-close
+            # treatment as a timeout: the assistant turn never landed.
+            self._mark_interrupted_session(
+                meta.get("session_id"),
+                f"the chat turn ended with an error: {str(last_error)[:200]}",
+            )
             raise RuntimeError(f"chat error event: {last_error}")
 
         return {
@@ -1305,6 +1337,48 @@ class CroniterJobScheduler:
             "tool_calls": tool_calls,
             "tool_call_count": len(tool_calls),
         }
+
+    def _mark_interrupted_session(
+        self, session_id: str | None, reason: str
+    ) -> None:
+        """Close + annotate a chat session whose turn was aborted.
+
+        Appends a visible system 'interrupted' marker and sets
+        ended_at, so a failed autonomous-loop tick doesn't leave a
+        silent message_count=1 / ended_at=null orphan in the chat
+        sidebar — the operator opening it sees WHY it's empty instead
+        of just the seed prompt. Reaches the process-wide session
+        store via its singleton accessor (the scheduler takes no
+        store dependency in __init__). Best-effort: any failure here
+        is logged, never raised into the run-record path.
+        """
+        if not session_id:
+            return
+        try:
+            from usecase.session_store import session_store  # noqa: PLC0415
+            store = session_store()
+            if store is None:
+                return
+            store.append_message(
+                session_id,
+                role="system",
+                content=(
+                    "⚠️ Investigation interrupted — "
+                    f"{reason}. The autonomous loop resumes the partial "
+                    "investigation on its next tick."
+                ),
+                meta={"kind": "interrupted"},
+            )
+            store.end_session(session_id)
+            logger.info(
+                "JobScheduler: marked session %s interrupted (%s)",
+                session_id, reason,
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort cleanup
+            logger.warning(
+                "JobScheduler: failed to mark interrupted session %s: %s",
+                session_id, exc,
+            )
 
     # ─── External APIs (used by /api/v1/jobs) ──────────────────
 
