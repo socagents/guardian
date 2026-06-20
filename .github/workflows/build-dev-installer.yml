@@ -97,6 +97,14 @@ jobs:
       GHCR_USER: ${{ github.actor }}
       GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Token PERSISTED into the VM's /opt/guardian/.env for ongoing pulls.
+      # The job's GITHUB_TOKEN is revoked the instant this job ends, so baking
+      # it leaves the updater with a dead credential (403 denied on every pull
+      # until the next deploy). Prefer a long-lived PAT (repo secret
+      # GUARDIAN_REGISTRY_PAT, scope read:packages); fall back to GITHUB_TOKEN
+      # when the secret isn't set (no regression). NB: GitHub forbids secret
+      # names starting with GITHUB_, so the secret is GUARDIAN_REGISTRY_PAT.
+      REGISTRY_PERSIST_TOKEN: ${{ secrets.GUARDIAN_REGISTRY_PAT || secrets.GITHUB_TOKEN }}
       COMMIT_SHA: ${{ github.sha }}
     steps:
       - name: Reset workspace ownership (pre-checkout)
@@ -323,16 +331,17 @@ jobs:
           # log AND a local file for diagnostics if something goes
           # sideways.
           #
-          # Pass the workflow's GHCR creds to the installer so a FRESH
-          # install (no /opt/guardian/.env yet) can authenticate without
-          # an interactive /dev/tty prompt (which doesn't exist in CI).
-          # $GHCR_TOKEN is the job's GITHUB_TOKEN — it has read access to
-          # this repo's packages. On upgrades the installer reuses the
-          # stored token, so this is only load-bearing for the first
-          # install on a fresh guardian-vm.
+          # Pass GHCR creds to the installer so a FRESH install (no
+          # /opt/guardian/.env yet) can authenticate without an interactive
+          # /dev/tty prompt (which doesn't exist in CI). Use the PERSISTED
+          # token (REGISTRY_PERSIST_TOKEN = the long-lived GUARDIAN_REGISTRY_PAT
+          # when set, else GITHUB_TOKEN) — NOT the job's GITHUB_TOKEN, which is
+          # revoked the instant this job ends and would leave the updater with a
+          # dead pull credential. The installer reuses the stored token on
+          # upgrades, so a fresh install must persist a durable one.
           sudo env \
             GUARDIAN_REGISTRY_USER="$GHCR_USER" \
-            GUARDIAN_REGISTRY_TOKEN="$GHCR_TOKEN" \
+            GUARDIAN_REGISTRY_TOKEN="$REGISTRY_PERSIST_TOKEN" \
             /home/ayman/guardian-installer-dev 2>&1 | tee /tmp/guardian-install.log
           echo "::endgroup::"
           echo "::notice::Auto-deploy complete on guardian-vm — guardian-agent recreated with new digest. Agent-side smoke runs next (see CLAUDE.md § Agent-side headless smoke)."
