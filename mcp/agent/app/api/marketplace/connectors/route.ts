@@ -120,11 +120,12 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
     ],
     versions: [
       {
-        version: "0.2.3",
+        version: "0.2.4",
         date: "2026-06-20",
         changes: [
           "Integration troubleshooting (v0.2.42): get_integration_status reports each configured integration instance's enabled state + last fetch/test error (the diagnostic for a failing SplunkPy fetch); test_integration_instance re-runs an instance's Test button and surfaces the exact error; get_integration_fetch_history reads recent fetch runs (the XSOAR 8 fetch-error source).",
           "Playbook monitoring (v0.2.42): get_playbook_state reports a running playbook's per-task state on an incident (including sub-playbooks) + whether it ran to success + each failed task's error — the monitoring companion to run_playbook.",
+          "run_playbook now opens the war room (POST /incident/investigate) for a fetched/pending incident before assigning the playbook; list_incidents gains source_brand / source_instance filters.",
         ],
       },
       {

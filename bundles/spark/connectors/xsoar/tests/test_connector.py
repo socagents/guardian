@@ -1664,3 +1664,42 @@ def test_get_playbook_state_no_playbook(monkeypatch):
     out = run(connector.xsoar_get_playbook_state("42"))
     assert out["ok"] is True
     assert out["has_playbook"] is False
+
+
+# ─── run_playbook investigation bootstrap + list_incidents source (v0.2.42) ──
+
+def test_run_playbook_opens_investigation_then_setplaybook(monkeypatch):
+    f = _ScriptedFetcher(replies={
+        "/incident/investigate": {"id": "42", "investigation": {"id": "42"}},
+        "/entry/execute/sync": {"data": [{"type": 1,
+                                          "contents": "Changed playbook from 'Splunk Generic' to 'My PB'."}]},
+    })
+    _install_fetcher(monkeypatch, f)
+
+    out = run(connector.xsoar_run_playbook("42", "My PB"))
+    assert out["ok"] is True
+    assert out["opened_investigation"] is True
+    paths = [p for (_m, p, _b) in f.calls]
+    assert "/incident/investigate" in paths
+    # the war room is opened BEFORE setPlaybook runs
+    assert paths.index("/incident/investigate") < paths.index("/entry/execute/sync")
+    exec_call = [b for (_m, p, b) in f.calls if p == "/entry/execute/sync"][0]
+    assert "setPlaybook" in str(exec_call) and "My PB" in str(exec_call)
+
+
+def test_list_incidents_source_brand_builds_query(monkeypatch):
+    rf = _RecordingFetcher(post_reply={"total": 0, "data": []})
+    _install_fetcher(monkeypatch, rf)
+    run(connector.xsoar_list_incidents(source_brand="SplunkPy v2"))
+    q = rf.calls[0][2]["filter"]["query"]
+    assert q == 'sourceBrand:"SplunkPy v2"'
+
+
+def test_list_incidents_source_instance_and_query_combined(monkeypatch):
+    rf = _RecordingFetcher(post_reply={"total": 0, "data": []})
+    _install_fetcher(monkeypatch, rf)
+    run(connector.xsoar_list_incidents(query="status:active", source_instance="splunk-mimic"))
+    q = rf.calls[0][2]["filter"]["query"]
+    assert "(status:active)" in q
+    assert 'sourceInstance:"splunk-mimic"' in q
+    assert " and " in q

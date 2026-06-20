@@ -17,7 +17,7 @@
 # Logical paths + request bodies are identical across generations.
 
 id: "xsoar"
-version: "0.2.3"
+version: "0.2.4"
 description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, enrich with indicators and evidence, and import + run playbooks. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
 displayName: "Cortex XSOAR"
 tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]
@@ -89,6 +89,8 @@ spec:
         - { name: "to_date",   type: "string",  description: "ISO upper bound on created time.", required: false }
         - { name: "status",    type: "array",   description: "Status codes (ints): 0 pending, 1 active/open, 2 closed, 3 archived. e.g. [1] for open cases.", required: false }
         - { name: "severity",  type: "array",   description: "Severity levels (ints 1-4): 1 low, 2 medium, 3 high, 4 critical. e.g. [3,4].", required: false }
+        - { name: "source_brand",    type: "string", description: "Filter to incidents FETCHED by an integration brand, e.g. 'SplunkPy v2' (the sourceBrand field) — find the cases a specific integration created.", required: false }
+        - { name: "source_instance", type: "string", description: "Filter to incidents fetched by a specific configured instance, e.g. 'splunk-mimic' (the sourceInstance field).", required: false }
         - { name: "page",      type: "integer", description: "Zero-based page index (default 0).", required: false }
         - { name: "page_size", type: "integer", description: "Page size (default 50, max 200).", required: false }
       returns: { type: "object", description: "{ ok, incidents: [{id, name, type, severity, status, owner, created, modified}], total }" }
@@ -436,18 +438,22 @@ spec:
       returns: { type: "object", description: "{ ok, incident_id, name, created }" }
 
     - name: "run_playbook"
-      method: "POST /entry/execute/sync (!setPlaybook, in the incident's war room)"
+      method: "POST /incident/investigate + POST /entry/execute/sync (!setPlaybook)"
       description: |
-        Assign and run a playbook on an existing XSOAR incident — runs
-        `!setPlaybook` in the incident's OWN war room (an incident id is its
-        investigation id) to assign + start it. Does NOT need playground_id (it
-        runs in the incident's investigation), but the incident must have one
-        (created with createInvestigation). The v6 /inv-playbook REST endpoint
-        303-redirects on Cortex 8; the war-room command works on both.
+        Assign and run a playbook on an XSOAR incident — including a FETCHED /
+        pending one. First OPENS the incident's war room (POST
+        /incident/investigate) if it has none — a fetched incident is pending
+        with no investigation, and `!setPlaybook` can't target an incident
+        without one — then runs `!setPlaybook` in the incident's own war room to
+        assign + start the playbook. Monitor the run with get_playbook_state.
+        Opening the war room uses the direct REST call; on a gateway that
+        redirects it, the Core REST API integration is used as a fallback
+        (needs playground_id). The v6 /inv-playbook REST endpoint 303-redirects
+        on Cortex 8; the war-room command works on both generations.
       args:
-        - { name: "incident_id", type: "string", description: "The XSOAR incident id (its investigation id) to run on.", required: true }
+        - { name: "incident_id", type: "string", description: "The XSOAR incident id (its investigation id) to run on. May be a freshly fetched/pending incident — its war room is opened automatically.", required: true }
         - { name: "playbook_id", type: "string", description: "The playbook NAME to assign and run.", required: true }
-      returns: { type: "object", description: "{ ok, incident_id, playbook_id, output }" }
+      returns: { type: "object", description: "{ ok, incident_id, playbook_id, opened_investigation, output }" }
 
     - name: "get_playbook_state"
       method: "GET /investigation/{id}/workplan (v6) | core-api-get (v8)"

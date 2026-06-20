@@ -589,6 +589,8 @@ async def xsoar_list_incidents(
     to_date: Optional[str] = None,
     status: Optional[list] = None,
     severity: Optional[list] = None,
+    source_brand: Optional[str] = None,
+    source_instance: Optional[str] = None,
     page: int = 0,
     page_size: int = 50,
 ) -> dict:
@@ -615,6 +617,11 @@ async def xsoar_list_incidents(
         severity: Subset of XSOAR severity LEVELS as integers 1-4:
             1 = low, 2 = medium, 3 = high, 4 = critical.
             e.g. severity=[3, 4] for "high and critical".
+        source_brand: Filter to incidents FETCHED by an integration brand,
+            e.g. "SplunkPy v2" (the `sourceBrand` field). Use to find the
+            cases a specific integration created. Added to the search query.
+        source_instance: Filter to incidents fetched by a specific configured
+            instance, e.g. "splunk-mimic" (the `sourceInstance` field).
         page: Zero-based page index (default 0).
         page_size: Page size (default 50, max 200).
 
@@ -636,8 +643,18 @@ async def xsoar_list_incidents(
         "size": size,
         "sort": [{"field": "created", "asc": False, "fieldType": "date"}],
     }
+    # Fold the source filters into the Lucene query (sourceBrand / sourceInstance
+    # are searchable query fields, not structured filter keys); values with
+    # spaces must be double-quoted. AND them with any caller query.
+    clauses: list[str] = []
     if query:
-        filt["query"] = query
+        clauses.append(f"({query})")
+    if source_brand:
+        clauses.append(f'sourceBrand:"{source_brand}"')
+    if source_instance:
+        clauses.append(f'sourceInstance:"{source_instance}"')
+    if clauses:
+        filt["query"] = " and ".join(clauses)
     if from_date:
         filt["fromDate"] = from_date
     if to_date:
@@ -661,11 +678,13 @@ async def xsoar_list_incidents(
         "total": total,
         "result_count": len(incidents),
         "applied_filters": {
-            "query": query,
+            "query": filt.get("query"),
             "from_date": from_date,
             "to_date": to_date,
             "status": status_list,
             "severity": severity_list,
+            "source_brand": source_brand,
+            "source_instance": source_instance,
             "page": page,
             "page_size": size,
         },
@@ -2220,15 +2239,55 @@ async def xsoar_create_incident(
 # ─── xsoar_run_playbook ──────────────────────────────────────────────
 
 
+async def _ensure_investigation(fetcher: XSOARFetcher, incident_id: str) -> bool:
+    """Open the incident's investigation (war room) if it has none.
+
+    A FETCHED / pending incident (status 0) has no investigation, so a war-room
+    command like `!setPlaybook` can't target it ("investigation not found").
+    `POST /incident/investigate {id}` opens it — investigationId == incident id
+    — and you MUST investigate BEFORE running a war-room command. Best-effort +
+    idempotent: an already-open incident no-ops. On a generation/gateway where
+    the direct REST redirects, fall back to the Core REST API integration in
+    the playground (needs playground_id). Returns True if an open call ran.
+    """
+    body = {"id": str(incident_id)}
+    try:
+        await fetcher.post("/incident/investigate", body)
+        return True
+    except XSOARError as exc:
+        # Direct call redirected/failed (some gateways block it, like
+        # /playbook/import) — retry via the Core REST API in the playground.
+        cfg = _get_xsoar_config()
+        playground_id = cfg.get("playground_id")
+        if not playground_id:
+            # Can't open it here; let the caller's setPlaybook surface the
+            # real "investigation not found" if it's genuinely missing.
+            _ = exc
+            return False
+        payload = json.dumps(body, separators=(",", ":"))
+        try:
+            await _execute_command(
+                fetcher, str(playground_id),
+                f"!core-api-post uri=/incident/investigate body=`{payload}`",
+            )
+            return True
+        except XSOARError:  # pragma: no cover — best effort
+            return False
+
+
 @_wrap_xsoar_call
 async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
-    """Assign + run a playbook on an existing XSOAR incident.
+    """Assign + run a playbook on an XSOAR incident — opening the war room first.
 
     Runs the `!setPlaybook` war-room command IN the target incident's own war
     room (an incident id IS its investigation id), which assigns the playbook
-    and starts it. This does NOT use the playground — it runs in the incident's
-    investigation directly — so it does NOT require playground_id (but the
-    incident must have an investigation: created with createInvestigation).
+    and starts it. A FETCHED / pending incident has no war room yet, so this
+    first opens its investigation (`POST /incident/investigate`) — making the
+    tool work on freshly-fetched incidents, not just ones already being
+    investigated. Does NOT require playground_id on a tenant where
+    /incident/investigate is served directly (it's used only as the Core-REST
+    fallback when a gateway redirects the direct call). Monitor the run with
+    xsoar_get_playbook_state.
 
     Cortex 8 note: the v6 `POST /inv-playbook/{pb}/{inv}` REST endpoint is not
     served on Cortex cloud (it 303-redirects); the war-room command path works
@@ -2239,8 +2298,8 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
         playbook_id: The playbook name to assign and run.
 
     Returns:
-        {ok, incident_id, playbook_id, output}, or {ok:false, error} when the
-        playbook isn't found / the incident has no investigation.
+        {ok, incident_id, playbook_id, opened_investigation, output}, or
+        {ok:false, error} when the playbook isn't found.
     """
     if not incident_id:
         raise ValueError("incident_id is required")
@@ -2248,6 +2307,10 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
         raise ValueError("playbook_id is required")
 
     fetcher = _get_fetcher()
+    # Open the war room first — a fetched/pending incident has none, and
+    # !setPlaybook can't target an incident without an investigation.
+    opened = await _ensure_investigation(fetcher, str(incident_id))
+
     # Run in the incident's OWN investigation (not the playground).
     result = await _execute_command(
         fetcher, str(incident_id), f"!setPlaybook name={_quote_arg(playbook_id)}"
@@ -2258,10 +2321,12 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
             f"run_playbook failed: {output}",
             incident_id=incident_id,
             playbook_id=playbook_id,
+            opened_investigation=opened,
         )
     return {
         "incident_id": incident_id,
         "playbook_id": playbook_id,
+        "opened_investigation": opened,
         "output": output,
     }
 
