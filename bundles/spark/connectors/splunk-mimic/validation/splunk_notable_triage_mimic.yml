@@ -4,9 +4,10 @@ name: Splunk Notable Triage (mimic-safe)
 description: >-
   Validation playbook for the Splunk (Emulated) service. Every automation task
   uses ONLY SplunkPy commands the mimic serves over the splunkd REST API
-  (search/jobs, data/indexes) — no HEC, no KV-store data ops, no ES notable
-  mirroring. Assign it to a fetched "Splunk Notable" incident with
-  xsoar_run_playbook, then confirm it ran clean with xsoar_get_playbook_state.
+  (search/jobs, data/indexes), each SELF-CONTAINED (no cross-task context
+  chaining) so it runs clean against the mimic. No HEC, no KV-store data ops,
+  no ES notable mirroring. Assign it to an incident with xsoar_run_playbook,
+  then confirm it ran clean with xsoar_get_playbook_state.
 starttaskid: "0"
 tasks:
   "0":
@@ -33,15 +34,19 @@ tasks:
     task:
       id: 22222222-2222-2222-2222-222222222222
       version: -1
-      name: Create Splunk search job
-      description: Create a search job over the notable index (splunkd search/jobs REST).
-      script: '|||splunk-job-create'
+      name: Search Splunk notables
+      description: Run a notable search against Splunk (splunkd search/jobs REST).
+      script: '|||splunk-search'
       type: regular
       iscommand: true
       brand: ""
     scriptarguments:
       query:
-        simple: 'search index=notable | head 5'
+        simple: 'search index=notable | head 3'
+      earliest_time:
+        simple: '-24h'
+      latest_time:
+        simple: 'now'
     nexttasks:
       '#none#':
         - "2"
@@ -55,15 +60,12 @@ tasks:
     task:
       id: 33333333-3333-3333-3333-333333333333
       version: -1
-      name: Fetch search results
-      description: Read the created job's results by SID (search/jobs/{sid}/results).
-      script: '|||splunk-results'
+      name: List Splunk indexes
+      description: Environment context (splunkd data/indexes REST).
+      script: '|||splunk-get-indexes'
       type: regular
       iscommand: true
       brand: ""
-    scriptarguments:
-      sid:
-        simple: ${Splunk.Job.SID}
     nexttasks:
       '#none#':
         - "3"
@@ -73,28 +75,9 @@ tasks:
   "3":
     id: "3"
     taskid: 44444444-4444-4444-4444-444444444444
-    type: regular
-    task:
-      id: 44444444-4444-4444-4444-444444444444
-      version: -1
-      name: List Splunk indexes
-      description: Environment context (splunkd data/indexes REST).
-      script: '|||splunk-get-indexes'
-      type: regular
-      iscommand: true
-      brand: ""
-    nexttasks:
-      '#none#':
-        - "4"
-    separatecontext: false
-    view: |-
-      {"position":{"x":50,"y":500}}
-  "4":
-    id: "4"
-    taskid: 55555555-5555-5555-5555-555555555555
     type: title
     task:
-      id: 55555555-5555-5555-5555-555555555555
+      id: 44444444-4444-4444-4444-444444444444
       version: -1
       name: Done
       type: title
@@ -102,9 +85,9 @@ tasks:
       brand: ""
     separatecontext: false
     view: |-
-      {"position":{"x":50,"y":650}}
+      {"position":{"x":50,"y":500}}
 view: |-
-  {"linkLabelsPosition":{},"paper":{"dimensions":{"height":700,"width":380,"x":50,"y":50}}}
+  {"linkLabelsPosition":{},"paper":{"dimensions":{"height":550,"width":380,"x":50,"y":50}}}
 inputs: []
 outputs: []
 fromversion: 6.0.0

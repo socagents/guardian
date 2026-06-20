@@ -2519,13 +2519,18 @@ async def xsoar_get_playbook_state(incident_id: str) -> dict:
     await _enrich_failed_task_errors(fetcher, str(incident_id), failed)
 
     overall_state = inv.get("state")
+    # XSOAR reports the PLAYBOOK-level state lowercased ("completed" /
+    # "inprogress" / "failed") even though per-TASK states are capitalized
+    # ("Completed" / "Error" / ...). Compare case-insensitively so a clean run
+    # isn't reported as ran_to_success=false.
+    completed = str(overall_state or "").lower() == "completed"
     return {
         "incident_id": incident_id,
         "has_playbook": True,
         "playbook_id": inv.get("playbookId"),
         "playbook_name": inv.get("name") or inv.get("playbookName"),
         "overall_state": overall_state,
-        "ran_to_success": overall_state == "Completed" and not failed,
+        "ran_to_success": completed and not failed,
         "counts": counts,
         "task_total": sum(counts.values()),
         "failed_tasks": failed,

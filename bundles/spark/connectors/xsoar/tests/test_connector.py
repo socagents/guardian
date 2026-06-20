@@ -1574,7 +1574,10 @@ _WORKPLAN_OK = {
     "invPlaybook": {
         "playbookId": "Splunk Notable Triage",
         "name": "Splunk Notable Triage",
-        "state": "Completed",
+        # XSOAR returns the playbook-level state LOWERCASE ("completed") even
+        # though per-task states are capitalized — ran_to_success must match
+        # case-insensitively.
+        "state": "completed",
         "tasks": {
             "0": {"id": "0", "state": "Completed", "task": {"name": "Start"}},
             "1": {"id": "1", "state": "Completed",
@@ -1622,7 +1625,7 @@ def test_get_playbook_state_success(monkeypatch):
     assert out["ok"] is True
     assert out["has_playbook"] is True
     assert out["ran_to_success"] is True
-    assert out["overall_state"] == "Completed"
+    assert out["overall_state"] == "completed"
     assert out["counts"]["completed"] == 2
     assert out["task_total"] == 2
     assert out["failed_tasks"] == []
