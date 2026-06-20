@@ -38,7 +38,7 @@ export interface ReleaseNote {
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "0.2.42",
-    date: "2026-06-19",
+    date: "2026-06-20",
     title: "Emulated services in the marketplace — first up: Splunk.",
     highlights: [
       "New marketplace kind: emulated SERVICES (alongside connectors). A service runs as a container Guardian publishes on a host port so an EXTERNAL system reaches it — the agent never calls it.",
@@ -46,6 +46,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       "splunk-search + fetch-incidents + the Indicator Hunting playbook run end-to-end against the mimic with no real Splunk server.",
       "The mimic emits a rotating stream of notables on a fixed time grid (~1/min), so each XSOAR fetch picks up NEW simulated incidents (varied rules/urgencies/domains) while re-queries dedup cleanly.",
       "Services show a 'Service' badge + a Services filter on /connectors; they advertise zero agent tools and skip the agent's Test Connection (they're reached by external systems, not the agent).",
+      "XSOAR connector gains 3 integration-troubleshooting tools: check an integration instance's health + last fetch error, re-run its Test button, and read its fetch-run history — so you diagnose a failing fetch from Guardian, not by reading XSOAR logs.",
     ],
   },
   {

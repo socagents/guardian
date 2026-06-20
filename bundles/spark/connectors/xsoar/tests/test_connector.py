@@ -937,6 +937,9 @@ def test_all_exported_tools_are_callable():
         "xsoar_search_evidence",
         "xsoar_health_check",
         "xsoar_list_integrations",
+        "xsoar_get_integration_status",
+        "xsoar_test_integration_instance",
+        "xsoar_get_integration_fetch_history",
         "xsoar_run_command",
         "xsoar_enrich_indicator",
         "xsoar_complete_task",
@@ -1032,6 +1035,220 @@ def test_list_integrations_include_commands_false_is_name_only(monkeypatch):
     assert out["total"] == 1
     assert "commands" not in out["integrations"][0]
     assert "command_count" not in out["integrations"][0]
+
+
+# ─── get_integration_status / test_integration_instance (v0.2.42) ─────
+
+# POST /settings/integration/search response carrying the `health` block —
+# a map keyed per instance with {brand, instance:<name>, lastError, modified}.
+# A non-empty lastError == that instance's fetch/test is failing.
+_HEALTH_SEARCH_REPLY = {
+    "instances": [
+        {"brand": "Splunk", "name": "splunk_prod", "enabled": "true",
+         "modified": "t-inst", "data": [{"name": "host", "value": "guardian-host"}]},
+        {"brand": "VirusTotal", "name": "VT_prod", "enabled": "true"},
+        {"brand": "Splunk", "name": "splunk_old", "enabled": "false"},
+    ],
+    "health": {
+        "id-1": {"brand": "Splunk", "instance": "splunk_prod",
+                 "lastError": "Could not fetch Splunk time", "modified": "t-health"},
+        "id-2": {"brand": "VirusTotal", "instance": "VT_prod",
+                 "lastError": "", "modified": "t2"},
+    },
+}
+
+
+def test_get_integration_status_surfaces_last_error(monkeypatch):
+    rf = _RecordingFetcher(post_reply=_HEALTH_SEARCH_REPLY)
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_get_integration_status())
+    assert out["ok"] is True
+    assert out["total"] == 3
+    assert out["unhealthy_count"] == 1
+    by_name = {i["instance_name"]: i for i in out["integrations"]}
+    splunk = by_name["splunk_prod"]
+    assert splunk["healthy"] is False
+    assert splunk["last_error"] == "Could not fetch Splunk time"
+    assert splunk["enabled"] is True
+    assert splunk["modified"] == "t-health"  # health row wins over instance
+    vt = by_name["VT_prod"]
+    assert vt["healthy"] is True
+    assert vt["last_error"] is None
+
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/settings/integration/search")
+
+
+def test_get_integration_status_unhealthy_only(monkeypatch):
+    rf = _RecordingFetcher(post_reply=_HEALTH_SEARCH_REPLY)
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_get_integration_status(unhealthy_only=True))
+    assert out["total"] == 1
+    assert out["unhealthy_count"] == 1
+    assert out["integrations"][0]["instance_name"] == "splunk_prod"
+
+
+def test_get_integration_status_brand_filter(monkeypatch):
+    rf = _RecordingFetcher(post_reply=_HEALTH_SEARCH_REPLY)
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_get_integration_status(brand="splunk"))
+    names = {i["instance_name"] for i in out["integrations"]}
+    assert names == {"splunk_prod", "splunk_old"}
+    assert out["unhealthy_count"] == 1  # only splunk_prod has a lastError
+
+
+def test_test_integration_instance_success(monkeypatch):
+    sf = _ScriptedFetcher(replies={
+        "/settings/integration/search": _HEALTH_SEARCH_REPLY,
+        "/settings/integration/test": {"success": True, "message": "ok"},
+    })
+    _install_fetcher(monkeypatch, sf)
+
+    out = run(connector.xsoar_test_integration_instance("splunk_prod"))
+    assert out["ok"] is True
+    assert out["success"] is True
+    assert out["message"] == "ok"
+    assert out["instance_name"] == "splunk_prod"
+    assert out["brand"] == "Splunk"
+
+    # The full resolved instance object is POSTed to /test verbatim.
+    test_calls = [c for c in sf.calls if c[1] == "/settings/integration/test"]
+    assert len(test_calls) == 1
+    posted = test_calls[0][2]
+    assert posted["name"] == "splunk_prod"
+    assert posted["data"] == [{"name": "host", "value": "guardian-host"}]
+
+
+def test_test_integration_instance_failure_surfaces_message(monkeypatch):
+    sf = _ScriptedFetcher(replies={
+        "/settings/integration/search": _HEALTH_SEARCH_REPLY,
+        "/settings/integration/test": {
+            "success": False, "message": "Could not fetch Splunk time"},
+    })
+    _install_fetcher(monkeypatch, sf)
+
+    out = run(connector.xsoar_test_integration_instance("splunk_prod"))
+    assert out["ok"] is True            # the call completed…
+    assert out["success"] is False      # …but the test itself failed
+    assert out["message"] == "Could not fetch Splunk time"
+
+
+def test_test_integration_instance_unwraps_response_envelope(monkeypatch):
+    sf = _ScriptedFetcher(replies={
+        "/settings/integration/search": _HEALTH_SEARCH_REPLY,
+        "/settings/integration/test": {"response": {"success": True, "message": "good"}},
+    })
+    _install_fetcher(monkeypatch, sf)
+
+    out = run(connector.xsoar_test_integration_instance("splunk_prod"))
+    assert out["success"] is True
+    assert out["message"] == "good"
+
+
+def test_test_integration_instance_not_found_is_error_envelope(monkeypatch):
+    sf = _ScriptedFetcher(replies={
+        "/settings/integration/search": _HEALTH_SEARCH_REPLY,
+    })
+    _install_fetcher(monkeypatch, sf)
+
+    out = run(connector.xsoar_test_integration_instance("does_not_exist"))
+    assert out["ok"] is False
+    assert "No configured integration instance" in out["error"]
+    # never reached the /test endpoint
+    assert not any(c[1] == "/settings/integration/test" for c in sf.calls)
+
+
+def test_test_integration_instance_v8_unavailable_returns_pointer(monkeypatch):
+    """On v8, /settings/integration/test 404s — surface a clear pointer."""
+
+    class _V8TestFetcher:
+        is_v8 = True
+
+        def __init__(self):
+            self.calls: list = []
+
+        async def post(self, path, body=None, **kw):
+            self.calls.append(("POST", path, body))
+            if path.endswith("/settings/integration/test"):
+                raise XSOARRequestError(
+                    "HTTP 404 from /settings/integration/test (not served)"
+                )
+            return _HEALTH_SEARCH_REPLY
+
+    f = _V8TestFetcher()
+    _install_fetcher(monkeypatch, f)
+
+    out = run(connector.xsoar_test_integration_instance("splunk_prod"))
+    assert out["ok"] is False
+    assert out.get("v8_test_unavailable") is True
+    assert "Cortex XSOAR 8" in out["error"]
+    assert "fetch_history" in out["error"] or "fetch-history" in out["error"] \
+        or "get_integration_fetch_history" in out["error"]
+
+
+# ─── get_integration_fetch_history (v0.2.42) ─────────────────────────
+
+# POST /settings/integration/fetch-history response — `data` rows each with a
+# status + lastError (the v8 fetch-error source).
+_FETCH_HISTORY_REPLY = {
+    "data": [
+        {"status": "failed", "lastError": "Could not fetch Splunk time",
+         "lastPullTime": "2026-06-20T05:00:00Z", "numOfIncidents": 0},
+        {"status": "success", "lastError": "",
+         "lastPullTime": "2026-06-20T04:59:00Z", "numOfIncidents": 15},
+    ],
+}
+
+
+def test_get_integration_fetch_history_projects_runs(monkeypatch):
+    sf = _ScriptedFetcher(replies={
+        "/settings/integration/search": _HEALTH_SEARCH_REPLY,
+        "/settings/integration/fetch-history": _FETCH_HISTORY_REPLY,
+    })
+    _install_fetcher(monkeypatch, sf)
+
+    out = run(connector.xsoar_get_integration_fetch_history("splunk_prod"))
+    assert out["ok"] is True
+    assert out["brand"] == "Splunk"
+    assert out["total"] == 2
+    assert out["runs"][0]["status"] == "failed"
+    assert out["runs"][0]["last_error"] == "Could not fetch Splunk time"
+    assert out["runs"][0]["incidents_pulled"] == 0
+    assert out["runs"][1]["last_error"] is None
+    assert out["runs"][1]["incidents_pulled"] == 15
+
+    fh = [c for c in sf.calls if c[1] == "/settings/integration/fetch-history"]
+    assert len(fh) == 1
+    assert fh[0][2] == {"brand": "Splunk", "instance": "splunk_prod"}
+
+
+def test_get_integration_fetch_history_clamps_limit(monkeypatch):
+    sf = _ScriptedFetcher(replies={
+        "/settings/integration/search": _HEALTH_SEARCH_REPLY,
+        "/settings/integration/fetch-history": _FETCH_HISTORY_REPLY,
+    })
+    _install_fetcher(monkeypatch, sf)
+
+    out = run(connector.xsoar_get_integration_fetch_history("splunk_prod", limit=1))
+    assert out["total"] == 1
+    assert out["runs"][0]["status"] == "failed"
+
+
+def test_get_integration_fetch_history_not_found(monkeypatch):
+    sf = _ScriptedFetcher(replies={
+        "/settings/integration/search": _HEALTH_SEARCH_REPLY,
+    })
+    _install_fetcher(monkeypatch, sf)
+
+    out = run(connector.xsoar_get_integration_fetch_history("nope"))
+    assert out["ok"] is False
+    assert "No configured integration instance" in out["error"]
+    assert not any(
+        c[1] == "/settings/integration/fetch-history" for c in sf.calls
+    )
 
 
 # ─── import_playbook (v0.2.26) ───────────────────────────────────────

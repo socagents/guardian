@@ -17,7 +17,7 @@
 # Logical paths + request bodies are identical across generations.
 
 id: "xsoar"
-version: "0.2.1"
+version: "0.2.2"
 description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, enrich with indicators and evidence, and import + run playbooks. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
 displayName: "Cortex XSOAR"
 tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]
@@ -284,6 +284,62 @@ spec:
         - { name: "command_detail",  type: "boolean", description: "Default false — when true (or brand set), each command also carries its arguments (name/required/description).", required: false }
         - { name: "size",            type: "integer", description: "Max integration definitions to scan for the command join (default 1000, max 2000).", required: false }
       returns: { type: "object", description: "{ ok, integrations: [{ brand, instance_name, enabled, category, command_count, commands: [{name, description, arguments?}] }], total }" }
+
+    # ─── Integration troubleshooting (health + test) ─────────────
+    - name: "get_integration_status"
+      method: "POST /settings/integration/search (join health map)"
+      description: |
+        Report integration-instance HEALTH — enabled state + the last fetch /
+        test error per configured instance. The diagnostic for "why isn't my
+        integration working?" (e.g. a SplunkPy instance whose fetch fails).
+        Joins each configured instance to the search response's `health` map:
+        a non-empty `last_error` means that instance's fetch or test-module is
+        failing, and the string is the EXACT error XSOAR recorded (e.g. "Could
+        not fetch Splunk time"). Reads the LAST recorded error without
+        re-running the test — to actively re-run it use
+        xsoar_test_integration_instance. Does NOT need playground_id. Works on
+        XSOAR 6 and XSOAR 8.
+      args:
+        - { name: "brand",          type: "string",  description: "Optional — filter to one integration brand (case-insensitive substring on brand or instance name, e.g. 'splunk').", required: false }
+        - { name: "instance_name",  type: "string",  description: "Optional — filter to one configured instance by exact (case-insensitive) name.", required: false }
+        - { name: "unhealthy_only", type: "boolean", description: "Default false — when true, return only instances currently carrying a non-empty last_error (the ones failing right now).", required: false }
+      returns: { type: "object", description: "{ ok, integrations: [{ brand, instance_name, enabled, healthy, last_error, modified }], total, unhealthy_count }" }
+
+    - name: "test_integration_instance"
+      method: "POST /settings/integration/test (full instance object)"
+      description: |
+        Run an integration instance's Test — the XSOAR UI "Test" button.
+        Actively validates ONE configured instance's connectivity / auth /
+        config by executing its test-module. Resolves the instance's full
+        config via /settings/integration/search, then POSTs it to
+        /settings/integration/test. A logical test FAILURE returns HTTP 200
+        with success=false, so this returns ok=true (the call completed) with
+        `success` carrying the real verdict and `message` the exact error
+        XSOAR shows under a red Test button. Distinct from
+        xsoar_get_integration_status, which reads the LAST recorded error
+        without re-running the test. Does NOT need playground_id.
+      args:
+        - { name: "instance_name", type: "string", description: "The configured integration INSTANCE name (not the brand), e.g. 'Splunk_prod'. Discover names via xsoar_get_integration_status or xsoar_list_integrations.", required: true }
+      returns: { type: "object", description: "{ ok, instance_name, brand, success, message }" }
+
+    - name: "get_integration_fetch_history"
+      method: "POST /settings/integration/fetch-history (resolve brand via search)"
+      description: |
+        Read an integration instance's recent FETCH runs — including the last
+        fetch error. The fetch-failure diagnostic for Cortex XSOAR 8 (and
+        XSOAR 6.8+): each run carries its status, last error (empty on
+        success), timing, and how many incidents/indicators/events were pulled.
+        This is the REST surface behind the "Fetch History" UI modal — and the
+        authoritative failed-fetch source on XSOAR 8, whose
+        /settings/integration/search response (read by
+        xsoar_get_integration_status) carries no per-instance lastError on that
+        generation. Resolves the instance's brand via /settings/integration/
+        search, then POSTs {brand, instance} to /settings/integration/
+        fetch-history. Does NOT need playground_id.
+      args:
+        - { name: "instance_name", type: "string",  description: "The configured integration INSTANCE name (not the brand), e.g. 'Splunk_prod'. Brand is resolved internally. Discover names via xsoar_get_integration_status or xsoar_list_integrations.", required: true }
+        - { name: "limit",         type: "integer", description: "Max history rows to return, newest first (default 5, clamped 1-50).", required: false }
+      returns: { type: "object", description: "{ ok, instance_name, brand, total, runs: [{ status, last_error, last_pull_time, incidents_pulled, indicators_pulled, events_pulled, fetch_duration }] }" }
 
     # ─── Command engine (needs playground_id) ────────────────────
     - name: "run_command"

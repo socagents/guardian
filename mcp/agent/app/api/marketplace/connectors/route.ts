@@ -92,13 +92,15 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
     description:
       "Cortex XSOAR connector — monitor and investigate cases (incidents): list, fetch full case data, read the War Room, add entries/notes, update fields, manage evidence, and close incidents. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud.",
     longDescription:
-      "Guardian's interface to your Cortex XSOAR tenant. The chat agent monitors cases opened on XSOAR, fetches full case data, summarizes and investigates, documents findings, and updates/closes cases. Thirteen tools cover the incident-investigation lifecycle: list and get incidents, read the War Room timeline, add entries and investigation notes, update incident fields, save and search evidence, enumerate incident types and fields, search threat indicators, and close incidents once the investigation is documented. The connector auto-detects the platform: when an API key ID is supplied it speaks the XSOAR 8 / Cortex cloud dialect (x-xdr-auth-id header, /xsoar/public/v1 path prefix, api-<fqdn> base); otherwise it speaks XSOAR 6 on-prem (single API key in the Authorization header against the server base URL).",
+      "Guardian's interface to your Cortex XSOAR tenant. The chat agent monitors cases opened on XSOAR, fetches full case data, summarizes and investigates, documents findings, and updates/closes cases. The toolset spans the incident-investigation lifecycle — list and get incidents, read the War Room timeline, add entries and investigation notes, update incident fields, save and search evidence, enumerate incident types and fields, search threat indicators, and close incidents — plus command execution, playbook import/run, XSOAR Lists, and integration troubleshooting (report each integration instance's health + last fetch error, and re-run an instance's Test). The connector auto-detects the platform: when an API key ID is supplied it speaks the XSOAR 8 / Cortex cloud dialect (x-xdr-auth-id header, /xsoar/public/v1 path prefix, api-<fqdn> base); otherwise it speaks XSOAR 6 on-prem (single API key in the Authorization header against the server base URL).",
     category: "Security",
     tags: ["xsoar", "cortex", "soar", "cases", "incident-response"],
     icon: "shield",
     iconColor: "#6366f1",
     iconBg: "rgba(99, 102, 241, 0.12)",
-    toolCount: 13,
+    // Fallback only — the live count is read from connector.yaml's spec.tools[]
+    // by loadLiveMeta() below (currently 26). Keep this in step with the yaml.
+    toolCount: 26,
     installs: "bundle-internal",
     installCount: 0,
     status: "installed",
@@ -117,6 +119,13 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
       { display: "Verify SSL", name: "verify_ssl", type: "boolean", required: false, defaultValue: "true", order: 5 },
     ],
     versions: [
+      {
+        version: "0.2.2",
+        date: "2026-06-20",
+        changes: [
+          "Integration troubleshooting (v0.2.42): get_integration_status reports each configured integration instance's enabled state + last fetch/test error (the diagnostic for a failing SplunkPy fetch); test_integration_instance re-runs an instance's Test button and surfaces the exact error.",
+        ],
+      },
       {
         version: "0.1.0",
         date: "2026-06-10",

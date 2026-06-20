@@ -80,6 +80,9 @@ __all__ = [
     "xsoar_search_evidence",
     "xsoar_health_check",
     "xsoar_list_integrations",
+    "xsoar_get_integration_status",
+    "xsoar_test_integration_instance",
+    "xsoar_get_integration_fetch_history",
     "xsoar_run_command",
     "xsoar_enrich_indicator",
     "xsoar_complete_task",
@@ -1587,6 +1590,324 @@ async def xsoar_list_integrations(
         out_integrations.append(row)
 
     return {"integrations": out_integrations, "total": len(out_integrations)}
+
+
+# ─── Integration troubleshooting (health + test) ─────────────────────
+
+
+def _integration_health_index(resp: dict) -> dict:
+    """Index a /settings/integration/search response's `health` block by instance name.
+
+    The search response carries a `health` block — a MAP whose values are
+    {brand, instance: <instance name>, lastError, modified}. A non-empty
+    `lastError` means that instance's fetch (or test-module) is currently
+    failing, and the string is the exact error XSOAR recorded. Returns
+    {instance_name: health_dict}. Tolerates the block arriving as a dict
+    (the documented shape) or a bare list.
+    """
+    if not isinstance(resp, dict):
+        return {}
+    health = resp.get("health")
+    if isinstance(health, dict):
+        values: Any = health.values()
+    elif isinstance(health, list):
+        values = health
+    else:
+        values = []
+    out: dict[str, dict] = {}
+    for h in values:
+        if not isinstance(h, dict):
+            continue
+        name = h.get("instance") or h.get("name")
+        if name:
+            out[str(name)] = h
+    return out
+
+
+def _find_integration_instance(instances: list, instance_name: str) -> Optional[dict]:
+    """Find a configured instance by exact name, then case-insensitive name."""
+    target = str(instance_name).strip()
+    for inst in instances:
+        if isinstance(inst, dict) and str(inst.get("name") or "") == target:
+            return inst
+    low = target.lower()
+    for inst in instances:
+        if isinstance(inst, dict) and str(inst.get("name") or "").lower() == low:
+            return inst
+    return None
+
+
+@_wrap_xsoar_call
+async def xsoar_get_integration_status(
+    brand: Optional[str] = None,
+    instance_name: Optional[str] = None,
+    unhealthy_only: bool = False,
+) -> dict:
+    """Report integration-instance health — enabled state + last fetch/test error.
+
+    The diagnostic for "why isn't my integration working?" — e.g. a SplunkPy
+    instance whose fetch is failing. Reads POST /settings/integration/search
+    and joins each configured instance to its entry in the response's `health`
+    map: a non-empty `last_error` means that instance's fetch (or test-module)
+    is failing, and the string is the exact error XSOAR recorded (e.g. "Could
+    not fetch Splunk time"). Pairs with xsoar_test_integration_instance (which
+    actively RE-RUNS the test) and xsoar_list_integrations (which lists the
+    commands each exposes). Does NOT require playground_id. Works on XSOAR 6
+    and XSOAR 8 / Cortex.
+
+    Args:
+        brand: optional — filter to one integration brand (case-insensitive
+            substring on brand or instance name, e.g. "splunk", "virustotal").
+        instance_name: optional — filter to one configured instance by exact
+            (case-insensitive) name.
+        unhealthy_only: default false — when true, return only instances that
+            currently have a non-empty last_error (the ones failing right now).
+
+    Returns:
+        {ok, integrations: [{brand, instance_name, enabled, healthy,
+        last_error, modified}], total, unhealthy_count}. `unhealthy_count` is
+        the number of MATCHED instances with a last_error (independent of the
+        unhealthy_only filter); `total` is the number of rows returned.
+
+    Example: xsoar_get_integration_status(brand="splunk") →
+        {"ok": true, "total": 1, "unhealthy_count": 1, "integrations":
+        [{"brand": "Splunk", "instance_name": "Splunk_prod", "enabled": true,
+        "healthy": false, "last_error": "Could not fetch Splunk time",
+        "modified": "2026-06-20T..."}]}
+    """
+    fetcher = _get_fetcher()
+    resp = await fetcher.post("/settings/integration/search", {"size": 1000})
+    if not isinstance(resp, dict):
+        resp = {}
+
+    instances = resp.get("instances")
+    if instances is None:
+        instances = resp.get("data") or []
+    health_by_instance = _integration_health_index(resp)
+
+    brand_filter = str(brand).strip().lower() if brand else None
+    name_filter = str(instance_name).strip().lower() if instance_name else None
+
+    rows: list[dict] = []
+    unhealthy = 0
+    for inst in instances:
+        if not isinstance(inst, dict):
+            continue
+        b = str(inst.get("brand") or inst.get("name") or "")
+        name = str(inst.get("name") or "")
+        if (
+            brand_filter
+            and brand_filter not in b.lower()
+            and brand_filter not in name.lower()
+        ):
+            continue
+        if name_filter and name_filter != name.lower():
+            continue
+
+        h = health_by_instance.get(name) or {}
+        last_error = (str(h.get("lastError") or "")).strip() or None
+        healthy = last_error is None
+        if not healthy:
+            unhealthy += 1
+        if unhealthy_only and healthy:
+            continue
+
+        rows.append({
+            "brand": b,
+            "instance_name": name,
+            "enabled": _integration_enabled(inst),
+            "healthy": healthy,
+            "last_error": last_error,
+            "modified": h.get("modified") or inst.get("modified"),
+        })
+
+    return {
+        "integrations": rows,
+        "total": len(rows),
+        "unhealthy_count": unhealthy,
+    }
+
+
+@_wrap_xsoar_call
+async def xsoar_test_integration_instance(instance_name: str) -> dict:
+    """Run an integration instance's Test — the XSOAR UI "Test" button.
+
+    Actively validates ONE configured integration instance's connectivity /
+    auth / config by executing its test-module — exactly what clicking "Test"
+    in Settings → Integrations does. The diagnostic for "is my Splunk / EDR /
+    TI integration actually wired up correctly, right now?". Two-step: resolve
+    the instance's full config via POST /settings/integration/search, then POST
+    it to POST /settings/integration/test. Does NOT require playground_id.
+
+    A logical test FAILURE comes back as HTTP 200 with success=false — so this
+    tool returns ok=true (the call completed) with `success` carrying the real
+    verdict and `message` the exact error XSOAR shows under a red Test button
+    (e.g. "Could not fetch Splunk time", auth/connectivity errors). Distinct
+    from xsoar_get_integration_status, which reads the LAST recorded error
+    without re-running the test.
+
+    Args:
+        instance_name: the configured integration INSTANCE name (not the
+            brand) — e.g. "Splunk_prod". Discover names via
+            xsoar_get_integration_status or xsoar_list_integrations.
+
+    Returns:
+        {ok, instance_name, brand, success, message}. ok=true means the test
+        call completed; branch on `success` for the actual verdict.
+    """
+    fetcher = _get_fetcher()
+    search = await fetcher.post("/settings/integration/search", {"size": 1000})
+    if not isinstance(search, dict):
+        search = {}
+    instances = search.get("instances")
+    if instances is None:
+        instances = search.get("data") or []
+
+    inst = _find_integration_instance(instances, instance_name)
+    if inst is None:
+        raise ValueError(
+            f"No configured integration instance named '{instance_name}'. "
+            "List configured instances via xsoar_get_integration_status or "
+            "xsoar_list_integrations."
+        )
+
+    try:
+        result = await fetcher.post("/settings/integration/test", inst)
+    except XSOARRequestError as exc:
+        # POST /settings/integration/test is a v6 surface — the Cortex 8 public
+        # API doesn't expose the generic test-module (only a syslog-specific
+        # one), so it 404s / redirects there. Surface a clear pointer to the
+        # v8-applicable diagnostics instead of a confusing raw rejection.
+        if fetcher.is_v8:
+            return _err(
+                "Re-running an integration instance's Test isn't available on "
+                "the Cortex XSOAR 8 public API (XSOAR 8 returned: "
+                f"{exc}). On XSOAR 8 use xsoar_get_integration_fetch_history "
+                "(the fetch-error source) or xsoar_get_integration_status.",
+                v8_test_unavailable=True,
+            )
+        raise
+
+    # A raw REST POST returns {success, message} directly; some surfaces wrap
+    # it as {response: {success, message}} (the automation-engine envelope).
+    body = result
+    if isinstance(result, dict) and isinstance(result.get("response"), dict):
+        body = result["response"]
+    success = bool(body.get("success")) if isinstance(body, dict) else False
+    message = ((body.get("message") if isinstance(body, dict) else None) or "").strip()
+
+    return {
+        "instance_name": inst.get("name") or instance_name,
+        "brand": inst.get("brand"),
+        "success": success,
+        "message": message,
+    }
+
+
+def _shape_fetch_run(r: dict) -> dict:
+    """Project one fetch-history row to a compact, generation-tolerant shape.
+
+    XSOAR's fetch-history rows vary in field naming across versions; read each
+    field through a small set of known aliases so the critical signal —
+    `status` + `last_error` — always lands, with secondary counters degrading
+    to None rather than breaking.
+    """
+    def _first(*keys):
+        for k in keys:
+            v = r.get(k)
+            if v is not None:
+                return v
+        return None
+
+    return {
+        "status": _first("status", "fetchStatus"),
+        "last_error": (str(_first("lastError", "error") or "")).strip() or None,
+        "last_pull_time": _first("lastPullTime", "endDate", "time", "date"),
+        "incidents_pulled": _first("incidentsPulled", "numOfIncidents", "incidents"),
+        "indicators_pulled": _first("indicatorsPulled", "numOfIndicators"),
+        "events_pulled": _first("eventsPulled", "numOfEvents"),
+        "fetch_duration": _first("fetchDuration", "duration"),
+    }
+
+
+@_wrap_xsoar_call
+async def xsoar_get_integration_fetch_history(
+    instance_name: str,
+    limit: int = 5,
+) -> dict:
+    """Read an integration instance's recent fetch runs — including the last fetch error.
+
+    The fetch-failure diagnostic for Cortex XSOAR 8 (and XSOAR 6.8+): retrieves
+    the recent fetch-incidents runs for one configured fetching integration
+    instance, each carrying its status, last error (empty on success), timing,
+    and how many incidents/indicators/events were pulled. This is the REST
+    surface behind the "Fetch History" UI modal — and the authoritative
+    failed-fetch source on XSOAR 8, whose /settings/integration/search response
+    (read by xsoar_get_integration_status) carries no per-instance lastError on
+    that generation. Two-step: resolve the instance's brand via
+    /settings/integration/search, then POST {brand, instance} to
+    /settings/integration/fetch-history. Does NOT require playground_id.
+
+    Args:
+        instance_name: the configured integration INSTANCE name (not the
+            brand), e.g. "Splunk_prod". The brand is resolved internally.
+            Discover names via xsoar_get_integration_status or
+            xsoar_list_integrations.
+        limit: max history rows to return, newest first (default 5,
+            clamped 1-50).
+
+    Returns:
+        {ok, instance_name, brand, total, runs: [{status, last_error,
+        last_pull_time, incidents_pulled, indicators_pulled, events_pulled,
+        fetch_duration}]}.
+
+    Example: xsoar_get_integration_fetch_history(instance_name="Splunk_prod") →
+        {"ok": true, "brand": "SplunkPy", "total": 1, "runs": [{"status":
+        "failed", "last_error": "Could not fetch Splunk time", ...}]}.
+    """
+    fetcher = _get_fetcher()
+    search = await fetcher.post("/settings/integration/search", {"size": 1000})
+    if not isinstance(search, dict):
+        search = {}
+    instances = search.get("instances")
+    if instances is None:
+        instances = search.get("data") or []
+
+    inst = _find_integration_instance(instances, instance_name)
+    if inst is None:
+        raise ValueError(
+            f"No configured integration instance named '{instance_name}'. "
+            "List configured instances via xsoar_get_integration_status or "
+            "xsoar_list_integrations."
+        )
+    brand = inst.get("brand") or inst.get("name")
+    n = _clamp_int(limit, 5, 1, 50)
+
+    resp = await fetcher.post(
+        "/settings/integration/fetch-history",
+        {"brand": brand, "instance": inst.get("name") or instance_name},
+    )
+
+    # The rows arrive under `data` (the documented shape), or as a bare list,
+    # or under `history` — tolerate all three.
+    rows: Any = None
+    if isinstance(resp, dict):
+        rows = resp.get("data")
+        if not isinstance(rows, list) and isinstance(resp.get("history"), list):
+            rows = resp["history"]
+    elif isinstance(resp, list):
+        rows = resp
+    if not isinstance(rows, list):
+        rows = []
+
+    shaped = [_shape_fetch_run(r) for r in rows if isinstance(r, dict)][:n]
+
+    return {
+        "instance_name": inst.get("name") or instance_name,
+        "brand": brand,
+        "total": len(shaped),
+        "runs": shaped,
+    }
 
 
 # ─── xsoar_run_command ───────────────────────────────────────────────

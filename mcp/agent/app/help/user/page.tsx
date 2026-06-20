@@ -3092,6 +3092,18 @@ Networks documentation and returning evidence-backed, cited answers.
                   <Code>playground_id</Code> needed.
                 </li>
                 <li>
+                  <em>&ldquo;why is my Splunk integration&apos;s fetch
+                  failing?&rdquo;</em> — troubleshoot a configured integration
+                  without reading XSOAR logs (v0.2.42):{" "}
+                  <Code>get_integration_status</Code> reports each instance&apos;s
+                  enabled state + its last fetch error,{" "}
+                  <Code>test_integration_instance</Code> re-runs the
+                  Settings → Integrations <em>Test</em> button and surfaces the
+                  exact error, and <Code>get_integration_fetch_history</Code>{" "}
+                  reads the recent fetch runs (the failed-fetch source on
+                  XSOAR 8). No <Code>playground_id</Code> needed.
+                </li>
+                <li>
                   <em>&ldquo;run <Code>!Print value=hi</Code> in
                   XSOAR&rdquo;</em> — any XSOAR command, via{" "}
                   <Code>run_command</Code>.
