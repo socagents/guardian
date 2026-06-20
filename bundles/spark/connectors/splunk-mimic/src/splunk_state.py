@@ -313,6 +313,27 @@ def run_query(
     """
     spl = spl or ""
     low = spl.lower()
+
+    # SplunkPy's "current Splunk time" probe (get_current_splunk_time), issued
+    # BEFORE every fetch to anchor the window (SplunkPy v2):
+    #   | gentimes start=-1 | eval <field> = strftime(time(), "<fmt>") | table <field>
+    # It reads the single row's <field>; an EMPTY result aborts the whole
+    # fetch with "ValueError: Could not fetch Splunk time". Return one row
+    # carrying the current time in the exact field + strftime format the
+    # query asked for (parsed from the query so it tracks SplunkPy changes).
+    if "gentimes" in low or "strftime(time()" in low.replace(" ", ""):
+        m = re.search(
+            r'eval\s+(\w+)\s*=\s*strftime\(\s*time\(\)\s*,\s*"([^"]+)"', spl
+        )
+        field = m.group(1) if m else "clock"
+        fmt = m.group(2) if m else "%Y-%m-%dT%H:%M:%S"
+        now = datetime.now(timezone.utc)
+        try:
+            value = now.strftime(fmt)
+        except (ValueError, KeyError):
+            value = now.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+        return [{field: value, "_time": splunk_time(now.timestamp())}]
+
     if "notable" in low or "`notable`" in spl:
         return generate_notables(count, earliest, latest, offset=offset)
 

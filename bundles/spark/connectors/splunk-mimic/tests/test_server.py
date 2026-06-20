@@ -90,6 +90,19 @@ def test_run_query_unmatched_returns_empty():
     assert splunk_state.run_query("search index=empty someuniquetokenxyz") == []
 
 
+def test_run_query_gentimes_returns_current_time():
+    # SplunkPy v2's get_current_splunk_time probe — must return ONE row with
+    # the field named in the eval, formatted per the query's strftime. An
+    # empty result aborts the whole fetch ("Could not fetch Splunk time").
+    q = '| gentimes start=-1 | eval clock = strftime(time(), "%Y-%m-%dT%H:%M:%S.%f%z") | table clock'
+    rows = splunk_state.run_query(q, count=1)
+    assert len(rows) == 1
+    assert rows[0].get("clock")
+    # the field name is parsed from the eval, not hardcoded
+    q2 = '| gentimes start=-1 | eval now_ts = strftime(time(), "%Y-%m-%dT%H:%M:%S") | table now_ts'
+    assert splunk_state.run_query(q2, count=1)[0].get("now_ts")
+
+
 # ── rotation contract: fixed grid, count-independent, disjoint windows ───
 #
 # These guard the SplunkPy fetch+dedup contract: a fetch must see NEW
