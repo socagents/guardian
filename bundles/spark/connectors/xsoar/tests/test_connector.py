@@ -948,6 +948,7 @@ def test_all_exported_tools_are_callable():
         "xsoar_append_to_list",
         "xsoar_create_incident",
         "xsoar_run_playbook",
+        "xsoar_get_playbook_state",
         "xsoar_import_playbook",
     }
     assert set(connector.__all__) == expected
@@ -1565,3 +1566,101 @@ def test_summarize_evidence_entry_maps_war_room_fields():
         "id": "9@1", "entry_id": "9@1", "incident_id": "1", "description": "c",
         "occurred": "t", "marked_by": "u", "marked_date": "t", "tags": ["evidence"],
     }
+
+
+# ─── get_playbook_state (v0.2.42) ────────────────────────────────────
+
+_WORKPLAN_OK = {
+    "invPlaybook": {
+        "playbookId": "Splunk Notable Triage",
+        "name": "Splunk Notable Triage",
+        "state": "Completed",
+        "tasks": {
+            "0": {"id": "0", "state": "Completed", "task": {"name": "Start"}},
+            "1": {"id": "1", "state": "Completed",
+                  "task": {"name": "splunk-job-create", "scriptId": "SplunkPy"}},
+        },
+    }
+}
+
+_WORKPLAN_FAILED = {
+    "invPlaybook": {
+        "playbookId": "PB", "name": "PB", "state": "Completed",
+        "tasks": {
+            "0": {"id": "0", "state": "Completed", "task": {"name": "Start"}},
+            "3": {"id": "3", "state": "Error",
+                  "task": {"name": "splunk-search", "scriptId": "SplunkPy"}},
+        },
+    }
+}
+
+_WARROOM_ERR = {"entries": [
+    {"id": "e1", "type": 4, "taskId": "3", "contents": "splunk-search failed: boom"},
+    {"id": "e2", "type": 1, "taskId": "0", "contents": "ok"},
+]}
+
+_WORKPLAN_SUBPB = {
+    "invPlaybook": {
+        "playbookId": "Parent", "name": "Parent", "state": "Completed",
+        "tasks": {
+            "0": {"id": "0", "state": "Completed", "task": {"name": "Start"}},
+            "5": {"id": "5", "state": "Completed", "task": {"name": "sub"},
+                  "subPlaybook": {"tasks": {
+                      "s1": {"id": "s1", "state": "LoopError",
+                             "task": {"name": "nested-fail"}},
+                  }}},
+        },
+    }
+}
+
+
+def test_get_playbook_state_success(monkeypatch):
+    rf = _RecordingFetcher(get_reply=_WORKPLAN_OK)
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_get_playbook_state("42"))
+    assert out["ok"] is True
+    assert out["has_playbook"] is True
+    assert out["ran_to_success"] is True
+    assert out["overall_state"] == "Completed"
+    assert out["counts"]["completed"] == 2
+    assert out["task_total"] == 2
+    assert out["failed_tasks"] == []
+    # work plan read via GET; war room NOT fetched when there are no failures.
+    assert rf.calls[0][0] == "GET"
+    assert all(c[0] != "POST" for c in rf.calls)
+
+
+def test_get_playbook_state_failed_task_attaches_error(monkeypatch):
+    rf = _RecordingFetcher(get_reply=_WORKPLAN_FAILED, post_reply=_WARROOM_ERR)
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_get_playbook_state("42"))
+    assert out["ran_to_success"] is False
+    assert out["counts"]["error"] == 1
+    assert len(out["failed_tasks"]) == 1
+    ft = out["failed_tasks"][0]
+    assert ft["state"] == "Error"
+    assert ft["name"] == "splunk-search"
+    assert "boom" in (ft.get("errorMessage") or "")
+    # the war room WAS fetched (to resolve the error text).
+    assert any(c[0] == "POST" for c in rf.calls)
+
+
+def test_get_playbook_state_recurses_subplaybook(monkeypatch):
+    rf = _RecordingFetcher(get_reply=_WORKPLAN_SUBPB, post_reply={"entries": []})
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_get_playbook_state("42"))
+    assert out["ran_to_success"] is False
+    names = {f["name"] for f in out["failed_tasks"]}
+    assert "nested-fail" in names  # failure inside the sub-playbook surfaces
+
+
+def test_get_playbook_state_no_playbook(monkeypatch):
+    rf = _RecordingFetcher(get_reply={"noPlaybookHere": 1})
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_get_playbook_state("42"))
+    assert out["ok"] is True
+    assert out["has_playbook"] is False

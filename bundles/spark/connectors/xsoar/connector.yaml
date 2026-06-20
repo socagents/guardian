@@ -17,7 +17,7 @@
 # Logical paths + request bodies are identical across generations.
 
 id: "xsoar"
-version: "0.2.2"
+version: "0.2.3"
 description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, enrich with indicators and evidence, and import + run playbooks. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
 displayName: "Cortex XSOAR"
 tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]
@@ -448,6 +448,24 @@ spec:
         - { name: "incident_id", type: "string", description: "The XSOAR incident id (its investigation id) to run on.", required: true }
         - { name: "playbook_id", type: "string", description: "The playbook NAME to assign and run.", required: true }
       returns: { type: "object", description: "{ ok, incident_id, playbook_id, output }" }
+
+    - name: "get_playbook_state"
+      method: "GET /investigation/{id}/workplan (v6) | core-api-get (v8)"
+      description: |
+        Report the state of the playbook running on an incident — task by task.
+        The MONITORING companion to run_playbook: after assigning a playbook,
+        poll this to confirm it ran to completion WITHOUT errored tasks. Reads
+        the incident's work plan and buckets every task (including sub-playbook
+        tasks) by state, flags the failed (Error/LoopError) tasks, and
+        best-effort attaches each failed task's error message from the war room.
+        ran_to_success is true only when overall_state == 'Completed' AND no
+        task is in Error/LoopError. On XSOAR 6 this is a direct GET (no
+        playground_id needed); on XSOAR 8 (where the work plan isn't on the
+        public API) it reads via the Core REST API integration, which needs the
+        instance's playground_id.
+      args:
+        - { name: "incident_id", type: "string", description: "The XSOAR incident id (== its investigation id) whose running playbook to inspect.", required: true }
+      returns: { type: "object", description: "{ ok, incident_id, has_playbook, playbook_id, playbook_name, overall_state, ran_to_success, counts: {completed, error, waiting, inprogress, skipped, blocked, new}, task_total, failed_tasks: [{id, name, scriptId, state, errorMessage?}] }" }
 
     - name: "import_playbook"
       method: "POST /playbook/import (v6) | core-api-post /playbook/save (Cortex 8)"

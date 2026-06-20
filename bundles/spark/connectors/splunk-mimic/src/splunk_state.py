@@ -334,6 +334,19 @@ def run_query(
             value = now.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
         return [{field: value, "_time": splunk_time(now.timestamp())}]
 
+    # SplunkPy's splunk-get-indexes PRIMARY path issues a `| rest` oneshot
+    # against the data/indexes endpoint and reads each row's `title` as an
+    # index name. run_query previously only matched the notable macro, so this
+    # returned [] and the command worked ONLY via its fallback to iterating
+    # service.indexes. Answer it directly so the primary path works too (and to
+    # de-risk SplunkPy versions that don't fall back). Keep the index roster in
+    # sync with server.py's _INDEX_DEFS.
+    if "data/indexes" in low and "rest" in low:
+        return [
+            {"title": name, "currentDBSizeMB": "1", "totalEventCount": "100"}
+            for name in ("notable", "main", "history", "summary", "_internal")
+        ]
+
     if "notable" in low or "`notable`" in spl:
         return generate_notables(count, earliest, latest, offset=offset)
 

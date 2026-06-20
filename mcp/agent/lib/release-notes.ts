@@ -46,7 +46,8 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       "splunk-search + fetch-incidents + the Indicator Hunting playbook run end-to-end against the mimic with no real Splunk server.",
       "The mimic emits a rotating stream of notables on a fixed time grid (~1/min), so each XSOAR fetch picks up NEW simulated incidents (varied rules/urgencies/domains) while re-queries dedup cleanly.",
       "Services show a 'Service' badge + a Services filter on /connectors; they advertise zero agent tools and skip the agent's Test Connection (they're reached by external systems, not the agent).",
-      "XSOAR connector gains 3 integration-troubleshooting tools: check an integration instance's health + last fetch error, re-run its Test button, and read its fetch-run history — so you diagnose a failing fetch from Guardian, not by reading XSOAR logs.",
+      "XSOAR connector gains 4 operational tools: check an integration instance's health + last fetch error, re-run its Test button, read its fetch-run history (diagnose a failing fetch from Guardian, not by reading XSOAR logs), and monitor a running playbook's per-task state to confirm it ran to success.",
+      "Every SplunkPy command that uses the splunkd REST API (search, job-create/results/status/share, get-indexes, submit-event, notable-update) now round-trips against the Splunk mimic — verified with the real splunklib SDK.",
     ],
   },
   {

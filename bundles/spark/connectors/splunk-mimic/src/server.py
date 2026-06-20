@@ -246,6 +246,14 @@ async def control_job(sid: str) -> Response:
     return JSONResponse({"messages": [{"type": "INFO", "text": "ok"}]})
 
 
+@app.post("/services/search/jobs/{sid}/acl")
+async def control_job_acl(sid: str) -> Response:
+    # splunk-job-share POSTs the job ACL (sharing=global, perms.read=*) AFTER
+    # set_ttl. Without this route the namespaced path 404s and splunklib
+    # raises. Ack it so the command completes.
+    return JSONResponse({"messages": [{"type": "INFO", "text": "ok"}]})
+
+
 @app.get("/services/search/jobs/{sid}/results")
 async def get_job_results(sid: str, request: Request) -> Response:
     job = _JOBS.get(sid)
@@ -292,24 +300,80 @@ async def server_info(request: Request) -> Response:
     return _xml(responses.server_info_atom())
 
 
+# The indexes the mimic advertises. splunk-get-indexes lists them and
+# splunk-submit-event resolves one by name (service.indexes[<name>]).
+_INDEX_DEFS: dict[str, dict[str, str]] = {
+    "notable": {"datatype": "event", "totalEventCount": "1000"},
+    "main": {"datatype": "event", "totalEventCount": "100"},
+    "history": {"datatype": "event", "totalEventCount": "0"},
+    "summary": {"datatype": "event", "totalEventCount": "0"},
+    "_internal": {"datatype": "event", "totalEventCount": "5000"},
+}
+
+
+def _index_content(name: str, content: dict[str, str]) -> dict[str, str]:
+    return {
+        "currentDBSizeMB": "1",
+        "maxTotalDataSizeMB": "500000",
+        "disabled": "0",
+        "isInternal": "1" if name.startswith("_") else "0",
+        **content,
+    }
+
+
 @app.get("/services/data/indexes")
-async def data_indexes() -> Response:
-    entries = [
-        {"name": name, "content": {"currentDBSizeMB": 1, "totalEventCount": "100"}}
-        for name in ("notable", "main", "_internal")
-    ]
-    return JSONResponse({"entry": entries, "paging": {"total": len(entries)}})
+async def data_indexes(request: Request) -> Response:
+    # splunklib reads service.indexes as an ATOM collection (each <entry> title
+    # is the index name it keys by — service.indexes["main"]). JSON here makes
+    # splunklib's data.load raise ParseError. ATOM by default; JSON only on an
+    # explicit output_mode=json caller.
+    if str(request.query_params.get("output_mode", "")).lower() == "json":
+        return JSONResponse({
+            "entry": [
+                {"name": n, "content": {"currentDBSizeMB": 1, **c}}
+                for n, c in _INDEX_DEFS.items()
+            ],
+            "paging": {"total": len(_INDEX_DEFS)},
+        })
+    entries = [(n, _index_content(n, c)) for n, c in _INDEX_DEFS.items()]
+    return _xml(responses.atom_collection_feed("data/indexes", entries))
+
+
+@app.get("/services/data/indexes/{name}")
+async def data_index_one(name: str, request: Request) -> Response:
+    # splunklib's Collection.__getitem__ ("main" in service.indexes[...]) issues
+    # a SEPARATE GET data/indexes/<name> and reads the single entity from a
+    # one-entry feed — a 404 here surfaces as KeyError(name) and breaks
+    # splunk-submit-event. Unknown index -> 404 (splunklib -> KeyError), which
+    # is the faithful behaviour.
+    content = _INDEX_DEFS.get(name)
+    if content is None:
+        return _xml(responses.auth_error_xml(f"Unknown index {name}"), status=404)
+    if str(request.query_params.get("output_mode", "")).lower() == "json":
+        return JSONResponse({
+            "entry": [{"name": name, "content": {"currentDBSizeMB": 1, **content}}],
+            "paging": {"total": 1},
+        })
+    return _xml(
+        responses.atom_collection_feed(
+            "data/indexes", [(name, _index_content(name, content))]
+        )
+    )
 
 
 @app.get("/services/saved/searches")
-async def saved_searches() -> Response:
-    entries = [
-        {
-            "name": "Splunk_SOAR_Notables",
-            "content": {"search": "`notable`", "is_scheduled": False},
-        }
-    ]
-    return JSONResponse({"entry": entries, "paging": {"total": len(entries)}})
+async def saved_searches(request: Request) -> Response:
+    # Also an ATOM collection for splunklib (service.saved_searches).
+    saved = {
+        "Splunk_SOAR_Notables": {"search": "`notable`", "is_scheduled": "0"},
+    }
+    if str(request.query_params.get("output_mode", "")).lower() == "json":
+        return JSONResponse({
+            "entry": [{"name": n, "content": c} for n, c in saved.items()],
+            "paging": {"total": len(saved)},
+        })
+    entries = [(name, content) for name, content in saved.items()]
+    return _xml(responses.atom_collection_feed("saved/searches", entries))
 
 
 @app.api_route(
@@ -317,8 +381,16 @@ async def saved_searches() -> Response:
     methods=["GET", "POST", "DELETE"],
 )
 async def kvstore(rest: str, request: Request) -> Response:
-    # Empty-collection stubs — SplunkPy's kv-store-backed dedup is optional.
+    # KV Store. splunklib reads the COLLECTION CONFIG list (service.kvstore →
+    # storage/collections/config) as an ATOM collection — JSON there raises
+    # ParseError. The record DATA path (storage/collections/data/<coll>) is
+    # JSON. Both are stateful-store stubs (SplunkPy's kv-store dedup is
+    # optional); the config feed is empty until a collection is created.
+    path = rest.strip("/")
     if request.method == "GET":
+        if path == "config" or path.startswith("config"):
+            return _xml(responses.atom_collection_feed("storage/collections/config", []))
+        # data/<collection> record reads → JSON array of records.
         return JSONResponse([])
     return JSONResponse({"acknowledged": True})
 

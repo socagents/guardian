@@ -91,6 +91,7 @@ __all__ = [
     "xsoar_append_to_list",
     "xsoar_create_incident",
     "xsoar_run_playbook",
+    "xsoar_get_playbook_state",
     "xsoar_import_playbook",
 ]
 
@@ -2262,6 +2263,205 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
         "incident_id": incident_id,
         "playbook_id": playbook_id,
         "output": output,
+    }
+
+
+# ─── xsoar_get_playbook_state (monitor a running playbook) ───────────
+#
+# The work plan (inv-playbook) carries every task node keyed by its node id,
+# each with a `state` + a nested `task` definition + an optional `subPlaybook`.
+# XSOAR TaskState strings (case-sensitive): "" (New), "inprogress",
+# "Completed", "Waiting", "Error", "LoopError", "WillNotBeExecuted" (Skipped),
+# "Blocked". A playbook "ran to success" iff its overall state is Completed AND
+# no task is in Error/LoopError.
+
+_TASK_STATE_BUCKET = {
+    "": "new",
+    "inprogress": "inprogress",
+    "Completed": "completed",
+    "Waiting": "waiting",
+    "Error": "error",
+    "LoopError": "error",
+    "WillNotBeExecuted": "skipped",
+    "Blocked": "blocked",
+}
+_FAILED_TASK_STATES = {"Error", "LoopError"}
+_ERROR_ENTRY_TYPE = 4  # XSOAR war-room entry type for an error
+
+
+def _walk_workplan_tasks(tasks: Any, counts: dict, failed: list) -> None:
+    """Recurse a work-plan task map: bucket each task by state, collect the
+    failed (Error/LoopError) ones. Sub-playbook tasks recurse so a failure
+    inside a nested playbook still surfaces."""
+    if not isinstance(tasks, dict):
+        return
+    for node_id, node in tasks.items():
+        if not isinstance(node, dict):
+            continue
+        state = node.get("state") or ""
+        bucket = _TASK_STATE_BUCKET.get(state, "other")
+        counts[bucket] = counts.get(bucket, 0) + 1
+        if state in _FAILED_TASK_STATES:
+            defn = node.get("task") if isinstance(node.get("task"), dict) else {}
+            failed.append({
+                "id": node.get("id") or node_id,
+                "name": defn.get("name"),
+                "scriptId": defn.get("scriptId"),
+                "state": state,
+            })
+        sub = node.get("subPlaybook")
+        if isinstance(sub, dict):
+            _walk_workplan_tasks(sub.get("tasks"), counts, failed)
+
+
+def _extract_inv_playbook(raw: Any) -> Optional[dict]:
+    """Pull `invPlaybook` from a work-plan response — raw v6 ({invPlaybook})
+    or the Core REST API wrapper ({response: {invPlaybook}})."""
+    if not isinstance(raw, dict):
+        return None
+    inv = raw.get("invPlaybook")
+    if isinstance(inv, dict):
+        return inv
+    resp = raw.get("response")
+    if isinstance(resp, dict) and isinstance(resp.get("invPlaybook"), dict):
+        return resp["invPlaybook"]
+    return None
+
+
+def _parse_core_api_json(output: str) -> Any:
+    """Best-effort extract the JSON body from a core-api-get war-room output."""
+    if not output:
+        return {}
+    try:
+        return json.loads(output)
+    except (ValueError, TypeError):
+        pass
+    start = output.find("{")
+    if start >= 0:
+        try:
+            return json.loads(output[start:])
+        except (ValueError, TypeError):
+            return {}
+    return {}
+
+
+async def _fetch_workplan(fetcher: XSOARFetcher, incident_id: str) -> Any:
+    """Fetch the raw work plan for an incident, generation-aware.
+
+    v6 (on-prem): GET /investigation/{id}/workplan directly. v8 / Cortex: the
+    public gateway doesn't serve that route, so read it through the Core REST
+    API integration in the playground (!core-api-get) — which needs
+    playground_id.
+    """
+    if not fetcher.is_v8:
+        return await fetcher.get(f"/investigation/{incident_id}/workplan")
+    cfg = _get_xsoar_config()
+    playground_id = cfg.get("playground_id")
+    if not playground_id:
+        raise ValueError(
+            "On Cortex XSOAR 8 the work plan isn't on the public API — reading "
+            "playbook state needs the Core REST API integration AND this "
+            "instance's playground_id (set it at /connectors)."
+        )
+    result = await _execute_command(
+        fetcher, str(playground_id),
+        f"!core-api-get uri={_quote_arg('/investigation/' + str(incident_id) + '/workplan')}",
+    )
+    return _parse_core_api_json(result.get("output", "") or "")
+
+
+async def _enrich_failed_task_errors(
+    fetcher: XSOARFetcher, incident_id: str, failed: list
+) -> None:
+    """Best-effort: attach each failed task's error text from the war room.
+
+    The work plan flags WHICH tasks errored but not WHY — the message lives in
+    a type-4 (error) war-room entry whose taskId matches. One extra read; any
+    failure here just leaves failed_tasks without an errorMessage.
+    """
+    if not failed:
+        return
+    try:
+        resp = await fetcher.post(f"/investigation/{incident_id}", {"pageSize": 200})
+    except XSOARError:
+        return
+    entries = resp.get("entries") if isinstance(resp, dict) else None
+    if entries is None and isinstance(resp, dict):
+        entries = resp.get("data")
+    if not isinstance(entries, list):
+        return
+    by_task: dict[str, str] = {}
+    for e in entries:
+        if not isinstance(e, dict) or e.get("type") != _ERROR_ENTRY_TYPE:
+            continue
+        tid = e.get("taskId") or e.get("taskID")
+        if tid and str(tid) not in by_task:
+            contents = e.get("contents")
+            by_task[str(tid)] = str(contents)[:600] if contents is not None else ""
+    for ft in failed:
+        msg = by_task.get(str(ft.get("id")))
+        if msg:
+            ft["errorMessage"] = msg
+
+
+@_wrap_xsoar_call
+async def xsoar_get_playbook_state(incident_id: str) -> dict:
+    """Report the state of the playbook running on an incident — task by task.
+
+    The monitoring companion to xsoar_run_playbook: after assigning a playbook,
+    poll this to confirm it ran to completion WITHOUT errored tasks. Reads the
+    incident's work plan and buckets every task (including sub-playbook tasks)
+    by state, flags the failed (Error/LoopError) tasks, and — best-effort —
+    attaches each failed task's error message from the war room.
+
+    Does NOT require playground_id on XSOAR 6 (direct GET
+    /investigation/{id}/workplan). On XSOAR 8 the work plan isn't on the public
+    API, so it reads via the Core REST API integration, which needs the
+    instance's playground_id.
+
+    Args:
+        incident_id: The XSOAR incident id (== its investigation id) whose
+            running playbook to inspect.
+
+    Returns:
+        {ok, incident_id, has_playbook, playbook_id, playbook_name,
+        overall_state, ran_to_success, counts: {completed, error, waiting,
+        inprogress, skipped, blocked, new, ...}, task_total, failed_tasks:
+        [{id, name, scriptId, state, errorMessage?}]}. ran_to_success is true
+        only when overall_state == 'Completed' AND no task is in Error/LoopError.
+    """
+    if not incident_id:
+        raise ValueError("incident_id is required")
+
+    fetcher = _get_fetcher()
+    raw = await _fetch_workplan(fetcher, str(incident_id))
+    inv = _extract_inv_playbook(raw)
+    if inv is None:
+        return {
+            "incident_id": incident_id,
+            "has_playbook": False,
+            "detail": (
+                "No playbook work plan for this incident — none assigned, or "
+                "the investigation hasn't started one."
+            ),
+        }
+
+    counts: dict[str, int] = {}
+    failed: list[dict] = []
+    _walk_workplan_tasks(inv.get("tasks"), counts, failed)
+    await _enrich_failed_task_errors(fetcher, str(incident_id), failed)
+
+    overall_state = inv.get("state")
+    return {
+        "incident_id": incident_id,
+        "has_playbook": True,
+        "playbook_id": inv.get("playbookId"),
+        "playbook_name": inv.get("name") or inv.get("playbookName"),
+        "overall_state": overall_state,
+        "ran_to_success": overall_state == "Completed" and not failed,
+        "counts": counts,
+        "task_total": sum(counts.values()),
+        "failed_tasks": failed,
     }
 
 

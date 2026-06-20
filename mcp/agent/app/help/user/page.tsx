@@ -3121,8 +3121,11 @@ Networks documentation and returning evidence-backed, cited answers.
                 <li>
                   <em>&ldquo;open an incident for this finding&rdquo;</em> /{" "}
                   <em>&ldquo;run the Phishing playbook on case 42&rdquo;</em> /{" "}
+                  <em>&ldquo;did the playbook on case 42 finish cleanly?&rdquo;</em> /{" "}
                   <em>&ldquo;complete task 7 on case 42&rdquo;</em> —{" "}
                   <Code>create_incident</Code>, <Code>run_playbook</Code>,{" "}
+                  <Code>get_playbook_state</Code> (per-task state +
+                  ran-to-success + failed-task errors, v0.2.42),{" "}
                   <Code>complete_task</Code>.
                 </li>
               </ul>

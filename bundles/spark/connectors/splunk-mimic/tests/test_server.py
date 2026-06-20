@@ -103,6 +103,16 @@ def test_run_query_gentimes_returns_current_time():
     assert splunk_state.run_query(q2, count=1)[0].get("now_ts")
 
 
+def test_run_query_rest_data_indexes_lists_indexes():
+    # splunk-get-indexes PRIMARY path: `| rest .../data/indexes` must return
+    # one row per index with a `title` field (else the command depends on the
+    # service.indexes fallback alone).
+    q = '| rest /servicesNS/nobody/search/data/indexes count=0 | table title'
+    rows = splunk_state.run_query(q, count=0)
+    titles = {r.get("title") for r in rows}
+    assert "notable" in titles and "main" in titles
+
+
 # ── rotation contract: fixed grid, count-independent, disjoint windows ───
 #
 # These guard the SplunkPy fetch+dedup contract: a fetch must see NEW
@@ -233,6 +243,14 @@ def test_notable_update_ack():
     assert r.json()["success"] is True
 
 
+def test_job_acl_ack():
+    # splunk-job-share POSTs the job ACL after set_ttl; without this route the
+    # command 404s on the acl step. Must ack.
+    r = client.post("/services/search/jobs/sid-123/acl",
+                    data={"sharing": "global", "perms.read": "*"})
+    assert r.status_code == 200
+
+
 def test_server_info_has_version():
     r = client.get("/services/server/info", params={"output_mode": "json"})
     assert r.json()["entry"][0]["content"]["version"]
@@ -319,3 +337,81 @@ def test_splunklib_create_search_roundtrip(live_server):
     reader = splunk_results.JSONResultsReader(job.results(output_mode="json", count=4))
     rows = [r for r in reader if isinstance(r, dict)]
     assert len(rows) == 4
+
+
+@needs_splunklib
+def test_splunklib_get_indexes_roundtrip(live_server):
+    """splunk-get-indexes — service.indexes reads the ATOM collection.
+
+    Regression for the JSON-not-ATOM gap: splunklib's Collection parser raised
+    `ParseError`/`AttributeError: alternate` until /services/data/indexes
+    emitted an ATOM feed with per-entry <link rel="alternate">.
+    """
+    import splunklib.client as splunk_client
+
+    service = splunk_client.connect(
+        host="127.0.0.1", port=live_server, scheme="https",
+        username="admin", password="changeme", verify=False,
+    )
+    names = [idx.name for idx in service.indexes]
+    assert "notable" in names and "main" in names
+
+
+@needs_splunklib
+def test_splunklib_submit_event_roundtrip(live_server):
+    """splunk-submit-event — service.indexes[name].submit() POSTs to receivers.
+
+    Regression for `KeyError('main')`: Collection.__getitem__ issues a
+    separate GET /services/data/indexes/<name>, so the single-index entity
+    route must exist and parse.
+    """
+    import splunklib.client as splunk_client
+
+    service = splunk_client.connect(
+        host="127.0.0.1", port=live_server, scheme="https",
+        username="admin", password="changeme", verify=False,
+    )
+    index = service.indexes["main"]
+    # submit returns the receivers/simple ack; must not raise.
+    index.submit("guardian test event", sourcetype="manual", source="guardian")
+
+
+@needs_splunklib
+def test_splunklib_kvstore_collections_roundtrip(live_server):
+    """splunk-kv-store list — service.kvstore reads the ATOM config collection.
+
+    Regression for the JSON-not-ATOM gap on /services/storage/collections/config
+    (empty collection must still parse).
+    """
+    import splunklib.client as splunk_client
+
+    service = splunk_client.connect(
+        host="127.0.0.1", port=live_server, scheme="https",
+        username="admin", password="changeme", verify=False,
+    )
+    # Enumerating the (empty) collection config must not raise a ParseError.
+    assert list(service.kvstore) == []
+
+
+@needs_splunklib
+def test_splunklib_job_share_roundtrip(live_server):
+    """splunk-job-share — set_ttl + the follow-up ACL POST must both ack.
+
+    Regression for the missing /services/search/jobs/{sid}/acl route (the
+    command 404'd on the ACL step after set_ttl succeeded).
+    """
+    import splunklib.client as splunk_client
+
+    service = splunk_client.connect(
+        host="127.0.0.1", port=live_server, scheme="https",
+        username="admin", password="changeme", verify=False,
+    )
+    job = service.jobs.create("search `notable`", count=2)
+    for _ in range(50):
+        if job.is_done():
+            break
+        time.sleep(0.05)
+    job.set_ttl(1800)
+    # The ACL POST SplunkPy issues for splunk-job-share — must not 404.
+    service.post(f"search/jobs/{job.sid}/acl", sharing="global", owner="admin",
+                 **{"perms.read": "*"})

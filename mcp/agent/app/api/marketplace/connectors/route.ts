@@ -99,8 +99,8 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
     iconColor: "#6366f1",
     iconBg: "rgba(99, 102, 241, 0.12)",
     // Fallback only — the live count is read from connector.yaml's spec.tools[]
-    // by loadLiveMeta() below (currently 26). Keep this in step with the yaml.
-    toolCount: 26,
+    // by loadLiveMeta() below (currently 27). Keep this in step with the yaml.
+    toolCount: 27,
     installs: "bundle-internal",
     installCount: 0,
     status: "installed",
@@ -120,10 +120,11 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
     ],
     versions: [
       {
-        version: "0.2.2",
+        version: "0.2.3",
         date: "2026-06-20",
         changes: [
-          "Integration troubleshooting (v0.2.42): get_integration_status reports each configured integration instance's enabled state + last fetch/test error (the diagnostic for a failing SplunkPy fetch); test_integration_instance re-runs an instance's Test button and surfaces the exact error.",
+          "Integration troubleshooting (v0.2.42): get_integration_status reports each configured integration instance's enabled state + last fetch/test error (the diagnostic for a failing SplunkPy fetch); test_integration_instance re-runs an instance's Test button and surfaces the exact error; get_integration_fetch_history reads recent fetch runs (the XSOAR 8 fetch-error source).",
+          "Playbook monitoring (v0.2.42): get_playbook_state reports a running playbook's per-task state on an incident (including sub-playbooks) + whether it ran to success + each failed task's error — the monitoring companion to run_playbook.",
         ],
       },
       {

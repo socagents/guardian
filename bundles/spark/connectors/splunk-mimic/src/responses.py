@@ -136,6 +136,55 @@ def atom_entry_feed(title: str, content: dict[str, Any]) -> str:
     )
 
 
+def atom_collection_feed(title: str, entries: list[tuple[str, dict[str, Any]]]) -> str:
+    """A MULTI-entry ATOM feed — the shape splunklib's Collection consumes.
+
+    splunklib reads a management COLLECTION (service.indexes, service.kvstore,
+    service.saved_searches) as a `<feed>` of `<entry>` elements; each entry's
+    `<title>` is the entity name it keys by (so `service.indexes["main"]`
+    matches the entry titled "main") and `<content>` is the entity's s:dict.
+    Every entry carries `eai:acl` so splunklib's _parse_atom_entry can build
+    the entity namespace without dereferencing a None access (the same crash
+    job status hit). An empty `entries` list yields a valid empty collection.
+    """
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<feed xmlns="{_ATOM_NS}" xmlns:s="{_REST_NS}">',
+        f"  <title>{escape(title)}</title>",
+    ]
+    for name, content in entries:
+        body = dict(content)
+        body.setdefault(
+            "eai:acl",
+            {
+                "owner": "nobody",
+                "app": "search",
+                "sharing": "global",
+                "modifiable": "1",
+                "removable": "1",
+                "can_write": "1",
+            },
+        )
+        entity_path = f"/servicesNS/nobody/search/{title}/{escape(str(name))}"
+        parts.append("  <entry>")
+        parts.append(f"    <title>{escape(str(name))}</title>")
+        parts.append(
+            f"    <id>https://localhost:8089/services/{escape(title)}/{escape(str(name))}</id>"
+        )
+        # splunklib builds a rel->href link map per entry and dereferences
+        # `.alternate` (the canonical entity URL) — without these it raises
+        # `AttributeError: alternate`. Real splunkd emits alternate/list/edit.
+        parts.append(f'    <link href="{entity_path}" rel="alternate"/>')
+        parts.append(f'    <link href="{entity_path}" rel="list"/>')
+        parts.append(f'    <link href="{entity_path}" rel="edit"/>')
+        parts.append('    <content type="text/xml">')
+        parts.append(_sdict_xml(body))
+        parts.append("    </content>")
+        parts.append("  </entry>")
+    parts.append("</feed>")
+    return "\n".join(parts)
+
+
 def server_info_atom(version: str = "8.2.0") -> str:
     """server/info as ATOM. version < 9.0.2 keeps splunklib on the v1
     search/jobs path (its disable_v2_api gate), avoiding the v2 endpoints —
