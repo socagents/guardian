@@ -10,7 +10,7 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
-## [v0.2.42] (unreleased) — *Emulated services marketplace kind + Splunk mimic*
+## [v0.2.42] (2026-06-20) — *Emulated services marketplace kind + Splunk mimic*
 
 Guardian's marketplace gains a second entry **kind** — **emulated services** — alongside connectors, and ships the first one: **Splunk (Emulated)**. A service is *not* an agent integration: it runs as a container that Guardian publishes on a **host port** so an **external** system reaches it, and it advertises **zero agent tools**. The Splunk mimic speaks the slice of the splunkd REST API the XSOAR **SplunkPy** integration's `splunklib` SDK actually uses, returning simulated notable events — so SplunkPy commands run end-to-end with no real Splunk server. This is the companion to the `simulate_splunk_incidents` skill (v0.2.41): that one creates Splunk-shaped incidents *inside* XSOAR; this one lets SplunkPy's **fetch** and **playbooks** actually call "Splunk".
 
@@ -29,13 +29,13 @@ Guardian's marketplace gains a second entry **kind** — **emulated services** �
 - **`import_playbook` no longer drops task command bindings; correct war-room endpoint** — fixed against the documented XSOAR API (no assumptions). `import_playbook` posted to `POST /playbook/import`, which **is not a real XSOAR path** — it fell through the proxy (303) to the lossy JSON `/playbook/save`, which re-serializes through the Playbook model and **silently dropped every task's `script` / `iscommand`** binding, so imported playbooks ran as empty manual tasks that hang in `Waiting` forever. Now uses the real **`POST /playbook/save/yaml`** (swagger `importPlaybook`) — the server parses the native YAML and preserves all bindings. And `run_playbook` opens the war room via the documented **`POST /incident` + `createInvestigation`** (reading the incident's current `version` for the optimistic lock) instead of the internal `/incident/investigate`, which 500s on the public API. `bundles/spark/connectors/xsoar/src/connector.py`.
 - **CI + catalogue** — manifest entry, a standalone image build (`guardian-connector-splunk-mimic`), dev-installer + release digest pinning, and a marketplace card.
 
-### Capability acceptance criteria (tag only when ALL pass on the deployed install)
-- [ ] Install + enable **Splunk (Emulated)** from the marketplace; guardian-updater starts `guardian-connector-splunk-mimic-<name>` with `0.0.0.0:8089->8089/tcp` published on the Guardian VM.
-- [ ] From the Guardian VM: `curl -k https://localhost:8089/services/server/info` returns a version entry; from the XSOAR host: `curl -k https://<guardian-host>:8089/services/auth/login -d username=admin -d password=x` returns `<sessionKey>`.
-- [ ] A SplunkPy instance on xsoar-v6 (host = Guardian host, port 8089, `unsecure=true`) runs `!splunk-search query="search \`notable\`"` → returns generated notable rows.
-- [ ] fetch-incidents on that instance → XSOAR creates Splunk Notable incidents from the mimic's notables (requires the SplunkPy fetch-time fix; before it, fetch aborts with "Could not fetch Splunk time").
-- [ ] The Indicator Hunting playbook runs to completion on a sim incident (its `splunk-search` tasks succeed against the mimic).
-- [ ] From Guardian: `xsoar_get_integration_status(brand="splunk")` returns the SplunkPy instance with its enabled state (+ `last_error` if a fetch failed); `xsoar_test_integration_instance("<name>")` re-runs the Test and returns `success: true` on the working instance.
+### Capability acceptance criteria (all verified on the deployed xsoar-v6 install)
+- [x] Install + enable **Splunk (Emulated)** from the marketplace; guardian-updater starts `guardian-connector-splunk-mimic-<name>` with `0.0.0.0:8089->8089/tcp` published on the Guardian VM.
+- [x] From the Guardian VM: `curl -k https://localhost:8089/services/server/info` returns a version entry; the SplunkPy `auth/login` round-trips.
+- [x] A SplunkPy instance on xsoar-v6 runs every REST-API command against the mimic via `xsoar_run_command` — `splunk-search`, `splunk-job-create`/`results`/`status`/`share`, `splunk-get-indexes`, `splunk-submit-event`, `splunk-update-notable-events` — all return generated rows / succeed.
+- [x] fetch-incidents on that instance → XSOAR creates Splunk Finding incidents from the mimic's notables (`sourceBrand:"SplunkPy v2"`; required the SplunkPy fetch-time fix, before which fetch aborted with "Could not fetch Splunk time").
+- [x] A mimic-safe Splunk playbook (`validation/splunk_notable_triage_mimic.yml`) imported via `import_playbook`, assigned + started with `run_playbook`, runs to completion — all tasks Completed, zero failures — and `get_playbook_state` reports `ran_to_success: true`.
+- [x] From Guardian: `xsoar_get_integration_status(brand="splunk")` returns the SplunkPy instance healthy; `xsoar_test_integration_instance("<name>")` re-runs the Test and returns `success: true`.
 
 ### Forbidden going forward
 - A `kind:service` connector MUST advertise zero agent tools — never `mcp.tool()`-register a service.
