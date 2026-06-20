@@ -2244,35 +2244,37 @@ async def _ensure_investigation(fetcher: XSOARFetcher, incident_id: str) -> bool
 
     A FETCHED / pending incident (status 0) has no investigation, so a war-room
     command like `!setPlaybook` can't target it ("investigation not found").
-    `POST /incident/investigate {id}` opens it — investigationId == incident id
-    — and you MUST investigate BEFORE running a war-room command. Best-effort +
-    idempotent: an already-open incident no-ops. On a generation/gateway where
-    the direct REST redirects, fall back to the Core REST API integration in
-    the playground (needs playground_id). Returns True if an open call ran.
+    The DOCUMENTED way to open one is `POST /incident` with
+    `createInvestigation: true` (the internal `/incident/investigate` endpoint
+    500s — it needs server-side investigation context the public API can't
+    supply). /incident is an upsert keyed by `id`, so we pass the incident's
+    CURRENT `version` (optimistic lock, read from /incidents/search) to target
+    the existing incident rather than create a new one. Best-effort: returns
+    True if the open call succeeded. (createInvestigation also starts the
+    incident-type's default playbook; the caller's !setPlaybook then switches to
+    the requested one.)
     """
-    body = {"id": str(incident_id)}
+    iid = str(incident_id)
+    version = None
     try:
-        await fetcher.post("/incident/investigate", body)
+        search = await fetcher.post(
+            "/incidents/search",
+            {"filter": {"id": [iid], "page": 0, "size": 1}},
+        )
+        rows = search.get("data") or []
+        if rows:
+            version = rows[0].get("version")
+    except XSOARError:
+        pass
+
+    body: dict[str, Any] = {"id": iid, "createInvestigation": True}
+    if version is not None:
+        body["version"] = version
+    try:
+        await fetcher.post("/incident", body)
         return True
-    except XSOARError as exc:
-        # Direct call redirected/failed (some gateways block it, like
-        # /playbook/import) — retry via the Core REST API in the playground.
-        cfg = _get_xsoar_config()
-        playground_id = cfg.get("playground_id")
-        if not playground_id:
-            # Can't open it here; let the caller's setPlaybook surface the
-            # real "investigation not found" if it's genuinely missing.
-            _ = exc
-            return False
-        payload = json.dumps(body, separators=(",", ":"))
-        try:
-            await _execute_command(
-                fetcher, str(playground_id),
-                f"!core-api-post uri=/incident/investigate body=`{payload}`",
-            )
-            return True
-        except XSOARError:  # pragma: no cover — best effort
-            return False
+    except XSOARError:
+        return False
 
 
 @_wrap_xsoar_call
@@ -2615,12 +2617,15 @@ async def xsoar_import_playbook(
     validate structure first with playbook_validate. This WRITES to the tenant
     — it is approval-gated like every connector action.
 
-    Path by generation: XSOAR 6 uses the direct `POST /playbook/import`
-    (multipart). Cortex 8's public API doesn't proxy that (405), so — when the
-    Core REST API integration is installed AND the instance has a playground_id
-    — Guardian imports via that integration (core-api-post → /playbook/save).
-    Without the integration/playground, returns a guided-manual message
-    (import_unavailable=True).
+    Path by generation: imports via the documented `POST /playbook/save/yaml`
+    (multipart `file` part carrying the raw YAML — the server parses native v6
+    YAML, so task command bindings survive). Cortex 8's public API doesn't proxy
+    that (405), so — when the Core REST API integration is installed AND the
+    instance has a playground_id — Guardian falls back to that integration
+    (core-api-post → /playbook/save); note that JSON path is lossy (it
+    re-serializes through the Playbook model and drops task.script/iscommand),
+    so prefer the direct YAML upload. Without the integration/playground,
+    returns a guided-manual message (import_unavailable=True).
 
     Args:
         playbook_yaml: The full playbook definition as a YAML (or JSON) string.
@@ -2640,9 +2645,16 @@ async def xsoar_import_playbook(
         "file": (fname, playbook_yaml.encode("utf-8"), "application/octet-stream"),
     }
     try:
-        response = await fetcher.post_multipart("/playbook/import", files=files)
+        # The REAL import endpoint is POST /playbook/save/yaml (swagger
+        # operationId importPlaybook, "Import and override playbook"). There is
+        # NO /playbook/import path — sending there falls through the proxy to
+        # the SPA catch-all (303) and then to the lossy JSON /playbook/save,
+        # which re-serializes through the v8 Playbook model and SILENTLY DROPS
+        # each task's command binding (task.script / iscommand). /save/yaml
+        # makes the SERVER parse the native v6 YAML, preserving every binding.
+        response = await fetcher.post_multipart("/playbook/save/yaml", files=files)
     except XSOARRequestError as exc:
-        # Cortex 8's public API gateway doesn't proxy /playbook/import (405),
+        # Cortex 8's public API gateway doesn't proxy /playbook/save/yaml (405),
         # and v6 REST endpoints 303-redirect on Cortex 8. When the direct path
         # is unavailable, try the Core REST API integration path (issue #46):
         # core-api-post → /playbook/save run in the playground. That needs the

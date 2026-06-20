@@ -1264,7 +1264,7 @@ def test_import_playbook_success(monkeypatch):
     assert out["playbook_name"] == "My PB"
     assert out["imported"] is True
     method, path, files = rf.calls[0]
-    assert (method, path) == ("POST_MULTIPART", "/playbook/import")
+    assert (method, path) == ("POST_MULTIPART", "/playbook/save/yaml")
     assert "file" in files
 
 
@@ -1669,8 +1669,12 @@ def test_get_playbook_state_no_playbook(monkeypatch):
 # ─── run_playbook investigation bootstrap + list_incidents source (v0.2.42) ──
 
 def test_run_playbook_opens_investigation_then_setplaybook(monkeypatch):
+    # _ensure_investigation: reads the version via /incidents/search, then opens
+    # the war room via POST /incident {createInvestigation:true} (NOT the
+    # 500-prone /incident/investigate), then !setPlaybook switches to the target.
     f = _ScriptedFetcher(replies={
-        "/incident/investigate": {"id": "42", "investigation": {"id": "42"}},
+        "/incidents/search": {"data": [{"id": "42", "version": 7}], "total": 1},
+        "/incident": {"id": "42", "version": 8, "investigationId": "42"},
         "/entry/execute/sync": {"data": [{"type": 1,
                                           "contents": "Changed playbook from 'Splunk Generic' to 'My PB'."}]},
     })
@@ -1680,9 +1684,14 @@ def test_run_playbook_opens_investigation_then_setplaybook(monkeypatch):
     assert out["ok"] is True
     assert out["opened_investigation"] is True
     paths = [p for (_m, p, _b) in f.calls]
-    assert "/incident/investigate" in paths
+    assert "/incident" in paths  # war room opened the documented way
+    assert "/incident/investigate" not in paths  # NOT the 500-prone endpoint
     # the war room is opened BEFORE setPlaybook runs
-    assert paths.index("/incident/investigate") < paths.index("/entry/execute/sync")
+    assert paths.index("/incident") < paths.index("/entry/execute/sync")
+    # the open call carried the optimistic-lock version + createInvestigation
+    open_body = [b for (_m, p, b) in f.calls if p == "/incident"][0]
+    assert open_body.get("createInvestigation") is True
+    assert open_body.get("version") == 7
     exec_call = [b for (_m, p, b) in f.calls if p == "/entry/execute/sync"][0]
     assert "setPlaybook" in str(exec_call) and "My PB" in str(exec_call)
 
