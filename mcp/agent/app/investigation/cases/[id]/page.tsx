@@ -276,7 +276,15 @@ export default function CaseDetailPage() {
 
       {tab === "campaign" && (
         <div className="grid grid-cols-1 gap-4">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <a
+              href={`/api/agent/cases/${id}/stix`}
+              download={`guardian-case-${id}-stix.json`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant px-3 py-1.5 text-[11px] text-on-surface-variant hover:text-on-surface"
+            >
+              <span className="material-symbols-outlined text-[14px]">download</span>
+              Export STIX 2.1
+            </a>
             <button
               onClick={runRollup}
               disabled={rollingUp}

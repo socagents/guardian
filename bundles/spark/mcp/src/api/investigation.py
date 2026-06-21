@@ -188,6 +188,28 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
             })
         return JSONResponse({"related": out, "count": len(out)})
 
+    @mcp.custom_route("/api/v1/issues/{id}/stix", methods=["GET"], include_in_schema=False)
+    async def issue_stix(request: Request) -> JSONResponse:
+        # v0.2.48 (stage D) — STIX 2.1 bundle for one issue (read/assemble only).
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        from usecase.builtin_components import _stix  # noqa: PLC0415
+        issue = store.get_issue(request.path_params["id"])
+        if issue is None:
+            return JSONResponse({"error": "issue not found"}, status_code=404)
+        return JSONResponse(_stix.build_issue_bundle(store, issue))
+
+    @mcp.custom_route("/api/v1/cases/{id}/stix", methods=["GET"], include_in_schema=False)
+    async def case_stix(request: Request) -> JSONResponse:
+        # v0.2.48 (stage D) — campaign-level STIX 2.1 bundle for one case.
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        from usecase.builtin_components import _stix  # noqa: PLC0415
+        case = store.get_case(request.path_params["id"])
+        if case is None:
+            return JSONResponse({"error": "case not found"}, status_code=404)
+        return JSONResponse(_stix.build_case_bundle(store, case))
+
     @mcp.custom_route("/api/v1/issues/{id}", methods=["PATCH"], include_in_schema=False)
     async def patch_issue(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:

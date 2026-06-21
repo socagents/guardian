@@ -388,12 +388,24 @@ export default function IssueDetailPage() {
       )}
 
       {tab === "report" && (
-        <ReportTab
-          report={issue.report}
-          busy={genReport}
-          disabled={genReport}
-          onGenerate={generateReport}
-        />
+        <div className="grid grid-cols-1 gap-3">
+          <div className="flex justify-end">
+            <a
+              href={`/api/agent/issues/${id}/stix`}
+              download={`guardian-issue-${id}-stix.json`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant px-3 py-1.5 text-[11px] text-on-surface-variant hover:text-on-surface"
+            >
+              <span className="material-symbols-outlined text-[14px]">download</span>
+              Export STIX 2.1
+            </a>
+          </div>
+          <ReportTab
+            report={issue.report}
+            busy={genReport}
+            disabled={genReport}
+            onGenerate={generateReport}
+          />
+        </div>
       )}
 
       {tab === "indicators" && (
