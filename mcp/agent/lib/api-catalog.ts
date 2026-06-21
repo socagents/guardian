@@ -433,7 +433,6 @@ const COGNITIVE: ApiEndpoint[] = [
     ],
     responses: [{ status: "200", description: "Transcript." }],
   },
-  // ─── v0.7.1 overnight quality pass — auto-added cognitive entries ───
   {
     id: "sessions-by-sessionId-fork-post",
     category: "cognitive",
@@ -962,7 +961,7 @@ const COGNITIVE: ApiEndpoint[] = [
     method: "GET",
     path: "/api/agent/knowledge/{name}/tags",
     summary: "List tag facets for one knowledge base",
-    description: "Returns the distinct tags present in a single named knowledge base, each with a per-tag document count, ordered by count desc then tag asc (capped at 200). Drives the filter chips on the /knowledge/{name} browser view (v0.2.20). Read-only.",
+    description: "Returns the distinct tags present in a single named knowledge base, each with a per-tag document count, ordered by count desc then tag asc (capped at 200). Drives the filter chips on the /knowledge/{name} browser view. Read-only.",
     pathParams: [
       {
         name: "name",
@@ -1319,7 +1318,7 @@ const CONFIGURATION: ApiEndpoint[] = [
     path: "/api/agent/personality",
     summary: "Get the agent's persona document",
     description:
-      "Single-row persona — operator-defined markdown plus operational settings (action policy, model defaults, notifications). Stored in MCP-side personality.db; the agent's chat-route system instruction reads `personalityMd` into the prompt and uses `actionPolicy` for safety classification (v0.1.23+).",
+      "Single-row persona — operator-defined markdown plus operational settings (action policy, model defaults, notifications). Stored in MCP-side personality.db; the agent's chat-route system instruction reads `personalityMd` into the prompt and uses `actionPolicy` for safety classification.",
     responses: [
       {
         status: "200",
@@ -1348,7 +1347,7 @@ const CONFIGURATION: ApiEndpoint[] = [
     path: "/api/agent/personality",
     summary: "Replace the persona document",
     description:
-      "Last-write-wins. Bumps version; previous version is preserved in personality_history. v0.1.23+: the agent prefers `personality_patch` for partial updates (atomic merge) — direct PUT requires sending the full blob.",
+      "Last-write-wins. Bumps version; previous version is preserved in personality_history. The agent prefers `personality_patch` for partial updates (atomic merge) — direct PUT requires sending the full blob.",
     body: {
       contentType: "application/json",
       schema: {
@@ -1508,7 +1507,6 @@ const CONFIGURATION: ApiEndpoint[] = [
       },
     ],
   },
-  // ─── v0.7.1 overnight quality pass — auto-added configuration entries ───
   {
     id: "backup",
     category: "configuration",
@@ -1786,11 +1784,6 @@ const CONFIGURATION: ApiEndpoint[] = [
         status: "404",
         description: "No instance with that id exists (store.get returned None).",
         example: { error: "not found" }
-      },
-      {
-        status: "409",
-        description: "store.update raised a ValueError whose message contains 'already has an active instance'. Note: as of v0.2.29 the store's one-active-per-connector guard was removed (multi-active-instance), so the store no longer emits this message — the handler branch (instances.py:667-670) still exists but is effectively unreachable for current store code.",
-        example: { error: "connector xsoar already has an active instance" }
       },
       {
         status: "401",
@@ -2348,7 +2341,7 @@ const CONFIGURATION: ApiEndpoint[] = [
     method: "GET",
     path: "/api/agent/operator-state/{key}",
     summary: "Read one operator workflow-state value by key",
-    description: "Returns the operator workflow-state row for a single key (tested-journey marks, metrics-query bookmarks, etc.). This is the v0.5.1 canonical home that replaced browser localStorage: a key-value SQLite store (operator_state.db) that is NOT a secret and NOT platform catalogue. The agent-side route proxies to the embedded MCP at GET /api/v1/operator-state/{key}; the MCP returns {key, value, updated_at} where value is the parsed JSON the hook stored, or 404 when the key has never been set.",
+    description: "Returns the operator workflow-state row for a single key (tested-journey marks, metrics-query bookmarks, etc.). This is the canonical home for operator workflow state: a key-value SQLite store (operator_state.db) that is NOT a secret and NOT platform catalogue. The agent-side route proxies to the embedded MCP at GET /api/v1/operator-state/{key}; the MCP returns {key, value, updated_at} where value is the parsed JSON the hook stored, or 404 when the key has never been set.",
     pathParams: [
       {
         name: "key",
@@ -3190,7 +3183,6 @@ const SELF_MOD: ApiEndpoint[] = [
     ],
     riskTier: "soft",
   },
-  // ─── v0.7.1 overnight quality pass — auto-added self-modification entries ───
   {
     id: "agent-definitions",
     category: "configuration",
@@ -4192,7 +4184,7 @@ const SELF_MOD: ApiEndpoint[] = [
     method: "GET",
     path: "/api/agent/plugins",
     summary: "List filesystem-discovered plugins",
-    description: "Read-only inventory of the Round-15 / Phase X filesystem plugin tree (bundles/spark/plugins/<name>/). Returns every discovered plugin with manifest metadata and contribution counts. Applies NO contributions — calls loader.list_loaded(), which reads manifests and counts contributions without side effects; applying contributions is the /plugins/reload endpoint's job. The agent route proxies to the embedded MCP at GET /api/v1/plugins with the MCP_TOKEN bearer and a 10s timeout.",
+    description: "Read-only inventory of the filesystem plugin tree (bundles/spark/plugins/<name>/). Returns every discovered plugin with manifest metadata and contribution counts. Applies NO contributions — calls loader.list_loaded(), which reads manifests and counts contributions without side effects; applying contributions is the /plugins/reload endpoint's job. The agent route proxies to the embedded MCP at GET /api/v1/plugins with the MCP_TOKEN bearer and a 10s timeout.",
     responses: [
       {
         status: "200",
@@ -4703,7 +4695,6 @@ const OBSERVABILITY: ApiEndpoint[] = [
       },
     ],
   },
-  // ─── v0.7.1 overnight quality pass — auto-added observability entries ───
   {
     id: "bench-runs",
     category: "observability",
@@ -4715,7 +4706,7 @@ const OBSERVABILITY: ApiEndpoint[] = [
       {
         name: "limit",
         type: "integer",
-        description: "Max number of runs to return, newest-first. The agent route forwards \"20\" when the query param is absent. The MCP applies NO default cap as of v0.6.10: a missing/empty/non-integer/<=0 limit maps to SQL LIMIT -1 (unbounded). Pre-v0.6.10 the MCP defaulted to 20 with a min(limit,100) cap.",
+        description: "Max number of runs to return, newest-first. The agent route forwards \"20\" when the query param is absent. The MCP applies no default cap: a missing/empty/non-integer/<=0 limit maps to SQL LIMIT -1 (unbounded).",
         example: "20"
       }
     ],
@@ -4916,7 +4907,7 @@ const OBSERVABILITY: ApiEndpoint[] = [
     path: "/api/agent/detections",
     summary: "List detections",
     description:
-      "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
+      "Returns the detection-rule inventory as `{ rules: [...], count }`, newest first. Optional query params (`severity`, `technique` MITRE T-code, `limit`) filter and bound the result. Proxies to the embedded MCP at GET /api/v1/detections; backs the /observability/detections page.",
     responses: [{ status: "200", description: "OK" }],
   },
   {
@@ -4926,7 +4917,7 @@ const OBSERVABILITY: ApiEndpoint[] = [
     path: "/api/agent/detections/{rule_id}",
     summary: "Get detections",
     description:
-      "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
+      "Returns a single detection rule by id as `{ rule: {...}, fires: { count, last_seen, ... } }`, pairing the rule definition with a rollup of its recent fire activity. Proxies to the embedded MCP at GET /api/v1/detections/{rule_id}.",
     responses: [{ status: "200", description: "OK" }],
   },
   {
@@ -4936,7 +4927,7 @@ const OBSERVABILITY: ApiEndpoint[] = [
     path: "/api/agent/detections/{rule_id}/fires",
     summary: "List rule-fire events for a detection rule",
     description:
-      "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
+      "Returns the timeline of individual fire events for one detection rule as `{ fires: [...], count }`, newest first. Optional query params `limit` (default 100) and `since` (ISO-8601 timestamp; only fires after it) bound the window. Proxies to the embedded MCP at GET /api/v1/detections/{rule_id}/fires.",
     responses: [{ status: "200", description: "OK" }],
   },
   {
@@ -4946,7 +4937,7 @@ const OBSERVABILITY: ApiEndpoint[] = [
     path: "/api/agent/detections/coverage/techniques",
     summary: "Coverage breakdown by MITRE technique",
     description:
-      "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
+      "Returns detection coverage aggregated by MITRE ATT&CK technique as `{ techniques: [{ technique, rule_count, fire_count, ... }], count }`, so operators can see which T-codes have detection rules behind them. Proxies to the embedded MCP at GET /api/v1/detections/coverage/techniques; backs the Coverage tab of the /observability/detections page.",
     responses: [{ status: "200", description: "OK" }],
   },
   {
@@ -4956,7 +4947,7 @@ const OBSERVABILITY: ApiEndpoint[] = [
     path: "/api/agent/detections/sync",
     summary: "Sync detections from configured XSIAM/EDR instances",
     description:
-      "Auto-added v0.7.1. Full request/response schema is a follow-up — run the endpoint via the try-it-out form to see the response shape.",
+      "Bulk-upserts a batch of detection rules into the inventory. Accepts a JSON body of `{ issues: [{ rule_id, rule_name, severity, technique?, last_fired, ... }, ...] }` and writes each row through. Used by external tooling that pre-fetches rules from XSIAM/SIEM outside the standard detection-inventory sync skill (the canonical path for most operators). Proxies to the embedded MCP at POST /api/v1/detections/sync.",
     responses: [{ status: "200", description: "OK" }],
   },
   {
@@ -5171,13 +5162,13 @@ const OBSERVABILITY: ApiEndpoint[] = [
     method: "GET",
     path: "/api/agent/version",
     summary: "Running stack version and image digests",
-    description: "Native agent route (no MCP proxy; returns NextResponse.json directly) that reports the pinned GUARDIAN_VERSION the agent stack is running, resolved from process.env.GUARDIAN_VERSION then NEXT_PUBLIC_GUARDIAN_VERSION (both.trim()'d), falling back to 'dev'. v0.3.0+ it also returns per-stack-image content digests for guardian-agent, guardian-updater, and guardian-browser, sourced from the compose-injected DIGEST_GUARDIAN_AGENT/UPDATER/BROWSER env vars; a digest is included only when its value starts with 'sha256:'. The digests object is omitted entirely when no qualifying digests are present (e.g. dev builds). Powers the sidebar version indicator and the About modal.",
+    description: "Native agent route (no MCP proxy; returns NextResponse.json directly) that reports the pinned GUARDIAN_VERSION the agent stack is running, resolved from process.env.GUARDIAN_VERSION then NEXT_PUBLIC_GUARDIAN_VERSION (both.trim()'d), falling back to 'dev'. It also returns per-stack-image content digests for guardian-agent, guardian-updater, and guardian-browser, sourced from the compose-injected DIGEST_GUARDIAN_AGENT/UPDATER/BROWSER env vars; a digest is included only when its value starts with 'sha256:'. The digests object is omitted entirely when no qualifying digests are present (e.g. dev builds). Powers the sidebar version indicator and the About modal.",
     responses: [
       {
         status: "200",
         description: "Version label, plus an optional digests map keyed by compose service name (omitted entirely when no sha256:-prefixed digests are present). No authentication or error branches in the handler itself.",
         example: {
-          version: "v0.2.36",
+          version: "<running stack version>",
           digests: {
             "guardian-agent": "sha256:abc123",
             "guardian-updater": "sha256:def456",
@@ -5243,7 +5234,6 @@ const IDENTITY: ApiEndpoint[] = [
     responses: [{ status: "200", description: "Revoked." }],
     riskTier: "credential",
   },
-  // ─── v0.7.1 overnight quality pass — auto-added identity entries ───
   {
     id: "auth-change-password-post",
     category: "identity",
@@ -5385,7 +5375,7 @@ const IDENTITY: ApiEndpoint[] = [
     method: "GET",
     path: "/api/auth/status",
     summary: "Report whether the session cookie is currently valid",
-    description: "Native Next.js route polled by the client-side AuthGate on mount, bfcache restore, and tab-visibility change. Reads the guardian_session cookie and calls lib/auth-store.validateSession(token), which POSTs {session_token} to the embedded MCP at /api/v1/ui/auth/session (positive results cached 30s in-process; negative results never cached so revocation takes effect immediately). Returns {authenticated,credentialsChanged,username}: authenticated=true only for a valid, non-expired, non-revoked token; otherwise authenticated=false, credentialsChanged=false, username=null (the same all-false shape is returned when the MCP is unreachable). Always sets Cache-Control no-store/no-cache + Pragma no-cache so an intermediary can't serve a stale authenticated:true after sign-out. The pre-v0.4.0 setupRequired field was removed.",
+    description: "Native Next.js route polled by the client-side AuthGate on mount, bfcache restore, and tab-visibility change. Reads the guardian_session cookie and calls lib/auth-store.validateSession(token), which POSTs {session_token} to the embedded MCP at /api/v1/ui/auth/session (positive results cached 30s in-process; negative results never cached so revocation takes effect immediately). Returns {authenticated,credentialsChanged,username}: authenticated=true only for a valid, non-expired, non-revoked token; otherwise authenticated=false, credentialsChanged=false, username=null (the same all-false shape is returned when the MCP is unreachable). Always sets Cache-Control no-store/no-cache + Pragma no-cache so an intermediary can't serve a stale authenticated:true after sign-out.",
     responses: [
       {
         status: "200",
@@ -6358,6 +6348,178 @@ const INVESTIGATION: ApiEndpoint[] = [
     ],
     riskTier: "soft",
     tags: ["investigation", "issues", "events", "timeline", "create"],
+  },
+  {
+    id: "issues-by-id-report",
+    category: "investigation",
+    method: "GET",
+    path: "/api/agent/issues/{id}/report",
+    summary: "Fetch an issue's generated report",
+    description: "Returns the generated closure-report markdown for an issue as {issue_id, report}. Returns 404 if the issue does not exist or no report has been generated yet. Proxies to the embedded MCP at GET /api/v1/issues/{id}/report.",
+    pathParams: [
+      {
+        name: "id",
+        type: "string",
+        description: "The issue id (UUID) whose report to fetch.",
+        required: true,
+        example: "b1c2d3e4-e5f6-7890-abcd-ef1234567890"
+      }
+    ],
+    responses: [
+      {
+        status: "200",
+        description: "{issue_id, report}. report is the full markdown closure document for the issue.",
+        example: {
+          issue_id: "b1c2d3e4-e5f6-7890-abcd-ef1234567890",
+          report: "# Investigation report\n\n## Summary\nConfirmed true positive; host-12 reimaged.\n"
+        }
+      },
+      {
+        status: "404",
+        description: "No issue with that id ({\"error\":\"issue not found\"}), or the issue exists but has no report yet ({\"error\":\"no report generated for this issue yet\"})."
+      },
+      {
+        status: "401",
+        description: "Agent middleware rejected the request: no/invalid guardian_session cookie and no valid guardian_ak_* bearer API key."
+      }
+    ],
+    tags: ["investigation", "issues", "report", "read-only"],
+  },
+  {
+    id: "cases-by-id-related",
+    category: "investigation",
+    method: "GET",
+    path: "/api/agent/cases/{id}/related",
+    summary: "List a case's related cases",
+    description: "Returns the typed cross-case links touching a case as {related, count}. Each entry carries the relationship_type, an optional note, a direction (incoming/outgoing relative to this case), and the other case's id/title/status. Returns 404 if the case does not exist. Proxies to the embedded MCP at GET /api/v1/cases/{id}/related.",
+    pathParams: [
+      {
+        name: "id",
+        type: "string",
+        description: "The case id (UUID) whose related cases to list.",
+        required: true,
+        example: "c0ffee00-1234-5678-9abc-def012345678"
+      }
+    ],
+    responses: [
+      {
+        status: "200",
+        description: "{related, count}. related is an array of typed cross-case edges, each with the other case's id/title/status and the edge direction.",
+        example: {
+          related: [
+            {
+              relationship_type: "duplicate-of",
+              note: "Same campaign, different tenant",
+              direction: "outgoing",
+              other_case: {
+                id: "deadbeef-1111-2222-3333-444455556666",
+                title: "APT29 follow-on intrusion",
+                status: "open"
+              }
+            }
+          ],
+          count: 1
+        }
+      },
+      {
+        status: "404",
+        description: "No case with that id: {\"error\":\"case not found\"}."
+      },
+      {
+        status: "401",
+        description: "Agent middleware rejected the request: no/invalid guardian_session cookie and no valid guardian_ak_* bearer API key."
+      }
+    ],
+    tags: ["investigation", "cases", "relationships", "campaign", "read-only"],
+  },
+  {
+    id: "issues-by-id-stix",
+    category: "investigation",
+    method: "GET",
+    path: "/api/agent/issues/{id}/stix",
+    summary: "Export an issue as a STIX 2.1 bundle",
+    description: "Assembles and returns the issue (its indicators and relationships) as a STIX 2.1 bundle (application/json) suitable for sharing with threat-intel platforms. Returns 404 if the issue does not exist. Proxies to the embedded MCP at GET /api/v1/issues/{id}/stix.",
+    pathParams: [
+      {
+        name: "id",
+        type: "string",
+        description: "The issue id (UUID) to export as STIX.",
+        required: true,
+        example: "b1c2d3e4-e5f6-7890-abcd-ef1234567890"
+      }
+    ],
+    responses: [
+      {
+        status: "200",
+        description: "A STIX 2.1 bundle object: {type:\"bundle\", id, objects:[...]} where objects are the issue's STIX SDOs/SROs (indicators, relationships, etc.).",
+        example: {
+          type: "bundle",
+          id: "bundle--a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          objects: [
+            {
+              type: "indicator",
+              spec_version: "2.1",
+              id: "indicator--11111111-2222-3333-4444-555566667777",
+              pattern: "[ipv4-addr:value = '203.0.113.7']",
+              pattern_type: "stix"
+            }
+          ]
+        }
+      },
+      {
+        status: "404",
+        description: "No issue with that id: {\"error\":\"issue not found\"}."
+      },
+      {
+        status: "401",
+        description: "Agent middleware rejected the request: no/invalid guardian_session cookie and no valid guardian_ak_* bearer API key."
+      }
+    ],
+    tags: ["investigation", "issues", "stix", "export", "read-only"],
+  },
+  {
+    id: "cases-by-id-stix",
+    category: "investigation",
+    method: "GET",
+    path: "/api/agent/cases/{id}/stix",
+    summary: "Export a case as a STIX 2.1 bundle",
+    description: "Assembles and returns the case (campaign) as a STIX 2.1 bundle (application/json), rolling up the STIX objects across its grouped issues for sharing with threat-intel platforms. Returns 404 if the case does not exist. Proxies to the embedded MCP at GET /api/v1/cases/{id}/stix.",
+    pathParams: [
+      {
+        name: "id",
+        type: "string",
+        description: "The case id (UUID) to export as STIX.",
+        required: true,
+        example: "c0ffee00-1234-5678-9abc-def012345678"
+      }
+    ],
+    responses: [
+      {
+        status: "200",
+        description: "A campaign-level STIX 2.1 bundle object: {type:\"bundle\", id, objects:[...]} aggregating the STIX SDOs/SROs across the case's issues.",
+        example: {
+          type: "bundle",
+          id: "bundle--c0ffee00-1234-5678-9abc-def012345678",
+          objects: [
+            {
+              type: "campaign",
+              spec_version: "2.1",
+              id: "campaign--88889999-aaaa-bbbb-cccc-ddddeeeeffff",
+              name: "APT29 follow-on intrusion"
+            }
+          ]
+        }
+      },
+      {
+        status: "404",
+        description: "No case with that id: {\"error\":\"case not found\"}."
+      },
+      {
+        status: "401",
+        description: "Agent middleware rejected the request: no/invalid guardian_session cookie and no valid guardian_ak_* bearer API key."
+      }
+    ],
+    tags: ["investigation", "cases", "stix", "campaign", "export", "read-only"],
   },
 ];
 
