@@ -2028,11 +2028,14 @@ async def xsoar_complete_task(
 
     Runs XSOAR's `!taskComplete` command (a war-room automation command, not a
     REST endpoint) in the playground, targeting the given incident's task. Use
-    to advance a stuck playbook task. Requires the instance's playground_id.
+    to advance a Waiting manual task. Requires the instance's playground_id.
+    Find the task_id with xsoar_get_playbook_state — its `tasks` list gives each
+    task's id + state; pick the one in state "Waiting".
 
     Args:
         incident_id: The XSOAR incident id that owns the task.
-        task_id: The playbook task id (or tag) to complete.
+        task_id: The playbook task id (the work-plan node id, e.g. "1") to
+            complete — from xsoar_get_playbook_state's `tasks` list.
         comment: Optional completion note recorded on the task.
 
     Returns:
@@ -2399,10 +2402,16 @@ _FAILED_TASK_STATES = {"Error", "LoopError"}
 _ERROR_ENTRY_TYPE = 4  # XSOAR war-room entry type for an error
 
 
-def _walk_workplan_tasks(tasks: Any, counts: dict, failed: list) -> None:
+def _walk_workplan_tasks(
+    tasks: Any, counts: dict, failed: list, collected: Optional[list] = None
+) -> None:
     """Recurse a work-plan task map: bucket each task by state, collect the
-    failed (Error/LoopError) ones. Sub-playbook tasks recurse so a failure
-    inside a nested playbook still surfaces."""
+    failed (Error/LoopError) ones, and — when `collected` is given — record a
+    compact {id, name, state, type} for EVERY task. The task list lets callers
+    see task-by-task progress and, crucially, find a Waiting manual task's id to
+    drive xsoar_complete_task (the work plan is the only place those ids live).
+    Sub-playbook tasks recurse so a failure inside a nested playbook still
+    surfaces."""
     if not isinstance(tasks, dict):
         return
     for node_id, node in tasks.items():
@@ -2411,8 +2420,15 @@ def _walk_workplan_tasks(tasks: Any, counts: dict, failed: list) -> None:
         state = node.get("state") or ""
         bucket = _TASK_STATE_BUCKET.get(state, "other")
         counts[bucket] = counts.get(bucket, 0) + 1
+        defn = node.get("task") if isinstance(node.get("task"), dict) else {}
+        if collected is not None:
+            collected.append({
+                "id": node.get("id") or node_id,
+                "name": defn.get("name"),
+                "state": state or "New",
+                "type": defn.get("type"),
+            })
         if state in _FAILED_TASK_STATES:
-            defn = node.get("task") if isinstance(node.get("task"), dict) else {}
             failed.append({
                 "id": node.get("id") or node_id,
                 "name": defn.get("name"),
@@ -2421,7 +2437,7 @@ def _walk_workplan_tasks(tasks: Any, counts: dict, failed: list) -> None:
             })
         sub = node.get("subPlaybook")
         if isinstance(sub, dict):
-            _walk_workplan_tasks(sub.get("tasks"), counts, failed)
+            _walk_workplan_tasks(sub.get("tasks"), counts, failed, collected)
 
 
 def _extract_inv_playbook(raw: Any) -> Optional[dict]:
@@ -2536,9 +2552,12 @@ async def xsoar_get_playbook_state(incident_id: str) -> dict:
     Returns:
         {ok, incident_id, has_playbook, playbook_id, playbook_name,
         overall_state, ran_to_success, counts: {completed, error, waiting,
-        inprogress, skipped, blocked, new, ...}, task_total, failed_tasks:
-        [{id, name, scriptId, state, errorMessage?}]}. ran_to_success is true
-        only when overall_state == 'Completed' AND no task is in Error/LoopError.
+        inprogress, skipped, blocked, new, ...}, task_total, tasks: [{id, name,
+        state, type}] (capped at 200; tasks_truncated flags overflow),
+        failed_tasks: [{id, name, scriptId, state, errorMessage?}]}.
+        ran_to_success is true only when overall_state == 'Completed' AND no
+        task is in Error/LoopError. Use the `tasks` list to find a Waiting
+        manual task's id to pass to xsoar_complete_task.
     """
     if not incident_id:
         raise ValueError("incident_id is required")
@@ -2558,8 +2577,14 @@ async def xsoar_get_playbook_state(incident_id: str) -> dict:
 
     counts: dict[str, int] = {}
     failed: list[dict] = []
-    _walk_workplan_tasks(inv.get("tasks"), counts, failed)
+    collected: list[dict] = []
+    _walk_workplan_tasks(inv.get("tasks"), counts, failed, collected)
     await _enrich_failed_task_errors(fetcher, str(incident_id), failed)
+
+    # Cap the task list so a huge default playbook (100s of tasks) can't bloat
+    # the response; counts/task_total still reflect the full plan.
+    _TASK_CAP = 200
+    tasks_truncated = len(collected) > _TASK_CAP
 
     overall_state = inv.get("state")
     # XSOAR reports the PLAYBOOK-level state lowercased ("completed" /
@@ -2576,6 +2601,8 @@ async def xsoar_get_playbook_state(incident_id: str) -> dict:
         "ran_to_success": completed and not failed,
         "counts": counts,
         "task_total": sum(counts.values()),
+        "tasks": collected[:_TASK_CAP],
+        "tasks_truncated": tasks_truncated,
         "failed_tasks": failed,
     }
 

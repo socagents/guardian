@@ -17,7 +17,7 @@
 # Logical paths + request bodies are identical across generations.
 
 id: "xsoar"
-version: "0.2.7"
+version: "0.2.8"
 description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, enrich with indicators and evidence, and import + run playbooks. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
 displayName: "Cortex XSOAR"
 tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]

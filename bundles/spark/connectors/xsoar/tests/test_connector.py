@@ -1642,9 +1642,31 @@ def test_get_playbook_state_success(monkeypatch):
     assert out["counts"]["completed"] == 2
     assert out["task_total"] == 2
     assert out["failed_tasks"] == []
+    # the per-task list is now surfaced (id/name/state/type) for monitoring +
+    # complete_task discovery
+    assert out["tasks_truncated"] is False
+    assert {t["id"] for t in out["tasks"]} == {"0", "1"}
+    assert all(t["state"] == "Completed" for t in out["tasks"])
     # work plan read via GET; war room NOT fetched when there are no failures.
     assert rf.calls[0][0] == "GET"
     assert all(c[0] != "POST" for c in rf.calls)
+
+
+def test_get_playbook_state_surfaces_waiting_task_for_complete(monkeypatch):
+    # A Waiting manual task's id must appear in `tasks` so the operator/agent
+    # can feed it to xsoar_complete_task (the work plan is the only place the
+    # id lives).
+    wp = {"invPlaybook": {"playbookId": "PB", "name": "PB", "state": "waiting", "tasks": {
+        "0": {"id": "0", "state": "Completed", "task": {"name": "Start", "type": "start"}},
+        "1": {"id": "1", "state": "Waiting", "task": {"name": "Analyst review", "type": "regular"}},
+    }}}
+    rf = _RecordingFetcher(get_reply=wp)
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_get_playbook_state("42"))
+    assert out["ran_to_success"] is False
+    waiting = [t for t in out["tasks"] if t["state"] == "Waiting"]
+    assert len(waiting) == 1
+    assert waiting[0]["id"] == "1" and waiting[0]["type"] == "regular"
 
 
 def test_get_playbook_state_failed_task_attaches_error(monkeypatch):
