@@ -104,8 +104,21 @@ class Case:
     title: str
     description: str | None
     status: str
+    # v0.2.47 (stage C) — campaign rollup, synthesized from member issues by
+    # case_rollup. infrastructure + techniques are JSON strings (flexible shape);
+    # campaign_summary/threat_actor/severity_rollup are plain text. Null until rolled up.
+    campaign_summary: str | None
+    threat_actor: str | None
+    infrastructure: str | None
+    techniques: str | None
+    severity_rollup: str | None
     created_at: str
     updated_at: str
+
+
+# v0.2.47 (stage C) — fields case_rollup / case_update may write on a Case.
+_CASE_ROLLUP_FIELDS = ("campaign_summary", "threat_actor", "infrastructure",
+                       "techniques", "severity_rollup")
 
 
 @dataclass(frozen=True)
@@ -137,8 +150,35 @@ class Indicator:
     updated_at: str
 
 
+@dataclass(frozen=True)
+class PlaybookMatch:
+    """A structured link from an Issue to the KB playbook the investigation was
+    routed through (v0.2.47) — lets cases be typed by playbook + queried."""
+    id: str
+    issue_id: str
+    playbook_doc_id: str
+    score: float | None
+    matched_criteria: str | None
+    created_at: str
+
+
+@dataclass(frozen=True)
+class CaseRelationship:
+    """A typed edge between two Cases (v0.2.47): sibling / escalation / reopen /
+    same-campaign. Lets the model link a new case to a prior campaign."""
+    id: str
+    source_case_id: str
+    target_case_id: str
+    relationship_type: str
+    note: str | None
+    created_at: str
+
+
 # Common IoC types (free-form accepted; the tool/API may validate).
 INDICATOR_TYPES = ("ip", "domain", "url", "file_hash", "email", "cve", "host", "account")
+
+# v0.2.47 (stage C) — typed cross-case edge verbs (free-form accepted).
+CASE_RELATIONSHIP_TYPES = ("sibling", "escalation", "reopen", "same-campaign")
 
 
 def _now() -> str:
@@ -321,6 +361,43 @@ class InvestigationStore:
             )
             c.execute("CREATE INDEX IF NOT EXISTS idx_techmap_issue ON technique_mappings(issue_id)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_techmap_tech ON technique_mappings(technique_id)")
+            # v0.2.47 (stage C) — campaign rollup columns on cases (migrate existing
+            # dbs) + a playbook-match table + a typed cross-case edge table.
+            case_cols2 = {r["name"] for r in c.execute("PRAGMA table_info(cases)")}
+            for col in ("campaign_summary", "threat_actor", "infrastructure",
+                        "techniques", "severity_rollup"):
+                if col not in case_cols2:
+                    c.execute(f"ALTER TABLE cases ADD COLUMN {col} TEXT")
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS playbook_matches (
+                    id               TEXT PRIMARY KEY,
+                    issue_id         TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+                    playbook_doc_id  TEXT NOT NULL,
+                    score            REAL,
+                    matched_criteria TEXT,
+                    created_at       TEXT NOT NULL,
+                    UNIQUE(issue_id, playbook_doc_id)
+                )
+                """
+            )
+            c.execute("CREATE INDEX IF NOT EXISTS idx_pbmatch_issue ON playbook_matches(issue_id)")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_pbmatch_doc ON playbook_matches(playbook_doc_id)")
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS case_relationships (
+                    id                TEXT PRIMARY KEY,
+                    source_case_id    TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+                    target_case_id    TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+                    relationship_type TEXT NOT NULL,
+                    note              TEXT,
+                    created_at        TEXT NOT NULL,
+                    UNIQUE(source_case_id, target_case_id, relationship_type)
+                )
+                """
+            )
+            c.execute("CREATE INDEX IF NOT EXISTS idx_caserel_src ON case_relationships(source_case_id)")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_caserel_tgt ON case_relationships(target_case_id)")
 
     # ─── Issues ────────────────────────────────────────────────────
 
@@ -503,6 +580,95 @@ class InvestigationStore:
             created_at=row["created_at"],
         )
 
+    # ─── Playbook matches (stage C) ────────────────────────────────
+
+    def add_playbook_match(self, issue_id: str, playbook_doc_id: str,
+                           score: float | None = None,
+                           matched_criteria: str | None = None) -> PlaybookMatch:
+        """Record (upsert) the KB playbook an investigation was routed through.
+        Re-asserting the same (issue, playbook) updates the score/criteria
+        (COALESCE keeps a prior value when the new one is None)."""
+        ts = _now()
+        with self._lock, self._conn() as c:
+            c.execute(
+                "INSERT INTO playbook_matches (id, issue_id, playbook_doc_id, score, "
+                "matched_criteria, created_at) VALUES (?,?,?,?,?,?) "
+                "ON CONFLICT(issue_id, playbook_doc_id) DO UPDATE SET "
+                "score = COALESCE(excluded.score, playbook_matches.score), "
+                "matched_criteria = COALESCE(excluded.matched_criteria, playbook_matches.matched_criteria)",
+                (str(uuid.uuid4()), issue_id, playbook_doc_id, score, matched_criteria, ts),
+            )
+            row = c.execute(
+                "SELECT * FROM playbook_matches WHERE issue_id = ? AND playbook_doc_id = ?",
+                (issue_id, playbook_doc_id),
+            ).fetchone()
+        return self._row_to_playbook_match(row)
+
+    def list_playbook_matches(self, issue_id: str) -> list[PlaybookMatch]:
+        with self._lock, self._conn() as c:
+            rows = c.execute(
+                "SELECT * FROM playbook_matches WHERE issue_id = ? ORDER BY score DESC, created_at",
+                (issue_id,),
+            ).fetchall()
+        return [self._row_to_playbook_match(r) for r in rows]
+
+    def list_issues_by_playbook(self, playbook_doc_id: str) -> list[Issue]:
+        with self._lock, self._conn() as c:
+            rows = c.execute(
+                "SELECT i.* FROM issues i JOIN playbook_matches pm ON pm.issue_id = i.id "
+                "WHERE pm.playbook_doc_id = ? ORDER BY i.updated_at DESC",
+                (playbook_doc_id,),
+            ).fetchall()
+        return [self._row_to_issue(r) for r in rows]
+
+    @staticmethod
+    def _row_to_playbook_match(row: sqlite3.Row) -> PlaybookMatch:
+        return PlaybookMatch(
+            id=row["id"], issue_id=row["issue_id"], playbook_doc_id=row["playbook_doc_id"],
+            score=row["score"], matched_criteria=row["matched_criteria"],
+            created_at=row["created_at"],
+        )
+
+    # ─── Case relationships (stage C) ──────────────────────────────
+
+    def add_case_relationship(self, source_case_id: str, target_case_id: str,
+                              relationship_type: str, note: str | None = None) -> CaseRelationship:
+        """Record (upsert) a typed edge between two cases. Re-asserting the same
+        (source, type, target) updates the note."""
+        ts = _now()
+        with self._lock, self._conn() as c:
+            c.execute(
+                "INSERT INTO case_relationships (id, source_case_id, target_case_id, "
+                "relationship_type, note, created_at) VALUES (?,?,?,?,?,?) "
+                "ON CONFLICT(source_case_id, target_case_id, relationship_type) DO UPDATE SET "
+                "note = COALESCE(excluded.note, case_relationships.note)",
+                (str(uuid.uuid4()), source_case_id, target_case_id, relationship_type, note, ts),
+            )
+            row = c.execute(
+                "SELECT * FROM case_relationships WHERE source_case_id = ? AND "
+                "target_case_id = ? AND relationship_type = ?",
+                (source_case_id, target_case_id, relationship_type),
+            ).fetchone()
+        return self._row_to_case_relationship(row)
+
+    def list_case_relationships(self, case_id: str) -> list[CaseRelationship]:
+        """Every edge touching this case (as source OR target)."""
+        with self._lock, self._conn() as c:
+            rows = c.execute(
+                "SELECT * FROM case_relationships WHERE source_case_id = ? OR target_case_id = ? "
+                "ORDER BY created_at",
+                (case_id, case_id),
+            ).fetchall()
+        return [self._row_to_case_relationship(r) for r in rows]
+
+    @staticmethod
+    def _row_to_case_relationship(row: sqlite3.Row) -> CaseRelationship:
+        return CaseRelationship(
+            id=row["id"], source_case_id=row["source_case_id"],
+            target_case_id=row["target_case_id"], relationship_type=row["relationship_type"],
+            note=row["note"], created_at=row["created_at"],
+        )
+
     def set_attack_chain(self, issue_id: str, svg: str | None) -> bool:
         """Store (or clear, with None) the issue's attack-chain SVG.
 
@@ -569,6 +735,11 @@ class InvestigationStore:
             title=title,
             description=description,
             status="open",
+            campaign_summary=None,
+            threat_actor=None,
+            infrastructure=None,
+            techniques=None,
+            severity_rollup=None,
             created_at=ts,
             updated_at=ts,
         )
@@ -613,7 +784,7 @@ class InvestigationStore:
     def update_case(self, case_id: str, **fields) -> Case | None:
         sets: list[str] = []
         params: list[str] = []
-        for key in ("title", "description", "status"):
+        for key in ("title", "description", "status", *_CASE_ROLLUP_FIELDS):
             if key in fields and fields[key] is not None:
                 sets.append(f"{key} = ?")
                 params.append(fields[key])
@@ -900,10 +1071,16 @@ class InvestigationStore:
 
     @staticmethod
     def _row_to_case(row: sqlite3.Row) -> Case:
+        keys = row.keys()
         return Case(
             id=row["id"], title=row["title"], description=row["description"],
-            status=row["status"], created_at=row["created_at"],
-            updated_at=row["updated_at"],
+            status=row["status"],
+            campaign_summary=row["campaign_summary"] if "campaign_summary" in keys else None,
+            threat_actor=row["threat_actor"] if "threat_actor" in keys else None,
+            infrastructure=row["infrastructure"] if "infrastructure" in keys else None,
+            techniques=row["techniques"] if "techniques" in keys else None,
+            severity_rollup=row["severity_rollup"] if "severity_rollup" in keys else None,
+            created_at=row["created_at"], updated_at=row["updated_at"],
         )
 
     @staticmethod
