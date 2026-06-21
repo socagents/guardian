@@ -40,7 +40,11 @@ logger = logging.getLogger("Guardian MCP")
 
 
 def _issue_dict(issue: Any) -> dict:
-    return dataclasses.asdict(issue)
+    d = dataclasses.asdict(issue)
+    # v0.2.45 — `report` is a full markdown document; keep it OFF the lean list
+    # payload (same treatment as the SVGs). The detail endpoint adds it back.
+    d.pop("report", None)
+    return d
 
 
 def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> None:
@@ -117,7 +121,37 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
             "attack_chain_svg": store.get_attack_chain(issue.id),
             # v0.2.1 — the relations canvas SVG (same treatment).
             "relations_canvas_svg": store.get_relations_canvas(issue.id),
+            # v0.2.45 (stage A) — structured outcome detail: the closure report
+            # (off the lean list) + the queryable ATT&CK technique mappings.
+            "report": issue.report,
+            "techniques": [
+                dataclasses.asdict(t) for t in store.list_technique_mappings(issue.id)
+            ],
         })
+
+    @mcp.custom_route("/api/v1/issues/{id}/report", methods=["GET"], include_in_schema=False)
+    async def get_issue_report(request: Request) -> JSONResponse:
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        issue = store.get_issue(request.path_params["id"])
+        if issue is None:
+            return JSONResponse({"error": "issue not found"}, status_code=404)
+        if not issue.report:
+            return JSONResponse(
+                {"error": "no report generated for this issue yet"}, status_code=404,
+            )
+        return JSONResponse({"issue_id": issue.id, "report": issue.report})
+
+    @mcp.custom_route(
+        "/api/v1/techniques/{technique_id}/issues", methods=["GET"], include_in_schema=False,
+    )
+    async def issues_by_technique(request: Request) -> JSONResponse:
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        issues = store.list_issues_by_technique(request.path_params["technique_id"])
+        return JSONResponse(
+            {"issues": [_issue_dict(i) for i in issues], "count": len(issues)}
+        )
 
     @mcp.custom_route("/api/v1/issues/{id}", methods=["PATCH"], include_in_schema=False)
     async def patch_issue(request: Request) -> JSONResponse:
