@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.43",
+    date: "2026-06-21",
+    title: "XSOAR playbook tools — fixed end-to-end on fetched incidents.",
+    highlights: [
+      "run_playbook now works on a freshly-fetched, not-yet-investigated incident — it opens the war room the way the XSOAR UI does (the path the autonomous investigation loop relies on).",
+      "run_playbook accepts a playbook id OR name — it resolves the id to the display name XSOAR's setPlaybook needs, so the id from import_playbook just works.",
+      "import_playbook now returns the imported playbook's id + name (was blank) — hand them straight to run_playbook.",
+      "get_playbook_state now lists every task (id, name, state, type), not just counts — see task-by-task progress and find a waiting manual task's id for complete_task.",
+      "Verified against a live XSOAR 6 tenant: all 27 connector tools pass end-to-end (import → assign → run → monitor → complete).",
+    ],
+  },
+  {
     version: "0.2.42",
     date: "2026-06-20",
     title: "Emulated services in the marketplace — first up: Splunk.",

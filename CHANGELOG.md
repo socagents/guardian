@@ -10,6 +10,19 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.43] (2026-06-21) — *XSOAR playbook tools — fixed end-to-end on fetched incidents*
+
+A full live smoke of all 27 Cortex XSOAR connector tools surfaced — and this release fixes — three bugs in the playbook tooling (the other tools were already correct). The headline fix lets **`run_playbook` actually run a playbook on a freshly-fetched, not-yet-investigated incident** — the path the autonomous investigation loop depends on.
+
+- **Run a playbook by id *or* name.** `run_playbook` passed your identifier straight to XSOAR's `setPlaybook`, which only matches the playbook's *display name* — so passing the id (e.g. the one `import_playbook` returns) failed with "Playbook … not found". It now resolves an id to its name automatically and accepts either.
+- **Run a playbook on a pending/fetched incident.** Assigning a playbook to an incident with no war room yet (status "pending", e.g. just fetched from Splunk) silently failed to open the investigation, so the playbook never started. `run_playbook` now opens the war room the way the XSOAR UI does — it works on fetched incidents, not only ones already under investigation.
+- **`import_playbook` reports the imported playbook's id + name** instead of blank values, so you can hand them straight to `run_playbook`.
+- **`get_playbook_state` now lists every task** (id, name, state, type), not just the count summary and failed tasks — see task-by-task progress and find a waiting manual task's id to advance with `complete_task`.
+
+All verified against a live XSOAR 6 tenant: import → assign → run → monitor → complete, across the full 27-tool surface.
+
+---
+
 ## [v0.2.42] (2026-06-20) — *Emulated services marketplace kind + Splunk mimic*
 
 Guardian's marketplace gains a second entry **kind** — **emulated services** — alongside connectors, and ships the first one: **Splunk (Emulated)**. A service is *not* an agent integration: it runs as a container that Guardian publishes on a **host port** so an **external** system reaches it, and it advertises **zero agent tools**. The Splunk mimic speaks the slice of the splunkd REST API the XSOAR **SplunkPy** integration's `splunklib` SDK actually uses, returning simulated notable events — so SplunkPy commands run end-to-end with no real Splunk server. This is the companion to the `simulate_splunk_incidents` skill (v0.2.41): that one creates Splunk-shaped incidents *inside* XSOAR; this one lets SplunkPy's **fetch** and **playbooks** actually call "Splunk".
