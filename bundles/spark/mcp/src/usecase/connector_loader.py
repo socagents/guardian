@@ -298,6 +298,13 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("case_get", investigation_tools.case_get),
     ("case_set_attack_chain", investigation_tools.case_set_attack_chain),
     ("case_set_relation_graph", investigation_tools.case_set_relation_graph),
+    # v0.2.47 (stage C) — campaign / cross-incident analytics: roll member issues
+    # into a typed campaign, link cases, type by playbook, infer missing edges.
+    ("case_rollup", investigation_tools.case_rollup),
+    ("issue_match_playbook", investigation_tools.issue_match_playbook),
+    ("case_relate", investigation_tools.case_relate),
+    ("case_related", investigation_tools.case_related),
+    ("infer_relationships", investigation_tools.infer_relationships),
     # v0.2.0 — Indicators (IoCs extracted from issues + imported from the SOAR).
     # Catalog side of the guardrail (investigation metadata, no SecretStore).
     ("indicator_upsert", indicator_tools.indicator_upsert),

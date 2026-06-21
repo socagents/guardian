@@ -23,8 +23,14 @@ import json
 import re
 from typing import Any
 
-from usecase.investigation_store import ISSUE_VERDICTS, investigation_store
+from usecase.investigation_store import (
+    CASE_RELATIONSHIP_TYPES,
+    ISSUE_VERDICTS,
+    investigation_store,
+)
 from usecase.tool_dispatcher import get_tool_dispatcher
+
+_SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
 
 def _store():
@@ -717,3 +723,212 @@ def case_get(case_id: str) -> dict[str, Any]:
         "case": dataclasses.asdict(case),
         "issues": [dataclasses.asdict(i) for i in issues],
     }
+
+
+# ─── Campaign / cross-incident analytics (stage C, v0.2.47) ──────────
+
+def case_rollup(case_id: str, threat_actor: str | None = None,
+                campaign_summary: str | None = None) -> dict[str, Any]:
+    """Synthesize a campaign rollup for a Case from its member issues and
+    persist it on the Case (campaign_summary, threat_actor, infrastructure,
+    techniques, severity_rollup). Computes: the ATT&CK technique union, the
+    shared infrastructure (indicator values seen on >=2 members), the max
+    severity, and the verdict mix. `threat_actor` / `campaign_summary` are the
+    two non-derivable fields — pass them to set, else a summary is generated.
+
+    Returns {"rollup": {...}} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    case = s.get_case(case_id)
+    if case is None:
+        return {"error": f"case {case_id!r} not found"}
+    members = s.list_issues(case_id=case_id)
+
+    techniques: set[str] = set()
+    value_member_counts: dict[str, int] = {}
+    sev = None
+    for m in members:
+        for t in s.list_technique_mappings(m.id):
+            techniques.add(t.technique_id)
+        for v in {i.value for i in s.list_indicators_for_issue(m.id)}:
+            value_member_counts[v] = value_member_counts.get(v, 0) + 1
+        if m.severity and (sev is None or _SEVERITY_ORDER.get(m.severity, 0) > _SEVERITY_ORDER.get(sev, 0)):
+            sev = m.severity
+    techniques_sorted = sorted(techniques)
+    shared = sorted(v for v, n in value_member_counts.items() if n >= 2)
+    infrastructure = {"shared_indicators": shared}
+    verdict_mix: dict[str, int] = {}
+    for m in members:
+        if m.verdict:
+            verdict_mix[m.verdict] = verdict_mix.get(m.verdict, 0) + 1
+
+    if not campaign_summary:
+        parts = [f"{len(members)} issue(s)"]
+        if verdict_mix:
+            parts.append("verdicts " + ", ".join(f"{k}×{v}" for k, v in verdict_mix.items()))
+        if techniques_sorted:
+            parts.append(f"{len(techniques_sorted)} ATT&CK techniques")
+        if shared:
+            parts.append(f"{len(shared)} shared indicator(s)")
+        if sev:
+            parts.append(f"max severity {sev}")
+        campaign_summary = "; ".join(parts)
+
+    update = {
+        "campaign_summary": campaign_summary,
+        "techniques": json.dumps(techniques_sorted),
+        "infrastructure": json.dumps(infrastructure),
+    }
+    if sev:
+        update["severity_rollup"] = sev
+    if threat_actor:
+        update["threat_actor"] = threat_actor
+    s.update_case(case_id, **update)
+
+    return {"rollup": {
+        "case_id": case_id, "member_count": len(members),
+        "techniques": techniques_sorted, "infrastructure": infrastructure,
+        "severity_rollup": sev, "verdict_mix": verdict_mix,
+        "campaign_summary": campaign_summary,
+        "threat_actor": threat_actor or s.get_case(case_id).threat_actor,
+    }}
+
+
+def issue_match_playbook(issue_id: str, playbook_doc_id: str,
+                         score: float | None = None,
+                         matched_criteria: str | None = None) -> dict[str, Any]:
+    """Record (upsert) the KB playbook an investigation was routed through, so
+    cases can be typed by playbook + queried. Returns {"match": {...}}."""
+    s, err = _store()
+    if err:
+        return err
+    if not playbook_doc_id:
+        return {"error": "playbook_doc_id is required"}
+    if s.get_issue(issue_id) is None:
+        return {"error": f"issue {issue_id!r} not found"}
+    if score is not None:
+        try:
+            score = float(score)
+        except (TypeError, ValueError):
+            return {"error": "score must be a number"}
+    m = s.add_playbook_match(issue_id, playbook_doc_id, score=score, matched_criteria=matched_criteria)
+    return {"match": dataclasses.asdict(m)}
+
+
+def case_relate(source_case_id: str, target_case_id: str, relationship_type: str,
+                note: str | None = None) -> dict[str, Any]:
+    """Record a typed edge between two cases (sibling / escalation / reopen /
+    same-campaign). Returns {"relationship": {...}} or {"error": ...}."""
+    s, err = _store()
+    if err:
+        return err
+    if relationship_type not in CASE_RELATIONSHIP_TYPES:
+        return {"error": f"relationship_type must be one of {', '.join(CASE_RELATIONSHIP_TYPES)}"}
+    if source_case_id == target_case_id:
+        return {"error": "cannot relate a case to itself"}
+    if s.get_case(source_case_id) is None:
+        return {"error": f"case {source_case_id!r} not found"}
+    if s.get_case(target_case_id) is None:
+        return {"error": f"case {target_case_id!r} not found"}
+    r = s.add_case_relationship(source_case_id, target_case_id, relationship_type, note=note)
+    return {"relationship": dataclasses.asdict(r)}
+
+
+def case_related(case_id: str) -> dict[str, Any]:
+    """List the cases related to this one (edges in either direction), each with
+    the other case's title/status. Returns {"related": [...], "count": N}."""
+    s, err = _store()
+    if err:
+        return err
+    if s.get_case(case_id) is None:
+        return {"error": f"case {case_id!r} not found"}
+    out = []
+    for r in s.list_case_relationships(case_id):
+        outgoing = r.source_case_id == case_id
+        other_id = r.target_case_id if outgoing else r.source_case_id
+        oc = s.get_case(other_id)
+        out.append({
+            "relationship_type": r.relationship_type, "note": r.note,
+            "direction": "outgoing" if outgoing else "incoming",
+            "other_case": {"id": other_id, "title": oc.title if oc else None,
+                           "status": oc.status if oc else None},
+        })
+    return {"related": out, "count": len(out)}
+
+
+def infer_relationships(issue_id: str | None = None,
+                        indicator_id: str | None = None) -> dict[str, Any]:
+    """SUGGEST (never write) missing graph edges + sibling issues. Pass an
+    indicator_id for transitive-edge suggestions over the STIX relationship
+    graph (A resolves-to V, indicator(V) communicates-with C ⇒ suggest A→C), or
+    an issue_id for sibling issues that share an ATT&CK technique or an IOC.
+    The agent reviews + confirms; this tool makes no changes.
+
+    Returns {"suggestions": [...], "count": N} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    if not issue_id and not indicator_id:
+        return {"error": "pass issue_id or indicator_id"}
+    suggestions: list[dict] = []
+
+    if indicator_id:
+        ind = s.get_indicator(indicator_id)
+        if ind is None:
+            return {"error": f"indicator {indicator_id!r} not found"}
+        by_value: dict[str, str] = {}
+        for d in s.list_indicators():
+            by_value.setdefault(d["value"], d["id"])
+        direct = s.list_relationships(source_id=indicator_id)
+        direct_targets = {r["target_value"] for r in direct}
+        for r in direct:
+            mid = by_value.get(r["target_value"])
+            if not mid or mid == indicator_id:
+                continue
+            for r2 in s.list_relationships(source_id=mid):
+                tv2 = r2["target_value"]
+                if tv2 == ind["value"] or tv2 in direct_targets:
+                    continue
+                suggestions.append({
+                    "kind": "transitive-edge", "source_indicator_id": indicator_id,
+                    "via": r["target_value"], "target_value": tv2,
+                    "target_type": r2["target_type"],
+                    "rationale": (f"{ind['value']} {r['relationship_type']} {r['target_value']}; "
+                                  f"{r['target_value']} {r2['relationship_type']} {tv2}"),
+                    "confidence": 0.6,
+                })
+
+    if issue_id:
+        if s.get_issue(issue_id) is None:
+            return {"error": f"issue {issue_id!r} not found"}
+        sib_tech: dict[str, set] = {}
+        for t in s.list_technique_mappings(issue_id):
+            for other in s.list_issues_by_technique(t.technique_id):
+                if other.id != issue_id:
+                    sib_tech.setdefault(other.id, set()).add(t.technique_id)
+        for oid, shared_t in sib_tech.items():
+            suggestions.append({
+                "kind": "technique-sibling", "issue_id": oid,
+                "shared_techniques": sorted(shared_t),
+                "rationale": f"shares {len(shared_t)} ATT&CK technique(s): {', '.join(sorted(shared_t))}",
+                "confidence": min(0.4 + 0.2 * len(shared_t), 0.95),
+            })
+        my_vals = {i.value for i in s.list_indicators_for_issue(issue_id)}
+        if my_vals:
+            for other in s.list_issues():
+                if other.id == issue_id:
+                    continue
+                shared_v = my_vals & {i.value for i in s.list_indicators_for_issue(other.id)}
+                if shared_v:
+                    suggestions.append({
+                        "kind": "ioc-sibling", "issue_id": other.id,
+                        "shared_indicators": sorted(shared_v),
+                        "rationale": f"shares {len(shared_v)} indicator(s): {', '.join(sorted(shared_v))}",
+                        "confidence": min(0.5 + 0.15 * len(shared_v), 0.95),
+                    })
+
+    suggestions.sort(key=lambda x: x.get("confidence", 0), reverse=True)
+    return {"suggestions": suggestions, "count": len(suggestions)}
