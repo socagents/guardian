@@ -27,11 +27,8 @@ export type JourneyCategory =
   | "onboarding"
   | "chat"
   | "memory"
-  // [guardian v0.1.0] Retired categories: the log-generation,
-  // red-team-emulation, and vendor-log-schema marketplace categories
-  // were removed with their subsystems. `validation` survives but now
-  // covers XSOAR incident-investigation workflows (case triage,
-  // war-room review, indicator search, documentation, closure).
+  // `validation` covers XSOAR incident-investigation workflows (case
+  // triage, war-room review, indicator search, documentation, closure).
   | "validation"
   | "ops"
   // Authentication covers operator identity, sessions, password
@@ -78,15 +75,11 @@ export type JourneyComponent =
   | "audit"
   | "pipeline"
   | "settings"
-  // [guardian v0.1.0] Retired components: the synthetic-log-generation
-  // connector and the red-team-emulation connector were removed with
-  // their subsystems. The telemetry-era xsiam / cortex-xdr connectors
-  // were removed in the XSOAR pivot; `xsoar` is the surviving
-  // incident-investigation connector component.
+  // `xsoar` is the incident-investigation connector component.
   | "xsoar"
-  // [guardian v0.1.3] Investigation: Guardian's OWN local investigation
-  // records — Issues + Cases stored in investigations.db, distinct from
-  // upstream XSOAR incidents. Catalog domain (no SecretStore access).
+  // Investigation: Guardian's OWN local investigation records — Issues +
+  // Cases stored in investigations.db, distinct from upstream XSOAR
+  // incidents. Catalog domain (no SecretStore access).
   | "investigation"
   | "mcp"
   | "auth"
@@ -181,8 +174,6 @@ export const CATEGORY_META: Record<
     description:
       "Teach the agent durable facts about your org and recall them across sessions.",
   },
-  // [guardian v0.1.0] Retired: the log-generation + red-team category
-  // tabs — both subsystems were removed.
   validation: {
     label: "Incident Investigation",
     icon: "fact_check",
@@ -213,8 +204,6 @@ export const CATEGORY_META: Record<
     description:
       "Marketplace browse + install/uninstall, per-instance container lifecycle, user-uploaded connectors, credential rotation, tool catalog gating.",
   },
-  // [guardian v0.1.0] Retired: data-sources category tab — the
-  // vendor-log-schema marketplace subsystem was removed.
 };
 
 // ─── Component metadata ──────────────────────────────────────────────
@@ -386,10 +375,7 @@ export const COMPONENT_META: Record<JourneyComponent, ComponentMeta> = {
     guide: "architecture",
     anchor: "settings-tuning",
   },
-  // [guardian v0.1.0] Retired: the synthetic-log-generation and
-  // red-team-emulation connector component chips — subsystems removed.
-  // The telemetry-era xsiam / cortex-xdr chips were removed in the
-  // XSOAR pivot; xsoar is the incident-investigation connector.
+  // xsoar is the incident-investigation connector.
   xsoar: {
     label: "XSOAR connector",
     icon: "security",
@@ -511,8 +497,6 @@ export const JOURNEYS: Journey[] = [
     related: ["get-oriented"],
     components: ["chat", "mcp", "audit"],
   },
-  // [guardian v0.1.0] Retired: configure-tech-stack — the technology-stack
-  // store lived in the removed log-generation backend.
 
   // ─────────────────────────────────────────────────────────────────
   // MEMORY
@@ -564,25 +548,6 @@ export const JOURNEYS: Journey[] = [
     related: ["chat-memory-recall"],
     components: ["chat", "memory", "settings"],
   },
-  // [guardian v0.1.0] Retired: memorize-sim*-result — the auto-memorize-
-  // run-outcomes flow depended on the removed log-generation engine.
-
-  // [guardian v0.1.0] Retired section (log generation + vendor data
-  // sources + log destinations — subsystems removed):
-  //   generate-firewall-logs, sim*-to-log-destination,
-  //   run-port-scan-scenario, install-data-source,
-  //   roll-back-data-source, edit-data-source-guidance,
-  //   sim*-from-installed-data-source, upload-custom-data-source,
-  //   filter-data-sources-by-use-case, edit-user-data-source,
-  //   configure-log-destination.
-
-  // [guardian v0.1.0] Retired section (red-team C2 emulation —
-  // subsystem removed): deploy-*-sandcat, list-*-abilities,
-  // create-*-operation.
-
-  // [guardian v0.1.0] Retired section (detection-validation + coverage
-  // reporting — subsystem removed): validate-detection,
-  // generate-coverage-report.
 
   // ─────────────────────────────────────────────────────────────────
   // OPS
@@ -688,8 +653,6 @@ export const JOURNEYS: Journey[] = [
     ],
     components: ["chat", "jobs", "approvals"],
   },
-  // [guardian v0.1.0] Retired: schedule-log-generation-job — the
-  // synthetic log-generation engine was removed.
   {
     id: "run-job-now",
     category: "ops",
@@ -1054,7 +1017,7 @@ export const JOURNEYS: Journey[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────
-  // OPS — Phase 11 chat-driven self-modification
+  // OPS — chat-driven self-modification
   // ─────────────────────────────────────────────────────────────────
   {
     id: "configure-agent-via-chat",
@@ -1163,7 +1126,7 @@ export const JOURNEYS: Journey[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────
-  // OPS — Phase 11.1 action-policy disambiguation
+  // OPS — action-policy disambiguation
   // ─────────────────────────────────────────────────────────────────
   {
     id: "tune-action-policy",
@@ -1240,16 +1203,13 @@ export const JOURNEYS: Journey[] = [
     components: ["chat", "settings", "approvals"],
   },
 
-  // [guardian v0.1.0] Retired: find-coverage-gaps — the detection-
-  // inventory / coverage-gap subsystem was removed.
-
   // ─────────────────────────────────────────────────────────────────
   // CHAT & SESSIONS
   // ─────────────────────────────────────────────────────────────────
-  // Round-12: operator asked for chat-surface journeys covering the
-  // session lifecycle (create / rename / export / delete / load) plus
-  // the two correctness behaviors that need to be visibly testable —
-  // within-session context awareness and memory-recall cross-session.
+  // Chat-surface journeys cover the session lifecycle (create / rename /
+  // export / delete / load) plus the two correctness behaviors that need
+  // to be visibly testable — within-session context awareness and
+  // memory-recall cross-session.
 
   {
     id: "chat-create-new-session",
@@ -1701,7 +1661,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/audit",
         description:
-          "Round-14 / Phase D — chat_compaction_start and chat_compaction_end audit rows land here. Filter chip on /observability/events surfaces them.",
+          "The chat_compaction_start and chat_compaction_end audit rows land here. Filter chip on /observability/events surfaces them.",
       },
     ],
     howToTest: [
@@ -1937,7 +1897,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/chat",
         description:
-          "When totalRequired/ctxCap >= 0.90, emits context_warning SSE event AND fires safeAudit('chat_context_warning', ...). Phase A.2 banner triggers at the lower 0.80 threshold so the operator gets ~1-2 turns of lead time.",
+          "When totalRequired/ctxCap >= 0.90, emits context_warning SSE event AND fires safeAudit('chat_context_warning', ...). The banner triggers at the lower 0.80 threshold so the operator gets ~1-2 turns of lead time.",
       },
     ],
     howToTest: [
@@ -2153,7 +2113,7 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/memory/search",
         description:
-          "When mmr_lambda or temporal_decay_lambda are present in the body, they override the server's Phase B operator defaults for THIS query only. Missing fields fall through to defaults.",
+          "When mmr_lambda or temporal_decay_lambda are present in the body, they override the server's operator defaults for THIS query only. Missing fields fall through to defaults.",
       },
     ],
     howToTest: [
@@ -2194,7 +2154,7 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/personality",
         description:
-          "Returns the persisted AgentConfig blob. The Phase B fields (vertexCacheEnabled, autoCompactMinDropped, memoryMmrLambda, memoryTemporalDecayLambda) live alongside the personality fields.",
+          "Returns the persisted AgentConfig blob. The tuning fields (vertexCacheEnabled, autoCompactMinDropped, memoryMmrLambda, memoryTemporalDecayLambda) live alongside the personality fields.",
       },
       {
         method: "PUT",
@@ -2253,7 +2213,7 @@ export const JOURNEYS: Journey[] = [
       "Click the toggle off again — turning the cache off should stop new cache_hit events from firing on subsequent turns.",
     ],
     expectedResult:
-      "Per-operator opt-in. Lets operators experiment with caching on a per-deploy basis without changing container env vars. Combined with the cache-hit indicator on the model chip (Phase A.4), the operator gets a clean closed loop: enable here, see the cyan dot in chat, query savings in /observability/events.",
+      "Per-operator opt-in. Lets operators experiment with caching on a per-deploy basis without changing container env vars. Combined with the cache-hit indicator on the model chip, the operator gets a clean closed loop: enable here, see the cyan dot in chat, query savings in /observability/events.",
     verifyVia: [
       "GET /api/agent/personality → personality.vertexCacheEnabled reflects the toggle state.",
       "Audit log: GET /api/agent/audit?action=settings_changed → row written when the personality blob updates (if MCP audits PUT /api/agent/personality).",
@@ -2422,7 +2382,7 @@ export const JOURNEYS: Journey[] = [
     components: ["chat", "slash-commands", "cost", "vertex-cache", "audit"],
   },
 
-  // ── v0.5.23 — Jobs: per-job permission policy (Issue #23) ──────
+  // ── Jobs: per-job permission policy ──────
   {
     id: "ops-restrict-job-tools",
     category: "ops",
@@ -2465,7 +2425,7 @@ export const JOURNEYS: Journey[] = [
     components: ["jobs", "approvals", "audit", "settings"],
   },
 
-  // ── v0.5.22 — Jobs: per-job model override (Issue #22) ─────────
+  // ── Jobs: per-job model override ─────────
   {
     id: "ops-set-job-model-override",
     category: "ops",
@@ -2502,7 +2462,7 @@ export const JOURNEYS: Journey[] = [
       "CLI verify the dispatch body: in chat, run a one-shot 'Run now' on the job and inspect the request via /observability/events — look for the chat_dispatch event with the model_id in metadata. (Alternatively check job_runs.result_json which preserves meta.model.)",
       "Edit the job: clear the Model field back to 'Router default'. Save. Confirm next dispatch uses runtimeConfig.GEMINI_MODEL again (no override).",
       "Chat with the agent: 'set the test-flash-override job to use gemini-2.5-flash with thinking off'. Confirm the agent calls jobs_update with the right model_id + thinking_enabled values.",
-      "Open /help/user#model-routing to confirm the explainer renders + Callout about the v0.5.22 thinking-wire caveat.",
+      "Open /help/user#model-routing to confirm the explainer renders + Callout about the thinking-wire caveat.",
     ],
     expectedResult:
       "Operators tune per-job cost economics without changing the runtime default. Routine / volume jobs land on Flash; analysis jobs land on Pro. The runtime default stays sensible for interactive chat. /observability/cost surfaces the differential.",
@@ -2516,13 +2476,13 @@ export const JOURNEYS: Journey[] = [
     components: ["jobs", "models", "cost", "chat", "audit"],
   },
 
-  // ── v0.5.21 — Hooks: builtin transport (Issue #26) ─────────────
+  // ── Hooks: builtin transport ─────────────
   {
     id: "ops-install-builtin-hook",
     category: "ops",
     title: "Install a built-in hook (Slack approval) with no code",
     summary:
-      "v0.5.21 adds a fourth hook transport — builtin — that registers named in-process handlers from /settings/hooks via a dropdown + dynamic config form. No subprocess, no HTTP receiver to deploy: pick the handler, fill the config, save. v0.5.21 ships slack-approval as the first builtin; later issues add memory-inject, pre-compact-warning, cost-warn-over-budget.",
+      "The builtin hook transport registers named in-process handlers from /settings/hooks via a dropdown + dynamic config form. No subprocess, no HTTP receiver to deploy: pick the handler, fill the config, save. Built-in handlers include slack-approval, memory-inject, pre-compact-warning, and cost-warn-over-budget.",
     difficulty: "starter",
     durationMin: 3,
     icon: "extension",
@@ -2597,7 +2557,7 @@ export const JOURNEYS: Journey[] = [
       "Try again with Deny — tool call blocks; the model sees an error response with the analyst's reason.",
     ],
     expectedResult:
-      "Slack-routed approval works as a Phase H hook; no special chat-route code path. Failure is graceful (failurePolicy='allow' = receiver outage is benign; 'block' = strict denial-on-failure).",
+      "Slack-routed approval works as a hook; no special chat-route code path. Failure is graceful (failurePolicy='allow' = receiver outage is benign; 'block' = strict denial-on-failure).",
     verifyVia: [
       "GET /api/agent/audit?action=hook_dispatched → metadata.per_hook[].decision shows the Slack analyst's choice",
       "Slack channel history shows the buttons + click",
@@ -2746,7 +2706,7 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Install a vendor plugin (skills + memory seeds + agents)",
     summary:
-      "Drop a plugin directory under bundles/spark/plugins/, click Reload on /plugins, watch contributions land. Plugin contributes skills (auto-copied to /app/skills/plugins/), memory seeds (idempotent — operator edits survive), and (Phase S) agent definitions.",
+      "Drop a plugin directory under bundles/spark/plugins/, click Reload on /plugins, watch contributions land. Plugin contributes skills (auto-copied to /app/skills/plugins/), memory seeds (idempotent — operator edits survive), and agent definitions.",
     difficulty: "intermediate",
     durationMin: 6,
     icon: "extension",
@@ -2774,7 +2734,7 @@ export const JOURNEYS: Journey[] = [
       "Click 'Reload all'. Wait for the spinner. Plugin reload applies all contributions.",
       "Verify skill: navigate to /skills, look for plugin-namespaced skill.",
       "Verify memory seeds: /memory page → search for keys you declared. Each seeded memory has meta.source='plugin:vendor-x' for provenance.",
-      "Verify agents (Phase S): /agents page → new origin='plugin:vendor-x' rows.",
+      "Verify agents: /agents page → new origin='plugin:vendor-x' rows.",
       "Edit a plugin-contributed memory in /memory → operator edit. Reload plugin again — your edit survives (the seeder skips existing keys).",
     ],
     expectedResult:
@@ -2788,14 +2748,14 @@ export const JOURNEYS: Journey[] = [
     components: ["plugins", "settings", "audit"],
   },
 
-  // ── v0.5.48 — Plugin hook handler invocation ────────────────────
+  // ── Plugin hook handler invocation ────────────────────
   {
     id: "ops-wire-plugin-hook-handler",
     category: "ops",
     title:
       "Wire a plugin-contributed hook handler from /settings/hooks (entry-point bridge)",
     summary:
-      "v0.5.48 closes the cross-language hook-handler bridge: plugin handlers in the guardian.hooks entry-point group are now invocable from the agent's hook-runner via a new 'plugin' transport. End-to-end: pip install a plugin → discover its handler → wire into /settings/hooks → handler fires on matching events.",
+      "The cross-language hook-handler bridge makes plugin handlers in the guardian.hooks entry-point group invocable from the agent's hook-runner via the 'plugin' transport. End-to-end: pip install a plugin → discover its handler → wire into /settings/hooks → handler fires on matching events.",
     difficulty: "intermediate",
     durationMin: 8,
     icon: "extension",
@@ -2843,14 +2803,14 @@ export const JOURNEYS: Journey[] = [
     components: ["plugins", "hooks", "audit"],
   },
 
-  // ── v0.5.47 — Distributable plugin install/uninstall ────────────
+  // ── Distributable plugin install/uninstall ────────────
   {
     id: "ops-install-distributable-plugin-via-ui",
     category: "ops",
     title:
       "Install a distributable plugin via /observability/plugins UI (pip-installable, entry-point)",
     summary:
-      "v0.5.47 closes the install/uninstall loop on the entry-point distributable plugin system (the pip-installable counterpart to /plugins). Paste a pypi name or git+https URL into the install form → server runs pip install --user → catalog refreshes → plugin appears in its entry-point group. Per-row Uninstall buttons reverse the flow.",
+      "The entry-point distributable plugin system (the pip-installable counterpart to /plugins) supports the full install/uninstall loop. Paste a pypi name or git+https URL into the install form → server runs pip install --user → catalog refreshes → plugin appears in its entry-point group. Per-row Uninstall buttons reverse the flow.",
     difficulty: "starter",
     durationMin: 5,
     icon: "inventory_2",
@@ -2888,7 +2848,7 @@ export const JOURNEYS: Journey[] = [
       "/observability/events?action=plugin_uninstall shows the corresponding audit row.",
     ],
     expectedResult:
-      "Plugin lifecycle (install + discovery + uninstall) works end-to-end from UI without docker exec. Newly-installed packages with entry-points targeting guardian.* groups appear in the right section after the next refresh. Contributed handlers themselves don't become callable until guardian-agent restarts (handler-invocation bridge ships in v0.5.48).",
+      "Plugin lifecycle (install + discovery + uninstall) works end-to-end from UI without docker exec. Newly-installed packages with entry-points targeting guardian.* groups appear in the right section after the next refresh. Contributed handlers themselves don't become callable until guardian-agent restarts, when the handler-invocation bridge picks them up.",
     verifyVia: [
       "GET /api/agent/plugin-entries → installed package appears in its target group",
       "GET /api/agent/audit?action=plugin_install → audit row with metadata.spec + return_code=0",
@@ -2899,14 +2859,7 @@ export const JOURNEYS: Journey[] = [
     components: ["plugins", "audit"],
   },
 
-  // [guardian v0.1.0] Retired: redteam-spawn-red-team-subagent,
-  // validation-spawn-blue-team-validator, validation-multi-agent-
-  // purple-team — the red-team C2 emulation connector and the
-  // detection-coverage validation flow they exercised were removed
-  // (no reference plugin agents ship in the bundle). Operator-authored
-  // subagents are covered by ops-author-custom-agent below.
-
-  // ── Phase S — Custom agent definition ──────────────────────────
+  // ── Custom agent definition ──────────────────────────
   {
     id: "ops-author-custom-agent",
     category: "ops",
@@ -2997,7 +2950,7 @@ export const JOURNEYS: Journey[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────
-  // Full-platform coverage: surfaces that previously had no walkthrough
+  // Full-platform coverage
   // ─────────────────────────────────────────────────────────────────
 
   {
@@ -3071,7 +3024,7 @@ export const JOURNEYS: Journey[] = [
       "Search 'kerberoasting service principal name' — T1558.003 ranks at the top.",
     ],
     expectedResult:
-      "mitre-attack-enterprise shows ~697 docs and returns semantically-ranked ATT&CK techniques. Because embeddings are baked into the bundle (v0.2.17), the KB loaded at boot with ZERO Vertex calls — confirmable in /observability/events (no embedder upstream calls during boot for this KB).",
+      "mitre-attack-enterprise shows ~697 docs and returns semantically-ranked ATT&CK techniques. Because embeddings are baked into the bundle, the KB loads at boot with ZERO Vertex calls — confirmable in /observability/events (no embedder upstream calls during boot for this KB).",
     verifyVia: [
       "GET /api/agent/knowledge → mitre-attack-enterprise listed with doc_count ~697",
       "Search 'lsass memory credential dump' → T1003.001 in the top hits with a real cosine score",
@@ -3184,7 +3137,7 @@ export const JOURNEYS: Journey[] = [
       "Citations name the example playbooks it grounded on; the draft is yours to import into XSOAR.",
     ],
     expectedResult:
-      "A structurally-valid Cortex XSOAR playbook YAML grounded in real soar-playbooks examples, validated (required fields + task-graph integrity), downloadable. The Build step produces a reviewable draft; deploying + test-running it is the separate playbook-deploy-test-run journey (v0.2.26).",
+      "A structurally-valid Cortex XSOAR playbook YAML grounded in real soar-playbooks examples, validated (required fields + task-graph integrity), downloadable. The Build step produces a reviewable draft; deploying + test-running it is the separate playbook-deploy-test-run journey.",
     verifyVia: [
       "The drafted YAML passes /api/agent/playbooks/validate (valid:true)",
       "knowledge_search(kb_name='soar-playbooks') appears in the run",
@@ -4108,6 +4061,133 @@ export const JOURNEYS: Journey[] = [
   },
 
   {
+    id: "investigation-record-verdict",
+    category: "connectors",
+    title: "Record a structured verdict on an Issue (Assessment tab)",
+    summary:
+      "Close out an Issue with a structured verdict instead of free text: a verdict enum, a 0–100% confidence, the blast radius (impacted hosts / accounts / data), and the ATT&CK technique mappings. The agent writes them with issue_set_verdict; the Issue detail's Assessment tab renders the verdict banner, confidence, blast radius, and techniques.",
+    difficulty: "intermediate",
+    durationMin: 4,
+    icon: "gavel",
+    prompts: [
+      {
+        text: "For Guardian issue <id>, decide a verdict from the evidence and record it with a confidence, the blast radius, and the ATT&CK techniques.",
+        note: "Exercises issue_set_verdict — sets the verdict enum (e.g. true_positive / false_positive / benign), verdict_confidence (0..1), blast_radius (impacted hosts/accounts/data), and the technique_mappings the evidence supports.",
+      },
+    ],
+    toolsExercised: ["issue_set_verdict", "issues_list"],
+    apis: [
+      {
+        method: "PATCH",
+        path: "/api/agent/issues/{id}",
+        description:
+          "Persists the structured verdict fields on the Issue (investigations.db → issues): verdict, verdict_confidence, blast_radius, plus the technique_mappings rows. The Assessment tab reads these back. MCP_TOKEN bearer; catalog domain — no SecretStore access.",
+      },
+      {
+        method: "GET",
+        path: "/api/agent/issues/{id}",
+        description:
+          "Returns the Issue with verdict, verdict_confidence, blast_radius, and technique_mappings populated — the data the Assessment tab renders.",
+      },
+    ],
+    howToTest: [
+      "Open an Issue you've investigated. Paste the prompt with its id. The agent calls issue_set_verdict and confirms the verdict it recorded.",
+      "Open /investigation/issues/<id> → Assessment tab. The verdict banner shows the verdict + confidence; the blast radius lists impacted hosts / accounts / data; the ATT&CK techniques are listed.",
+      "Negative: open an Issue with no verdict yet → the Assessment tab shows the 'No structured verdict yet' empty state explaining issue_set_verdict.",
+    ],
+    expectedResult:
+      "The Issue carries a structured verdict — enum + confidence + blast radius + ATT&CK techniques — written by issue_set_verdict and rendered on the Assessment tab. The verdict banner also appears in the Issue header.",
+    verifyVia: [
+      "GET /api/agent/issues/<id> → verdict, verdict_confidence (0..1), blast_radius, technique_mappings all populated",
+      "/investigation/issues/<id> → Assessment tab renders the verdict, confidence, blast radius, and techniques",
+    ],
+    related: ["investigate-to-issue", "investigation-generate-report"],
+    prerequisites: ["investigate-to-issue"],
+    components: ["investigation", "xsoar", "connectors"],
+  },
+
+  {
+    id: "investigation-generate-report",
+    category: "connectors",
+    title: "Generate an investigation report (Report tab)",
+    summary:
+      "Produce a shareable closure report for an Issue: a markdown document assembled from the verdict, blast radius, ATT&CK techniques, summary, conclusions, and timeline. The agent writes it with generate_investigation_report; the Issue detail's Report tab renders it and the report is fetchable via the API.",
+    difficulty: "intermediate",
+    durationMin: 4,
+    icon: "description",
+    prompts: [
+      {
+        text: "Generate the investigation report for Guardian issue <id>.",
+        note: "Exercises generate_investigation_report — assembles the closure markdown from the structured verdict, blast radius, techniques, summary, conclusions, and timeline. If no verdict is set yet, the agent decides one with issue_set_verdict first.",
+      },
+    ],
+    toolsExercised: ["generate_investigation_report", "issue_set_verdict"],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/agent/issues/{id}/report",
+        description:
+          "Returns {issue_id, report} where report is the full markdown closure document. 404 if the issue does not exist or no report has been generated yet. Proxies to the embedded MCP at GET /api/v1/issues/{id}/report.",
+      },
+    ],
+    howToTest: [
+      "Open an investigated Issue. On the Report tab, click Generate (or paste the prompt). After a moment the markdown report renders.",
+      "Read the report: it covers the summary, conclusions, verdict, blast radius, ATT&CK techniques, and timeline.",
+      "Re-open the Report tab later — the generated report persists and renders without regenerating.",
+    ],
+    expectedResult:
+      "The Report tab shows a markdown closure report synthesized from the Issue's verdict, blast radius, techniques, summary, conclusions, and timeline. The same report is fetchable via GET /api/agent/issues/<id>/report.",
+    verifyVia: [
+      "GET /api/agent/issues/<id>/report → {issue_id, report} with the markdown body",
+      "/investigation/issues/<id> → Report tab renders the generated markdown",
+    ],
+    related: ["investigation-record-verdict", "investigation-export-stix"],
+    prerequisites: ["investigate-to-issue"],
+    components: ["investigation", "xsoar", "connectors"],
+  },
+
+  {
+    id: "investigation-export-stix",
+    category: "connectors",
+    title: "Export an Issue or Case as a STIX 2.1 bundle",
+    summary:
+      "Download the indicators and relationships of an Issue (or the union across a Case) as a STIX 2.1 bundle for interop with other tooling. The Issue detail's 'Export STIX 2.1' button downloads the bundle; Cases have the equivalent at the case level.",
+    difficulty: "starter",
+    durationMin: 2,
+    icon: "download",
+    prompts: [],
+    toolsExercised: [],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/agent/issues/{id}/stix",
+        description:
+          "Returns the STIX 2.1 bundle for one Issue — its indicators plus the STIX relationships attributed to it — for download / interop. Proxies to the embedded MCP at GET /api/v1/issues/{id}/stix.",
+      },
+      {
+        method: "GET",
+        path: "/api/agent/cases/{id}/stix",
+        description:
+          "Returns the STIX 2.1 bundle for a Case — the union of its issues' indicators and relationships.",
+      },
+    ],
+    howToTest: [
+      "Open an Issue with attributed indicators. Click 'Export STIX 2.1' in the header. A STIX 2.1 bundle downloads.",
+      "Open the bundle: it is a valid STIX 2.1 bundle whose objects are the Issue's indicators + relationship objects.",
+      "For a Case grouping 2+ issues, use the case-level STIX export — the bundle covers the union of the case's indicators and relationships.",
+    ],
+    expectedResult:
+      "Exporting an Issue downloads a STIX 2.1 bundle of its indicators and relationships; the case-level export returns the union across the case's issues. Both are valid STIX 2.1 ready to import into other tooling.",
+    verifyVia: [
+      "GET /api/agent/issues/<id>/stix → a STIX 2.1 bundle of the issue's indicators + relationships",
+      "GET /api/agent/cases/<id>/stix → the union bundle across the case's issues",
+    ],
+    related: ["investigation-relations-canvas", "investigation-case-diagrams"],
+    prerequisites: ["investigation-relations-canvas"],
+    components: ["investigation", "xsoar", "connectors"],
+  },
+
+  {
     id: "investigation-relations-canvas",
     category: "connectors",
     title: "Attribute indicators + draw the Relations canvas",
@@ -4176,7 +4256,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Draw campaign-level diagrams on a multi-issue Case",
     summary:
-      "On a Case grouping 2+ related issues, generate the campaign-level attack chain and relations canvas — one causal diagram across the case's shared kill-chain, one STIX graph over the union of the case's indicators. The case-level companions to the per-issue diagrams; generated on demand from the case detail's tabs (v0.2.2).",
+      "On a Case grouping 2+ related issues, generate the campaign-level attack chain and relations canvas — one causal diagram across the case's shared kill-chain, one STIX graph over the union of the case's indicators. The case-level companions to the per-issue diagrams; generated on demand from the case detail's tabs.",
     difficulty: "intermediate",
     durationMin: 6,
     icon: "folder_special",
@@ -4201,7 +4281,7 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/cases/{id}",
         description:
-          "Case detail now carries attack_chain_svg + relations_canvas_svg (campaign-level, v0.2.2) alongside the grouped issues. Null until the agent draws them; the Attack chain / Relations tabs render them sandboxed as <img> data-URIs.",
+          "Case detail carries attack_chain_svg + relations_canvas_svg (campaign-level) alongside the grouped issues. Null until the agent draws them; the Attack chain / Relations tabs render them sandboxed as <img> data-URIs.",
       },
       {
         method: "POST",
@@ -4227,9 +4307,6 @@ export const JOURNEYS: Journey[] = [
     related: ["investigation-relations-canvas", "investigate-to-issue"],
     components: ["investigation", "xsoar", "connectors"],
   },
-
-  // [guardian v0.1.0] Retired: ops-list-stop-*-workers — the synthetic
-  // log-worker registry shipped with the removed log-generation engine.
 
   {
     id: "ops-marketplace-browse",
@@ -4289,7 +4366,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Install an emulated service (Splunk mimic) + wire it to XSOAR",
     summary:
-      "v0.2.42 — the marketplace has a second entry kind: emulated SERVICES (badged 'Service', under the Services filter). A service advertises ZERO agent tools and runs as a container Guardian publishes on a HOST port so an EXTERNAL system reaches it. Splunk (Emulated) speaks the splunkd REST API the XSOAR SplunkPy integration uses — point a real SplunkPy instance at it.",
+      "The marketplace has a second entry kind: emulated SERVICES (badged 'Service', under the Services filter). A service advertises ZERO agent tools and runs as a container Guardian publishes on a HOST port so an EXTERNAL system reaches it. Splunk (Emulated) speaks the splunkd REST API the XSOAR SplunkPy integration uses — point a real SplunkPy instance at it.",
     difficulty: "intermediate",
     durationMin: 8,
     icon: "lan",
@@ -4392,9 +4469,9 @@ export const JOURNEYS: Journey[] = [
   {
     id: "ops-create-xsoar-instance",
     category: "connectors",
-    title: "Create an XSOAR instance (v6 or v8)",
+    title: "Create an XSOAR instance — version 6 or 8",
     summary:
-      "Install the Cortex XSOAR connector and create one instance via the version-aware create form (v0.2.30): pick the Version first, then fill only the fields that version needs — API key alone for v6, API key + key id for v8 — plus the optional Playground / War Room id that powers the command tools.",
+      "Install the Cortex XSOAR connector and create one instance via the version-aware create form: pick the Version first, then fill only the fields that version needs — API key alone for v6, API key + key id for v8 — plus the optional Playground / War Room id that powers the command tools.",
     difficulty: "starter",
     durationMin: 3,
     icon: "add_box",
@@ -4410,12 +4487,12 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/instances",
         description:
-          "Create the instance: {connector_id:'xsoar', name, config:{version:'v6'|'v8', api_url, api_id?(v8 only), playground_id?}, secrets:{api_key}, enabled:true}. The create form is credential-bearing so it's REST/UI-only — the chat agent cannot create instances (credential guardrail).",
+          "Create the instance: {connector_id:'xsoar', name, config:{version:'v6'|'v8', api_url, api_id [version 8 only], playground_id?}, secrets:{api_key}, enabled:true}. The create form is credential-bearing so it's REST/UI-only — the chat agent cannot create instances (credential guardrail).",
       },
     ],
     howToTest: [
       "Open /connectors → Marketplace. Install Cortex XSOAR (operator ack — no instance yet).",
-      "Switch to Instances → Add Instance for XSOAR. The Version dropdown is FIRST (v0.2.30); pick v6 (on-prem) or v8 (Cortex cloud).",
+      "Switch to Instances → Add Instance for XSOAR. The Version dropdown is FIRST; pick v6 (on-prem) or v8 (Cortex cloud).",
       "Fill the fields the form shows for that version: v6 → api_url + api_key (no key id); v8 → api_url + API key ID (api_id) + api_key. The api_id field only appears for v8.",
       "Optional: set Playground / War Room ID — needed only to run commands (run_command), enrich_indicator, complete_task, and the list tools. Leave blank for read-only/lifecycle use.",
       "Submit. guardian-updater starts guardian-connector-xsoar-<name>; the card shows 'Creating…' then healthy.",
@@ -4438,7 +4515,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Create a Cortex XSIAM instance",
     summary:
-      "Install the Cortex XSIAM connector (v0.2.27, 54 tools — investigation + EDR response) and create an instance with the Cortex public-API key pair (key id → x-xdr-auth-id, key → Authorization). Prerequisite for the XSIAM hunt-and-respond journey.",
+      "Install the Cortex XSIAM connector (54 tools — investigation + EDR response) and create an instance with the Cortex public-API key pair (key id → x-xdr-auth-id, key → Authorization). Prerequisite for the XSIAM hunt-and-respond journey.",
     difficulty: "starter",
     durationMin: 3,
     icon: "security",
@@ -4481,7 +4558,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Run XSOAR v6 + v8 instances side by side",
     summary:
-      "Enable two instances of the same connector at once — an on-prem XSOAR 6 tenant and a cloud XSOAR 8 tenant — and watch the agent route each request to the right tenant via the call-time `instance` selector. First real user of the v0.2.29 multi-active-instance capability.",
+      "Enable two instances of the same connector at once — an on-prem XSOAR 6 tenant and a cloud XSOAR 8 tenant — and watch the agent route each request to the right tenant via the call-time `instance` selector. Exercises the multi-active-instance capability.",
     difficulty: "advanced",
     durationMin: 8,
     icon: "alt_route",
@@ -4496,7 +4573,7 @@ export const JOURNEYS: Journey[] = [
       },
       {
         text: "List the open XSOAR incidents.",
-        note: "Deliberately ambiguous about which tenant. With 2+ enabled, the agent must ASK which tenant (v6 or v8) rather than silently defaulting. A structured 'instance required' error backstops this if the agent guesses.",
+        note: "Deliberately ambiguous about which tenant. With 2+ enabled, the agent must ASK which tenant — v6 or v8 — rather than silently defaulting. A structured 'instance required' error backstops this if the agent guesses.",
       },
     ],
     toolsExercised: ["xsoar_list_incidents", "xsoar_get_incident"],
@@ -4505,13 +4582,13 @@ export const JOURNEYS: Journey[] = [
         method: "POST",
         path: "/api/agent/instances",
         description:
-          "Create the v6 instance: {connector_id:'xsoar', name:'xsoar-v6', config:{version:'v6', api_url, ...}, secrets:{api_key}}. Pick Version=v6 in the create-instance dropdown (renders from connector.yaml enum, v0.2.29). guardian-updater starts guardian-connector-xsoar-xsoar-v6.",
+          "Create the v6 instance: {connector_id:'xsoar', name:'xsoar-v6', config:{version:'v6', api_url, ...}, secrets:{api_key}}. Pick Version=v6 in the create-instance dropdown (renders from the connector.yaml enum). guardian-updater starts guardian-connector-xsoar-xsoar-v6.",
       },
       {
         method: "POST",
         path: "/api/agent/instances",
         description:
-          "Create the v8 instance: {connector_id:'xsoar', name:'xsoar-v8', config:{version:'v8', api_url, api_id}, secrets:{api_key}}. Pick Version=v8. With the one-enabled-per-connector guard lifted (v0.2.29), this no longer 409s when the v6 instance is already enabled.",
+          "Create the v8 instance: {connector_id:'xsoar', name:'xsoar-v8', config:{version:'v8', api_url, api_id}, secrets:{api_key}}. Pick Version=v8. A connector can run multiple enabled instances, so this succeeds even when the v6 instance is already enabled.",
       },
       {
         method: "PATCH",
@@ -4523,10 +4600,10 @@ export const JOURNEYS: Journey[] = [
     howToTest: [
       "Open /connectors → Marketplace. Install Cortex XSOAR (operator ack — no instance yet).",
       "Switch to Instances → Add Instance for XSOAR. Name='xsoar-v6'. In the Version dropdown pick 'v6'. Fill the on-prem api_url + api_key. Submit.",
-      "Add a second XSOAR instance. Name='xsoar-v8'. Version dropdown = 'v8'. Fill the cloud api_url + api_id (key id) + api_key. Submit. This succeeds with the v6 instance already enabled (the one-enabled-per-connector guard is lifted in v0.2.29).",
+      "Add a second XSOAR instance. Name='xsoar-v8'. Version dropdown = 'v8'. Fill the cloud api_url + api_id (key id) + api_key. Submit. This succeeds with the v6 instance already enabled, since a connector can run multiple enabled instances.",
       "Confirm both containers run: `docker ps` shows guardian-connector-xsoar-xsoar-v6 AND guardian-connector-xsoar-xsoar-v8 up.",
-      "In chat, paste prompt 1 (v6). Verify in /observability/events the xsoar_list_incidents call recorded instance_name='xsoar-v6'; the response is the on-prem tenant's incidents.",
-      "Paste prompt 2 (v8). Verify the call recorded instance_name='xsoar-v8'; the response is the cloud tenant's cases. No v6 data leaks into the v8 answer or vice versa.",
+      "In chat, paste the v6 prompt. Verify in /observability/events the xsoar_list_incidents call recorded instance_name='xsoar-v6'; the response is the on-prem tenant's incidents.",
+      "Paste the v8 prompt. Verify the call recorded instance_name='xsoar-v8'; the response is the cloud tenant's cases. No v6 data leaks into the v8 answer or vice versa.",
       "Paste prompt 3 (ambiguous). Expected: the agent asks which tenant rather than guessing. If it does call the tool without `instance`, the connector_loader returns a structured error listing the valid instance names (xsoar-v6, xsoar-v8) — the agent surfaces that and asks you to disambiguate.",
     ],
     expectedResult:
@@ -4628,10 +4705,10 @@ export const JOURNEYS: Journey[] = [
       "Confirm guardian-browser is running (it's profile-gated): `docker compose --profile browser up -d guardian-browser`. Without it, guardian_web_navigate calls fail at the chromedp connection step.",
       "Open /connectors → Marketplace. Find Web Browser, click Install (operator ack — does NOT create an instance).",
       "Switch to Instances. Click 'Add Instance' for Web Browser. Name='primary'. cdp_url='http://guardian-browser:9222' (the default).",
-      "Submit. The form reports the outcome (v0.2.28): on success it closes and the instance card appears; an amber 'still starting' notice appears if the container needs a moment; a red banner if the create itself failed. The 201 body carries runtime_style='container' + container_start={started:true, container_url, error:null}. After a few seconds, `docker ps` shows guardian-connector-web-primary up + healthy.",
+      "Submit. The form reports the outcome: on success it closes and the instance card appears; an amber 'still starting' notice appears if the container needs a moment; a red banner if the create itself failed. The 201 body carries runtime_style='container' + container_start={started:true, container_url, error:null}. After a few seconds, `docker ps` shows guardian-connector-web-primary up + healthy.",
       "Read /api/agent/instances/<id> → container_url field is populated.",
       "Trigger a tool: in chat, 'Open https://example.com and tell me the page title'. The agent calls guardian_web_navigate → routes through the proxy → through MCP-over-HTTP → connector container → CDP → guardian-browser → real fetch → result returns up the chain.",
-      "Negative + self-heal (v0.2.28): stop the connector container directly via `docker stop guardian-connector-web-primary`. Next guardian_web_navigate call → tool error 'connector container unreachable'. guardian-updater's periodic reconcile restarts the missing container automatically within one interval (≤5 min by default); to recover immediately, POST /api/v1/connectors/reconcile (or the per-instance .../restart endpoint).",
+      "Negative + self-heal: stop the connector container directly via `docker stop guardian-connector-web-primary`. Next guardian_web_navigate call → tool error 'connector container unreachable'. guardian-updater's periodic reconcile restarts the missing container automatically within one interval (≤5 min by default); to recover immediately, POST /api/v1/connectors/reconcile (or the per-instance .../restart endpoint).",
     ],
     expectedResult:
       "The per-instance-container lifecycle exercises four moving parts: agent (creates instance), guardian-updater (starts the container), the per-instance connector container (loads instance config + secrets via SecretStoreReader, registers tools with FastMCP), and the agent's tool-dispatch loader (synthesizes proxy callables that forward to the container's MCP). The routing happens under the hood.",
@@ -4941,18 +5018,6 @@ export const JOURNEYS: Journey[] = [
     components: ["connectors", "secrets"],
   },
 
-  // [v0.4.0] Retired: ops-override-ui-password-via-profile. The "legacy
-  // plaintext compare vs SecretStore hash" distinction collapsed when
-  // v0.4.0 deleted setup.json + UI_USER/UI_PASSWORD env. Only ONE path
-  // remains — see ops-change-ui-password above.
-
-  // [guardian v0.1.0] Retired: ops-edit-*-via-connectors-v0135 (red-team
-  // C2 connector instance editing) — the connector it edited was removed.
-  // Also retired: ops-edit-xsiam-via-connectors-v0135 — the telemetry-era
-  // xsiam connector + its send_webhook_log log-injection tool were removed
-  // in the XSOAR pivot. The same InstanceStore-backed edit flow survives
-  // in ops-edit-xsoar-via-connectors below.
-
   {
     id: "ops-edit-xsoar-via-connectors",
     category: "connectors",
@@ -4986,7 +5051,7 @@ export const JOURNEYS: Journey[] = [
       "Run prompt 1 in chat. Confirm xsoar.list_incidents fires and returns.",
       "Open /connectors → xsoar → Instances → your instance → Edit. Change api_url OR rotate api_key. Save.",
       "Run prompt 2. Confirm the call goes to the NEW base URL with the NEW auth.",
-      "Optional (v6 ↔ v8): set api_id to your Cortex cloud key id. Confirm the next call adds the /xsoar/public/v1 path prefix + x-xdr-auth-id header. Clear api_id to go back to the XSOAR 6 bare-Authorization shape.",
+      "Optional, switching v6 ↔ v8: set api_id to your Cortex cloud key id. Confirm the next call adds the /xsoar/public/v1 path prefix + x-xdr-auth-id header. Clear api_id to go back to the XSOAR 6 bare-Authorization shape.",
       "Negative: temporarily set api_key to garbage. Run prompt 2. Expect a 401 from XSOAR, surfaced verbatim. Restore the real value.",
     ],
     expectedResult:
@@ -5002,12 +5067,6 @@ export const JOURNEYS: Journey[] = [
     ],
     components: ["chat", "xsoar", "connectors", "secrets"],
   },
-
-  // [v0.4.0] Retired: ops-reset-ui-password-cli-v0135. The
-  // reset-ui-password.sh script + the /api/agent/ui/auth/password endpoint
-  // were both deleted in v0.4.0's auth redesign. The replacement is
-  // ops-cli-reset-admin-password (added below) using the new
-  // /app/cli/reset-admin.mjs invoked via docker exec.
 
   {
     id: "ops-backup-restore-roundtrip-v0136",
@@ -5071,21 +5130,6 @@ export const JOURNEYS: Journey[] = [
     ],
     components: ["secrets", "connectors", "auth", "jobs", "skills", "memory", "knowledge"],
   },
-
-  // [v0.4.0] Retired: ops-recover-reset-script-via-ui-v0137. The script
-  // this journey recovered (reset-ui-password.sh) was deleted in v0.4.0,
-  // and the /api/agent/recovery/reset-ui-password endpoint that served
-  // it was removed too. The forgot-password path is now the always-
-  // baked-in /app/cli/reset-admin.mjs (no separate file to "recover").
-
-  // [guardian v0.1.0] Retired: cortex-xql-query-authoring — XQL authoring
-  // was xsiam/xdr-backed; the XQL capability + the xql-examples KB were
-  // removed in the XSOAR pivot. The cortex-docs connector survives, but it
-  // no longer drives XQL composition.
-  // [guardian v0.1.0] Retired: xdr-discover-datasets-and-query-v070 — the
-  // cortex-xdr connector (and its dataset-discovery + run_xql_query tools)
-  // was removed entirely. Replaced by the XSOAR incident-investigation
-  // journeys below (xsoar-monitor-cases, xsoar-investigate-case).
 
   // ─────────────────────────────────────────────────────────────────
   // VALIDATION — XSOAR incident investigation (Guardian's core use case)
