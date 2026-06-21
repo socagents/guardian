@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.45",
+    date: "2026-06-21",
+    title: "Structured investigation outcome — verdict, blast radius, ATT&CK, report.",
+    highlights: [
+      "Investigation Issues gain a structured outcome: a verdict from a fixed set (true/false positive, benign, needs escalation, inconclusive), a 0-100% confidence, and a blast-radius object (hosts/accounts/data the attack touched). The Assessment tab renders the verdict chip, confidence meter, and blast-radius groups.",
+      "ATT&CK technique mappings: confirmed techniques are recorded as structured rows (id + tactic + manifestation + evidence) and shown as chips — not only in prose. A cross-incident lookup answers 'which incidents involved this technique'.",
+      "New Report tab: assembles the verdict, blast radius, techniques, indicators, and timeline into one shareable markdown report — generate/regenerate on demand.",
+      "The agent does it automatically: the xsoar_case_investigation skill sets the structured verdict, maps techniques, and generates the report at resolve; the autonomous judge scores against the structured record; the Block-close-without-verdict hook accepts either the structured verdict or the legacy VERDICT: line.",
+      "Backward-safe: existing investigations.db upgrades in place; the large report rides only on the issue-detail read.",
+    ],
+  },
+  {
     version: "0.2.44",
     date: "2026-06-21",
     title: "XQL knowledge base + authoring skill for Cortex XSIAM.",

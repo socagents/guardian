@@ -2776,8 +2776,9 @@ Networks documentation and returning evidence-backed, cited answers.
               <p>
                 Opening an Issue shows a full-width, tabbed layout built for an
                 analyst write-up (redesigned in v0.1.7). A header carries the
-                title, a derived <Term>VERDICT</Term> banner (pulled from the
-                summary&apos;s leading verdict line), the{" "}
+                title, a <Term>VERDICT</Term> banner (the structured verdict
+                with its confidence when set, falling back to the summary&apos;s
+                leading verdict line — v0.2.45), the{" "}
                 <Term>status / severity</Term> controls, and the{" "}
                 <Term>case assignment</Term>; the body is organised into tabs:
               </p>
@@ -2788,9 +2789,21 @@ Networks documentation and returning evidence-backed, cited answers.
                   the agent fills these in as it works and you can refine them.
                 </li>
                 <li>
-                  <Term>Assessment</Term> — the <Term>Conclusions</Term> (the
-                  verdict reasoning, with MITRE ATT&amp;CK technique tags) and{" "}
-                  <Term>Next steps</Term>.
+                  <Term>Assessment</Term> — the <Term>structured outcome</Term>{" "}
+                  (v0.2.45): the verdict (true positive, false positive, benign,
+                  needs escalation, or inconclusive), a confidence meter, the{" "}
+                  <Term>blast radius</Term> (which hosts, accounts, and data the
+                  attack touched), and <Term>ATT&amp;CK technique</Term> chips —
+                  over the editable <Term>Conclusions</Term> (the verdict
+                  reasoning) and <Term>Next steps</Term>.
+                </li>
+                <li>
+                  <Term>Report</Term> (v0.2.45) — a generated, shareable markdown
+                  closure report that pulls the verdict, blast radius, ATT&amp;CK
+                  techniques, indicators, and timeline into one document. Click{" "}
+                  <strong>Generate report</strong> (or <strong>Regenerate</strong>)
+                  to (re)build it on demand; Guardian also writes it when it
+                  finishes an investigation.
                 </li>
                 <li>
                   <Term>Activity</Term> — the timeline of every step and finding
@@ -3908,9 +3921,10 @@ probed          ── transient state during an in-flight probe`}</Pre>
                   <Term>Block close without verdict</Term> —{" "}
                   <Code>PreToolUse</Code> on{" "}
                   <Code>xsoar_close_incident</Code>. Denies the close when the
-                  Guardian Issue tracking that incident has no recorded{" "}
-                  <Code>VERDICT:</Code> line, so no incident is closed without a
-                  documented disposition. Use <Code>failurePolicy: block</Code>{" "}
+                  Guardian Issue tracking that incident has no recorded
+                  disposition — either the structured verdict (v0.2.45) or the
+                  legacy <Code>VERDICT:</Code> line — so no incident is closed
+                  without one. Use <Code>failurePolicy: block</Code>{" "}
                   (fail-closed). Conservative by default — closes of incidents
                   Guardian isn&apos;t tracking pass through; flip{" "}
                   <Term>block_if_untracked</Term> for strict mode.

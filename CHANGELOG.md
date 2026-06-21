@@ -10,6 +10,18 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.45] (2026-06-21) — *Structured investigation outcome (stage A)*
+
+Guardian's investigation Issues gain a **structured outcome** alongside the prose write-up — a queryable verdict, confidence, blast radius, and ATT&CK technique mappings — plus a generated closure **report**. This is stage A of the cross-incident investigation-model arc: it makes a verdict machine-readable (not just a sentence in the summary) so it can drive the UI, the cross-incident pivot, and later campaign analytics.
+
+- **Structured verdict + confidence + blast radius.** Each Issue can now carry a verdict from a fixed set (true positive, false positive, benign, needs escalation, inconclusive), a 0–100% confidence, and a blast-radius object (which hosts, accounts, and data the attack touched). The Issue detail's **Assessment** tab renders the verdict chip, a confidence meter, and the parsed blast-radius groups; the header verdict banner now prefers the structured verdict and shows its confidence.
+- **ATT&CK technique mappings.** Confirmed techniques are recorded as structured rows (technique id + tactic + how it manifested + the evidence), shown as chips on the Assessment tab — not only mentioned in prose. A new cross-incident lookup answers "which incidents involved this technique."
+- **Generated investigation report.** A new **Report** tab assembles the verdict, blast radius, techniques, indicators, and timeline into one shareable markdown document — generate or regenerate it on demand, and Guardian writes it when it finishes an investigation.
+- **The agent records all of this automatically.** The `xsoar_case_investigation` skill now sets the structured verdict, maps each confirmed technique, and generates the report at resolve, on top of the existing summary/conclusions. The autonomous judge scores against the structured record; the *Block close without verdict* hook accepts either the structured verdict or the legacy `VERDICT:` line.
+- **Backward-safe.** Existing `investigations.db` files upgrade in place (guarded `ALTER`/`CREATE TABLE IF NOT EXISTS`); the large report rides only on the issue-detail read, never the list.
+
+---
+
 ## [v0.2.44] (2026-06-21) — *XQL knowledge base + authoring skill*
 
 Guardian gains a Cortex XSIAM **XQL query** capability for analysts and the investigation agent: a knowledge base of example queries, a search tool that enriches results with syntax + schema context, and a skill that ties them to live Cortex docs.

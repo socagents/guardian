@@ -6534,13 +6534,17 @@ function Investigation() {
  persists to <Code>investigations.db</Code> in the data root. It is{" "}
  <Term>catalog-domain</Term> state — no SecretStore values, no
  credentials — which is why the agent is permitted to read and mutate
- it (see the credential-guardrail subsection below). Six tables:
+ it (see the credential-guardrail subsection below). Seven tables:
  </p>
  <Pre>{`investigations.db  (DATA_ROOT/ — SQLite, catalog domain)
  ├── issues          Guardian's own investigation records
  │     id, title, status, severity, kind, origin,
  │     summary, scope, recommendations,
  │     conclusions, next_steps,
+ │     verdict              -- structured verdict enum (v0.2.45, nullable)
+ │     verdict_confidence   -- 0..1 confidence in the verdict (v0.2.45)
+ │     blast_radius         -- JSON scope object {hosts,accounts,…} (v0.2.45)
+ │     report               -- generated markdown closure report (v0.2.45)
  │     source_ref           -- the XSOAR incident id this Issue tracks
  │     case_id              -- FK → cases.id (one-to-many issue→case)
  │     attack_chain_svg     -- the causal diagram SVG (v0.1.8, nullable)
@@ -6552,6 +6556,10 @@ function Investigation() {
  │     created_at, updated_at
  ├── issue_events    the per-issue activity timeline
  │     seq, id, issue_id, ts, type, content
+ ├── technique_mappings  ATT&CK techniques per issue (v0.2.45), unique by
+ │     (issue_id, technique_id)
+ │     id, issue_id, technique_id, tactic, manifestation,
+ │     evidence_ref, confidence, created_at
  ├── indicators      deduped IoCs (v0.2.0), unique by (value, type)
  │     id, value, type, dbot_score, enrichment, source, first/last_seen
  ├── indicator_issues  M:N linking indicators ↔ the issues they're seen in
@@ -6569,15 +6577,25 @@ function Investigation() {
  correlate across cases. The <Code>relationships</Code> table (v0.2.1)
  holds <Term>STIX</Term>-style edges — one generic relationship row per
  (source, verb, target), deduped on re-assertion — which back the
- indicator-attribution and the per-issue Relations canvas. The two SVG
- columns ride only on the issue <em>detail</em> read, never the lean
- list.
+ indicator-attribution and the per-issue Relations canvas. The{" "}
+ <Code>technique_mappings</Code> table (v0.2.45) records the ATT&amp;CK
+ techniques the agent confirms on an Issue — one row per
+ (issue, technique), upserted on re-assertion — which back the Assessment
+ tab&apos;s technique chips and the cross-incident <em>technique pivot</em>{" "}
+ (<Code>incidents_by_technique</Code>). The four v0.2.45 structured-outcome
+ columns on <Code>issues</Code> (<Code>verdict</Code>,{" "}
+ <Code>verdict_confidence</Code>, <Code>blast_radius</Code>,{" "}
+ <Code>report</Code>) are added by a backward-safe <Code>ALTER</Code>{" "}
+ migration guarded by a <Code>PRAGMA table_info</Code> check, so an
+ existing <Code>investigations.db</Code> upgrades in place. The large{" "}
+ <Code>report</Code> markdown and the two SVG columns ride only on the
+ issue <em>detail</em> read, never the lean list.
  </p>
  </SubSection>
 
  <SubSection icon="api" title="Agent MCP tools — catalog side of the credential guardrail">
  <p>
- The agent reaches the module through seventeen MCP tools. They are on the{" "}
+ The agent reaches the module through twenty-one MCP tools. They are on the{" "}
  <Term>catalog</Term> side of the credential guardrail, NOT the
  credential side: they touch only investigation metadata in{" "}
  <Code>investigations.db</Code> and never read, write, mint, or rotate
@@ -6610,13 +6628,29 @@ function Investigation() {
  another IoC, an ATT&amp;CK technique, malware, a campaign, or a
  threat-actor.
  </li>
+ <li>
+ <strong>Structured outcome</strong> (v0.2.45) —{" "}
+ <Code>issue_set_verdict</Code> (the verdict enum + 0..1 confidence +
+ the blast-radius JSON object), <Code>issue_add_technique</Code> (one
+ confirmed ATT&amp;CK technique mapped to the Issue, upserted),{" "}
+ <Code>incidents_by_technique</Code> (the read-only cross-incident
+ pivot — every Issue carrying a given technique id), and{" "}
+ <Code>generate_investigation_report</Code> (assembles the verdict +
+ blast radius + techniques + indicators + timeline into one markdown
+ report and stores it on the Issue). These turn the Issue from a prose
+ write-up into a queryable structured record.
+ </li>
  </ul>
  <p>
  Typical flow during a chat or job: the agent opens an Issue when it
  starts working a case (<Code>issue_create</Code> with{" "}
  <Code>source_ref</Code> = the XSOAR incident id), logs each step and
- finding via <Code>issue_add_event</Code>, records the verdict via{" "}
- <Code>issue_update</Code>, and groups related Issues into a Case. The{" "}
+ finding via <Code>issue_add_event</Code>, writes the prose verdict via{" "}
+ <Code>issue_update</Code>, then records the <em>structured</em> outcome
+ at resolve — <Code>issue_set_verdict</Code>,{" "}
+ <Code>issue_add_technique</Code> per confirmed technique, and{" "}
+ <Code>generate_investigation_report</Code> for the deliverable — and
+ groups related Issues into a Case. The{" "}
  <Code>bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md</Code>{" "}
  skill drives opening and maintaining the Issue throughout the
  investigation.
@@ -6636,8 +6670,15 @@ function Investigation() {
  <Code>/api/v1/indicators*</Code> under bearer <Code>MCP_TOKEN</Code>{" "}
  auth. The issue-detail AND case-detail GETs carry{" "}
  <Code>attack_chain_svg</Code> + <Code>relations_canvas_svg</Code>{" "}
- (case-level = campaign, v0.2.2); the indicator-detail GET carries
- the indicator&apos;s <Code>relationships</Code>.
+ (case-level = campaign, v0.2.2); the issue-detail GET also carries
+ the structured outcome (<Code>verdict</Code>,{" "}
+ <Code>verdict_confidence</Code>, <Code>blast_radius</Code>,{" "}
+ <Code>report</Code>, and the <Code>techniques</Code> array, v0.2.45);
+ the indicator-detail GET carries the indicator&apos;s{" "}
+ <Code>relationships</Code>. Two v0.2.45 routes round out the surface:{" "}
+ <Code>GET /api/v1/issues/{"{id}"}/report</Code> (the stored markdown
+ report) and <Code>GET /api/v1/techniques/{"{technique_id}"}/issues</Code>{" "}
+ (the cross-incident technique pivot).
  </li>
  <li>
  <strong>Next.js proxies</strong>:{" "}
@@ -6652,9 +6693,16 @@ function Investigation() {
  links <Code>/investigation/issues</Code>,{" "}
  <Code>/investigation/cases</Code>, and{" "}
  <Code>/investigation/indicators</Code>. The Issue detail is a
- tabbed layout — status/severity controls; editable Summary, Scope,
- Recommendations, Conclusions, and Next-steps fields; the Indicators
- tab; the activity timeline; and the two diagram tabs,{" "}
+ tabbed layout — status/severity controls; a header verdict banner
+ (the structured <Code>verdict</Code> with its confidence, falling
+ back to the summary&apos;s leading <Code>VERDICT:</Code> line); the{" "}
+ <Term>Assessment</Term> tab (v0.2.45 structured outcome — verdict
+ chip, confidence meter, parsed blast-radius groups, and ATT&amp;CK
+ technique chips — over the editable Conclusions + Next-steps); the{" "}
+ <Term>Report</Term> tab (the generated markdown, with on-demand
+ generate/regenerate via a one-shot agent job); editable Summary,
+ Scope, and Recommendations on the Overview tab; the Indicators tab;
+ the activity timeline; and the two diagram tabs,{" "}
  <Term>Attack chain</Term> (causal) and <Term>Relations</Term>{" "}
  (STIX graph), each generated on demand via a one-shot agent job and
  rendered sandboxed as an <Code>&lt;img&gt;</Code> data-URI. The
@@ -6715,8 +6763,11 @@ function Investigation() {
  </li>
  <li>
  <Code>guardian-investigation-judge</Code> (every 6h) — rubric-scores
- the most-recent resolved investigations (VERDICT / MITRE /
- blast-radius / recommendations) and, only on a{" "}
+ the most-recent resolved investigations against the structured record
+ (the <Code>verdict</Code> enum + confidence, the mapped ATT&amp;CK{" "}
+ <Code>techniques</Code>, the <Code>blast_radius</Code> object, and the
+ generated <Code>report</Code> — v0.2.45 — alongside the legacy prose
+ VERDICT / recommendations) and, only on a{" "}
  <em>systematic</em> weakness, makes one bounded additive edit to the{" "}
  <Code>xsoar_case_investigation</Code> skill via{" "}
  <Code>skills_update</Code>. Tightly whitelisted (reads
