@@ -242,11 +242,25 @@ class GetIssuesRequest(BaseModel):
     search_from: int = Field(default=0, description="Pagination offset.")
 
 
-async def xsiam_run_xql_query(query: str = "", ctx: Context = None) -> dict:
-    """
-    Execute custom XQL query against XSIAM datasets.
+# XQL execution tuning (v0.2.46 / Stage B). lookback widens the query window
+# beyond the legacy 30-min default so blast-radius hunts can scope days, not
+# minutes; the poll loop waits out a still-running query instead of returning
+# empty after a fixed 2s. _XQL_POLL_INTERVAL_S is module-level so tests set it 0.
+_XQL_POLL_INTERVAL_S = 2.0
+_XQL_POLL_MAX_TRIES = 30          # ~60s ceiling at the default interval
+_XQL_LOOKBACK_MAX_HOURS = 168.0   # 7 days — cap to keep PAPI windows sane
+_XQL_LOOKBACK_DEFAULT_HOURS = 0.5  # backward-compatible 30-min default
 
-    Queries last 30 minutes by default. Returns JSON results.
+
+async def xsiam_run_xql_query(query: str = "", lookback_hours: float = _XQL_LOOKBACK_DEFAULT_HOURS,
+                              ctx: Context = None) -> dict:
+    """
+    Execute a custom XQL query against XSIAM datasets.
+
+    `lookback_hours` sets the query time window (default 0.5 = last 30 minutes;
+    clamped to 7 days). For a blast-radius hunt over a multi-day incident, pass
+    e.g. lookback_hours=72. The tool polls until the query finishes (bounded),
+    so wide windows return complete results rather than an empty early read.
 
     Example MCP tool call:
     {
@@ -254,7 +268,8 @@ async def xsiam_run_xql_query(query: str = "", ctx: Context = None) -> dict:
       "params": {
         "name": "xsiam_run_xql_query",
         "arguments": {
-          "query": "datamodel dataset = corelight_http_raw | limit 10"
+          "query": "datamodel dataset = corelight_http_raw | filter src_ip = \\"1.2.3.4\\" | limit 100",
+          "lookback_hours": 72
         }
       }
     }
@@ -264,9 +279,17 @@ async def xsiam_run_xql_query(query: str = "", ctx: Context = None) -> dict:
         return _create_response({"error": "XQL query is required"}, is_error=True)
 
     try:
+        lb = float(lookback_hours)
+    except (TypeError, ValueError):
+        lb = _XQL_LOOKBACK_DEFAULT_HOURS
+    if lb <= 0:
+        lb = _XQL_LOOKBACK_DEFAULT_HOURS
+    lb = min(lb, _XQL_LOOKBACK_MAX_HOURS)
+
+    try:
         fetcher = _get_fetcher()
         to_ts = int(time.time() * 1000)
-        from_ts = to_ts - (30 * 60 * 1000)
+        from_ts = to_ts - int(lb * 60 * 60 * 1000)
 
         start_payload = {"request_data": {"query": request.query.strip(), "timeframe": {"from": from_ts, "to": to_ts}}}
         start_resp = await fetcher.send_request("xql/start_xql_query", data=start_payload)
@@ -274,11 +297,20 @@ async def xsiam_run_xql_query(query: str = "", ctx: Context = None) -> dict:
         if not query_id:
             return _create_response({"error": "Error starting XQL", "details": start_resp}, is_error=True)
 
-        await asyncio.sleep(2)
+        # Poll get_query_results until the query is no longer PENDING (bounded).
+        # pending_flag=True asks the API to report PENDING rather than error while
+        # the query is still running; we sleep + retry up to the ceiling.
         results_payload = {
-            "request_data": {"query_id": query_id, "pending_flag": False, "limit": 1000, "format": "json"}
+            "request_data": {"query_id": query_id, "pending_flag": True, "limit": 1000, "format": "json"}
         }
-        results_resp = await fetcher.send_request("xql/get_query_results", data=results_payload)
+        results_resp: dict = {}
+        for _ in range(_XQL_POLL_MAX_TRIES):
+            await asyncio.sleep(_XQL_POLL_INTERVAL_S)
+            results_resp = await fetcher.send_request("xql/get_query_results", data=results_payload)
+            reply = results_resp.get("reply") if isinstance(results_resp, dict) else None
+            status = reply.get("status") if isinstance(reply, dict) else None
+            if status != "PENDING":
+                break
         return _create_response(results_resp)
     except Exception as e:
         return _create_response({"error": f"Error running XQL: {str(e)}"}, is_error=True)

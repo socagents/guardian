@@ -67,10 +67,11 @@ spec:
     # ─── XQL queries ────────────────────────────────────────────
     - name: "run_xql_query"
       method: "POST /xql/run_query"
-      description: "Execute an XQL query against XSIAM's data lake. Returns the result rows or an execution id depending on query duration."
+      description: "Execute an XQL query against XSIAM's data lake and poll until it finishes (bounded). Returns the result rows. Use lookback_hours to widen the window for blast-radius hunts."
       args:
-        - { name: "query",      type: "string",  description: "XQL query text. Queried over the last 30 minutes.",        required: true  }
-      returns: { type: "object", description: "Query result rows or execution_id for async queries." }
+        - { name: "query",         type: "string", description: "XQL query text (e.g. 'dataset = x | filter src_ip = \"1.2.3.4\" | limit 100').", required: true  }
+        - { name: "lookback_hours", type: "number", description: "Query time window in hours (default 0.5 = last 30 min; max 168 = 7 days). For a blast-radius hunt over a multi-day incident, pass e.g. 72.", required: false }
+      returns: { type: "object", description: "Query result rows (reply.results.data)." }
 
     # ─── Datasets ───────────────────────────────────────────────
     - name: "get_datasets"

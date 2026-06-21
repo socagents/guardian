@@ -153,6 +153,86 @@ def test_endpoints_isolate_requires_a_filter(monkeypatch):
     assert rf.calls == []  # never hit the API
 
 
+# ─── 3b. run_xql_query — lookback window + bounded poll (Stage B / v0.2.46) ───
+
+
+class _XqlFetcher:
+    """query_id for start_xql_query, then a scripted sequence of
+    get_query_results replies (to exercise the PENDING poll loop)."""
+
+    def __init__(self, results_sequence):
+        self._results = list(results_sequence)
+        self.calls: list[tuple[str, Any]] = []
+
+    async def send_request(self, path, method="POST", data=None):
+        self.calls.append((path, data))
+        if path == "xql/start_xql_query":
+            return {"reply": "QID-1"}
+        if path == "xql/get_query_results":
+            if self._results:
+                return self._results.pop(0)
+            return {"reply": {"status": "SUCCESS", "results": {"data": []}}}
+        return {}
+
+
+def _start_timeframe(rf):
+    start = next(d for p, d in rf.calls if p == "xql/start_xql_query")
+    return start["request_data"]["timeframe"]
+
+
+def test_run_xql_default_window_is_30min(monkeypatch):
+    monkeypatch.setattr(connector, "_XQL_POLL_INTERVAL_S", 0)
+    rf = _XqlFetcher([{"reply": {"status": "SUCCESS", "results": {"data": [{"a": 1}]}}}])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_run_xql_query(query="dataset = x | limit 1"))
+    assert out["success"] is True
+    tf = _start_timeframe(rf)
+    span_min = (tf["to"] - tf["from"]) / 60000
+    assert 29.5 <= span_min <= 30.5  # backward-compatible default
+
+
+def test_run_xql_lookback_hours_widens_window(monkeypatch):
+    monkeypatch.setattr(connector, "_XQL_POLL_INTERVAL_S", 0)
+    rf = _XqlFetcher([{"reply": {"status": "SUCCESS", "results": {"data": []}}}])
+    _install(monkeypatch, rf)
+    run(connector.xsiam_run_xql_query(query="dataset = x", lookback_hours=24))
+    tf = _start_timeframe(rf)
+    span_h = (tf["to"] - tf["from"]) / 3_600_000
+    assert 23.5 <= span_h <= 24.5
+
+
+def test_run_xql_lookback_clamped_to_max(monkeypatch):
+    monkeypatch.setattr(connector, "_XQL_POLL_INTERVAL_S", 0)
+    rf = _XqlFetcher([{"reply": {"status": "SUCCESS", "results": {"data": []}}}])
+    _install(monkeypatch, rf)
+    run(connector.xsiam_run_xql_query(query="dataset = x", lookback_hours=100000))
+    tf = _start_timeframe(rf)
+    span_h = (tf["to"] - tf["from"]) / 3_600_000
+    assert span_h <= 168.5  # clamped to 7 days
+
+
+def test_run_xql_polls_until_not_pending(monkeypatch):
+    monkeypatch.setattr(connector, "_XQL_POLL_INTERVAL_S", 0)
+    rf = _XqlFetcher([
+        {"reply": {"status": "PENDING"}},
+        {"reply": {"status": "PENDING"}},
+        {"reply": {"status": "SUCCESS", "results": {"data": [{"host": "h1"}]}}},
+    ])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_run_xql_query(query="dataset = x", lookback_hours=1))
+    assert out["success"] is True
+    polls = [c for c in rf.calls if c[0] == "xql/get_query_results"]
+    assert len(polls) == 3  # polled through the two PENDINGs
+
+
+def test_run_xql_requires_query(monkeypatch):
+    rf = _XqlFetcher([])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_run_xql_query(query="   "))
+    assert out["success"] is False
+    assert rf.calls == []  # never hit the API
+
+
 # ─── 4. __all__ integrity ────────────────────────────────────────────
 
 _DROPPED = {
