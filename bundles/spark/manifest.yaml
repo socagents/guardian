@@ -285,6 +285,8 @@ tools:
     - "export_issue_stix"
     - "export_case_stix"
     - "generate_campaign_report"
+    - "webhook_preview"
+    - "export_to_webhook"
     # Built-in skill tools (env.skills)
     - "skills_*"
     # Phase 11 — agent self-modification (Tier 1: read-only tools).
@@ -419,6 +421,11 @@ approvals:
   # agent that issued a request cannot also resolve it
   # (ApprovalSelfResolveError; see approvals_bus.py).
   humanRequired:
+    # v0.2.48 (stage D) — the one investigation tool that SENDS DATA to an
+    # external system. Opt-in (off unless GUARDIAN_WEBHOOK_URL is set) + the
+    # target is operator config only; gated here so a human confirms each send.
+    # `webhook_preview` is read-only (shows what would be sent) and NOT gated.
+    - "export_to_webhook"
     - "jobs_create"
     - "jobs_update"
     - "jobs_run_now"

@@ -310,6 +310,11 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("export_issue_stix", investigation_tools.export_issue_stix),
     ("export_case_stix", investigation_tools.export_case_stix),
     ("generate_campaign_report", investigation_tools.generate_campaign_report),
+    # Webhook handoff: preview is read-only; export_to_webhook SENDS data out and
+    # is approval-gated (manifest.approvals.humanRequired) + opt-in (off unless
+    # the operator sets GUARDIAN_WEBHOOK_URL).
+    ("webhook_preview", investigation_tools.webhook_preview),
+    ("export_to_webhook", investigation_tools.export_to_webhook),
     # v0.2.0 — Indicators (IoCs extracted from issues + imported from the SOAR).
     # Catalog side of the guardrail (investigation metadata, no SecretStore).
     ("indicator_upsert", indicator_tools.indicator_upsert),

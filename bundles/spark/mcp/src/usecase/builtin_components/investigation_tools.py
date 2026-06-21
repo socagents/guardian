@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import re
+import urllib.request
 from typing import Any
 
 from usecase.investigation_store import (
@@ -456,6 +458,96 @@ def generate_campaign_report(case_id: str) -> dict[str, Any]:
         "techniques": techniques, "shared_infrastructure": shared,
         "members": [{"id": m.id, "title": m.title, "severity": m.severity, "verdict": m.verdict} for m in members],
     }}
+
+
+# ─── Webhook handoff (stage D, v0.2.48) — opt-in + approval-gated ────
+
+def _webhook_post(url: str, headers: dict, body: bytes) -> tuple[int, str]:
+    """The single outbound HTTP call (factored so tests mock it)."""
+    req = urllib.request.Request(url, data=body, method="POST", headers=headers)
+    with urllib.request.urlopen(req, timeout=15) as r:  # noqa: S310 (url is operator config)
+        return r.status, r.read().decode("utf-8", "replace")[:500]
+
+
+def _webhook_payload(s, issue_id: str | None, case_id: str | None):
+    """Assemble the outbound payload for an issue or a case, or (None, error)."""
+    if bool(issue_id) == bool(case_id):
+        return None, {"error": "pass exactly one of issue_id or case_id"}
+    if issue_id:
+        issue = s.get_issue(issue_id)
+        if issue is None:
+            return None, {"error": f"issue {issue_id!r} not found"}
+        report = generate_investigation_report(issue_id, template="executive")
+        stix = export_issue_stix(issue_id)
+        iocs = [{"value": i.value, "type": i.type, "dbot_score": i.dbot_score}
+                for i in s.list_indicators_for_issue(issue_id)]
+        return {
+            "source": "guardian", "kind": "issue", "issue_id": issue.id,
+            "title": issue.title, "verdict": issue.verdict,
+            "verdict_confidence": issue.verdict_confidence, "severity": issue.severity,
+            "source_ref": issue.source_ref, "report": report.get("markdown"),
+            "iocs": iocs, "stix": stix.get("bundle"),
+        }, None
+    case = s.get_case(case_id)
+    if case is None:
+        return None, {"error": f"case {case_id!r} not found"}
+    report = generate_campaign_report(case_id)
+    stix = export_case_stix(case_id)
+    return {
+        "source": "guardian", "kind": "case", "case_id": case.id, "title": case.title,
+        "threat_actor": case.threat_actor, "severity_rollup": case.severity_rollup,
+        "report": report.get("markdown"), "stix": stix.get("bundle"),
+    }, None
+
+
+def webhook_preview(issue_id: str | None = None, case_id: str | None = None) -> dict[str, Any]:
+    """Show EXACTLY what `export_to_webhook` would send (and to which configured
+    target), without sending anything. Read-only — NOT approval-gated. Use this
+    to surface the outbound to the operator before they approve the actual send.
+
+    Returns {"target": <url or None>, "would_send": {...}} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    payload, perr = _webhook_payload(s, issue_id, case_id)
+    if perr:
+        return perr
+    target = os.environ.get("GUARDIAN_WEBHOOK_URL", "").strip() or None
+    return {"target": target, "would_send": payload}
+
+
+def export_to_webhook(issue_id: str | None = None, case_id: str | None = None) -> dict[str, Any]:
+    """Send the structured verdict + report + IOCs + STIX to the operator's
+    configured outbound webhook (e.g. a SOAR / ticketing / Slack ingress).
+
+    SAFETY: this SENDS DATA TO AN EXTERNAL SYSTEM. It is **opt-in** (off unless
+    the operator sets `GUARDIAN_WEBHOOK_URL`), the target comes ONLY from that
+    operator config (never a tool arg or observed content), and it is
+    **approval-gated** (listed in manifest.approvals.humanRequired). Call
+    `webhook_preview` first to show what will be sent.
+
+    Returns {"ok": bool, "status": int, ...} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    payload, perr = _webhook_payload(s, issue_id, case_id)
+    if perr:
+        return perr
+    url = os.environ.get("GUARDIAN_WEBHOOK_URL", "").strip()
+    if not url:
+        return {"error": "no webhook configured — the operator must set GUARDIAN_WEBHOOK_URL "
+                         "(this handoff is opt-in and off by default)"}
+    headers = {"Content-Type": "application/json", "User-Agent": "Guardian"}
+    token = os.environ.get("GUARDIAN_WEBHOOK_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        status, _resp = _webhook_post(url, headers, json.dumps(payload).encode())
+    except Exception as e:
+        return {"error": f"webhook POST to {url} failed: {e}"}
+    return {"ok": 200 <= status < 300, "status": status, "url": url, "kind": payload["kind"]}
 
 
 def _verdict_warroom_markdown(s, issue) -> str:
