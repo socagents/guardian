@@ -66,9 +66,34 @@ export interface CaseRow {
   title: string;
   description: string | null;
   status: string;
+  /** v0.2.47 (stage C) — campaign rollup, synthesized by case_rollup from member
+   *  issues. infrastructure + techniques are JSON strings; null until rolled up. */
+  campaign_summary: string | null;
+  threat_actor: string | null;
+  infrastructure: string | null;
+  techniques: string | null;
+  severity_rollup: string | null;
   created_at: string;
   updated_at: string;
   issue_count?: number;
+}
+
+/** v0.2.47 (stage C) — a typed cross-case edge, with the other case resolved. */
+export interface CaseRelationshipEdge {
+  relationship_type: string;
+  note: string | null;
+  direction: "outgoing" | "incoming";
+  other_case: { id: string; title: string | null; status: string | null } | null;
+}
+
+/** v0.2.47 (stage C) — a KB playbook an investigation was routed through. */
+export interface PlaybookMatch {
+  id: string;
+  issue_id: string;
+  playbook_doc_id: string;
+  score: number | null;
+  matched_criteria: string | null;
+  created_at: string;
 }
 
 export interface IssueDetail extends Issue {
@@ -85,6 +110,8 @@ export interface IssueDetail extends Issue {
   report: string | null;
   /** v0.2.45 — ATT&CK techniques mapped to this issue (empty until mapped). */
   techniques: TechniqueMapping[];
+  /** v0.2.47 — KB playbooks this investigation was routed through. */
+  playbook_matches: PlaybookMatch[];
 }
 
 /** v0.2.1 — a STIX-style relationship edge (source indicator → target entity). */
@@ -103,6 +130,8 @@ export interface Relationship {
 
 export interface CaseDetail extends CaseRow {
   issues: Issue[];
+  /** v0.2.47 (stage C) — typed cross-case edges touching this case. */
+  related: CaseRelationshipEdge[];
   /** v0.2.2 — campaign-level diagram SVGs synthesized across the case's
    *  issues (null until the agent draws them). Rendered sandboxed on the
    *  case detail's Attack-chain / Relations tabs. */
