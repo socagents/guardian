@@ -158,6 +158,10 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     # knowledge.bundled[] declaration.
     ("knowledge_search", cognitive_tools.knowledge_search),
     ("knowledge_list", cognitive_tools.knowledge_list),
+    # XQL example search — retrieves from the xql-examples KB and enriches
+    # each hit with stage-syntax snippets + dataset field lists. Read-only;
+    # the retrieval companion to the cortex_xql_query_authoring skill.
+    ("xql_examples_search", cognitive_tools.xql_examples_search),
     # v0.2.24 — playbook-builder validator. Pure structural check (no secrets,
     # no catalog mutation) → safe as an agent tool. Paired with the
     # build_xsoar_playbook skill + the /playbooks/build UI.

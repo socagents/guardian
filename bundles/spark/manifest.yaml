@@ -263,6 +263,7 @@ tools:
     - "sessions_history"
     - "knowledge_search"
     - "knowledge_list"
+    - "xql_examples_search"
     # Built-in skill tools (env.skills)
     - "skills_*"
     # Phase 11 — agent self-modification (Tier 1: read-only tools).

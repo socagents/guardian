@@ -238,6 +238,67 @@ def knowledge_list(kb_name: str, limit: int = 20) -> dict[str, Any]:
     }
 
 
+def xql_examples_search(intent: str, top_k: int = 5) -> dict[str, Any]:
+    """Search the bundled `xql-examples` KB by natural-language intent and
+    enrich each hit with XQL stage-syntax snippets + dataset field lists.
+
+    The retrieval companion to the `cortex_xql_query_authoring` skill: returns
+    idiomatic example queries (the pattern prior) plus, for the stages and
+    datasets those examples use, inline docs from the bundled XQL reference —
+    so the agent can author a query without a round-trip per stage. For
+    authoritative live syntax, pair with `cortex-docs/xql_lookup`.
+
+    Args:
+        intent: free-form analyst intent ("find C2 beaconing", "failed logon
+            spikes by user", ...).
+        top_k: max example matches (1-20). Default 5.
+
+    Returns {status, intent, matches:[{id,title,query,dataset,category,score}],
+    stage_docs:[{stage,snippet}], dataset_fields:[{dataset,fields}], count},
+    or {status:"error", message}.
+    """
+    from pathlib import Path
+    from usecase.kb_store import knowledge_base
+    from usecase.builtin_components import _xql_enrichment as _xe
+
+    if not (intent or "").strip():
+        return {"status": "error", "message": "intent must not be empty"}
+    kb = knowledge_base()
+    if kb is None:
+        return {"status": "error", "message": "knowledge base not initialized on this MCP runtime"}
+    try:
+        hits = kb.search(intent, kb_name="xql-examples", limit=max(1, min(int(top_k), 20)))
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "message": _friendly_embed_error(exc, "xql_examples_search")}
+
+    matches: list[dict[str, Any]] = []
+    stages: set[str] = set()
+    datasets: set[str] = set()
+    for doc, score in hits:
+        ds = (doc.metadata or {}).get("dataset") or _xe.extract_dataset(doc.content)
+        stages |= _xe.extract_stage_names(doc.content)
+        if ds:
+            datasets.add(ds)
+        matches.append({
+            "id": doc.doc_id,
+            "title": doc.title,
+            "query": doc.content,
+            "dataset": ds,
+            "category": doc.category,
+            "score": score,
+        })
+
+    resources_dir = Path(_xe.__file__).resolve().parent / "xql_data"
+    return {
+        "status": "ok",
+        "intent": intent,
+        "matches": matches,
+        "stage_docs": _xe.collect_stage_docs(resources_dir, sorted(stages)),
+        "dataset_fields": _xe.collect_dataset_fields(resources_dir, sorted(datasets)),
+        "count": len(matches),
+    }
+
+
 def sessions_history(
     session_id: str,
     limit: int | None = None,
