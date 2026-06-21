@@ -30,17 +30,21 @@ interface IssueRow {
   id: string;
   source_ref: string | null;
   summary: string | null;
+  /** v0.2.45 — structured verdict enum, set via issue_set_verdict (null until). */
+  verdict?: string | null;
   status: string;
 }
 interface IssuesResponse {
   issues?: IssueRow[];
 }
 
-/** True when the summary leads with (or contains) a `VERDICT:` line — the
- *  disposition marker the investigation skill writes at resolve. */
-function hasVerdict(summary: string | null | undefined): boolean {
-  if (!summary) return false;
-  return /^\s*VERDICT\s*:/im.test(summary);
+/** True when the Issue has a recorded disposition — either the structured
+ *  `verdict` enum (v0.2.45, set via issue_set_verdict) or the legacy leading
+ *  `VERDICT:` line in the summary. Either satisfies the gate. */
+function hasVerdict(issue: IssueRow): boolean {
+  if (issue.verdict && String(issue.verdict).trim() !== "") return true;
+  if (issue.summary && /^\s*VERDICT\s*:/im.test(issue.summary)) return true;
+  return false;
 }
 
 /** Pull the incident ref(s) the close targets. xsoar_close_incident takes
@@ -126,7 +130,7 @@ export const blockCloseWithoutVerdictBuiltin: BuiltinHookSpec = {
         }
         continue; // untracked + not strict → allow this ref
       }
-      const withVerdict = tracked.some((i) => hasVerdict(i.summary));
+      const withVerdict = tracked.some((i) => hasVerdict(i));
       if (!withVerdict) {
         const iss = tracked[0];
         return {
