@@ -69,8 +69,6 @@ const SECTIONS: SectionDef[] = [
   { id: "connectors", label: "Connectors & Instances", group: "Integration", icon: "cable" },
   { id: "connector-health-ux", label: "Connector Health", group: "Integration", icon: "monitor_heart" },
   { id: "marketplace", label: "Marketplace", group: "Integration", icon: "storefront" },
-  // [guardian v0.1.0] Retired: data-sources — simulation subsystem removed
-  // [guardian v0.1.0] Retired: log-destinations-ux — simulation subsystem removed
   { id: "plugins-ux", label: "Plugins", group: "Integration", icon: "extension" },
   { id: "hooks-ux", label: "Hooks", group: "Integration", icon: "webhook" },
   { id: "approvals", label: "Approvals", group: "Integration", icon: "fact_check" },
@@ -773,10 +771,6 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
               GHCR. Customer-side upgrades go through the installer.
             </p>
 
-            {/* [guardian v0.1.0] Retired: v0.3.0 breaking-change Callout —
-                pre-Guardian version history; v0.1.0 is the first
-                Guardian release. */}
-
             <SubSection icon="auto_awesome" title="Recommended upgrade flow">
               <ol className="list-decimal pl-5 space-y-1.5 text-sm">
                 <li>
@@ -801,10 +795,6 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
                 get recreated.
               </p>
             </SubSection>
-
-            {/* [guardian v0.1.0] Retired: upgrade-from-v02x — pre-Guardian
-                (Phantom) migration walkthrough removed; v0.1.0 is the first
-                Guardian release. */}
 
             <SubSection icon="visibility" title="Auditing image versions">
               <p>
@@ -845,7 +835,7 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
               </p>
               <pre className="text-xs bg-surface-container-low p-3 rounded">
 {`# Download the binary for the version you want:
-gh release download v0.1.0 --repo kite-production/guardian \\
+gh release download <version> --repo kite-production/guardian \\
   --pattern guardian-installer
 chmod +x guardian-installer
 sudo ./guardian-installer`}
@@ -969,7 +959,7 @@ sudo ./guardian-installer`}
 
             <SubSection
               icon="smart_toy"
-              title="Automated sessions are hidden by default (v0.2.40)"
+              title="Automated sessions are hidden by default"
             >
               <p>
                 The autonomous investigation loop runs on a schedule and
@@ -1943,24 +1933,19 @@ Networks documentation and returning evidence-backed, cited answers.
               KBs differ from memory in three ways: read-only at the agent
               surface, sourced from the bundle (not chat), and indexed at
               boot rather than on-write. Open a KB and use the{" "}
-              <strong>tag filter chips</strong> (v0.2.20) to narrow by
+              <strong>tag filter chips</strong> to narrow by
               tactic, platform, or any label — e.g. on{" "}
               <Code>mitre-attack-enterprise</Code>, click{" "}
               <Term>credential-access</Term> + <Term>windows</Term> to see
               only Windows credential-access techniques; both browse and
               semantic search respect the selected tags. On large KBs the
               header shows the full entry count and a <strong>Load more</strong>{" "}
-              button (v0.2.25) pages through every entry — e.g.{" "}
+              button pages through every entry — e.g.{" "}
               <Code>mitre-attack-enterprise</Code> is 697 entries,{" "}
               <Code>soar-playbooks</Code> 798.
             </p>
 
-            <SubSection icon="library_books" title="Bundled KB — SOC Investigation (v0.2.16)">
-              {/* [guardian v0.1.0] Retired: guardian-soc KB — simulation
-                  subsystem removed. */}
-              {/* [guardian v0.2.44] xql-examples KB REINTRODUCED for Cortex
-                  XSIAM XQL authoring (the XSIAM connector is back) — see the
-                  "XQL query authoring" subsection below. */}
+            <SubSection icon="library_books" title="Bundled KB — SOC Investigation">
               <p>
                 Guardian ships one knowledge base —{" "}
                 <Link href="/knowledge/soc-investigation" className="link">
@@ -2010,7 +1995,7 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="query_stats" title="XQL query authoring (v0.2.44)">
+            <SubSection icon="query_stats" title="XQL query authoring">
               <p>
                 Guardian can author <strong>Cortex XSIAM XQL queries</strong>{" "}
                 for you — ad-hoc (&quot;write an XQL query for failed logins in
@@ -2044,7 +2029,7 @@ Networks documentation and returning evidence-backed, cited answers.
               </ul>
             </SubSection>
 
-            <SubSection icon="shield" title="Bundled KB — MITRE ATT&CK Enterprise (v0.2.18)">
+            <SubSection icon="shield" title="Bundled KB — MITRE ATT&CK Enterprise">
               <p>
                 <Link href="/knowledge/mitre-attack-enterprise" className="link">
                   mitre-attack-enterprise
@@ -2064,7 +2049,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 faithful mirror and regenerates cleanly on each MITRE release
                 (~2×/yr); the <Code>framework_version</Code> on every doc pins
                 the source. Its 697 embeddings are <strong>pre-computed and baked
-                into the bundle</strong> (the v0.2.17 keystone), so the KB loads
+                into the bundle</strong>, so the KB loads
                 with <strong>zero Vertex calls</strong> at boot — no multi-minute
                 first-boot indexing. Search it with plain English (e.g.{" "}
                 <em>&quot;dumping credentials from lsass&quot;</em> →{" "}
@@ -2078,7 +2063,7 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="smart_toy" title="Bundled KB — MITRE ATLAS (AI security) (v0.2.19)">
+            <SubSection icon="smart_toy" title="Bundled KB — MITRE ATLAS (AI security)">
               <p>
                 <Link href="/knowledge/mitre-atlas" className="link">
                   mitre-atlas
@@ -2113,7 +2098,7 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="automation" title="Bundled KB — SOAR Playbooks (v0.2.21)">
+            <SubSection icon="automation" title="Bundled KB — SOAR Playbooks">
               <p>
                 <Link href="/knowledge/soar-playbooks" className="link">
                   soar-playbooks
@@ -2136,8 +2121,8 @@ Networks documentation and returning evidence-backed, cited answers.
                 <Code>support:partner</Code>) and by{" "}
                 <em>investigation-type / use-case</em> (e.g.{" "}
                 <Code>phishing</Code>, <Code>endpoint</Code>,{" "}
-                <Code>threat-intel</Code>) — both filterable via the v0.2.20 tag
-                chips. Later, these double as worked examples for an agent that
+                <Code>threat-intel</Code>) — both filterable via the tag
+                chips. They also double as worked examples for an agent that
                 helps <em>build</em> playbooks.
               </p>
               <p className="mt-2 text-xs text-on-surface-variant/70">
@@ -2147,7 +2132,7 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="lan" title="Bundled KBs — ATT&CK ICS + Mobile (v0.2.22)">
+            <SubSection icon="lan" title="Bundled KBs — ATT&CK ICS + Mobile">
               <p>
                 Rounding out the MITRE ATT&amp;CK matrix family:{" "}
                 <Link href="/knowledge/mitre-attack-ics" className="link">
@@ -2209,7 +2194,7 @@ Networks documentation and returning evidence-backed, cited answers.
               <Link href="/playbooks/build" className="link">/playbooks/build</Link>{" "}
               drafts a new <strong>Cortex XSOAR playbook</strong> from a
               plain-English use-case, grounded in the ~800 real playbooks in the{" "}
-              <Code>soar-playbooks</Code> knowledge base (v0.2.24).
+              <Code>soar-playbooks</Code> knowledge base.
             </p>
             <SubSection icon="bolt" title="How to use it">
               <p>
@@ -2227,7 +2212,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 grounded on.
               </p>
             </SubSection>
-            <SubSection icon="rocket_launch" title="Deploy + test-run (v0.2.26)">
+            <SubSection icon="rocket_launch" title="Deploy + test-run">
               <p>
                 Once you have a draft, click <strong>Deploy + test-run</strong>{" "}
                 and confirm. Guardian <strong>imports</strong> the playbook into
@@ -2721,7 +2706,7 @@ Networks documentation and returning evidence-backed, cited answers.
           >
             <p>
               The <Link href="/investigation/issues" className="link">Investigation</Link>{" "}
-              area (v0.1.3) is where Guardian keeps its own record of the
+              area is where Guardian keeps its own record of the
               work it does on an alert. It holds two object types:{" "}
               <Term>Issues</Term> and <Term>Cases</Term>.
             </p>
@@ -2775,10 +2760,10 @@ Networks documentation and returning evidence-backed, cited answers.
             <SubSection icon="description" title="The Issue layout">
               <p>
                 Opening an Issue shows a full-width, tabbed layout built for an
-                analyst write-up (redesigned in v0.1.7). A header carries the
+                analyst write-up. A header carries the
                 title, a <Term>VERDICT</Term> banner (the structured verdict
                 with its confidence when set, falling back to the summary&apos;s
-                leading verdict line — v0.2.45), the{" "}
+                leading verdict line), the{" "}
                 <Term>status / severity</Term> controls, and the{" "}
                 <Term>case assignment</Term>; the body is organised into tabs:
               </p>
@@ -2789,8 +2774,8 @@ Networks documentation and returning evidence-backed, cited answers.
                   the agent fills these in as it works and you can refine them.
                 </li>
                 <li>
-                  <Term>Assessment</Term> — the <Term>structured outcome</Term>{" "}
-                  (v0.2.45): the verdict (true positive, false positive, benign,
+                  <Term>Assessment</Term> — the <Term>structured outcome</Term>:
+                  the verdict (true positive, false positive, benign,
                   needs escalation, or inconclusive), a confidence meter, the{" "}
                   <Term>blast radius</Term> (which hosts, accounts, and data the
                   attack touched), and <Term>ATT&amp;CK technique</Term> chips —
@@ -2798,7 +2783,7 @@ Networks documentation and returning evidence-backed, cited answers.
                   reasoning) and <Term>Next steps</Term>.
                 </li>
                 <li>
-                  <Term>Report</Term> (v0.2.45) — a generated, shareable markdown
+                  <Term>Report</Term> — a generated, shareable markdown
                   closure report that pulls the verdict, blast radius, ATT&amp;CK
                   techniques, indicators, and timeline into one document. Click{" "}
                   <strong>Generate report</strong> (or <strong>Regenerate</strong>)
@@ -2808,17 +2793,17 @@ Networks documentation and returning evidence-backed, cited answers.
                 <li>
                   <Term>Activity</Term> — the timeline of every step and finding
                   logged against the Issue. Filter by event type (action /
-                  finding / note) and sort oldest- or newest-first (v0.1.9).
+                  finding / note) and sort oldest- or newest-first.
                 </li>
                 <li>
-                  <Term>Attack chain</Term> (v0.1.8) — an SVG causality diagram
+                  <Term>Attack chain</Term> — an SVG causality diagram
                   of the attack (entry &#8594; pivots &#8594; action &#8594;
                   impact), drawn by Guardian when it resolves the investigation.
                   Use <strong>Regenerate</strong> on the tab to redraw it on
                   demand. It is rendered sandboxed, so it can&apos;t run code.
                 </li>
                 <li>
-                  <Term>Relations</Term> (v0.2.1) — a STIX graph of the Issue&apos;s
+                  <Term>Relations</Term> — a STIX graph of the Issue&apos;s
                   indicators and how they relate to each other and to ATT&amp;CK
                   techniques, malware, campaigns, and threat-actors. The
                   relational companion to the causal Attack chain. Click{" "}
@@ -2827,7 +2812,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 </li>
               </ul>
               <p>
-                <strong>Multi-source depth (v0.2.46)</strong> — when it works a
+                <strong>Multi-source depth</strong> — when it works a
                 case, Guardian doesn&apos;t stop at the XSOAR incident. It hunts
                 the <Term>blast radius</Term> in your XSIAM telemetry with an XQL
                 query (finding the other hosts and accounts a bad indicator
@@ -2850,7 +2835,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 multi-Issue campaign reads as one investigation.
               </p>
               <p>
-                <strong>Case-level diagrams (v0.2.2)</strong> — a Case detail is
+                <strong>Case-level diagrams</strong> — a Case detail is
                 itself tabbed (Issues · Campaign · Attack chain · Relations). The
                 case&apos;s <Term>Attack chain</Term> and{" "}
                 <Term>Relations</Term> tabs draw <em>campaign-level</em>{" "}
@@ -2860,7 +2845,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 the same way as the per-issue diagrams.
               </p>
               <p>
-                <strong>Campaign rollup (v0.2.47)</strong> — the case&apos;s{" "}
+                <strong>Campaign rollup</strong> — the case&apos;s{" "}
                 <Term>Campaign</Term> tab turns a pile of related incidents into
                 one picture: the combined <Term>ATT&amp;CK techniques</Term> seen
                 across the campaign, the <Term>shared infrastructure</Term> (the
@@ -2873,7 +2858,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 to, so a long-running campaign reads as one story.
               </p>
               <p>
-                <strong>Export &amp; handoff (v0.2.48)</strong> — a finished
+                <strong>Export &amp; handoff</strong> — a finished
                 investigation is portable. The Report tab and the Campaign tab
                 each have an <strong>Export STIX 2.1</strong> download (a standard
                 bundle of the incident/campaign, ATT&amp;CK techniques, indicators,
@@ -2889,7 +2874,7 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="fingerprint" title="Indicators (v0.2.0)">
+            <SubSection icon="fingerprint" title="Indicators">
               <p>
                 <Link href="/investigation/indicators" className="link">Indicators</Link>{" "}
                 is Guardian&apos;s deduped record of every <Term>IoC</Term>{" "}
@@ -2917,7 +2902,7 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="hub" title="Relations & attribution (v0.2.1)">
+            <SubSection icon="hub" title="Relations & attribution">
               <p>
                 Guardian records typed <Term>relationships</Term> between
                 indicators and other entities using the same{" "}
@@ -2940,7 +2925,7 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="dashboard_customize" title="Per-issue-type layouts (v0.2.0)">
+            <SubSection icon="dashboard_customize" title="Per-issue-type layouts">
               <p>
                 The Issue detail adapts to the case kind — a kind-specific icon +
                 accent and a one-line investigative <Term>focus</Term> (what to
@@ -2986,7 +2971,7 @@ Networks documentation and returning evidence-backed, cited answers.
               to the container over loopback HTTPS.
             </p>
 
-            <SubSection icon="siren" title="Cortex XSIAM connector (v0.2.27)">
+            <SubSection icon="siren" title="Cortex XSIAM connector">
               <p>
                 The <Term>xsiam</Term> connector connects Guardian to a
                 Cortex XSIAM tenant over the Cortex public API — the same
@@ -3042,7 +3027,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 fields (URLs, IDs, hostnames) render in clear text.
               </p>
               <p className="text-sm leading-relaxed mt-2">
-                <strong>Version-aware fields (v0.2.30):</strong> some connectors
+                <strong>Version-aware fields:</strong> some connectors
                 show fields that depend on an earlier choice. The XSOAR form
                 leads with a <strong>Version</strong> dropdown — pick{" "}
                 <Term>v6</Term> (on-prem) or <Term>v8</Term> (Cortex cloud) and
@@ -3059,7 +3044,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 The instance is saved immediately. For container-style
                 connectors, guardian-updater then starts a dedicated
                 container for that instance. Whatever happens, the form now
-                tells you (v0.2.28):
+                tells you:
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
@@ -3081,9 +3066,9 @@ Networks documentation and returning evidence-backed, cited answers.
               </ul>
             </SubSection>
 
-            <SubSection icon="alt_route" title="Running multiple instances (e.g. XSOAR v6 + v8) (v0.2.29)">
+            <SubSection icon="alt_route" title="Running multiple instances (e.g. XSOAR v6 + v8)">
               <p className="text-sm leading-relaxed">
-                You can now enable <strong>more than one instance of the
+                You can enable <strong>more than one instance of the
                 same connector at the same time</strong> — for example a
                 Cortex XSOAR 6 (on-prem) tenant and a Cortex XSOAR 8 (cloud)
                 tenant running side by side. Guardian routes each request to
@@ -3097,7 +3082,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 <li>
                   Create an instance for your v6 tenant. Give it a
                   distinct name (for example <Code>xsoar-v6</Code>) and pick{" "}
-                  <strong>v6</strong> from the new <strong>Version</strong>{" "}
+                  <strong>v6</strong> from the <strong>Version</strong>{" "}
                   dropdown on the form.
                 </li>
                 <li>
@@ -3139,7 +3124,7 @@ Networks documentation and returning evidence-backed, cited answers.
                   <Code>search_indicators</Code>, <Code>add_note</Code>,{" "}
                   <Code>add_entry</Code>, <Code>save_evidence</Code>,{" "}
                   <Code>update_incident</Code>, <Code>close_incident</Code>.
-                  Action toolset (v0.2.0):{" "}
+                  Action toolset:{" "}
                   <Code>run_command</Code>, <Code>enrich_indicator</Code>,{" "}
                   <Code>complete_task</Code>, <Code>get_list</Code> /{" "}
                   <Code>set_list</Code> / <Code>append_to_list</Code>,{" "}
@@ -3165,7 +3150,7 @@ Networks documentation and returning evidence-backed, cited answers.
               </ul>
             </SubSection>
 
-            <SubSection icon="bolt" title="XSOAR command tools & the playground_id (v0.2.0)">
+            <SubSection icon="bolt" title="XSOAR command tools & the playground_id">
               <p>
                 The XSOAR connector&apos;s action toolset lets you ask
                 Guardian to <em>do</em> things, not just read. For example:
@@ -3175,7 +3160,7 @@ Networks documentation and returning evidence-backed, cited answers.
                   <em>&ldquo;which integrations are configured and what
                   commands can I run?&rdquo;</em> — list the configured
                   integration instances + each one&apos;s commands, via{" "}
-                  <Code>list_integrations</Code> (v0.2.13). The discovery
+                  <Code>list_integrations</Code>. The discovery
                   companion to <Code>run_command</Code>: Guardian learns which{" "}
                   <Code>!commands</Code> actually exist (ask{" "}
                   <em>&ldquo;list the VirusTotal commands&rdquo;</em> to also
@@ -3185,7 +3170,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 <li>
                   <em>&ldquo;why is my Splunk integration&apos;s fetch
                   failing?&rdquo;</em> — troubleshoot a configured integration
-                  without reading XSOAR logs (v0.2.42):{" "}
+                  without reading XSOAR logs:{" "}
                   <Code>get_integration_status</Code> reports each instance&apos;s
                   enabled state + its last fetch error,{" "}
                   <Code>test_integration_instance</Code> re-runs the
@@ -3216,7 +3201,7 @@ Networks documentation and returning evidence-backed, cited answers.
                   <em>&ldquo;complete task 7 on case 42&rdquo;</em> —{" "}
                   <Code>create_incident</Code>, <Code>run_playbook</Code>,{" "}
                   <Code>get_playbook_state</Code> (per-task state +
-                  ran-to-success + failed-task errors, v0.2.42),{" "}
+                  ran-to-success + failed-task errors),{" "}
                   <Code>complete_task</Code>.
                 </li>
               </ul>
@@ -3235,13 +3220,13 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
             </SubSection>
 
-            <SubSection icon="inventory_2" title="Evidence on XSOAR 6 vs 8 (v0.2.35/36)">
+            <SubSection icon="inventory_2" title="Evidence on XSOAR 6 vs 8">
               <p>
                 When the agent pins proof to a case&apos;s Evidence Board
                 (<Code>save_evidence</Code>) and lists it back
                 (<Code>search_evidence</Code>), the mechanics differ by XSOAR
                 generation — but you call the same tools and the agent handles
-                it. Both now work end-to-end on both versions:
+                it. Both work end-to-end on both versions:
               </p>
               <ul className="list-disc pl-6 space-y-1 text-sm">
                 <li>
@@ -3273,9 +3258,6 @@ Networks documentation and returning evidence-backed, cited answers.
                 next sweep.
               </p>
             </SubSection>
-
-            {/* [guardian v0.1.0] Retired: "Caldera password — setup form to
-                caldera handoff" SubSection — simulation subsystem removed. */}
 
             <SubSection icon="verified_user" title="Per-instance trusted flag">
               <p>
@@ -3491,7 +3473,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </p>
             </SubSection>
 
-            <SubSection icon="dns" title="Emulated services (v0.2.42+)">
+            <SubSection icon="dns" title="Emulated services">
               <p>
                 The marketplace has two kinds of entry: <Term>connectors</Term>{" "}
                 (integrations the agent calls) and <Term>services</Term>{" "}
@@ -3730,13 +3712,6 @@ probed          ── transient state during an in-flight probe`}</Pre>
             </SubSection>
           </Section>
 
-          {/* [guardian v0.1.0] Retired: data-sources — Data Sources
-              marketplace (vendor log-shape catalog) removed with the
-              simulation subsystem. */}
-
-          {/* [guardian v0.1.0] Retired: log-destinations-ux — Log
-              Destinations page removed with the simulation subsystem. */}
-
           {/* Plugins page operator workflow. */}
           <Section id="plugins-ux" icon="extension" title="Plugins">
             <p>
@@ -3910,7 +3885,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               .
             </p>
             <p>
-              <strong>The page (v0.2.4)</strong> opens with summary cards
+              <strong>The page</strong> opens with summary cards
               (total · enabled · disabled · fail-closed), an event-group +
               name filter over the hook list, and slimmed hook rows showing
               the event, transport, and a fail-closed flag at a glance. The
@@ -3954,7 +3929,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
               </ul>
             </SubSection>
 
-            <SubSection icon="security" title="Guardian IR built-ins (v0.2.5)">
+            <SubSection icon="security" title="Guardian IR built-ins">
               <p>
                 Two built-in hooks ship for the incident-response workflow —
                 install either from the <Term>Transport → Built-in</Term>{" "}
@@ -3966,7 +3941,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                   <Code>PreToolUse</Code> on{" "}
                   <Code>xsoar_close_incident</Code>. Denies the close when the
                   Guardian Issue tracking that incident has no recorded
-                  disposition — either the structured verdict (v0.2.45) or the
+                  disposition — either the structured verdict or the
                   legacy <Code>VERDICT:</Code> line — so no incident is closed
                   without one. Use <Code>failurePolicy: block</Code>{" "}
                   (fail-closed). Conservative by default — closes of incidents
@@ -4210,7 +4185,7 @@ probed          ── transient state during an in-flight probe`}</Pre>
                   rows for your hook means the matcher didn&apos;t hit
                   (check toolGlob / triggerPrefix / tenantId) or the
                   event itself never fired. Tool globs are{" "}
-                  <Term>separator-insensitive</Term> (v0.2.9): a glob of{" "}
+                  <Term>separator-insensitive</Term>: a glob of{" "}
                   <Code>xsoar_close_incident</Code> matches the same tool
                   whether the model invokes it as{" "}
                   <Code>xsoar_close_incident</Code> or in the dotted
@@ -4413,8 +4388,6 @@ probed          ── transient state during an in-flight probe`}</Pre>
                 <Term>Jobs</Term> — runs that complete, fail, or are
                 disabled.
               </li>
-              {/* [guardian v0.1.0] Retired: Scenarios notification source —
-                  simulation subsystem removed. */}
               <li>
                 <Term>Approvals</Term> — pending, granted, denied.
               </li>
@@ -4991,9 +4964,6 @@ session:s_4k21m
                   <Term>Knowledge</Term> — bundle doc references (the
                   KB itself reseeds from the destination&apos;s image)
                 </li>
-                {/* [guardian v0.1.0] Retired: Data sources + Log
-                    destinations backup sections — simulation subsystem
-                    removed. */}
               </ul>
               <p className="text-warning text-sm">
                 <span className="material-symbols-outlined text-[14px] align-text-bottom mr-1">
@@ -5054,8 +5024,6 @@ session:s_4k21m
                   <Term>Skills</Term> + <Term>Memory</Term> +{" "}
                   <Term>Knowledge</Term>
                 </li>
-                {/* [guardian v0.1.0] Retired: Data sources restore step —
-                    simulation subsystem removed. */}
                 <li>
                   <Term>Jobs</Term> last — runtime jobs that
                   reference connectors don&apos;t fire on a missing
