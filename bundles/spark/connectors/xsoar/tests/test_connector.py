@@ -1275,6 +1275,19 @@ def test_import_playbook_normalizes_array_body(monkeypatch):
     assert out["ok"] is True and out["playbook_id"] == "pb-2"
 
 
+def test_import_playbook_extracts_from_playbook_wrapped_body(monkeypatch):
+    # v6 POST /playbook/save/yaml returns {"playbook": {...}} (the live shape) —
+    # extract id/name from the nested object, not the outer envelope.
+    rf = _RecordingFetcher(
+        multipart_reply={"playbook": {"id": "PbWrapped", "name": "Wrapped PB", "version": 8}}
+    )
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_import_playbook(playbook_yaml="id: PbWrapped\nname: Wrapped PB\n"))
+    assert out["ok"] is True
+    assert out["playbook_id"] == "PbWrapped"
+    assert out["playbook_name"] == "Wrapped PB"
+
+
 def test_import_playbook_requires_yaml(monkeypatch):
     rf = _RecordingFetcher()
     _install_fetcher(monkeypatch, rf)
@@ -1673,30 +1686,59 @@ def test_get_playbook_state_no_playbook(monkeypatch):
 
 def test_run_playbook_opens_investigation_then_setplaybook(monkeypatch):
     # _ensure_investigation: reads the version via /incidents/search, then opens
-    # the war room via POST /incident {createInvestigation:true} (NOT the
-    # 500-prone /incident/investigate), then !setPlaybook switches to the target.
+    # the war room via POST /incident/investigate {id, version} (verified live;
+    # the old POST /incident {createInvestigation:true} is a no-op on an existing
+    # incident). run_playbook then resolves the playbook id -> display name via
+    # /playbook/search and !setPlaybook switches the incident to it.
     f = _ScriptedFetcher(replies={
         "/incidents/search": {"data": [{"id": "42", "version": 7}], "total": 1},
-        "/incident": {"id": "42", "version": 8, "investigationId": "42"},
+        "/incident/investigate": {"id": "42", "investigation": {"id": "42"}},
+        "/playbook/search": {"playbooks": [{"id": "MyPbId", "name": "My PB"}]},
         "/entry/execute/sync": {"data": [{"type": 1,
-                                          "contents": "Changed playbook from 'Splunk Generic' to 'My PB'."}]},
+                                          "contents": "Changed playbook from 'Default' to 'My PB'."}]},
     })
     _install_fetcher(monkeypatch, f)
 
-    out = run(connector.xsoar_run_playbook("42", "My PB"))
+    out = run(connector.xsoar_run_playbook("42", "MyPbId"))
     assert out["ok"] is True
     assert out["opened_investigation"] is True
+    assert out["playbook_name"] == "My PB"  # resolved from the id
     paths = [p for (_m, p, _b) in f.calls]
-    assert "/incident" in paths  # war room opened the documented way
-    assert "/incident/investigate" not in paths  # NOT the 500-prone endpoint
+    assert "/incident/investigate" in paths  # the working open endpoint
     # the war room is opened BEFORE setPlaybook runs
-    assert paths.index("/incident") < paths.index("/entry/execute/sync")
-    # the open call carried the optimistic-lock version + createInvestigation
-    open_body = [b for (_m, p, b) in f.calls if p == "/incident"][0]
-    assert open_body.get("createInvestigation") is True
+    assert paths.index("/incident/investigate") < paths.index("/entry/execute/sync")
+    # the open call carried the incident id + optimistic-lock version
+    open_body = [b for (_m, p, b) in f.calls if p == "/incident/investigate"][0]
+    assert open_body.get("id") == "42"
     assert open_body.get("version") == 7
+    # setPlaybook uses the RESOLVED display name, not the id
     exec_call = [b for (_m, p, b) in f.calls if p == "/entry/execute/sync"][0]
-    assert "setPlaybook" in str(exec_call) and "My PB" in str(exec_call)
+    assert exec_call["data"] == '!setPlaybook name="My PB"'
+
+
+def test_run_playbook_falls_back_to_createinvestigation(monkeypatch):
+    # When /incident/investigate isn't served (raises), _ensure_investigation
+    # falls back to POST /incident {createInvestigation:true}.
+    class _InvestigateUnservedFetcher(_ScriptedFetcher):
+        async def post(self, path, body=None, **kw):
+            if path == "/incident/investigate":
+                self.calls.append(("POST", path, body))
+                raise XSOARRequestError("HTTP 404 from /incident/investigate")
+            return await super().post(path, body, **kw)
+
+    f = _InvestigateUnservedFetcher(replies={
+        "/incidents/search": {"data": [{"id": "42", "version": 7}], "total": 1},
+        "/incident": {"id": "42", "investigationId": "42"},
+        "/playbook/search": {},
+        "/entry/execute/sync": {"data": [{"type": 1, "contents": "done"}]},
+    })
+    _install_fetcher(monkeypatch, f)
+    out = run(connector.xsoar_run_playbook("42", "Some PB"))
+    assert out["ok"] is True and out["opened_investigation"] is True
+    paths = [p for (_m, p, _b) in f.calls]
+    assert "/incident/investigate" in paths and "/incident" in paths  # tried both
+    fb_body = [b for (_m, p, b) in f.calls if p == "/incident"][0]
+    assert fb_body.get("createInvestigation") is True
 
 
 def test_list_incidents_source_brand_builds_query(monkeypatch):

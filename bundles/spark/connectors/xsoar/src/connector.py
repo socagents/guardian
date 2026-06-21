@@ -2244,13 +2244,16 @@ async def _ensure_investigation(fetcher: XSOARFetcher, incident_id: str) -> bool
 
     A FETCHED / pending incident (status 0) has no investigation, so a war-room
     command like `!setPlaybook` can't target it ("investigation not found").
-    The DOCUMENTED way to open one is `POST /incident` with
-    `createInvestigation: true` (the internal `/incident/investigate` endpoint
-    500s — it needs server-side investigation context the public API can't
-    supply). /incident is an upsert keyed by `id`, so we pass the incident's
-    CURRENT `version` (optimistic lock, read from /incidents/search) to target
-    the existing incident rather than create a new one. Best-effort: returns
-    True if the open call succeeded. (createInvestigation also starts the
+    The working endpoint is `POST /incident/investigate` with the incident `id`
+    — verified live on XSOAR 6: it opens the war room and returns the
+    investigation object. (An earlier note that it 500s did not reproduce; the
+    prior approach — `POST /incident` with `createInvestigation: true` — is a
+    NO-OP on an existing incident because createInvestigation only fires on
+    CREATE, so it never opened the war room for a pending/fetched incident.) We
+    pass the incident's CURRENT `version` (read from /incidents/search) as an
+    optimistic-lock hint when available, and keep the createInvestigation upsert
+    as a best-effort fallback for tenants where /investigate isn't served.
+    Returns True if an open call succeeded. (investigate also starts the
     incident-type's default playbook; the caller's !setPlaybook then switches to
     the requested one.)
     """
@@ -2267,14 +2270,48 @@ async def _ensure_investigation(fetcher: XSOARFetcher, incident_id: str) -> bool
     except XSOARError:
         pass
 
-    body: dict[str, Any] = {"id": iid, "createInvestigation": True}
+    body: dict[str, Any] = {"id": iid}
     if version is not None:
         body["version"] = version
     try:
-        await fetcher.post("/incident", body)
+        await fetcher.post("/incident/investigate", body)
         return True
     except XSOARError:
-        return False
+        # Fallback: createInvestigation upsert (a no-op on existing incidents,
+        # but harmless and covers tenants where /investigate isn't served).
+        try:
+            fb: dict[str, Any] = {"id": iid, "createInvestigation": True}
+            if version is not None:
+                fb["version"] = version
+            await fetcher.post("/incident", fb)
+            return True
+        except XSOARError:
+            return False
+
+
+async def _resolve_playbook_name(fetcher: XSOARFetcher, ref: str) -> str:
+    """Resolve a playbook reference (id OR name) to its display NAME.
+
+    XSOAR's `!setPlaybook name=...` matches on the playbook's display NAME, not
+    its id — so a caller passing the playbook id (e.g. the id returned by
+    import_playbook) gets "Playbook named <id> was not found". We look the ref
+    up by id via `POST /playbook/search {query:"id:<ref>"}`; on a single hit we
+    return that playbook's name. On 0 / ambiguous hits (or any error) we return
+    the ref unchanged — it may already BE a name, which setPlaybook resolves
+    directly. This makes run_playbook accept either an id or a name.
+    """
+    try:
+        resp = await fetcher.post("/playbook/search", {"query": f"id:{ref}"})
+    except XSOARError:
+        return ref
+    pbs: Any = []
+    if isinstance(resp, dict):
+        pbs = resp.get("playbooks") or resp.get("data") or []
+    if isinstance(pbs, list) and len(pbs) == 1 and isinstance(pbs[0], dict):
+        name = pbs[0].get("name")
+        if name:
+            return str(name)
+    return ref
 
 
 @_wrap_xsoar_call
@@ -2313,9 +2350,13 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
     # !setPlaybook can't target an incident without an investigation.
     opened = await _ensure_investigation(fetcher, str(incident_id))
 
+    # setPlaybook matches by playbook NAME; resolve an id → its name so callers
+    # can pass either (import_playbook returns the id).
+    playbook_name = await _resolve_playbook_name(fetcher, str(playbook_id))
+
     # Run in the incident's OWN investigation (not the playground).
     result = await _execute_command(
-        fetcher, str(incident_id), f"!setPlaybook name={_quote_arg(playbook_id)}"
+        fetcher, str(incident_id), f"!setPlaybook name={_quote_arg(playbook_name)}"
     )
     output = result.get("output", "")
     if "was not found" in output or output.lower().startswith("error"):
@@ -2323,11 +2364,13 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
             f"run_playbook failed: {output}",
             incident_id=incident_id,
             playbook_id=playbook_id,
+            playbook_name=playbook_name,
             opened_investigation=opened,
         )
     return {
         "incident_id": incident_id,
         "playbook_id": playbook_id,
+        "playbook_name": playbook_name,
         "opened_investigation": opened,
         "output": output,
     }
@@ -2685,15 +2728,16 @@ async def xsoar_import_playbook(
             )
         raise
 
-    # XSOAR returns the imported playbook object, or {data:[...]} for a bare
-    # array body — normalize to the first playbook's id/name.
+    # Normalize to the imported playbook's id/name across response shapes:
+    #   * {"playbook": {...}}  — /playbook/save/yaml on v6 (the live shape)
+    #   * {"data": [{...}]}    — bare-array body normalized by the fetcher
+    #   * {...}                — the playbook object directly
     pb: Any = response
-    if (
-        isinstance(response, dict)
-        and isinstance(response.get("data"), list)
-        and response["data"]
-    ):
-        pb = response["data"][0]
+    if isinstance(response, dict):
+        if isinstance(response.get("playbook"), dict):
+            pb = response["playbook"]
+        elif isinstance(response.get("data"), list) and response["data"]:
+            pb = response["data"][0]
     playbook_id = pb.get("id") if isinstance(pb, dict) else None
     playbook_name = pb.get("name") if isinstance(pb, dict) else None
 
