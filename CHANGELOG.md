@@ -10,6 +10,16 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.49] (2026-06-21) — *In-product help refresh*
+
+A clean-up pass over the in-product help (User Guide, Architecture, API reference, User Journeys) so every page reads as a description of the product as it is today, plus two coverage fixes operators will notice.
+
+- **User Journeys catalog now shows every category.** The journeys browser previously hid the Authentication and Connectors categories; all categories and their click-paths are now listed, and journeys were added for the investigation Assessment/Report/Campaign tabs and STIX export.
+- **REST API reference completed.** Added the investigation export endpoints that were missing from the reference — issue/case STIX bundles, the generated report, and related-case lookup — and replaced placeholder entries on the observability endpoints with real descriptions.
+- **Guides clarified.** Every help page was rewritten to plain present-tense descriptions of current behavior; the Architecture page gained a concise Investigation-tools reference and a capability-oriented overview of the investigation module.
+
+---
+
 ## [v0.2.48] (2026-06-21) — *Export + interop (stage D)*
 
 The final stage of the investigation-model arc makes the structured record portable — exportable as STIX, renderable from report templates, and (opt-in) pushable to an external system — so Guardian's findings flow into the wider SOC ecosystem.

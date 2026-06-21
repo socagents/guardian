@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.49",
+    date: "2026-06-21",
+    title: "In-product help refresh — clearer guides, complete journeys + API reference.",
+    highlights: [
+      "User Journeys catalog now lists every category — the Authentication and Connectors click-paths were previously hidden; added journeys for the investigation Assessment/Report/Campaign tabs and STIX export.",
+      "REST API reference completed: added the investigation export endpoints (issue/case STIX bundles, generated report, related-case lookup) and gave the observability endpoints real descriptions.",
+      "Every help page (User Guide, Architecture, API, Journeys) rewritten to plain present-tense descriptions of current behavior; the Architecture page gained an Investigation-tools reference and a capability-oriented module overview.",
+    ],
+  },
+  {
     version: "0.2.48",
     date: "2026-06-21",
     title: "Export + interop — STIX 2.1, report templates, opt-in webhook handoff.",
