@@ -51,7 +51,16 @@ ISSUE_SEVERITIES = ("low", "medium", "high", "critical")
 # metadata). update_issue accepts any subset of these + status/severity/
 # title/kind.
 _ISSUE_TEXT_FIELDS = ("summary", "scope", "recommendations", "conclusions", "next_steps")
-_ISSUE_UPDATABLE = ("title", "status", "severity", "kind", *_ISSUE_TEXT_FIELDS)
+# v0.2.45 (stage A) — structured investigation outcome fields. verdict is one of
+# ISSUE_VERDICTS; verdict_confidence is 0..1; blast_radius + report are JSON /
+# markdown text. All nullable + additively migrated.
+ISSUE_VERDICTS = (
+    "TRUE_POSITIVE", "FALSE_POSITIVE", "BENIGN", "NEEDS_ESCALATION", "INCONCLUSIVE",
+)
+_ISSUE_STRUCTURED_FIELDS = ("verdict", "verdict_confidence", "blast_radius", "report")
+_ISSUE_UPDATABLE = (
+    "title", "status", "severity", "kind", *_ISSUE_TEXT_FIELDS, *_ISSUE_STRUCTURED_FIELDS,
+)
 
 
 @dataclass(frozen=True)
@@ -69,8 +78,24 @@ class Issue:
     recommendations: str | None
     conclusions: str | None
     next_steps: str | None
+    verdict: str | None
+    verdict_confidence: float | None
+    blast_radius: str | None
+    report: str | None
     created_at: str
     updated_at: str
+
+
+@dataclass(frozen=True)
+class TechniqueMapping:
+    id: str
+    issue_id: str
+    technique_id: str
+    tactic: str | None
+    manifestation: str | None
+    evidence_ref: str | None
+    confidence: float | None
+    created_at: str
 
 
 @dataclass(frozen=True)
@@ -268,6 +293,34 @@ class InvestigationStore:
                 c.execute("ALTER TABLE cases ADD COLUMN attack_chain_svg TEXT")
             if "relations_canvas_svg" not in case_cols:
                 c.execute("ALTER TABLE cases ADD COLUMN relations_canvas_svg TEXT")
+            # v0.2.45 (stage A) — structured investigation outcome on issues
+            # (migrate existing dbs) + a queryable issue<->ATT&CK technique table.
+            issue_cols3 = {r["name"] for r in c.execute("PRAGMA table_info(issues)")}
+            if "verdict" not in issue_cols3:
+                c.execute("ALTER TABLE issues ADD COLUMN verdict TEXT")
+            if "verdict_confidence" not in issue_cols3:
+                c.execute("ALTER TABLE issues ADD COLUMN verdict_confidence REAL")
+            if "blast_radius" not in issue_cols3:
+                c.execute("ALTER TABLE issues ADD COLUMN blast_radius TEXT")
+            if "report" not in issue_cols3:
+                c.execute("ALTER TABLE issues ADD COLUMN report TEXT")
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS technique_mappings (
+                    id            TEXT PRIMARY KEY,
+                    issue_id      TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+                    technique_id  TEXT NOT NULL,
+                    tactic        TEXT,
+                    manifestation TEXT,
+                    evidence_ref  TEXT,
+                    confidence    REAL,
+                    created_at    TEXT NOT NULL,
+                    UNIQUE(issue_id, technique_id)
+                )
+                """
+            )
+            c.execute("CREATE INDEX IF NOT EXISTS idx_techmap_issue ON technique_mappings(issue_id)")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_techmap_tech ON technique_mappings(technique_id)")
 
     # ─── Issues ────────────────────────────────────────────────────
 
@@ -298,6 +351,10 @@ class InvestigationStore:
             recommendations=None,
             conclusions=None,
             next_steps=None,
+            verdict=None,
+            verdict_confidence=None,
+            blast_radius=None,
+            report=None,
             created_at=ts,
             updated_at=ts,
         )
@@ -387,6 +444,64 @@ class InvestigationStore:
         with self._lock, self._conn() as c:
             cur = c.execute("DELETE FROM issues WHERE id = ?", (issue_id,))
         return cur.rowcount > 0
+
+    # ─── Technique mappings (issue <-> ATT&CK) ──────────────────────
+
+    def add_technique_mapping(
+        self, issue_id: str, technique_id: str, tactic: str | None = None,
+        manifestation: str | None = None, evidence_ref: str | None = None,
+        confidence: float | None = None,
+    ) -> TechniqueMapping:
+        """Upsert an issue->technique mapping (dedup on issue_id+technique_id).
+        Re-adding the same technique updates the provided fields, preserving any
+        prior non-null values for fields left None."""
+        ts = _now()
+        with self._lock, self._conn() as c:
+            c.execute(
+                """
+                INSERT INTO technique_mappings
+                    (id, issue_id, technique_id, tactic, manifestation, evidence_ref, confidence, created_at)
+                VALUES (?,?,?,?,?,?,?,?)
+                ON CONFLICT(issue_id, technique_id) DO UPDATE SET
+                    tactic        = COALESCE(excluded.tactic, technique_mappings.tactic),
+                    manifestation = COALESCE(excluded.manifestation, technique_mappings.manifestation),
+                    evidence_ref  = COALESCE(excluded.evidence_ref, technique_mappings.evidence_ref),
+                    confidence    = COALESCE(excluded.confidence, technique_mappings.confidence)
+                """,
+                (str(uuid.uuid4()), issue_id, technique_id, tactic, manifestation,
+                 evidence_ref, confidence, ts),
+            )
+            row = c.execute(
+                "SELECT * FROM technique_mappings WHERE issue_id = ? AND technique_id = ?",
+                (issue_id, technique_id),
+            ).fetchone()
+        return self._row_to_technique(row)
+
+    def list_technique_mappings(self, issue_id: str) -> list[TechniqueMapping]:
+        with self._lock, self._conn() as c:
+            rows = c.execute(
+                "SELECT * FROM technique_mappings WHERE issue_id = ? ORDER BY created_at ASC, technique_id ASC",
+                (issue_id,),
+            ).fetchall()
+        return [self._row_to_technique(r) for r in rows]
+
+    def list_issues_by_technique(self, technique_id: str) -> list[Issue]:
+        with self._lock, self._conn() as c:
+            rows = c.execute(
+                "SELECT i.* FROM issues i JOIN technique_mappings tm ON tm.issue_id = i.id "
+                "WHERE tm.technique_id = ? ORDER BY i.updated_at DESC",
+                (technique_id,),
+            ).fetchall()
+        return [self._row_to_issue(r) for r in rows]
+
+    @staticmethod
+    def _row_to_technique(row: sqlite3.Row) -> TechniqueMapping:
+        return TechniqueMapping(
+            id=row["id"], issue_id=row["issue_id"], technique_id=row["technique_id"],
+            tactic=row["tactic"], manifestation=row["manifestation"],
+            evidence_ref=row["evidence_ref"], confidence=row["confidence"],
+            created_at=row["created_at"],
+        )
 
     def set_attack_chain(self, issue_id: str, svg: str | None) -> bool:
         """Store (or clear, with None) the issue's attack-chain SVG.
@@ -777,8 +892,10 @@ class InvestigationStore:
             source_ref=row["source_ref"], case_id=row["case_id"],
             summary=row["summary"], scope=row["scope"],
             recommendations=row["recommendations"], conclusions=row["conclusions"],
-            next_steps=row["next_steps"], created_at=row["created_at"],
-            updated_at=row["updated_at"],
+            next_steps=row["next_steps"],
+            verdict=row["verdict"], verdict_confidence=row["verdict_confidence"],
+            blast_radius=row["blast_radius"], report=row["report"],
+            created_at=row["created_at"], updated_at=row["updated_at"],
         )
 
     @staticmethod
