@@ -9,6 +9,26 @@
 export type IssueStatus = "open" | "investigating" | "resolved" | "closed";
 export type IssueSeverity = "low" | "medium" | "high" | "critical";
 
+/** v0.2.45 — the closed enum of structured verdicts (mirrors ISSUE_VERDICTS). */
+export type IssueVerdict =
+  | "TRUE_POSITIVE"
+  | "FALSE_POSITIVE"
+  | "BENIGN"
+  | "NEEDS_ESCALATION"
+  | "INCONCLUSIVE";
+
+/** v0.2.45 — an ATT&CK technique observed in an issue (mirrors TechniqueMapping). */
+export interface TechniqueMapping {
+  id: string;
+  issue_id: string;
+  technique_id: string;
+  tactic: string | null;
+  manifestation: string | null;
+  evidence_ref: string | null;
+  confidence: number | null;
+  created_at: string;
+}
+
 export interface Issue {
   id: string;
   title: string;
@@ -23,6 +43,12 @@ export interface Issue {
   recommendations: string | null;
   conclusions: string | null;
   next_steps: string | null;
+  /** v0.2.45 — structured verdict enum (null until the agent calls issue_set_verdict). */
+  verdict: IssueVerdict | null;
+  /** v0.2.45 — 0..1 confidence the agent attaches to the verdict. */
+  verdict_confidence: number | null;
+  /** v0.2.45 — JSON-encoded blast-radius object, e.g. {"hosts":[…],"accounts":[…]}. */
+  blast_radius: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -54,6 +80,11 @@ export interface IssueDetail extends Issue {
   /** v0.2.1 — self-contained SVG STIX relations canvas (null until drawn).
    *  Rendered sandboxed as an <img> data-URI on the Relations tab. */
   relations_canvas_svg: string | null;
+  /** v0.2.45 — agent-generated investigation report (markdown), null until
+   *  generate_investigation_report runs. Detail-only (dropped from list payload). */
+  report: string | null;
+  /** v0.2.45 — ATT&CK techniques mapped to this issue (empty until mapped). */
+  techniques: TechniqueMapping[];
 }
 
 /** v0.2.1 — a STIX-style relationship edge (source indicator → target entity). */

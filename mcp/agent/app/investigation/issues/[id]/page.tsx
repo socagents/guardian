@@ -16,6 +16,7 @@ import {
   type IssueDetail,
   type CaseRow,
   type Indicator,
+  type TechniqueMapping,
 } from "@/lib/api/investigation";
 import {
   glassStyle,
@@ -46,10 +47,11 @@ import {
 const STATUSES = ["open", "investigating", "resolved", "closed"];
 const SEVERITIES = ["low", "medium", "high", "critical"];
 
-type Tab = "overview" | "assessment" | "indicators" | "activity" | "chain" | "relations";
+type Tab = "overview" | "assessment" | "report" | "indicators" | "activity" | "chain" | "relations";
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "overview", label: "Overview", icon: "dashboard" },
   { key: "assessment", label: "Assessment", icon: "gavel" },
+  { key: "report", label: "Report", icon: "description" },
   { key: "indicators", label: "Indicators", icon: "fingerprint" },
   { key: "activity", label: "Activity", icon: "timeline" },
   { key: "chain", label: "Attack chain", icon: "account_tree" },
@@ -74,6 +76,8 @@ export default function IssueDetailPage() {
   const [tab, setTab] = useState<Tab>("overview");
   // null = idle; otherwise the diagram kind currently regenerating (only one at a time).
   const [regenerating, setRegenerating] = useState<null | "chain" | "relations">(null);
+  // v0.2.45 — true while a one-shot report-generation agent job is in flight.
+  const [genReport, setGenReport] = useState(false);
   const [actType, setActType] = useState("all");
   const [actSort, setActSort] = useState<"oldest" | "newest">("oldest");
 
@@ -194,6 +198,68 @@ export default function IssueDetailPage() {
     }
   };
 
+  // v0.2.45 — generate (or refresh) the structured investigation report on
+  // demand. Fires a one-shot agent job that calls generate_investigation_report
+  // (which assembles the markdown from the verdict, blast radius, techniques,
+  // indicators, and timeline, then stores it on the issue), then polls until
+  // the issue's `report` field changes. Mirrors `regenerate` (diagrams).
+  const generateReport = async () => {
+    if (!issue || genReport) return;
+    setGenReport(true);
+    const before = issue.report ?? "";
+    const message =
+      `Generate the investigation report for Guardian Issue ${id}. ` +
+      `First call issue_get(issue_id="${id}") to read the full investigation ` +
+      `(summary, conclusions, verdict, blast radius, techniques, timeline). ` +
+      `If a structured verdict is not set yet, decide one from the evidence and ` +
+      `record it with issue_set_verdict; map any ATT&CK techniques you can ` +
+      `justify with issue_add_technique. Then call ` +
+      `generate_investigation_report(issue_id="${id}") to assemble and store the ` +
+      `report. Do only this — do not change unrelated fields.`;
+    try {
+      const resp = await fetch("/api/agent/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `gen-report-${id}-${before.length}`,
+          cron: "* * * * *",
+          timezone: "UTC",
+          run_once: true,
+          enabled: true,
+          bypass_approvals: true,
+          action: { type: "prompt", skill: "xsoar_case_investigation", message },
+        }),
+      });
+      if (!resp.ok) {
+        const detail = await resp.json().catch(() => ({}));
+        throw new Error((detail as { error?: string })?.error ?? `report generation failed (${resp.status})`);
+      }
+      const deadline = Date.now() + 180_000;
+      let updated = false;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 5000));
+        try {
+          const det = await getIssue(id);
+          if (det.report && det.report !== before) {
+            setIssue(det);
+            updated = true;
+            break;
+          }
+        } catch {
+          /* transient — keep polling */
+        }
+      }
+      if (!updated) {
+        try { setIssue(await getIssue(id)); } catch { /* ignore */ }
+        setError("Report generation timed out — the agent run may have failed. Try again.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "report generation failed");
+    } finally {
+      setGenReport(false);
+    }
+  };
+
   const activityTypes = useMemo(
     () => Array.from(new Set((issue?.events ?? []).map((e) => e.type))),
     [issue],
@@ -209,7 +275,13 @@ export default function IssueDetailPage() {
   if (error) return <p className="text-sm text-error p-8 text-center">{error}</p>;
   if (!issue) return <p className="text-sm text-on-surface-variant p-8 text-center">Issue not found.</p>;
 
-  const { verdict } = splitVerdict(issue.summary);
+  const { verdict: summaryVerdict } = splitVerdict(issue.summary);
+  // v0.2.45 — prefer the structured verdict (set via issue_set_verdict) over the
+  // legacy leading "VERDICT:" line in the summary; render the enum in Title Case
+  // (verdictTone lowercases internally, so the tone mapping still resolves).
+  const verdict = issue.verdict
+    ? issue.verdict.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+    : summaryVerdict;
   const layout = kindLayout(issue.kind);
 
   return (
@@ -243,11 +315,17 @@ export default function IssueDetailPage() {
           </div>
         </div>
 
-        {/* Verdict banner (derived from the summary's leading VERDICT: line) */}
+        {/* Verdict banner — structured verdict if set, else the summary's
+            leading VERDICT: line. Confidence (when present) sits on the right. */}
         {verdict && (
           <div className={`mt-4 rounded-xl border px-4 py-2.5 flex items-center gap-2 ${verdictTone(verdict)}`}>
             <span className="material-symbols-outlined text-[18px]">gavel</span>
             <span className="text-sm font-medium">{verdict}</span>
+            {issue.verdict_confidence != null && (
+              <span className="ml-auto text-[11px] font-medium opacity-80">
+                {Math.round(issue.verdict_confidence * 100)}% confidence
+              </span>
+            )}
           </div>
         )}
 
@@ -302,9 +380,20 @@ export default function IssueDetailPage() {
 
       {tab === "assessment" && (
         <div className="grid grid-cols-1 gap-4">
+          <StructuredOutcome issue={issue} />
+          <TechniqueChips techniques={issue.techniques} />
           <EditableSection icon="gavel" label="Conclusions" value={issue.conclusions ?? ""} onSave={(v) => patch({ conclusions: v })} />
           <EditableSection icon="checklist" label="Next steps" value={issue.next_steps ?? ""} onSave={(v) => patch({ next_steps: v })} />
         </div>
+      )}
+
+      {tab === "report" && (
+        <ReportTab
+          report={issue.report}
+          busy={genReport}
+          disabled={genReport}
+          onGenerate={generateReport}
+        />
       )}
 
       {tab === "indicators" && (
@@ -422,6 +511,191 @@ function Control({ label, children }: { label: string; children: React.ReactNode
     <div className="flex items-center gap-2">
       <label className="text-[10px] uppercase tracking-widest text-on-surface-variant">{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ── Structured outcome (v0.2.45 — stage A) ─────────────────────────────
+// Card shells mirror EditableSection's header (icon + label over a glass body)
+// so the Assessment tab reads as one consistent column.
+function OutcomeCard({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl p-5" style={glassStyle}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="material-symbols-outlined text-[18px] text-on-surface-variant">{icon}</span>
+        <span className="text-[10px] uppercase tracking-widest text-on-surface-variant">{label}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function humanizeKey(k: string): string {
+  return k.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Parse the JSON-encoded blast_radius into a plain object (or null if unset /
+// malformed — the agent writes it via issue_set_verdict so it's normally valid).
+function parseBlastRadius(raw: string | null): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw);
+    return o && typeof o === "object" && !Array.isArray(o) ? (o as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function StructuredOutcome({ issue }: { issue: IssueDetail }) {
+  const blast = parseBlastRadius(issue.blast_radius);
+  const hasOutcome = issue.verdict != null || issue.verdict_confidence != null || blast != null;
+  if (!hasOutcome) {
+    return (
+      <OutcomeCard icon="verified" label="Structured outcome">
+        <p className="text-xs text-on-surface-variant/80">
+          No structured verdict yet. Guardian records the verdict, a 0–100%
+          confidence, and the blast radius (impacted hosts, accounts, data) via{" "}
+          <code className="text-on-surface">issue_set_verdict</code> when it concludes
+          the investigation.
+        </p>
+      </OutcomeCard>
+    );
+  }
+  const pct = issue.verdict_confidence != null ? Math.round(issue.verdict_confidence * 100) : null;
+  return (
+    <OutcomeCard icon="verified" label="Structured outcome">
+      {issue.verdict && (
+        <div className="flex items-center gap-2 mb-3">
+          <Badge tone={verdictTone(issue.verdict.replace(/_/g, " "))}>
+            {humanizeKey(issue.verdict)}
+          </Badge>
+        </div>
+      )}
+      {pct != null && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-[11px] text-on-surface-variant mb-1">
+            <span>Confidence</span>
+            <span className="font-medium text-on-surface">{pct}%</span>
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-surface-container-highest overflow-hidden">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
+      {blast && Object.keys(blast).length > 0 && (
+        <div>
+          <div className="text-[11px] text-on-surface-variant mb-2">Blast radius</div>
+          <dl className="grid grid-cols-1 gap-2">
+            {Object.entries(blast).map(([k, v]) => (
+              <div key={k} className="flex flex-wrap items-start gap-2">
+                <dt className="text-[11px] uppercase tracking-wide text-on-surface-variant/70 min-w-[88px] pt-0.5">
+                  {humanizeKey(k)}
+                </dt>
+                <dd className="flex flex-wrap gap-1.5">
+                  {Array.isArray(v) ? (
+                    v.length === 0 ? (
+                      <span className="text-xs text-on-surface-variant/60">—</span>
+                    ) : (
+                      v.map((item, i) => (
+                        <span key={i} className="rounded-md bg-surface-container-highest border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface">
+                          {String(item)}
+                        </span>
+                      ))
+                    )
+                  ) : (
+                    <span className="text-xs text-on-surface">{String(v)}</span>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </OutcomeCard>
+  );
+}
+
+function TechniqueChips({ techniques }: { techniques: TechniqueMapping[] }) {
+  return (
+    <OutcomeCard icon="lan" label="ATT&CK techniques">
+      {techniques.length === 0 ? (
+        <p className="text-xs text-on-surface-variant/80">
+          No techniques mapped yet. Guardian links observed ATT&CK techniques to
+          this issue via <code className="text-on-surface">issue_add_technique</code>{" "}
+          — they also power the cross-incident{" "}
+          <Link href="/investigation/issues" className="text-secondary hover:underline">technique pivot</Link>.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {techniques.map((t) => (
+            <div
+              key={t.id}
+              title={[t.manifestation, t.evidence_ref].filter(Boolean).join(" · ") || undefined}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-tertiary/40 bg-tertiary/10 px-2.5 py-1 text-[11px] text-tertiary"
+            >
+              <span className="material-symbols-outlined text-[14px]">lan</span>
+              <span className="font-mono font-medium">{t.technique_id}</span>
+              {t.tactic && <span className="text-tertiary/70">· {t.tactic}</span>}
+              {t.confidence != null && (
+                <span className="text-tertiary/70">· {Math.round(t.confidence * 100)}%</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </OutcomeCard>
+  );
+}
+
+function ReportTab({
+  report,
+  busy,
+  disabled,
+  onGenerate,
+}: {
+  report: string | null;
+  busy: boolean;
+  disabled: boolean;
+  onGenerate: () => void;
+}) {
+  if (!report) {
+    return (
+      <div className="flex flex-col items-center gap-4">
+        <EmptyState
+          icon="description"
+          title="No report generated yet"
+          hint="Guardian assembles a structured closure report — verdict, blast radius, ATT&CK techniques, indicators, and the investigation timeline — into one markdown document. Generate it on demand (a full agent pass — about a minute)."
+        />
+        <button
+          onClick={onGenerate}
+          disabled={disabled}
+          className="inline-flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span className={`material-symbols-outlined text-[18px] ${busy ? "animate-spin" : ""}`}>
+            {busy ? "progress_activity" : "auto_awesome"}
+          </span>
+          {busy ? "Generating…" : "Generate report"}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      <div className="flex justify-end">
+        <button
+          onClick={onGenerate}
+          disabled={disabled}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant px-3 py-1.5 text-[11px] text-on-surface-variant hover:text-on-surface disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span className={`material-symbols-outlined text-[14px] ${busy ? "animate-spin" : ""}`}>
+            {busy ? "progress_activity" : "refresh"}
+          </span>
+          {busy ? "Regenerating…" : "Regenerate"}
+        </button>
+      </div>
+      <div className="rounded-2xl p-6" style={glassStyle}>
+        <MarkdownContent>{report}</MarkdownContent>
+      </div>
     </div>
   );
 }
