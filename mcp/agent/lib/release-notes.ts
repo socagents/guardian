@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.46",
+    date: "2026-06-21",
+    title: "Multi-source defensible depth — telemetry hunt, verdict pushback, containment rec.",
+    highlights: [
+      "Verdict pushback: new push_verdict_to_xsoar writes a resolved Issue's structured verdict + findings back to the upstream XSOAR incident's war room as pinned evidence — the disposition lives where the SOC works the case. Goes through the approval gate + audit; no-op for standalone Issues.",
+      "XQL telemetry blast-radius hunt: the investigation skill pivots into XSIAM (xql_examples_search → xsiam_run_xql_query) to find the other hosts/accounts a bad indicator touched, and folds them into the structured blast radius. Degrades gracefully when no XSIAM instance is configured.",
+      "xsiam_run_xql_query now takes lookback_hours (default 0.5 = backward-compatible 30 min; up to 7 days) + polls to completion — so blast-radius hunts scope days, not minutes.",
+      "Containment recommendations (recommend-only): for true positives Guardian attaches a structured isolate-host / disable-account / block-indicator / run-playbook step with the exact action to approve. It never auto-contains — containment runs only when you approve it.",
+      "Autonomous loop deepened: investigations now hunt telemetry + push the verdict back; the judge weighs cross-source depth and whether containment was considered for high/critical true positives.",
+    ],
+  },
+  {
     version: "0.2.45",
     date: "2026-06-21",
     title: "Structured investigation outcome — verdict, blast radius, ATT&CK, report.",

@@ -10,6 +10,18 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.46] (2026-06-21) — *Multi-source defensible depth (stage B)*
+
+Stage B of the investigation arc gives each investigation reach beyond the XSOAR case: it hunts the blast radius in telemetry, writes the verdict back to the source incident, and recommends containment — so the structured record (stage A) is backed by multi-source evidence and closes the loop where the SOC works.
+
+- **Verdict pushback to the XSOAR war room.** A new `push_verdict_to_xsoar` tool writes a resolved Issue's structured verdict + key findings back to the upstream incident's war room as a pinned evidence entry — the disposition Guardian reached now lives where the SOC works the case. It writes through the governed tool path (per-instance routing, approval gate, audit all apply) and is a no-op for a standalone Issue (guarded on the tracked incident).
+- **XQL telemetry blast-radius hunt.** When a case has a host/user/IP/domain/hash indicator, the investigation skill now pivots into XSIAM with an XQL hunt (`xql_examples_search` → `xsiam_run_xql_query`) to find every *other* endpoint or account that saw it, and folds the result into the structured blast radius. Degrades gracefully to XSOAR-only scoping when no XSIAM instance is configured.
+- **`xsiam_run_xql_query` can now scope days, not 30 minutes.** Added a `lookback_hours` window (default 0.5 = backward-compatible; up to 7 days) and a bounded result-poll so wide blast-radius hunts return complete results instead of an empty early read.
+- **Containment recommendations — recommend-only, approval-gated.** For true positives, Guardian attaches a structured recommended-containment step (isolate host / disable account / block indicator / run playbook) naming the exact action to approve. Guardian never executes containment on its own; it runs only when you approve it.
+- **Autonomous loop deepened.** The investigation loop now hunts telemetry and pushes the verdict back as part of every case; the judge weighs cross-source depth and whether containment was considered for high/critical true positives.
+
+---
+
 ## [v0.2.45] (2026-06-21) — *Structured investigation outcome (stage A)*
 
 Guardian's investigation Issues gain a **structured outcome** alongside the prose write-up — a queryable verdict, confidence, blast radius, and ATT&CK technique mappings — plus a generated closure **report**. This is stage A of the cross-incident investigation-model arc: it makes a verdict machine-readable (not just a sentence in the summary) so it can drive the UI, the cross-incident pivot, and later campaign analytics.

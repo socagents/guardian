@@ -6595,7 +6595,7 @@ function Investigation() {
 
  <SubSection icon="api" title="Agent MCP tools — catalog side of the credential guardrail">
  <p>
- The agent reaches the module through twenty-one MCP tools. They are on the{" "}
+ The agent reaches the module through twenty-two MCP tools. They are on the{" "}
  <Term>catalog</Term> side of the credential guardrail, NOT the
  credential side: they touch only investigation metadata in{" "}
  <Code>investigations.db</Code> and never read, write, mint, or rotate
@@ -6640,6 +6640,26 @@ function Investigation() {
  report and stores it on the Issue). These turn the Issue from a prose
  write-up into a queryable structured record.
  </li>
+ <li>
+ <strong>Multi-source depth</strong> (v0.2.46) —{" "}
+ <Code>push_verdict_to_xsoar</Code> writes the resolved Issue&apos;s
+ structured verdict + findings back to the upstream XSOAR incident&apos;s
+ war room as a pinned evidence entry, closing the loop so the disposition
+ lives where the SOC works the case. It is the one investigation tool that
+ reaches a connector, and it does so on the governed path — through the{" "}
+ <Term>tool dispatcher</Term> (<Code>get_tool_dispatcher()</Code>), so the
+ per-instance contextvar, the approval gate, and audit all apply — calling
+ the xsoar connector&apos;s <Code>xsoar_add_entry</Code> +{" "}
+ <Code>xsoar_save_evidence</Code>. Guarded on <Code>source_ref</Code>
+ (no-op for a standalone Issue). The complementary depth lives in the
+ skill, not new tools: an <Term>XQL telemetry blast-radius hunt</Term>{" "}
+ (<Code>xql_examples_search</Code> →{" "}
+ <Code>xsiam_run_xql_query</Code>, whose v0.2.46 <Code>lookback_hours</Code>
+ widens the window past the legacy 30 min so a hunt can scope days) and a{" "}
+ <Term>containment recommendation</Term> for true positives — recorded as a
+ structured <Code>containment_recommendation</Code> timeline event, naming
+ the exact approval-gated tool call but never executing it.
+ </li>
  </ul>
  <p>
  Typical flow during a chat or job: the agent opens an Issue when it
@@ -6649,8 +6669,9 @@ function Investigation() {
  <Code>issue_update</Code>, then records the <em>structured</em> outcome
  at resolve — <Code>issue_set_verdict</Code>,{" "}
  <Code>issue_add_technique</Code> per confirmed technique, and{" "}
- <Code>generate_investigation_report</Code> for the deliverable — and
- groups related Issues into a Case. The{" "}
+ <Code>generate_investigation_report</Code> for the deliverable, then
+ (v0.2.46) <Code>push_verdict_to_xsoar</Code> to write that verdict back
+ to the upstream war room — and groups related Issues into a Case. The{" "}
  <Code>bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md</Code>{" "}
  skill drives opening and maintaining the Issue throughout the
  investigation.
@@ -6756,10 +6777,11 @@ function Investigation() {
  order=&apos;asc&apos;)</Code> (the v0.2.11 structural filters — no
  reliance on the model to skip sourceless Issues or reverse a list),
  investigates the incident end-to-end per the{" "}
- <Code>xsoar_case_investigation</Code> skill (enrich → scope → draw the
- attack-chain + relations diagrams → resolve with a leading{" "}
- <Code>VERDICT:</Code> line, MITRE, blast-radius, recommendations), and
- groups related incidents into a Case.
+ <Code>xsoar_case_investigation</Code> skill (enrich → hunt blast radius
+ in telemetry via XQL (v0.2.46) → scope → draw the attack-chain +
+ relations diagrams → resolve with the structured verdict → push the
+ verdict back to the war room (v0.2.46) → recommend containment for true
+ positives), and groups related incidents into a Case.
  </li>
  <li>
  <Code>guardian-investigation-judge</Code> (every 6h) — rubric-scores

@@ -2827,6 +2827,22 @@ Networks documentation and returning evidence-backed, cited answers.
                 </li>
               </ul>
               <p>
+                <strong>Multi-source depth (v0.2.46)</strong> — when it works a
+                case, Guardian doesn&apos;t stop at the XSOAR incident. It hunts
+                the <Term>blast radius</Term> in your XSIAM telemetry with an XQL
+                query (finding the other hosts and accounts a bad indicator
+                touched — over a window wide enough to cover the incident, not
+                just the last few minutes), writes its final{" "}
+                <Term>verdict back to the XSOAR incident&apos;s war room</Term> as
+                a pinned evidence entry so the disposition lives where your SOC
+                works the case, and — for a true positive — attaches a{" "}
+                <Term>recommended containment</Term> step (isolate host, disable
+                account, block indicator, run a playbook) with the exact action
+                ready for you to approve. Guardian only <em>recommends</em>; it
+                never isolates a host or disables an account on its own —
+                containment runs only when you approve it.
+              </p>
+              <p>
                 The <Link href="/investigation/issues" className="link">Issues</Link>{" "}
                 and <Link href="/investigation/cases" className="link">Cases</Link>{" "}
                 lists are full-width, with summary stat cards and status
