@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.48",
+    date: "2026-06-21",
+    title: "Export + interop — STIX 2.1, report templates, opt-in webhook handoff.",
+    highlights: [
+      "STIX 2.1 export: export_issue_stix / export_case_stix (+ a one-click Export STIX 2.1 on the Report + Campaign tabs) emit a standard bundle — incident/campaign + ATT&CK techniques + indicators + relationships — for any TIP/SIEM. Deterministic, pure assembly.",
+      "Report templates: generate_investigation_report now takes a template — technical (full, default), executive (brief), or ioc-list (machine-pasteable); generate_campaign_report renders the case level.",
+      "Outbound handoff (opt-in + approval-gated): export_to_webhook POSTs the verdict + report + IOCs + STIX to an operator-configured webhook. Off by default (until you set GUARDIAN_WEBHOOK_URL), sends only to your configured URL, asks for approval before every send. webhook_preview shows what would be sent first.",
+      "Completes the structured-investigation arc (A–D): a machine-readable verdict, backed by multi-source evidence, rolled into campaigns, and now portable to the rest of your stack.",
+    ],
+  },
+  {
     version: "0.2.47",
     date: "2026-06-21",
     title: "Campaign / cross-incident analytics — roll up, type by playbook, link & infer.",

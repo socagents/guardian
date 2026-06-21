@@ -2872,6 +2872,21 @@ Networks documentation and returning evidence-backed, cited answers.
                 campaign — and it can suggest which prior case a new one belongs
                 to, so a long-running campaign reads as one story.
               </p>
+              <p>
+                <strong>Export &amp; handoff (v0.2.48)</strong> — a finished
+                investigation is portable. The Report tab and the Campaign tab
+                each have an <strong>Export STIX 2.1</strong> download (a standard
+                bundle of the incident/campaign, ATT&amp;CK techniques, indicators,
+                and their relationships) that any threat-intel platform or SIEM can
+                ingest. Guardian can also render the report three ways on request —
+                an <em>executive</em> brief, the full <em>technical</em> write-up,
+                or a machine-pasteable <em>IOC list</em>. And if you configure an
+                outbound webhook (a SOAR/ticketing/chat ingress), Guardian can push
+                the verdict + report + IOCs to it — but that handoff is{" "}
+                <strong>opt-in and off by default</strong>, sends only to the URL{" "}
+                <em>you</em> configure, and asks for your approval before every
+                send; it shows you exactly what it would send first.
+              </p>
             </SubSection>
 
             <SubSection icon="fingerprint" title="Indicators (v0.2.0)">

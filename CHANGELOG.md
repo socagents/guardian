@@ -10,6 +10,17 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.48] (2026-06-21) — *Export + interop (stage D)*
+
+The final stage of the investigation-model arc makes the structured record portable — exportable as STIX, renderable from report templates, and (opt-in) pushable to an external system — so Guardian's findings flow into the wider SOC ecosystem.
+
+- **STIX 2.1 export.** `export_issue_stix` / `export_case_stix` (and a one-click **Export STIX 2.1** on the Report + Campaign tabs) emit a standard STIX bundle of the incident/campaign + ATT&CK techniques + indicators + their relationships — ready for any threat-intel platform or SIEM. Deterministic ids, pure assembly.
+- **Report templates.** `generate_investigation_report` now takes a template — **technical** (the full write-up, default), **executive** (a brief), or **ioc-list** (machine-pasteable) — and `generate_campaign_report` renders the case level.
+- **Outbound handoff — opt-in + approval-gated.** `export_to_webhook` POSTs the verdict + report + IOCs + STIX to an operator-configured webhook (SOAR / ticketing / chat ingress). It is the only investigation tool that sends data externally, so it is **off by default** (until you set `GUARDIAN_WEBHOOK_URL`), sends only to the URL you configure, and asks for approval before every send. `webhook_preview` shows exactly what would be sent first.
+- This completes the structured-investigation arc (stages A–D): a machine-readable verdict, backed by multi-source evidence, rolled into campaigns, and now portable to the rest of your stack.
+
+---
+
 ## [v0.2.47] (2026-06-21) — *Campaign / cross-incident analytics (stage C)*
 
 Stage C lifts the structured single-incident records into fleet intelligence: related incidents roll up into a typed campaign, investigations are typed by the playbook they followed, cases link to prior campaigns, and the relationship graph suggests the edges and siblings you'd otherwise miss — so an analyst sees the bigger picture, not one alert at a time.

@@ -365,7 +365,12 @@ Alongside the XSOAR case, keep a **local Guardian Issue** — Guardian's own rec
 
    The rollup shows on the Case's **Campaign** tab (technique union, shared infrastructure, related cases). Only relate cases the evidence actually ties together — a shared benign IP is not a campaign link.
 
-These `issue_*` / `case_*` tools are local Guardian metadata (no tenant credentials) — call them freely; they are not approval-gated. The finished Issue should read as a complete investigation record on its own.
+6. **Export / hand off the finished record (stage C/D, on request or at resolve).** The structured record is portable:
+   - **Report templates** — `generate_investigation_report(issue_id, template="executive"|"technical"|"ioc-list")` renders the same record three ways (a brief for a manager, the full write-up, or a machine-pasteable IOC list); `generate_campaign_report(case_id)` does the case level.
+   - **STIX 2.1** — `export_issue_stix(issue_id)` / `export_case_stix(case_id)` emit a STIX bundle (incident/campaign + attack-patterns + indicators + relationships) for any external TIP/SIEM. Read-only.
+   - **Outbound handoff (opt-in, approval-gated)** — if the operator has configured an outbound webhook, `export_to_webhook(issue_id|case_id)` POSTs the verdict + report + IOCs + STIX to it. It SENDS DATA EXTERNALLY, so it is approval-gated (expect a confirmation) and OFF unless configured. **Always call `webhook_preview` first and show the operator what would be sent**; never invent a destination — the target comes only from operator config. If no webhook is configured, just say so; don't treat it as an error.
+
+These `issue_*` / `case_*` tools are local Guardian metadata (no tenant credentials) — call them freely; they are not approval-gated (except `export_to_webhook`, which sends data out). The finished Issue should read as a complete investigation record on its own.
 
 ---
 

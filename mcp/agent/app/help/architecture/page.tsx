@@ -6603,7 +6603,7 @@ function Investigation() {
 
  <SubSection icon="api" title="Agent MCP tools — catalog side of the credential guardrail">
  <p>
- The agent reaches the module through twenty-seven MCP tools. They are on the{" "}
+ The agent reaches the module through thirty-two MCP tools. They are on the{" "}
  <Term>catalog</Term> side of the credential guardrail, NOT the
  credential side: they touch only investigation metadata in{" "}
  <Code>investigations.db</Code> and never read, write, mint, or rotate
@@ -6683,6 +6683,27 @@ function Investigation() {
  indicator(V)→C ⇒ A→C) and sibling issues that share a technique or IOC.
  All pure-Python over the store — no new external calls.
  </li>
+ <li>
+ <strong>Export / interop</strong> (v0.2.48) — makes the structured
+ record portable.{" "}
+ <Code>export_issue_stix</Code> / <Code>export_case_stix</Code> assemble a{" "}
+ <Term>STIX 2.1</Term> bundle (incident/campaign + attack-pattern +
+ indicator + relationship objects, deterministic ids) for any external
+ TIP/SIEM;{" "}
+ <Code>generate_investigation_report</Code> now takes a{" "}
+ <Code>template</Code> (<Code>technical</Code> / <Code>executive</Code> /{" "}
+ <Code>ioc-list</Code>) and <Code>generate_campaign_report</Code> renders
+ the case level. The one outbound:{" "}
+ <Code>export_to_webhook</Code> POSTs the verdict + report + IOCs + STIX
+ to an operator-configured webhook — it is the only investigation tool
+ that <strong>sends data externally</strong>, so it is{" "}
+ <Term>opt-in</Term> (off unless <Code>GUARDIAN_WEBHOOK_URL</Code> is set),
+ its target comes ONLY from operator config (never a tool arg or observed
+ content), and it is <strong>approval-gated</strong>
+ (<Code>manifest.approvals.humanRequired</Code>). Its read-only companion{" "}
+ <Code>webhook_preview</Code> shows exactly what would be sent before the
+ operator approves. The STIX export + report rendering are pure assembly.
+ </li>
  </ul>
  <p>
  Typical flow during a chat or job: the agent opens an Issue when it
@@ -6726,7 +6747,11 @@ function Investigation() {
  <Code>GET /api/v1/issues/{"{id}"}/report</Code>,{" "}
  <Code>GET /api/v1/techniques/{"{technique_id}"}/issues</Code> (v0.2.45),
  and <Code>GET /api/v1/playbooks/{"{doc_id}"}/issues</Code> +{" "}
- <Code>GET /api/v1/cases/{"{id}"}/related</Code> (v0.2.47).
+ <Code>GET /api/v1/cases/{"{id}"}/related</Code> (v0.2.47); plus{" "}
+ <Code>GET /api/v1/issues/{"{id}"}/stix</Code> +{" "}
+ <Code>GET /api/v1/cases/{"{id}"}/stix</Code> (the STIX 2.1 bundle,
+ v0.2.48, surfaced as an Export-STIX download on the Report + Campaign
+ tabs).
  </li>
  <li>
  <strong>Next.js proxies</strong>:{" "}
