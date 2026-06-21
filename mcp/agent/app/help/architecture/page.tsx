@@ -47,8 +47,6 @@ import { AuthTopology } from "@/components/diagrams/auth-topology";
 import { AuthTrustBoundaries } from "@/components/diagrams/auth-trust-boundaries";
 import { ChatTurnLifecycle } from "@/components/diagrams/chat-turn-lifecycle";
 import { ContextMemoryPipeline } from "@/components/diagrams/context-memory-pipeline";
-// [guardian v0.1.0] Retired: DataSourcesFlow + LogDestinationsFlow diagram
-// imports — simulation subsystem removed.
 import { ExternalConnectorsAnatomy } from "@/components/diagrams/external-connectors-anatomy";
 import { FullPlatformTopology } from "@/components/diagrams/full-platform-topology";
 import { JobsLifecycle } from "@/components/diagrams/jobs-lifecycle";
@@ -121,17 +119,10 @@ const SECTIONS: SectionDef[] = [
  { id: "tool-metadata", label: "Tool Metadata", group: "Connectors & Extensions", icon: "fact_check" },
  { id: "plugins", label: "Plugin System", group: "Connectors & Extensions", icon: "extension" },
  { id: "marketplace-logic", label: "Marketplace Logic", group: "Connectors & Extensions", icon: "storefront" },
- // [guardian v0.1.0] Retired: data-sources — simulation subsystem removed.
- // [guardian v0.1.0] Retired: log-destinations — simulation subsystem removed.
  { id: "operator-state", label: "Operator Workflow State", group: "Connectors & Extensions", icon: "savings" },
  { id: "investigation", label: "Investigation Module", group: "Connectors & Extensions", icon: "frame_inspect" },
 
  // ── External Connectors ────────────────────────────────────────
- // [guardian v0.1.0] Retired: xlog-connector — simulation subsystem removed.
- // [guardian v0.1.0] Retired: caldera-connector — simulation subsystem removed.
- // [guardian XSOAR pivot] Retired: xsiam-connector, cortex-xdr-connector,
- // cortex-content-connector — log-simulation/telemetry-era; out of scope
- // for the incident-investigation product. Roster is now xsoar + cortex-docs + web.
  { id: "xsoar-connector", label: "XSOAR Connector", group: "External Connectors", icon: "cases" },
  { id: "cortex-docs-connector", label: "Cortex Docs Connector", group: "External Connectors", icon: "menu_book" },
  { id: "web-connector", label: "Web Browser Connector", group: "External Connectors", icon: "language" },
@@ -393,15 +384,9 @@ export default function ArchitectureGuide() {
  <ToolMetadata />
  <Plugins />
  <MarketplaceLogic />
- {/* [guardian v0.1.0] Retired: DataSourcesMarketplace — simulation subsystem removed */}
  <OperatorState />
  <Investigation />
  {/* External Connectors */}
- {/* [guardian v0.1.0] Retired: XlogConnector + CalderaConnector — simulation subsystem removed */}
- {/* [guardian XSOAR pivot] Retired: CortexXdrConnector + CortexContentConnector
-     — log-simulation/telemetry-era connectors, out of scope.
-     [v0.2.27] XsiamConnector RESTORED — the Cortex XSIAM connector returned as an
-     investigation + EDR-response surface (54 tools). Roster: xsoar + xsiam + cortex-docs + web. */}
  <XsoarConnector />
  <XsiamConnector />
  <CortexDocsConnector />
@@ -521,8 +506,6 @@ function Stack() {
  <FullPlatformTopology />
 
  <SubSection icon="dns" title="Fixed services">
- {/* [guardian v0.1.0] Retired: xlog + caldera service entries —
-     simulation subsystem removed. */}
  <ul className="list-disc pl-5 space-y-2 text-sm">
  <li>
  <Term>guardian-browser</Term> (container <Code>guardian_browser</Code>) —
@@ -1076,20 +1059,17 @@ MCP read connector.yaml.runtimeMapping.style
                     container's MCP, returns the result`}</Pre>
  </SubSection>
 
- <SubSection icon="alt_route" title="Multiple enabled instances per connector (v0.2.29)">
+ <SubSection icon="alt_route" title="Multiple enabled instances per connector">
  <p>
  A connector can run <strong>N enabled instances at once</strong>,
  each with its own per-instance container
  (<Code>guardian-connector-&lt;id&gt;-&lt;name&gt;</Code>). The{" "}
- <Code>instance_store</Code> schema has always been{" "}
+ <Code>instance_store</Code> schema is{" "}
  <Code>UNIQUE(connector_id, name)</Code>, so multiple rows per
- connector were allowed — but a guard in{" "}
- <Code>create()</Code>/<Code>update()</Code> raised{" "}
- <Code>ValueError</Code> (HTTP 409) on a second{" "}
- <Code>enabled=True</Code> instance for the same connector.{" "}
- <strong>v0.2.29 lifts that one-enabled-per-connector guard</strong>{" "}
- (the <Code>UNIQUE(connector_id, name)</Code> constraint stays). The
- advertise gate is now <em>≥1 ENABLED instance</em>, not just ≥1 row.
+ connector are allowed, and there is no enabled-count guard: any
+ number of <Code>enabled=True</Code> instances of the same connector
+ may coexist. The advertise gate is <em>≥1 ENABLED instance</em>,
+ not just ≥1 row.
  </p>
  <p>
  <strong>Tools register once per connector</strong> with their
@@ -1202,7 +1182,7 @@ function Manifest() {
 │ │ └── usecase/ # Stores + loaders + business logic
 │ ├── skills/ # Bundle-default skills (markdown)
 │ └── tests/
-├── kbs/ # 6 bundled knowledge bases (v0.2.16+, see Knowledge Pipeline)
+├── kbs/ # 6 bundled knowledge bases (see Knowledge Pipeline)
 ├── plugins/ # Filesystem-discovered plugin tree
 │ └── example-vendor/
 │ ├── manifest.yaml # Plugin contract — agents, skills, seeds
@@ -1686,12 +1666,11 @@ function ToolDispatch() {
  </li>
  </ol>
  </SubSection>
- <SubSection icon="cached" title="Turn-scoped read cache (v0.17.130)">
+ <SubSection icon="cached" title="Turn-scoped read cache">
  <p>
  Models sometimes re-request the same idempotent read several
  times within one turn (observed: <Code>marketplace_list</Code>{" "}
- called 3-4× while answering a single question). A soft
- system-prompt nudge (v0.17.129) did not reliably stop this, so
+ called 3-4× while answering a single question). To absorb this,
  step 5 (<Term>MCP dispatch</Term>) is fronted by a{" "}
  <Term>per-message memo</Term>: an identical{" "}
  <Code>(tool, args)</Code> call for an allowlisted read returns
@@ -1719,13 +1698,13 @@ function ToolDispatch() {
  <li>
  <Term>Display</Term>: only the MCP round-trip is skipped. The
  model still emits the <Code>tool_call</Code>, so live telemetry
- still shows the request, now badged <Code>cached</Code> in the Live
- Telemetry panel (v0.17.140, #128) to distinguish a cache-served hit
+ still shows the request, badged <Code>cached</Code> in the Live
+ Telemetry panel to distinguish a cache-served hit
  from a real MCP dispatch.
  </li>
  </ul>
  </SubSection>
- <SubSection icon="block" title="Failed-call loop breaker (v0.17.131)">
+ <SubSection icon="block" title="Failed-call loop breaker">
  <p>
  The read cache memoizes only successes. Some tools signal failure
  with an <Code>{"{ok:false}"}</Code> result payload rather than
@@ -2118,10 +2097,6 @@ function ObservabilityOverview() {
  {" "}— benchmark run history with per-run scored output + side-by-side compare view across runs.
  Tracks agent quality regression as the bundle or prompt changes.
  </li>
- {/* [guardian XSOAR pivot] Retired: /observability/detections bullet —
-     the detection inventory + POST /api/agent/detections/sync were
-     XSIAM-backed (the XSIAM connector is removed). The observability page
-     + sync endpoint are owned by other surfaces and tracked for removal. */}
  <li>
  <Term><Link href="/observability/plugins" className="link">/observability/plugins</Link></Term>
  {" "}— entry-point plugin inventory (pip-installed Python packages exposing{" "}
@@ -4175,7 +4150,6 @@ agents: # agent definitions contributed to /agents
  <Term>Skills</Term> — <Code>shutil.copy2</Code> to
  <Code>/app/skills/plugins/&lt;plugin&gt;/</Code>. Idempotent.
  </li>
- {/* [guardian v0.1.0] Retired: scenario contributions — simulation subsystem removed. */}
  <li>
  <Term>Memory seeds</Term> — Write to memory store IF the
  (scope, key) doesn&apos;t already exist. Operator edits
@@ -4728,10 +4702,10 @@ function RestApi() {
  query/path params, response shapes, and risk tier — lives at{" "}
  <Link href="/help/api" className="link">/help/api</Link>, and is
  exported as an OpenAPI 3.0 document at{" "}
- <Code>GET /api/agent/openapi</Code>. As of v0.2.38 the catalog
+ <Code>GET /api/agent/openapi</Code>. The catalog
  covers 138 endpoints across 8 categories, including a dedicated{" "}
  <strong>Investigation</strong> group for the cases / issues /
- indicators surface. Each entry&apos;s body and response schema was
+ indicators surface. Each entry&apos;s body and response schema is
  reconciled against its actual route handler and the embedded-MCP
  handler it forwards to.
  </p>
@@ -4927,8 +4901,6 @@ function BootLifecycle() {
 3. If !configured: redirect every route to /setup
 4. If configured: hydrate operator session from cookie, render UI`}</Pre>
  </SubSection>
- {/* [guardian v0.1.0] Retired: xlog boot sequence — simulation
-     subsystem removed. */}
  <SubSection icon="warning" title="Boot ordering subtleties">
  <ul className="list-disc pl-5 space-y-1.5 text-sm">
  <li>
@@ -5010,7 +4982,7 @@ Cookie: guardian_session=<32B random>; HttpOnly; Secure; SameSite=Strict;
  </ul>
  </SubSection>
 
- <SubSection icon="key" title="API-key bearer auth — programmatic access (v0.17.108)">
+ <SubSection icon="key" title="API-key bearer auth — programmatic access">
  <p>
  Besides the session cookie, the agent surface (<Code>/api/chat</Code>,{" "}
  <Code>/api/agent/*</Code>, <Code>/api/skills/*</Code>) accepts an{" "}
@@ -5681,18 +5653,21 @@ function KnowledgePipeline() {
  ways: read-only at the agent surface, sourced from the bundle
  (not chat), and indexed at boot rather than on-write. The bundle
  ships six complementary KBs:{" "}
- <Code>soc-investigation</Code> (v0.2.16) — 30 hand-written{" "}
+ <Code>soc-investigation</Code> — 30 hand-written{" "}
  <em>narrative</em> investigation guides + IR playbooks;{" "}
- <Code>mitre-attack-enterprise</Code> (v0.2.18) — the{" "}
+ <Code>mitre-attack-enterprise</Code> — the{" "}
  <em>complete</em> ATT&amp;CK Enterprise matrix (~697 techniques +
  sub-techniques) as terse, machine-extracted <em>reference</em>;
- <Code>mitre-atlas</Code> (v0.2.19) — MITRE ATLAS, the
+ <Code>mitre-atlas</Code> — MITRE ATLAS, the
  ATT&amp;CK-style framework for attacks on <em>AI/ML systems</em>
- (227 docs: techniques + 57 case studies); and{" "}
- <Code>soar-playbooks</Code> (v0.2.21) — ~800 Cortex XSOAR
+ (227 docs: techniques + 57 case studies);{" "}
+ <Code>soar-playbooks</Code> — ~800 Cortex XSOAR
  out-of-the-box <em>response playbooks</em> from the MIT-licensed
  demisto/content repo, each an embedded reviewed description with the
- raw YAML kept and dual-labeled by product + investigation-type. The
+ raw YAML kept and dual-labeled by product + investigation-type; and{" "}
+ <Code>mitre-attack-ics</Code> (OT/industrial, 97 docs) +{" "}
+ <Code>mitre-attack-mobile</Code> (Android/iOS, 124 docs) rounding
+ out the ATT&amp;CK matrix family. The
  agent searches <Code>soc-investigation</Code> for{" "}
  <em>how to investigate well</em>, <Code>mitre-attack-enterprise</Code>{" "}
  for <em>what a technique is + how it&apos;s detected/mitigated</em>,
@@ -5701,10 +5676,8 @@ function KnowledgePipeline() {
  The reference KBs are generated deterministically from official
  source data (<Code>kbs/_tools/gen_mitre.py</Code>,{" "}
  <Code>gen_atlas.py</Code>, <Code>gen_soar_playbooks.py</Code>) and
- ship with embeddings pre-computed (v0.2.17) so they boot with zero
- Vertex calls. v0.2.22 rounds out the ATT&amp;CK matrix family with{" "}
- <Code>mitre-attack-ics</Code> (OT/industrial, 97 docs) and{" "}
- <Code>mitre-attack-mobile</Code> (Android/iOS, 124 docs) — six KBs,
+ ship with embeddings pre-computed so they boot with zero
+ Vertex calls. Across all six KBs the bundle carries
  ~1,973 docs total, scoped per investigation via{" "}
  <Code>kb_name</Code> or the <Code>ecosystem</Code> tag.
  </p>
@@ -5732,7 +5705,7 @@ function KnowledgePipeline() {
  </p>
  </SubSection>
  <SubSection icon="folder_open" title="Bundle layout">
- <Pre>{`bundles/spark/kbs/soc-investigation/    # v0.2.16 — the shipped KB
+ <Pre>{`bundles/spark/kbs/soc-investigation/    # the shipped KB
 ├── schema.json   # required [id,title,category]; category enum
 │                 #   ["attack-technique","playbook"]
 ├── README.md
@@ -5746,7 +5719,7 @@ function KnowledgePipeline() {
 #   - name: soc-investigation
 #     path: ./kbs/soc-investigation/
 #     schema: ./kbs/soc-investigation/schema.json
-#   - name: xql-examples            # v0.2.44 (see XQL section below)
+#   - name: xql-examples            # see XQL section below
 #     path: ./kbs/xql-examples/
 #     schema: ./kbs/xql-examples/schema.json
 # Bundled KBs also include mitre-attack-{enterprise,ics,mobile},
@@ -5762,7 +5735,7 @@ function KnowledgePipeline() {
  detection means an unchanged repo = zero Vertex calls at boot.
  </p>
  </SubSection>
- <SubSection icon="bolt" title="Pre-computed embeddings (v0.2.17)">
+ <SubSection icon="bolt" title="Pre-computed embeddings">
  <p>
  A bundle may ship a doc&apos;s embedding <em>baked in</em> —
  an <Code>embedding</Code> (base64 little-endian float32) +{" "}
@@ -5789,7 +5762,7 @@ function KnowledgePipeline() {
  (or a connector wrapper over one) would call.
  </p>
  </SubSection>
- <SubSection icon="label" title="Label faceting (v0.2.20)">
+ <SubSection icon="label" title="Label faceting">
  <p>
  Beyond <Code>category</Code>, each doc&apos;s front-matter{" "}
  <Code>tags</Code> (tactic, platform, product, investigation-type,
@@ -5805,18 +5778,17 @@ function KnowledgePipeline() {
  <Code>offset</Code> for pagination.
  </p>
  </SubSection>
- <SubSection icon="tune" title="Passive vs active KB use (v0.2.23)">
+ <SubSection icon="tune" title="Passive vs active KB use">
  <p>
  Two paths put KB content in front of the agent.{" "}
  <strong>Active</strong>: the agent calls{" "}
  <Code>knowledge_search</Code> (scoped by <Code>kb_name</Code> /{" "}
  tags) — unrestricted across all six KBs.{" "}
  <strong>Passive</strong>: the <Code>ContextAssembler</Code> injects
- the top-K KB hits into <em>every</em> turn&apos;s context. At
- six-KB scale the passive path leaked specialist matrices into IT
- cases — a ransomware turn surfaced an ICS technique (eco=OT) above
- the correct Enterprise one (the noise is mid-cosine ~0.6, so a
- score floor can&apos;t separate it). So passive injection now{" "}
+ the top-K KB hits into <em>every</em> turn&apos;s context. To keep
+ specialist matrices from bleeding into unrelated cases (e.g. an ICS
+ technique surfacing on an IT ransomware turn, where mid-cosine noise
+ a score floor can&apos;t separate), passive injection{" "}
  <strong>excludes the specialist ecosystems</strong> (OT / Mobile /
  AI) — docs with no ecosystem (soc-investigation, soar-playbooks)
  and IT stay in; ICS/Mobile/ATLAS remain reachable via active
@@ -5824,9 +5796,9 @@ function KnowledgePipeline() {
  <Code>manifest.context.passiveExcludeEcosystems</Code>.
  </p>
  </SubSection>
- <SubSection icon="design_services" title="Playbook builder (v0.2.24)">
+ <SubSection icon="design_services" title="Playbook builder">
  <p>
- The first <em>generative</em> use of a KB: the{" "}
+ A <em>generative</em> use of a KB: the{" "}
  <Code>/playbooks/build</Code> page drafts a new Cortex XSOAR
  playbook from a use-case description, grounded in the{" "}
  <Code>soar-playbooks</Code> corpus.{" "}
@@ -5844,7 +5816,7 @@ function KnowledgePipeline() {
  <Code>/api/agent/playbooks/validate</Code>) and offers a download.
  </p>
  <p>
- <strong>Deploy + test-run (v0.2.26)</strong>: behind an explicit
+ <strong>Deploy + test-run</strong>: behind an explicit
  confirm, the <Code>Deploy + test-run</Code> button drives the skill&apos;s
  deploy lifecycle through <Code>/api/chat</Code> — <Code>playbook_validate</Code> →{" "}
  <Code>xsoar_import_playbook</Code> (a new approval-gated connector tool
@@ -5872,7 +5844,7 @@ function KnowledgePipeline() {
  immutable from the UI.
  </p>
  </SubSection>
- <SubSection icon="query_stats" title="XQL examples + xql_examples_search (v0.2.44)">
+ <SubSection icon="query_stats" title="XQL examples + xql_examples_search">
  <p>
  The <Code>xql-examples</Code> KB holds 201 curated Cortex XSIAM
  XQL queries — reusable patterns, per-vendor alert-mapping queries,
@@ -6031,7 +6003,7 @@ Load-first lifecycle for any XSOAR case investigation.
  with a backup-on-rename collision handler).
  </p>
  <p>
- <strong>Every skill edit is audited + versioned (v0.2.12).</strong>{" "}
+ <strong>Every skill edit is audited + versioned.</strong>{" "}
  Whether the edit comes from the operator (<Code>PUT /api/skills</Code>)
  or the agent (<Code>skills_update</Code>),{" "}
  <Code>update_skill</Code> snapshots the prior content to a
@@ -6041,7 +6013,7 @@ Load-first lifecycle for any XSOAR case investigation.
  audit event — file path, bytes before/after, backup location —
  visible at <Code>/observability/events</Code>. The current actor
  distinguishes operator vs agent edits, so an{" "}
- <em>autonomous</em> skill edit (from the v0.2.12{" "}
+ <em>autonomous</em> skill edit (from the{" "}
  <Code>guardian-investigation-judge</Code>, which rubric-scores
  resolved investigations and refines the{" "}
  <Code>xsoar_case_investigation</Code> skill on a systematic
@@ -6192,7 +6164,6 @@ skills_delete(...)          -- agent-side soft-delete`}</Pre>
  <ul className="list-disc pl-6 space-y-1 text-sm">
  <li><Code>bundles/spark/mcp/skills/&lt;category&gt;/*.md</Code> — bundle-shipped skills source</li>
  <li><Code>bundles/spark/mcp/src/usecase/builtin_components/skills_crud.py</Code> — frontmatter parse + CRUD primitives</li>
- {/* [guardian v0.1.0] Retired: simulation_skills.py reference — simulation subsystem removed. */}
  <li><Code>bundles/spark/mcp/src/api/skills.py</Code> — REST routes</li>
  <li><Code>mcp/agent/app/api/skills/route.ts</Code> — Next.js proxy</li>
  <li><Code>mcp/agent/lib/skills-registry.ts</Code> — <Code>fetchSkillsForPrompt()</Code> + <Code>SkillSummary</Code> shape</li>
@@ -6344,7 +6315,7 @@ Agent's tool catalogue: <id>/<tool_name> entries appear`}</Pre>
  </ul>
  </SubSection>
 
- <SubSection icon="dns" title="Emulated services (kind:service) — v0.2.42">
+ <SubSection icon="dns" title="Emulated services (kind:service)">
  <p>
  The marketplace has a <strong>second entry kind</strong>. A
  <Code>connector.yaml</Code> carries an optional{" "}
@@ -6391,10 +6362,6 @@ Agent's tool catalogue: <id>/<tool_name> entries appear`}</Pre>
  </Section>
 );
 }
-// ─── Retired sections ──────────────────────────────────────────────
-
-// [guardian v0.1.0] Retired: data-sources — simulation subsystem removed.
-// [guardian v0.1.0] Retired: log-destinations — simulation subsystem removed.
 
 // ─── Operator workflow state ───────────────────────────────────────
 
@@ -6515,8 +6482,8 @@ function Investigation() {
  title="Investigation Module — Issues & Cases"
  >
  <p>
- The v0.1.3 Investigation module adds a first-class{" "}
- <Term>Investigation</Term> area to Guardian: local{" "}
+ The Investigation module provides a first-class{" "}
+ <Term>Investigation</Term> area in Guardian: local{" "}
  <strong>Issues</strong> and <strong>Cases</strong> that the agent and
  operator create as they work an investigation. An Issue is{" "}
  <em>Guardian&apos;s own</em> investigation record — distinct from the
@@ -6526,53 +6493,70 @@ function Investigation() {
  keeps about it). Issues group one-to-many into Cases, and every Issue
  carries an activity timeline.
  </p>
+ <p>
+ The module turns a prose write-up into a queryable, portable
+ investigation record. It carries a <strong>structured verdict</strong>{" "}
+ (enum + confidence + blast-radius scope) and{" "}
+ <strong>ATT&amp;CK technique mappings</strong> per Issue; renders an{" "}
+ <strong>attack-chain diagram</strong> and a <strong>STIX relations
+ graph</strong> at both the issue and campaign level;{" "}
+ deduplicates <strong>indicators</strong> and the{" "}
+ <strong>STIX relationships</strong> that attribute them; rolls related
+ issues up into a <strong>campaign</strong> with shared infrastructure,
+ a technique union, and typed cross-case edges; and exports the whole
+ record as a <strong>STIX 2.1 bundle</strong>, a templated markdown
+ report, or an approval-gated webhook hand-off.
+ </p>
 
  <SubSection icon="storage" title="Store — investigations.db (catalog domain)">
  <p>
  The store lives in{" "}
  <Code>bundles/spark/mcp/src/usecase/investigation_store.py</Code> and
  persists to <Code>investigations.db</Code> in the data root. It is{" "}
- <Term>catalog-domain</Term> state — no SecretStore values, no
- credentials — which is why the agent is permitted to read and mutate
- it (see the credential-guardrail subsection below). Nine tables:
+ <Term>catalog-domain</Term> state — analysis metadata, never secrets:
+ no SecretStore values, no credentials. That domain boundary is why the
+ agent is permitted to read and mutate it directly (see the
+ credential-guardrail subsection below); the lone investigation tool
+ that sends data outside the store, <Code>export_to_webhook</Code>, is
+ approval-gated. The investigation store has nine tables:
  </p>
  <Pre>{`investigations.db  (DATA_ROOT/ — SQLite, catalog domain)
  ├── issues          Guardian's own investigation records
  │     id, title, status, severity, kind, origin,
  │     summary, scope, recommendations,
  │     conclusions, next_steps,
- │     verdict              -- structured verdict enum (v0.2.45, nullable)
- │     verdict_confidence   -- 0..1 confidence in the verdict (v0.2.45)
- │     blast_radius         -- JSON scope object {hosts,accounts,…} (v0.2.45)
- │     report               -- generated markdown closure report (v0.2.45)
+ │     verdict              -- structured verdict enum (nullable)
+ │     verdict_confidence   -- 0..1 confidence in the verdict
+ │     blast_radius         -- JSON scope object {hosts,accounts,…}
+ │     report               -- generated markdown closure report
  │     source_ref           -- the XSOAR incident id this Issue tracks
  │     case_id              -- FK → cases.id (one-to-many issue→case)
- │     attack_chain_svg     -- the causal diagram SVG (v0.1.8, nullable)
- │     relations_canvas_svg -- the STIX relations graph SVG (v0.2.1, nullable)
+ │     attack_chain_svg     -- the causal diagram SVG (nullable)
+ │     relations_canvas_svg -- the STIX relations graph SVG (nullable)
  │     created_at, updated_at
  ├── cases           named groupings of related issues
  │     id, title, description, status,
- │     attack_chain_svg, relations_canvas_svg,  -- campaign-level diagrams (v0.2.2)
- │     campaign_summary, threat_actor, infrastructure,  -- campaign rollup (v0.2.47)
+ │     attack_chain_svg, relations_canvas_svg,  -- campaign-level diagrams
+ │     campaign_summary, threat_actor, infrastructure,  -- campaign rollup
  │     techniques, severity_rollup,
  │     created_at, updated_at
  ├── issue_events    the per-issue activity timeline
  │     seq, id, issue_id, ts, type, content
- ├── technique_mappings  ATT&CK techniques per issue (v0.2.45), unique by
+ ├── technique_mappings  ATT&CK techniques per issue, unique by
  │     (issue_id, technique_id)
  │     id, issue_id, technique_id, tactic, manifestation,
  │     evidence_ref, confidence, created_at
- ├── playbook_matches  issue↔KB-playbook links (v0.2.47), unique by
+ ├── playbook_matches  issue↔KB-playbook links, unique by
  │     (issue_id, playbook_doc_id)
  │     id, issue_id, playbook_doc_id, score, matched_criteria, created_at
- ├── case_relationships  typed cross-case edges (v0.2.47), unique by
+ ├── case_relationships  typed cross-case edges, unique by
  │     (source_case_id, target_case_id, relationship_type)
  │     id, source_case_id, target_case_id, relationship_type, note, created_at
- ├── indicators      deduped IoCs (v0.2.0), unique by (value, type)
+ ├── indicators      deduped IoCs, unique by (value, type)
  │     id, value, type, dbot_score, enrichment, source, first/last_seen
  ├── indicator_issues  M:N linking indicators ↔ the issues they're seen in
  │     indicator_id, issue_id
- └── relationships   STIX edges (v0.2.1), unique by
+ └── relationships   STIX edges, unique by
        (source_id, relationship_type, target_value, target_type)
        id, source_id, source_type, target_value, target_type,
        relationship_type   -- STIX verb: resolves-to, indicates, uses, attributed-to, …
@@ -6582,15 +6566,15 @@ function Investigation() {
  issue→case relationship; <Code>issue_events</Code> is the append-only
  activity log that backs an Issue&apos;s timeline;{" "}
  <Code>indicator_issues</Code> is the many-to-many that lets one IoC
- correlate across cases. The <Code>relationships</Code> table (v0.2.1)
+ correlate across cases. The <Code>relationships</Code> table
  holds <Term>STIX</Term>-style edges — one generic relationship row per
  (source, verb, target), deduped on re-assertion — which back the
  indicator-attribution and the per-issue Relations canvas. The{" "}
- <Code>technique_mappings</Code> table (v0.2.45) records the ATT&amp;CK
+ <Code>technique_mappings</Code> table records the ATT&amp;CK
  techniques the agent confirms on an Issue — one row per
  (issue, technique), upserted on re-assertion — which back the Assessment
  tab&apos;s technique chips and the cross-incident <em>technique pivot</em>{" "}
- (<Code>incidents_by_technique</Code>). The four v0.2.45 structured-outcome
+ (<Code>incidents_by_technique</Code>). The four structured-outcome
  columns on <Code>issues</Code> (<Code>verdict</Code>,{" "}
  <Code>verdict_confidence</Code>, <Code>blast_radius</Code>,{" "}
  <Code>report</Code>) are added by a backward-safe <Code>ALTER</Code>{" "}
@@ -6611,25 +6595,41 @@ function Investigation() {
  them — the worst case of a mistaken call is a stray Issue the operator
  deletes in the UI, not a leaked or destroyed secret.
  </p>
+ <p>
+ Grouped by capability:
+ </p>
  <ul className="list-disc pl-6 space-y-1">
  <li>
- <strong>Issues</strong> — <Code>issue_create</Code>,{" "}
+ <strong>Issue lifecycle</strong> — <Code>issue_create</Code>,{" "}
  <Code>issue_update</Code>, <Code>issue_add_event</Code>,{" "}
- <Code>issue_get</Code>, <Code>issues_list</Code>, plus the two
- diagram tools <Code>issue_set_attack_chain</Code> (v0.1.8) and{" "}
- <Code>issue_set_relation_graph</Code> (v0.2.1) that store the
- sandboxed SVGs.
+ <Code>issue_get</Code>, and <Code>issues_list</Code> open, edit, log
+ activity on, and query Guardian&apos;s own investigation records.
  </li>
  <li>
- <strong>Cases</strong> — <Code>case_create</Code>,{" "}
- <Code>case_add_issue</Code>, <Code>cases_list</Code>,{" "}
- <Code>case_get</Code>, plus the two case-level diagram tools{" "}
- <Code>case_set_attack_chain</Code> and{" "}
- <Code>case_set_relation_graph</Code> (v0.2.2) that store the
- campaign-level SVGs synthesized across the case&apos;s issues.
+ <strong>Case grouping</strong> — <Code>case_create</Code>,{" "}
+ <Code>case_add_issue</Code>, <Code>cases_list</Code>, and{" "}
+ <Code>case_get</Code> group related Issues into named Cases.
  </li>
  <li>
- <strong>Indicators</strong> (v0.2.0–v0.2.1) —{" "}
+ <strong>Structured verdict</strong> —{" "}
+ <Code>issue_set_verdict</Code> records the verdict enum + 0..1
+ confidence + the blast-radius JSON object;{" "}
+ <Code>issue_add_technique</Code> maps one confirmed ATT&amp;CK
+ technique to the Issue (upserted); and{" "}
+ <Code>incidents_by_technique</Code> is the read-only cross-incident
+ pivot — every Issue carrying a given technique id. These turn the
+ Issue from a prose write-up into a queryable structured record.
+ </li>
+ <li>
+ <strong>Diagrams</strong> —{" "}
+ <Code>issue_set_attack_chain</Code> /{" "}
+ <Code>issue_set_relation_graph</Code> store the sandboxed issue-level
+ SVGs, and <Code>case_set_attack_chain</Code> /{" "}
+ <Code>case_set_relation_graph</Code> store the campaign-level SVGs
+ synthesized across a case&apos;s issues.
+ </li>
+ <li>
+ <strong>Indicators &amp; attribution</strong> —{" "}
  <Code>indicator_upsert</Code>, <Code>indicators_list</Code>,{" "}
  <Code>indicator_get</Code>, and <Code>indicator_relate</Code> — the
  attribution action that records a STIX edge from an indicator to
@@ -6637,39 +6637,7 @@ function Investigation() {
  threat-actor.
  </li>
  <li>
- <strong>Structured outcome</strong> (v0.2.45) —{" "}
- <Code>issue_set_verdict</Code> (the verdict enum + 0..1 confidence +
- the blast-radius JSON object), <Code>issue_add_technique</Code> (one
- confirmed ATT&amp;CK technique mapped to the Issue, upserted),{" "}
- <Code>incidents_by_technique</Code> (the read-only cross-incident
- pivot — every Issue carrying a given technique id), and{" "}
- <Code>generate_investigation_report</Code> (assembles the verdict +
- blast radius + techniques + indicators + timeline into one markdown
- report and stores it on the Issue). These turn the Issue from a prose
- write-up into a queryable structured record.
- </li>
- <li>
- <strong>Multi-source depth</strong> (v0.2.46) —{" "}
- <Code>push_verdict_to_xsoar</Code> writes the resolved Issue&apos;s
- structured verdict + findings back to the upstream XSOAR incident&apos;s
- war room as a pinned evidence entry, closing the loop so the disposition
- lives where the SOC works the case. It is the one investigation tool that
- reaches a connector, and it does so on the governed path — through the{" "}
- <Term>tool dispatcher</Term> (<Code>get_tool_dispatcher()</Code>), so the
- per-instance contextvar, the approval gate, and audit all apply — calling
- the xsoar connector&apos;s <Code>xsoar_add_entry</Code> +{" "}
- <Code>xsoar_save_evidence</Code>. Guarded on <Code>source_ref</Code>
- (no-op for a standalone Issue). The complementary depth lives in the
- skill, not new tools: an <Term>XQL telemetry blast-radius hunt</Term>{" "}
- (<Code>xql_examples_search</Code> →{" "}
- <Code>xsiam_run_xql_query</Code>, whose v0.2.46 <Code>lookback_hours</Code>
- widens the window past the legacy 30 min so a hunt can scope days) and a{" "}
- <Term>containment recommendation</Term> for true positives — recorded as a
- structured <Code>containment_recommendation</Code> timeline event, naming
- the exact approval-gated tool call but never executing it.
- </li>
- <li>
- <strong>Campaign / cross-incident analytics</strong> (v0.2.47) — lifts the
+ <strong>Campaign / cross-incident analytics</strong> — lifts the
  single-incident records into fleet intelligence.{" "}
  <Code>case_rollup</Code> synthesizes a Case from its member issues (the
  ATT&amp;CK technique union, the shared infrastructure — IOCs seen on ≥2
@@ -6681,28 +6649,40 @@ function Investigation() {
  and <Code>infer_relationships</Code> traverses the STIX relationship graph
  to <em>suggest</em> (never write) missing transitive edges (A→V,
  indicator(V)→C ⇒ A→C) and sibling issues that share a technique or IOC.
- All pure-Python over the store — no new external calls.
+ All pure-Python over the store — no external calls.
  </li>
  <li>
- <strong>Export / interop</strong> (v0.2.48) — makes the structured
- record portable.{" "}
+ <strong>Reporting &amp; export</strong> — makes the structured
+ record portable. <Code>generate_investigation_report</Code> assembles
+ the verdict + blast radius + techniques + indicators + timeline into
+ one markdown report (templated <Code>technical</Code> /{" "}
+ <Code>executive</Code> / <Code>ioc-list</Code>) and stores it on the
+ Issue; <Code>generate_campaign_report</Code> renders the case level;{" "}
  <Code>export_issue_stix</Code> / <Code>export_case_stix</Code> assemble a{" "}
  <Term>STIX 2.1</Term> bundle (incident/campaign + attack-pattern +
  indicator + relationship objects, deterministic ids) for any external
- TIP/SIEM;{" "}
- <Code>generate_investigation_report</Code> now takes a{" "}
- <Code>template</Code> (<Code>technical</Code> / <Code>executive</Code> /{" "}
- <Code>ioc-list</Code>) and <Code>generate_campaign_report</Code> renders
- the case level. The one outbound:{" "}
+ TIP/SIEM. The STIX export + report rendering are pure assembly.
+ </li>
+ <li>
+ <strong>Outbound hand-off</strong> —{" "}
+ <Code>push_verdict_to_xsoar</Code> writes the resolved Issue&apos;s
+ structured verdict + findings back to the upstream XSOAR incident&apos;s
+ war room as a pinned evidence entry, closing the loop so the disposition
+ lives where the SOC works the case. It reaches the xsoar connector on the
+ governed path — through the <Term>tool dispatcher</Term>{" "}
+ (<Code>get_tool_dispatcher()</Code>), so the per-instance contextvar, the
+ approval gate, and audit all apply — calling the connector&apos;s{" "}
+ <Code>xsoar_add_entry</Code> + <Code>xsoar_save_evidence</Code>, and is
+ guarded on <Code>source_ref</Code> (no-op for a standalone Issue).{" "}
  <Code>export_to_webhook</Code> POSTs the verdict + report + IOCs + STIX
- to an operator-configured webhook — it is the only investigation tool
- that <strong>sends data externally</strong>, so it is{" "}
- <Term>opt-in</Term> (off unless <Code>GUARDIAN_WEBHOOK_URL</Code> is set),
- its target comes ONLY from operator config (never a tool arg or observed
- content), and it is <strong>approval-gated</strong>
+ to an operator-configured webhook — the only investigation tool that{" "}
+ <strong>sends data externally</strong>, so it is <Term>opt-in</Term>{" "}
+ (off unless <Code>GUARDIAN_WEBHOOK_URL</Code> is set), its target comes
+ ONLY from operator config (never a tool arg or observed content), and it
+ is <strong>approval-gated</strong>{" "}
  (<Code>manifest.approvals.humanRequired</Code>). Its read-only companion{" "}
  <Code>webhook_preview</Code> shows exactly what would be sent before the
- operator approves. The STIX export + report rendering are pure assembly.
+ operator approves.
  </li>
  </ul>
  <p>
@@ -6713,13 +6693,88 @@ function Investigation() {
  <Code>issue_update</Code>, then records the <em>structured</em> outcome
  at resolve — <Code>issue_set_verdict</Code>,{" "}
  <Code>issue_add_technique</Code> per confirmed technique, and{" "}
- <Code>generate_investigation_report</Code> for the deliverable, then
- (v0.2.46) <Code>push_verdict_to_xsoar</Code> to write that verdict back
+ <Code>generate_investigation_report</Code> for the deliverable, then{" "}
+ <Code>push_verdict_to_xsoar</Code> to write that verdict back
  to the upstream war room — and groups related Issues into a Case. The{" "}
  <Code>bundles/spark/mcp/skills/workflows/xsoar_case_investigation.md</Code>{" "}
  skill drives opening and maintaining the Issue throughout the
- investigation.
+ investigation. Complementary investigative depth lives in that skill
+ rather than in dedicated tools: an <Term>XQL telemetry blast-radius
+ hunt</Term> (<Code>xql_examples_search</Code> →{" "}
+ <Code>xsiam_run_xql_query</Code>, whose <Code>lookback_hours</Code>{" "}
+ widens the window so a hunt can scope days) and a{" "}
+ <Term>containment recommendation</Term> for true positives — recorded
+ as a structured <Code>containment_recommendation</Code> timeline event
+ that names the exact approval-gated tool call but never executes it.
  </p>
+ </SubSection>
+
+ <SubSection icon="list_alt" title="Investigation tools — reference">
+ <p>
+ The full investigation tool surface registered in{" "}
+ <Code>connector_loader._BUILTIN_LEGACY_TOOLS</Code>{" "}
+ (<Code>investigation_tools</Code> + <Code>indicator_tools</Code>),
+ one line each:
+ </p>
+ <ul className="list-disc pl-6 space-y-1 text-sm">
+ <li><Code>issue_create</Code> — open a new Issue (optionally with a{" "}
+ <Code>source_ref</Code> to the XSOAR incident it tracks).</li>
+ <li><Code>issue_update</Code> — edit an Issue&apos;s fields (status,
+ severity, summary, scope, recommendations, conclusions, next-steps).</li>
+ <li><Code>issue_add_event</Code> — append a typed entry to the Issue
+ activity timeline.</li>
+ <li><Code>issue_get</Code> — read one Issue with its detail fields.</li>
+ <li><Code>issues_list</Code> — list/filter Issues (status,{" "}
+ <Code>source_ref</Code> presence, ordering).</li>
+ <li><Code>issue_set_verdict</Code> — record the structured verdict
+ enum + 0..1 confidence + blast-radius JSON.</li>
+ <li><Code>issue_add_technique</Code> — map one confirmed ATT&amp;CK
+ technique to the Issue (upserted).</li>
+ <li><Code>incidents_by_technique</Code> — read-only cross-incident
+ pivot: every Issue carrying a given technique id.</li>
+ <li><Code>issue_set_attack_chain</Code> /{" "}
+ <Code>issue_set_relation_graph</Code> — store the sandboxed
+ issue-level attack-chain / STIX-relations SVGs.</li>
+ <li><Code>case_create</Code> — create a named Case.</li>
+ <li><Code>case_add_issue</Code> — attach an Issue to a Case.</li>
+ <li><Code>cases_list</Code> / <Code>case_get</Code> — list Cases /
+ read one Case with its rollup.</li>
+ <li><Code>case_set_attack_chain</Code> /{" "}
+ <Code>case_set_relation_graph</Code> — store the campaign-level SVGs
+ synthesized across a case&apos;s issues.</li>
+ <li><Code>case_rollup</Code> — synthesize a Case from its member
+ issues (technique union, shared infrastructure, severity rollup,
+ verdict mix).</li>
+ <li><Code>issue_match_playbook</Code> — type an Issue by the KB
+ playbook it was routed through.</li>
+ <li><Code>case_relate</Code> / <Code>case_related</Code> — manage /
+ read typed cross-case edges (sibling, escalation, reopen,
+ same-campaign).</li>
+ <li><Code>infer_relationships</Code> — traverse the STIX graph to{" "}
+ <em>suggest</em> (never write) missing transitive edges and sibling
+ issues.</li>
+ <li><Code>indicator_upsert</Code> — upsert a deduped IoC.</li>
+ <li><Code>indicators_list</Code> / <Code>indicator_get</Code> — list
+ IoCs / read one with its relationships.</li>
+ <li><Code>indicator_relate</Code> — record a STIX edge from an
+ indicator to another IoC, technique, malware, campaign, or
+ threat-actor.</li>
+ <li><Code>generate_investigation_report</Code> — assemble the issue
+ deliverable as templated markdown (<Code>technical</Code> /{" "}
+ <Code>executive</Code> / <Code>ioc-list</Code>).</li>
+ <li><Code>generate_campaign_report</Code> — render the campaign
+ report at the case level.</li>
+ <li><Code>export_issue_stix</Code> / <Code>export_case_stix</Code> —
+ assemble a STIX 2.1 bundle for an external TIP/SIEM (pure assembly).</li>
+ <li><Code>push_verdict_to_xsoar</Code> — write the structured verdict
+ + findings back to the upstream XSOAR war room via the governed tool
+ dispatcher (approval-gated, guarded on <Code>source_ref</Code>).</li>
+ <li><Code>webhook_preview</Code> — read-only preview of the exact
+ payload <Code>export_to_webhook</Code> would send.</li>
+ <li><Code>export_to_webhook</Code> — the lone outbound: POST the
+ verdict + report + IOCs + STIX to the operator-configured webhook;
+ opt-in and approval-gated.</li>
+ </ul>
  </SubSection>
 
  <SubSection icon="hub" title="REST, proxy, UI — and the inter-service path">
@@ -6735,22 +6790,22 @@ function Investigation() {
  <Code>/api/v1/indicators*</Code> under bearer <Code>MCP_TOKEN</Code>{" "}
  auth. The issue-detail AND case-detail GETs carry{" "}
  <Code>attack_chain_svg</Code> + <Code>relations_canvas_svg</Code>{" "}
- (case-level = campaign, v0.2.2); the issue-detail GET also carries
+ (case-level = campaign); the issue-detail GET also carries
  the structured outcome (<Code>verdict</Code>,{" "}
  <Code>verdict_confidence</Code>, <Code>blast_radius</Code>,{" "}
- <Code>report</Code>, the <Code>techniques</Code> array, v0.2.45, and the{" "}
- <Code>playbook_matches</Code> array, v0.2.47); the case-detail GET
+ <Code>report</Code>, the <Code>techniques</Code> array, and the{" "}
+ <Code>playbook_matches</Code> array); the case-detail GET
  carries the campaign rollup (via the Case row) + a{" "}
- <Code>related</Code> array of typed cross-case edges (v0.2.47); the
+ <Code>related</Code> array of typed cross-case edges; the
  indicator-detail GET carries the indicator&apos;s{" "}
  <Code>relationships</Code>. Pivot routes round out the surface:{" "}
  <Code>GET /api/v1/issues/{"{id}"}/report</Code>,{" "}
- <Code>GET /api/v1/techniques/{"{technique_id}"}/issues</Code> (v0.2.45),
+ <Code>GET /api/v1/techniques/{"{technique_id}"}/issues</Code>,
  and <Code>GET /api/v1/playbooks/{"{doc_id}"}/issues</Code> +{" "}
- <Code>GET /api/v1/cases/{"{id}"}/related</Code> (v0.2.47); plus{" "}
+ <Code>GET /api/v1/cases/{"{id}"}/related</Code>; plus{" "}
  <Code>GET /api/v1/issues/{"{id}"}/stix</Code> +{" "}
  <Code>GET /api/v1/cases/{"{id}"}/stix</Code> (the STIX 2.1 bundle,
- v0.2.48, surfaced as an Export-STIX download on the Report + Campaign
+ surfaced as an Export-STIX download on the Report + Campaign
  tabs).
  </li>
  <li>
@@ -6769,9 +6824,9 @@ function Investigation() {
  tabbed layout — status/severity controls; a header verdict banner
  (the structured <Code>verdict</Code> with its confidence, falling
  back to the summary&apos;s leading <Code>VERDICT:</Code> line); the{" "}
- <Term>Assessment</Term> tab (v0.2.45 structured outcome — verdict
+ <Term>Assessment</Term> tab displays the structured outcome — verdict
  chip, confidence meter, parsed blast-radius groups, and ATT&amp;CK
- technique chips — over the editable Conclusions + Next-steps); the{" "}
+ technique chips — over the editable Conclusions + Next-steps; the{" "}
  <Term>Report</Term> tab (the generated markdown, with on-demand
  generate/regenerate via a one-shot agent job); editable Summary,
  Scope, and Recommendations on the Overview tab; the Indicators tab;
@@ -6782,12 +6837,12 @@ function Investigation() {
  Indicator detail shows reputation, enrichment, its relationships,
  and every issue it appears in. The Case detail is likewise tabbed
  (Issues · <Term>Campaign</Term> · Attack chain · Relations): the
- Campaign tab (v0.2.47) renders the rollup — summary, threat-actor +
+ Campaign tab renders the rollup — summary, threat-actor +
  severity-rollup badges, the ATT&amp;CK technique union, shared-
  infrastructure IOC chips, and related-case links — with an on-demand
  Roll-up button (a one-shot <Code>case_rollup</Code> job); the two
  diagram tabs draw at the campaign level across all the case&apos;s
- issues (v0.2.2); the <Code>DiagramTab</Code> renderer is shared between
+ issues; the <Code>DiagramTab</Code> renderer is shared between
  the issue + case pages.
  </li>
  </ul>
@@ -6830,22 +6885,22 @@ function Investigation() {
  <Code>guardian-investigation-loop</Code> (every 30 min) — picks the
  oldest open tracked Issue via{" "}
  <Code>issues_list(status=&apos;open&apos;, source_ref_not_null=true,
- order=&apos;asc&apos;)</Code> (the v0.2.11 structural filters — no
+ order=&apos;asc&apos;)</Code> (structural filters — no
  reliance on the model to skip sourceless Issues or reverse a list),
  investigates the incident end-to-end per the{" "}
  <Code>xsoar_case_investigation</Code> skill (enrich → hunt blast radius
- in telemetry via XQL (v0.2.46) → scope → draw the attack-chain +
+ in telemetry via XQL → scope → draw the attack-chain +
  relations diagrams → resolve with the structured verdict → push the
- verdict back to the war room (v0.2.46) → recommend containment for true
+ verdict back to the war room → recommend containment for true
  positives), and groups related incidents into a Case — rolling the case
- up into a typed campaign (<Code>case_rollup</Code>, v0.2.47).
+ up into a typed campaign (<Code>case_rollup</Code>).
  </li>
  <li>
  <Code>guardian-investigation-judge</Code> (every 6h) — rubric-scores
  the most-recent resolved investigations against the structured record
  (the <Code>verdict</Code> enum + confidence, the mapped ATT&amp;CK{" "}
  <Code>techniques</Code>, the <Code>blast_radius</Code> object, and the
- generated <Code>report</Code> — v0.2.45 — alongside the legacy prose
+ generated <Code>report</Code>, alongside the prose
  VERDICT / recommendations) and, only on a{" "}
  <em>systematic</em> weakness, makes one bounded additive edit to the{" "}
  <Code>xsoar_case_investigation</Code> skill via{" "}
@@ -6854,16 +6909,14 @@ function Investigation() {
  only). Every skill edit snapshots the prior content to{" "}
  <Code>skills/.history/</Code> and writes a{" "}
  <Code>skill_updated</Code> audit row — so an autonomous self-edit is
- attributable and revertible (v0.2.12).
+ attributable and revertible.
  </li>
  </ul>
  <p>
- Hardening from a 20-incident harness smoke campaign: the loop draws
- diagrams for true-positives; broad <Code>subagent</Code> hunts spawned
- during an investigation have their tool results truncated (v0.2.14) so
- a single large XSOAR read can&apos;t blow the subagent&apos;s context
- window (the Vertex token ceiling). 20/20 synthetic incidents resolved
- with correct verdicts in that campaign.
+ The loop draws diagrams for true-positives, and broad{" "}
+ <Code>subagent</Code> hunts spawned during an investigation have their
+ tool results truncated so a single large XSOAR read can&apos;t blow the
+ subagent&apos;s context window (the Vertex token ceiling).
  </p>
  </SubSection>
  </Section>
@@ -6871,9 +6924,6 @@ function Investigation() {
 }
 
 // ─── External Connectors ───────────────────────────────────────────
-
-// [guardian v0.1.0] Retired: xlog-connector — simulation subsystem removed.
-// [guardian v0.1.0] Retired: caldera-connector — simulation subsystem removed.
 
 function XsoarConnector() {
  return (
@@ -6913,7 +6963,7 @@ function XsoarConnector() {
  <ul className="list-disc pl-5 space-y-1 text-sm">
  <li>
  <strong>Discover</strong> —{" "}
- <Code>xsoar_list_integrations</Code> (v0.2.13) lists the
+ <Code>xsoar_list_integrations</Code> lists the
  integration instances configured on the tenant and the
  commands each exposes (one{" "}
  <Code>POST /settings/integration/search</Code>, joining
@@ -6966,7 +7016,7 @@ function XsoarConnector() {
  </p>
  </SubSection>
 
- <SubSection icon="bolt" title="Action toolset (v0.2.0) — command engine, Lists, lifecycle">
+ <SubSection icon="bolt" title="Action toolset — command engine, Lists, lifecycle">
  <p>
  Beyond the 13 read/lifecycle tools above, the connector
  exposes 8 action tools (21 total). Most use direct XSOAR REST
@@ -7045,8 +7095,8 @@ function XsoarConnector() {
  </li>
  </ul>
  <p className="text-sm leading-relaxed mt-2">
- <strong>Explicit <Code>version</Code> field (v0.2.29).</strong>{" "}
- The connector.yaml configSchema now declares an optional{" "}
+ <strong>Explicit <Code>version</Code> field.</strong>{" "}
+ The connector.yaml configSchema declares an optional{" "}
  <Code>version</Code> field —{" "}
  <Code>enum: [&quot;v6&quot;, &quot;v8&quot;]</Code>, rendered as a
  dropdown on the create-instance form. When set, it <em>forces</em>{" "}
@@ -7054,9 +7104,8 @@ function XsoarConnector() {
  <Code>Authorization</Code> only; <Code>v8</Code> → cloud, adds the{" "}
  <Code>/xsoar/public/v1</Code> prefix +{" "}
  <Code>x-xdr-auth-id</Code> header). When left blank, the connector
- falls back to the legacy inference: if an <Code>api_id</Code> (key
- id) is configured → v8; otherwise → v6 (preserving existing
- instances&apos; behaviour). Guardian stores the credentials via the
+ falls back to inference: if an <Code>api_id</Code> (key
+ id) is configured → v8; otherwise → v6. Guardian stores the credentials via the
  secret store envelope; the connector attaches the right headers per
  resolved version on every call. The explicit field is what makes a
  v6 instance and a v8 instance of the <em>same</em> connector
@@ -7067,27 +7116,28 @@ function XsoarConnector() {
  </p>
  </SubSection>
 
- <SubSection icon="tune" title="Generation-specific read/write refinements (v0.2.31–v0.2.36)">
+ <SubSection icon="tune" title="Generation-specific read/write refinements">
  <p>
  Several XSOAR REST shapes differ between v6 and Cortex 8; the
  connector resolves each per call so the agent calls one tool name
- regardless. The notable ones, all verified live:
+ regardless. The notable ones:
  </p>
  <ul className="list-disc pl-5 space-y-1 text-sm">
  <li>
- <strong>Indicator search (v0.2.34).</strong>{" "}
+ <strong>Indicator search.</strong>{" "}
  <Code>xsoar_search_indicators</Code> POSTs a <em>flat</em>{" "}
  <Code>{`{query, size, page}`}</Code> body to{" "}
- <Code>/indicators/search</Code> — the earlier{" "}
- <Code>{`{"filter": {…}}`}</Code> envelope made XSOAR silently
- ignore the query/size/page and return the whole store. Results
+ <Code>/indicators/search</Code> — a{" "}
+ <Code>{`{"filter": {…}}`}</Code> envelope makes XSOAR silently
+ ignore the query/size/page and return the whole store, so the flat
+ body is required. Results
  are a compact, scored projection{" "}
  (<Code>{`{id, type, value, score, reputation, …}`}</Code>), so
  &quot;how many bad IPs / top by reputation&quot; is answerable
  from one call.
  </li>
  <li>
- <strong>Evidence save (v0.2.35).</strong>{" "}
+ <strong>Evidence save.</strong>{" "}
  <Code>xsoar_save_evidence</Code> uses the formal{" "}
  <Code>POST /evidence</Code> on v6 (the entry-tag path
  optimistic-locked and never round-tripped there); on Cortex 8,
@@ -7095,7 +7145,7 @@ function XsoarConnector() {
  war-room entry <Code>evidence</Code>.
  </li>
  <li>
- <strong>Evidence search (v0.2.36).</strong>{" "}
+ <strong>Evidence search.</strong>{" "}
  <Code>xsoar_search_evidence</Code> reads{" "}
  <Code>/evidence/search</Code> on v6; on Cortex 8 — whose{" "}
  <Code>/evidence/search</Code> doesn&apos;t return tag-based
@@ -7104,7 +7154,7 @@ function XsoarConnector() {
  <Code>via</Code> field records which path served it.
  </li>
  <li>
- <strong>Playbook import (v0.2.32).</strong>{" "}
+ <strong>Playbook import.</strong>{" "}
  <Code>xsoar_import_playbook</Code> uploads directly on v6; on
  Cortex 8 (where the import endpoint 405s) it imports through the
  Core REST API integration (<Code>core-api-post</Code> →{" "}
@@ -7112,12 +7162,11 @@ function XsoarConnector() {
  instance&apos;s playground.
  </li>
  <li>
- <strong>Lists (v0.2.31).</strong>{" "}
+ <strong>Lists.</strong>{" "}
  <Code>xsoar_set_list</Code> / <Code>xsoar_append_to_list</Code>{" "}
- use <Code>!createList</Code> (create-or-overwrite) — the prior{" "}
- <Code>!setList</Code> only updated existing lists, so a new list
- silently went nowhere — and surface real command failures
- instead of reporting <Code>ok</Code> blindly.
+ use <Code>!createList</Code> (create-or-overwrite, so a new list
+ is created rather than silently skipped) and surface real command
+ failures instead of reporting <Code>ok</Code> blindly.
  </li>
  </ul>
  </SubSection>
@@ -7129,16 +7178,14 @@ function XsiamConnector() {
  return (
  <Section id="xsiam-connector" icon="security" title="XSIAM Connector">
  <p>
- The Cortex XSIAM connector (<Code>xsiam</Code>, restored in
- v0.2.27) wraps the Cortex public API (<Code>/public_api/v1</Code>)
+ The Cortex XSIAM connector (<Code>xsiam</Code>) wraps the Cortex
+ public API (<Code>/public_api/v1</Code>)
  to add a second investigation surface plus EDR response. Where
  the xsoar connector works <em>cases</em>, xsiam works the{" "}
  <strong>XSIAM platform</strong> directly: XQL hunts, incidents,
  alerts, issues, assets, and endpoint response actions (tool
  prefix <Code>xsiam_</Code>). It is the largest connector —{" "}
- <strong>54 tools</strong> — ported from the Phantom lineage,
- minus that era&apos;s simulation-only webhook-log + XQL-examples-RAG
- tools.
+ <strong>54 tools</strong>.
  </p>
 
  <SubSection icon="hub" title="Dispatch + container">
@@ -7181,8 +7228,8 @@ function XsiamConnector() {
  and approval-gated (an operator confirms before an endpoint is
  isolated or a hash is blocked). <Code>xsiam_remove_lookup_data</Code>{" "}
  is <strong>manifest-denied</strong> — not advertised to the agent
- at all. Each tool returns its projected fields only (v0.2.36
- dropped the verbose <Code>raw_response</Code> echo).
+ at all. Each tool returns its projected fields only — no verbose{" "}
+ <Code>raw_response</Code> echo.
  </p>
  </SubSection>
 
@@ -7202,16 +7249,6 @@ function XsiamConnector() {
  </Section>
 );
 }
-
-// [guardian XSOAR pivot] Retired: CortexXdrConnector — Cortex XDR was a
-// log-simulation/telemetry-era connector (XQL against the XDR data lake).
-// Removed with the XSOAR pivot; the investigation surface is the xsoar
-// connector. Replaced by XsoarConnector above.
-
-// [guardian XSOAR pivot] Retired: CortexContentConnector — the cortex-content
-// connector (palo-cortex/content rule/parser/dashboard search) was telemetry/
-// detection-engineering-era and out of scope. Removed with the XSOAR pivot;
-// documentation research now goes through the surviving cortex-docs connector.
 
 function CortexDocsConnector() {
  return (
@@ -7259,11 +7296,6 @@ function CortexDocsConnector() {
  </Section>
 );
 }
-
-// [guardian XSOAR pivot] Retired: CortexContentConnector function body —
-// see the retirement-stub comment above CortexDocsConnector. The
-// cortex-content connector is removed; cortex-docs is the surviving
-// research surface.
 
 function WebConnector() {
  return (
@@ -7456,9 +7488,9 @@ function SecretStore() {
  Because a per-instance connector container reads its
  config once at boot (into a ContextVar — no in-process
  reload by design), editing config/secrets on an{" "}
- <em>enabled</em> container-style instance now{" "}
+ <em>enabled</em> container-style instance{" "}
  <Term>automatically recreates that connector container</Term>{" "}
- (v0.2.10) so the new values are live within seconds — the{" "}
+ so the new values are live within seconds — the{" "}
  <Code>PATCH</Code> calls the updater&apos;s start endpoint
  exactly as the create path does, then the container_url
  callback triggers a tool reload. Operator wants to
@@ -8000,7 +8032,7 @@ function JobsSubsystem() {
 
  <SubSection
  icon="timer"
- title="Prompt-job timeout + interrupted sessions (v0.2.39)"
+ title="Prompt-job timeout + interrupted sessions"
  >
  <p>
  A <Code>prompt</Code> job streams the agent&apos;s{" "}
@@ -8016,12 +8048,12 @@ function JobsSubsystem() {
  <p className="mt-2">
  <Term>Why it&apos;s configurable + generous.</Term> A full{" "}
  <Code>xsoar_case_investigation</Code> turn makes 30–47 tool calls
- plus diagram generation and can legitimately run for minutes. The
- pre-v0.2.39 hard-coded <Code>300s</Code> aborted ~60% of loop
- ticks <em>after</em> the user prompt persisted but{" "}
- <em>before</em> the assistant turn — leaving silent{" "}
+ plus diagram generation and can legitimately run for minutes. Too
+ tight a timeout aborts a loop tick <em>after</em> the user prompt
+ persists but <em>before</em> the assistant turn — leaving silent{" "}
  <Code>message_count=1</Code>, <Code>ended_at=null</Code> orphan
- sessions that looked like &quot;the session won&apos;t load.&quot;
+ sessions that look like &quot;the session won&apos;t load.&quot; A
+ generous, operator-tunable default avoids that.
  </p>
  <p className="mt-2">
  <Term>Orphan-marking.</Term> On timeout (or a chat-error event
@@ -8254,7 +8286,6 @@ function NotificationsFeed() {
  disabled. From <Code>job_run_complete</Code>,{" "}
  <Code>job_run_failed</Code>.
  </li>
- {/* [guardian v0.1.0] Retired: scenario-worker notifications — simulation subsystem removed. */}
  <li>
  <Term>Approvals</Term> — pending, granted, denied. From
  <Code>approval_*</Code> audit families.
