@@ -305,6 +305,10 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("case_relate", investigation_tools.case_relate),
     ("case_related", investigation_tools.case_related),
     ("infer_relationships", investigation_tools.infer_relationships),
+    # v0.2.48 (stage D) — export / interop: STIX 2.1 bundles from the structured
+    # record (read/assemble only, no external calls).
+    ("export_issue_stix", investigation_tools.export_issue_stix),
+    ("export_case_stix", investigation_tools.export_case_stix),
     # v0.2.0 — Indicators (IoCs extracted from issues + imported from the SOAR).
     # Catalog side of the guardrail (investigation metadata, no SecretStore).
     ("indicator_upsert", indicator_tools.indicator_upsert),

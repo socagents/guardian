@@ -932,3 +932,40 @@ def infer_relationships(issue_id: str | None = None,
 
     suggestions.sort(key=lambda x: x.get("confidence", 0), reverse=True)
     return {"suggestions": suggestions, "count": len(suggestions)}
+
+
+# ─── Export / interop (stage D, v0.2.48) ─────────────────────────────
+
+def export_issue_stix(issue_id: str) -> dict[str, Any]:
+    """Assemble a STIX 2.1 bundle from an Issue's structured record — an
+    `incident` + `attack-pattern`s (technique mappings, with MITRE refs) +
+    `indicator`s + `relationship`s, wrapped in a `report`. Read/assemble only
+    (no external calls); deterministic ids so re-export is identical.
+
+    Returns {"bundle": {...}} or {"error": ...}.
+    """
+    from usecase.builtin_components import _stix  # local import keeps load lean
+    s, err = _store()
+    if err:
+        return err
+    issue = s.get_issue(issue_id)
+    if issue is None:
+        return {"error": f"issue {issue_id!r} not found"}
+    return {"bundle": _stix.build_issue_bundle(s, issue)}
+
+
+def export_case_stix(case_id: str) -> dict[str, Any]:
+    """Assemble a STIX 2.1 bundle for a Case (campaign) — a `campaign` +
+    `threat-actor` (from the rollup) + each member issue's `incident` /
+    `attack-pattern`s / `indicator`s / `relationship`s, wrapped in a `grouping`.
+
+    Returns {"bundle": {...}} or {"error": ...}.
+    """
+    from usecase.builtin_components import _stix
+    s, err = _store()
+    if err:
+        return err
+    case = s.get_case(case_id)
+    if case is None:
+        return {"error": f"case {case_id!r} not found"}
+    return {"bundle": _stix.build_case_bundle(s, case)}
