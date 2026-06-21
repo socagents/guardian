@@ -6534,7 +6534,7 @@ function Investigation() {
  persists to <Code>investigations.db</Code> in the data root. It is{" "}
  <Term>catalog-domain</Term> state — no SecretStore values, no
  credentials — which is why the agent is permitted to read and mutate
- it (see the credential-guardrail subsection below). Seven tables:
+ it (see the credential-guardrail subsection below). Nine tables:
  </p>
  <Pre>{`investigations.db  (DATA_ROOT/ — SQLite, catalog domain)
  ├── issues          Guardian's own investigation records
@@ -6553,6 +6553,8 @@ function Investigation() {
  ├── cases           named groupings of related issues
  │     id, title, description, status,
  │     attack_chain_svg, relations_canvas_svg,  -- campaign-level diagrams (v0.2.2)
+ │     campaign_summary, threat_actor, infrastructure,  -- campaign rollup (v0.2.47)
+ │     techniques, severity_rollup,
  │     created_at, updated_at
  ├── issue_events    the per-issue activity timeline
  │     seq, id, issue_id, ts, type, content
@@ -6560,6 +6562,12 @@ function Investigation() {
  │     (issue_id, technique_id)
  │     id, issue_id, technique_id, tactic, manifestation,
  │     evidence_ref, confidence, created_at
+ ├── playbook_matches  issue↔KB-playbook links (v0.2.47), unique by
+ │     (issue_id, playbook_doc_id)
+ │     id, issue_id, playbook_doc_id, score, matched_criteria, created_at
+ ├── case_relationships  typed cross-case edges (v0.2.47), unique by
+ │     (source_case_id, target_case_id, relationship_type)
+ │     id, source_case_id, target_case_id, relationship_type, note, created_at
  ├── indicators      deduped IoCs (v0.2.0), unique by (value, type)
  │     id, value, type, dbot_score, enrichment, source, first/last_seen
  ├── indicator_issues  M:N linking indicators ↔ the issues they're seen in
@@ -6595,7 +6603,7 @@ function Investigation() {
 
  <SubSection icon="api" title="Agent MCP tools — catalog side of the credential guardrail">
  <p>
- The agent reaches the module through twenty-two MCP tools. They are on the{" "}
+ The agent reaches the module through twenty-seven MCP tools. They are on the{" "}
  <Term>catalog</Term> side of the credential guardrail, NOT the
  credential side: they touch only investigation metadata in{" "}
  <Code>investigations.db</Code> and never read, write, mint, or rotate
@@ -6660,6 +6668,21 @@ function Investigation() {
  structured <Code>containment_recommendation</Code> timeline event, naming
  the exact approval-gated tool call but never executing it.
  </li>
+ <li>
+ <strong>Campaign / cross-incident analytics</strong> (v0.2.47) — lifts the
+ single-incident records into fleet intelligence.{" "}
+ <Code>case_rollup</Code> synthesizes a Case from its member issues (the
+ ATT&amp;CK technique union, the shared infrastructure — IOCs seen on ≥2
+ issues — the max severity, and the verdict mix) and persists it to the
+ cases rollup columns; <Code>issue_match_playbook</Code> types an issue by
+ the KB playbook it was routed through (so cases are queryable by
+ playbook); <Code>case_relate</Code> / <Code>case_related</Code> manage
+ typed cross-case edges (sibling / escalation / reopen / same-campaign);
+ and <Code>infer_relationships</Code> traverses the STIX relationship graph
+ to <em>suggest</em> (never write) missing transitive edges (A→V,
+ indicator(V)→C ⇒ A→C) and sibling issues that share a technique or IOC.
+ All pure-Python over the store — no new external calls.
+ </li>
  </ul>
  <p>
  Typical flow during a chat or job: the agent opens an Issue when it
@@ -6694,12 +6717,16 @@ function Investigation() {
  (case-level = campaign, v0.2.2); the issue-detail GET also carries
  the structured outcome (<Code>verdict</Code>,{" "}
  <Code>verdict_confidence</Code>, <Code>blast_radius</Code>,{" "}
- <Code>report</Code>, and the <Code>techniques</Code> array, v0.2.45);
- the indicator-detail GET carries the indicator&apos;s{" "}
- <Code>relationships</Code>. Two v0.2.45 routes round out the surface:{" "}
- <Code>GET /api/v1/issues/{"{id}"}/report</Code> (the stored markdown
- report) and <Code>GET /api/v1/techniques/{"{technique_id}"}/issues</Code>{" "}
- (the cross-incident technique pivot).
+ <Code>report</Code>, the <Code>techniques</Code> array, v0.2.45, and the{" "}
+ <Code>playbook_matches</Code> array, v0.2.47); the case-detail GET
+ carries the campaign rollup (via the Case row) + a{" "}
+ <Code>related</Code> array of typed cross-case edges (v0.2.47); the
+ indicator-detail GET carries the indicator&apos;s{" "}
+ <Code>relationships</Code>. Pivot routes round out the surface:{" "}
+ <Code>GET /api/v1/issues/{"{id}"}/report</Code>,{" "}
+ <Code>GET /api/v1/techniques/{"{technique_id}"}/issues</Code> (v0.2.45),
+ and <Code>GET /api/v1/playbooks/{"{doc_id}"}/issues</Code> +{" "}
+ <Code>GET /api/v1/cases/{"{id}"}/related</Code> (v0.2.47).
  </li>
  <li>
  <strong>Next.js proxies</strong>:{" "}
@@ -6729,10 +6756,14 @@ function Investigation() {
  rendered sandboxed as an <Code>&lt;img&gt;</Code> data-URI. The
  Indicator detail shows reputation, enrichment, its relationships,
  and every issue it appears in. The Case detail is likewise tabbed
- (Issues · Attack chain · Relations) with the same two diagram tabs,
- drawn at the campaign level across all the case&apos;s issues
- (v0.2.2); the <Code>DiagramTab</Code> renderer is shared between the
- issue + case pages.
+ (Issues · <Term>Campaign</Term> · Attack chain · Relations): the
+ Campaign tab (v0.2.47) renders the rollup — summary, threat-actor +
+ severity-rollup badges, the ATT&amp;CK technique union, shared-
+ infrastructure IOC chips, and related-case links — with an on-demand
+ Roll-up button (a one-shot <Code>case_rollup</Code> job); the two
+ diagram tabs draw at the campaign level across all the case&apos;s
+ issues (v0.2.2); the <Code>DiagramTab</Code> renderer is shared between
+ the issue + case pages.
  </li>
  </ul>
  <p>
@@ -6781,7 +6812,8 @@ function Investigation() {
  in telemetry via XQL (v0.2.46) → scope → draw the attack-chain +
  relations diagrams → resolve with the structured verdict → push the
  verdict back to the war room (v0.2.46) → recommend containment for true
- positives), and groups related incidents into a Case.
+ positives), and groups related incidents into a Case — rolling the case
+ up into a typed campaign (<Code>case_rollup</Code>, v0.2.47).
  </li>
  <li>
  <Code>guardian-investigation-judge</Code> (every 6h) — rubric-scores

@@ -10,6 +10,18 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.47] (2026-06-21) — *Campaign / cross-incident analytics (stage C)*
+
+Stage C lifts the structured single-incident records into fleet intelligence: related incidents roll up into a typed campaign, investigations are typed by the playbook they followed, cases link to prior campaigns, and the relationship graph suggests the edges and siblings you'd otherwise miss — so an analyst sees the bigger picture, not one alert at a time.
+
+- **Campaign rollup.** A new `case_rollup` synthesizes a Case from its member issues — the combined ATT&CK techniques, the shared infrastructure (indicators seen on more than one issue), the overall severity, and the verdict mix — and shows it on the case's new **Campaign** tab (with a Roll-up button, or automatically when Guardian resolves an incident in a campaign).
+- **Type investigations by playbook.** `issue_match_playbook` records which knowledge-base playbook an investigation followed, so cases become queryable by playbook ("show every ransomware-playbook incident").
+- **Link related campaigns.** Typed cross-case edges (`case_relate` / `case_related`) connect a new case to a prior one — sibling, escalation, reopen, or same-campaign — and surface as links on the Campaign tab.
+- **Relationship inference (suggest-only).** `infer_relationships` walks the indicator relationship graph to *suggest* missing transitive edges (a domain resolves to an IP that beacons to a C2 ⇒ suggest the domain→C2 link) and sibling issues that share a technique or an indicator. Guardian suggests; the analyst confirms — no silent writes.
+- **The autonomous loop + judge** now roll campaigns up as part of every investigation and weigh campaign coherence.
+
+---
+
 ## [v0.2.46] (2026-06-21) — *Multi-source defensible depth (stage B)*
 
 Stage B of the investigation arc gives each investigation reach beyond the XSOAR case: it hunts the blast radius in telemetry, writes the verdict back to the source incident, and recommends containment — so the structured record (stage A) is backed by multi-source evidence and closes the loop where the SOC works.

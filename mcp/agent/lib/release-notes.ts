@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.47",
+    date: "2026-06-21",
+    title: "Campaign / cross-incident analytics — roll up, type by playbook, link & infer.",
+    highlights: [
+      "Campaign rollup: new case_rollup synthesizes a Case from its member issues (combined ATT&CK techniques, shared infrastructure — indicators on >1 issue — overall severity, verdict mix) and shows it on the case's new Campaign tab (Roll-up button, or automatic when Guardian resolves an incident in a campaign).",
+      "Type investigations by playbook: issue_match_playbook records which KB playbook an investigation followed, so cases are queryable by playbook (e.g. all ransomware-playbook incidents).",
+      "Link related campaigns: typed cross-case edges (case_relate / case_related) connect a case to a prior one — sibling / escalation / reopen / same-campaign — surfaced on the Campaign tab.",
+      "Relationship inference (suggest-only): infer_relationships walks the indicator graph to suggest missing transitive edges (domain→IP→C2 ⇒ domain→C2) and sibling issues sharing a technique/indicator. Guardian suggests; the analyst confirms — no silent writes.",
+      "The autonomous loop + judge now roll campaigns up and weigh campaign coherence.",
+    ],
+  },
+  {
     version: "0.2.46",
     date: "2026-06-21",
     title: "Multi-source defensible depth — telemetry hunt, verdict pushback, containment rec.",

@@ -2851,13 +2851,26 @@ Networks documentation and returning evidence-backed, cited answers.
               </p>
               <p>
                 <strong>Case-level diagrams (v0.2.2)</strong> — a Case detail is
-                itself tabbed (Issues · Attack chain · Relations). The
+                itself tabbed (Issues · Campaign · Attack chain · Relations). The
                 case&apos;s <Term>Attack chain</Term> and{" "}
                 <Term>Relations</Term> tabs draw <em>campaign-level</em>{" "}
                 diagrams synthesized across <em>all</em> the issues in the case:
                 one causal chain for the shared kill-chain, one STIX graph over
                 the union of the case&apos;s indicators. Generate them on demand,
                 the same way as the per-issue diagrams.
+              </p>
+              <p>
+                <strong>Campaign rollup (v0.2.47)</strong> — the case&apos;s{" "}
+                <Term>Campaign</Term> tab turns a pile of related incidents into
+                one picture: the combined <Term>ATT&amp;CK techniques</Term> seen
+                across the campaign, the <Term>shared infrastructure</Term> (the
+                indicators that show up on more than one issue), the overall
+                severity and verdict mix, and links to <Term>related cases</Term>{" "}
+                (same campaign, escalation, reopen). Click <strong>Roll up
+                campaign</strong> to (re)build it, or Guardian rolls it up
+                automatically when it resolves an incident that belongs to a
+                campaign — and it can suggest which prior case a new one belongs
+                to, so a long-running campaign reads as one story.
               </p>
             </SubSection>
 
