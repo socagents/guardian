@@ -288,6 +288,10 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("issue_add_technique", investigation_tools.issue_add_technique),
     ("incidents_by_technique", investigation_tools.incidents_by_technique),
     ("generate_investigation_report", investigation_tools.generate_investigation_report),
+    # v0.2.46 (stage B) — write the structured verdict back to the upstream XSOAR
+    # incident war room. Reaches the xsoar connector via the tool dispatcher
+    # (approvals + audit + per-instance contextvar apply); guarded on source_ref.
+    ("push_verdict_to_xsoar", investigation_tools.push_verdict_to_xsoar),
     ("case_create", investigation_tools.case_create),
     ("case_add_issue", investigation_tools.case_add_issue),
     ("cases_list", investigation_tools.cases_list),

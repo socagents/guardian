@@ -24,6 +24,7 @@ import re
 from typing import Any
 
 from usecase.investigation_store import ISSUE_VERDICTS, investigation_store
+from usecase.tool_dispatcher import get_tool_dispatcher
 
 
 def _store():
@@ -355,6 +356,118 @@ def generate_investigation_report(issue_id: str) -> dict[str, Any]:
         "timeline": events,
     }
     return {"markdown": markdown, "json": report_json}
+
+
+def _verdict_warroom_markdown(s, issue) -> str:
+    """Compact war-room entry assembled from an Issue's STRUCTURED record —
+    verdict + confidence + severity/kind, conclusions, blast radius, ATT&CK
+    techniques, recommendations. Deliberately omits the full timeline (the
+    XSOAR war room already holds the case's own activity); this is Guardian's
+    disposition, posted back so it lives where the SOC works the case.
+    """
+    techniques = [dataclasses.asdict(t) for t in s.list_technique_mappings(issue.id)]
+    try:
+        blast = json.loads(issue.blast_radius) if issue.blast_radius else None
+    except (ValueError, TypeError):
+        blast = {"raw": issue.blast_radius}
+
+    conf = f" (confidence {issue.verdict_confidence:.0%})" if issue.verdict_confidence is not None else ""
+    lines = [
+        "## Guardian investigation verdict",
+        "",
+        f"**Verdict:** {issue.verdict}{conf}",
+        f"**Severity:** {issue.severity} | **Kind:** {issue.kind}",
+    ]
+    if issue.conclusions:
+        lines += ["", "### Conclusions", issue.conclusions]
+    if isinstance(blast, dict) and blast:
+        lines += ["", "### Blast radius"]
+        for k in ("hosts", "accounts", "related_issue_ids"):
+            v = blast.get(k)
+            if v:
+                lines.append(f"- **{k}** ({len(v)}): {', '.join(map(str, v))}")
+        if blast.get("summary"):
+            lines.append(blast["summary"])
+    if techniques:
+        lines += ["", "### ATT&CK techniques"]
+        for t in techniques:
+            tac = f" [{t['tactic']}]" if t.get("tactic") else ""
+            man = f": {t['manifestation']}" if t.get("manifestation") else ""
+            lines.append(f"- **{t['technique_id']}**{tac}{man}")
+    if issue.recommendations:
+        lines += ["", "### Recommendations", issue.recommendations]
+    lines += ["", f"— Recorded by Guardian (issue {issue.id})"]
+    return "\n".join(lines)
+
+
+async def push_verdict_to_xsoar(issue_id: str, instance: str | None = None) -> dict[str, Any]:
+    """Write a resolved Issue's structured verdict back to the upstream XSOAR
+    incident's war room as evidence (Stage B, v0.2.46).
+
+    Closes the loop so the disposition Guardian reached lives where the SOC
+    works the case. Reads the Issue's structured record, assembles a compact
+    war-room entry, and writes it via the XSOAR connector's `xsoar_add_entry`
+    + `xsoar_save_evidence` THROUGH the tool dispatcher — so the per-instance
+    contextvar, the approval gate, and audit logging all apply (this is the one
+    investigation tool that reaches a connector, and it does so on the governed
+    path, never the raw proxy).
+
+    Guards (no-op with error, connector untouched): the Issue must track an
+    XSOAR incident (`source_ref` non-null) and must have a structured `verdict`
+    set. For a tenant with 2+ enabled XSOAR instances, pass `instance`.
+
+    Returns {"ok": True, "incident_id", "entry_id", "evidence"} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    issue = s.get_issue(issue_id)
+    if issue is None:
+        return {"error": f"issue {issue_id!r} not found"}
+    if not issue.source_ref:
+        return {"error": "issue has no source_ref — it does not track an XSOAR incident; nothing to push"}
+    if not issue.verdict:
+        return {"error": "issue has no structured verdict yet — set it with issue_set_verdict before pushing"}
+
+    dispatcher = get_tool_dispatcher()
+    if dispatcher is None:
+        return {"error": "tool dispatcher not available on this MCP runtime"}
+
+    content = _verdict_warroom_markdown(s, issue)
+    inst = {} if instance is None else {"instance": instance}
+
+    try:
+        entry = await dispatcher("xsoar_add_entry", {"incident_id": issue.source_ref, "content": content, **inst})
+    except Exception as e:  # KeyError (no/unknown instance), ConnectorProxyError, timeouts, …
+        return {"error": f"could not write verdict to XSOAR incident {issue.source_ref}: {e}"}
+    if not isinstance(entry, dict) or not entry.get("ok"):
+        return {"error": f"xsoar_add_entry did not succeed for incident {issue.source_ref}", "raw": entry}
+
+    entry_id = entry.get("entry_id")
+    evidence = None
+    if entry_id:
+        try:
+            evidence = await dispatcher(
+                "xsoar_save_evidence",
+                {"incident_id": issue.source_ref, "entry_id": entry_id,
+                 "description": f"Guardian verdict: {issue.verdict}", **inst},
+            )
+        except Exception as e:
+            evidence = {"ok": False, "error": str(e)}
+
+    # Record the pushback on the Issue timeline (best-effort — the write already
+    # landed; a timeline-log failure must not fail the tool).
+    try:
+        issue_add_event(
+            issue_id, type="pushback",
+            content=(f"Pushed structured verdict ({issue.verdict}) to XSOAR incident "
+                     f"{issue.source_ref} as war-room evidence (entry {entry_id})."),
+        )
+    except Exception:
+        pass
+
+    return {"ok": True, "issue_id": issue_id, "incident_id": issue.source_ref,
+            "entry_id": entry_id, "evidence": evidence}
 
 
 def issue_get(issue_id: str) -> dict[str, Any]:
