@@ -272,6 +272,27 @@ const SKILLS: SkillDef[] = [
     eligibleAgents: "guardian-agent",
     analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
   },
+  {
+    id: "foundation-cortex-xql-query-authoring",
+    name: "cortex_xql_query_authoring",
+    displayName: "Cortex XQL query authoring",
+    category: "foundation",
+    description:
+      "Compose Cortex XSIAM XQL queries by chaining the bundled xql-examples KB (via xql_examples_search) with live Palo Alto Cortex docs (cortex-docs/xql_lookup): find ~5 idiomatic examples, extract their stages/functions, confirm syntax in the docs, then author the query — and, mid-investigation, scope an incident's blast radius and run it with xsiam_run_xql_query.",
+    icon: "query_stats",
+    source: "platform",
+    loadingMode: "on-demand",
+    enabled: true,
+    locked: false,
+    agentCount: 1,
+    calls7d: 0,
+    content: "See bundles/spark/mcp/skills/foundation/cortex_xql_query_authoring.md",
+    charCount: 0,
+    tokenCount: 0,
+    maxConcurrentAgents: 0,
+    eligibleAgents: "guardian-agent",
+    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
+  },
   // ── Workflows ───────────────────────────────────────────────────────
   {
     id: "workflow-xsoar-case-investigation",
