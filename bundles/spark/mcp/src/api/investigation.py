@@ -127,6 +127,10 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
             "techniques": [
                 dataclasses.asdict(t) for t in store.list_technique_mappings(issue.id)
             ],
+            # v0.2.47 (stage C) — KB playbooks this investigation was routed through.
+            "playbook_matches": [
+                dataclasses.asdict(p) for p in store.list_playbook_matches(issue.id)
+            ],
         })
 
     @mcp.custom_route("/api/v1/issues/{id}/report", methods=["GET"], include_in_schema=False)
@@ -152,6 +156,37 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
         return JSONResponse(
             {"issues": [_issue_dict(i) for i in issues], "count": len(issues)}
         )
+
+    @mcp.custom_route(
+        "/api/v1/playbooks/{doc_id}/issues", methods=["GET"], include_in_schema=False,
+    )
+    async def issues_by_playbook(request: Request) -> JSONResponse:
+        # v0.2.47 (stage C) — every issue typed by a given KB playbook.
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        issues = store.list_issues_by_playbook(request.path_params["doc_id"])
+        return JSONResponse(
+            {"issues": [_issue_dict(i) for i in issues], "count": len(issues)}
+        )
+
+    @mcp.custom_route("/api/v1/cases/{id}/related", methods=["GET"], include_in_schema=False)
+    async def case_related_route(request: Request) -> JSONResponse:
+        # v0.2.47 (stage C) — typed cross-case edges touching this case.
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        case = store.get_case(request.path_params["id"])
+        if case is None:
+            return JSONResponse({"error": "case not found"}, status_code=404)
+        out = []
+        for r in store.list_case_relationships(case.id):
+            outgoing = r.source_case_id == case.id
+            other = store.get_case(r.target_case_id if outgoing else r.source_case_id)
+            out.append({
+                "relationship_type": r.relationship_type, "note": r.note,
+                "direction": "outgoing" if outgoing else "incoming",
+                "other_case": {"id": other.id, "title": other.title, "status": other.status} if other else None,
+            })
+        return JSONResponse({"related": out, "count": len(out)})
 
     @mcp.custom_route("/api/v1/issues/{id}", methods=["PATCH"], include_in_schema=False)
     async def patch_issue(request: Request) -> JSONResponse:
@@ -227,10 +262,22 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
         if case is None:
             return JSONResponse({"error": "case not found"}, status_code=404)
         issues = store.list_issues(case_id=case.id)
+        # v0.2.47 (stage C) — typed cross-case edges, each with the other case's
+        # title/status so the Campaign tab can link without a second round-trip.
+        related = []
+        for r in store.list_case_relationships(case.id):
+            outgoing = r.source_case_id == case.id
+            other = store.get_case(r.target_case_id if outgoing else r.source_case_id)
+            related.append({
+                "relationship_type": r.relationship_type, "note": r.note,
+                "direction": "outgoing" if outgoing else "incoming",
+                "other_case": {"id": other.id, "title": other.title, "status": other.status} if other else None,
+            })
         return JSONResponse({
             **dataclasses.asdict(case),
             "issues": [_issue_dict(i) for i in issues],
             "issue_count": len(issues),
+            "related": related,
             # v0.2.2 — campaign-level diagram SVGs (kept off the lean case list,
             # surfaced only on the detail). Null until the agent draws them.
             "attack_chain_svg": store.get_case_attack_chain(case.id),
