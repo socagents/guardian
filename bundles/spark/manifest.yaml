@@ -131,6 +131,14 @@ knowledge:
     - name: "mitre-attack-mobile"
       path: "./kbs/mitre-attack-mobile/"
       schema: "./kbs/mitre-attack-mobile/schema.json"
+    # v0.2.44 — Cortex XSIAM XQL query examples: curated example queries (ported
+    # from the operator's corpus) PLUS ATT&CK-aligned IR/threat-hunting hunts.
+    # The pattern prior for the cortex_xql_query_authoring skill; searched via
+    # knowledge_search / xql_examples_search (which adds stage + dataset-field
+    # enrichment). Embeddings pre-computed (kbs/_tools/kb_embed.py).
+    - name: "xql-examples"
+      path: "./kbs/xql-examples/"
+      schema: "./kbs/xql-examples/schema.json"
   required: []
   optional: []
 

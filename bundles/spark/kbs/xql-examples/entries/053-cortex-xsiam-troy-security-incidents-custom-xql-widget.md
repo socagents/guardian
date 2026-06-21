@@ -1,0 +1,32 @@
+---
+id: XQL-053-e758f3ac
+title: Cortex XSIAM Troy Security Incidents - Custom XQL Widget
+category: investigation
+dataset: panw_ngfw_
+tags:
+- comp
+- fields
+- filter
+- iploc
+- sort
+- view
+ecosystem: xsiam
+---
+# Cortex XSIAM Troy Security Incidents - Custom XQL Widget
+
+**Dataset**: `panw_ngfw_`
+
+```sql
+dataset = panw_ngfw_*
+| fields dest_ip, app_category, threat_*, source_ip, to_zone, from_zone, action
+| filter from_zone = "internet"
+//| filter threat_category contains "spyware"
+| filter action contains "reset"
+| iploc  source_ip loc_city, loc_region, loc_country, loc_continent, loc_latlon, loc_timezone
+//| comp count(dest_ip) as count_dest by threat_category
+| comp count(dest_ip) as hit_count by source_ip
+| iploc  source_ip loc_country
+| sort desc hit_count
+|
+ view graph type = map xaxis = loc_country yaxis = hit_count
+```

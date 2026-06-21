@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "XQL Example Knowledge Entry",
+  "description": "One curated Cortex XSIAM XQL example, indexed for natural-language retrieval via knowledge_search / xql_examples_search.",
+  "type": "object",
+  "required": ["id", "title", "category"],
+  "properties": {
+    "id": {"type": "string"},
+    "title": {"type": "string"},
+    "category": {"type": "string", "enum": ["alert-mapping", "detection", "investigation", "general", "threat-hunting"]},
+    "dataset": {"type": "string"},
+    "ecosystem": {"type": "string"},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "attack": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}
