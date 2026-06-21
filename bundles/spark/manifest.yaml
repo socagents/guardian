@@ -272,6 +272,10 @@ tools:
     - "knowledge_search"
     - "knowledge_list"
     - "xql_examples_search"
+    - "issue_set_verdict"
+    - "issue_add_technique"
+    - "incidents_by_technique"
+    - "generate_investigation_report"
     # Built-in skill tools (env.skills)
     - "skills_*"
     # Phase 11 — agent self-modification (Tier 1: read-only tools).

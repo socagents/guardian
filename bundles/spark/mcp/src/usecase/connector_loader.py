@@ -282,6 +282,12 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("issue_set_relation_graph", investigation_tools.issue_set_relation_graph),
     ("issue_get", investigation_tools.issue_get),
     ("issues_list", investigation_tools.issues_list),
+    # v0.2.45 (stage A) — structured investigation outcome: queryable verdict
+    # + ATT&CK technique mappings + closure report. Catalog side (no secrets).
+    ("issue_set_verdict", investigation_tools.issue_set_verdict),
+    ("issue_add_technique", investigation_tools.issue_add_technique),
+    ("incidents_by_technique", investigation_tools.incidents_by_technique),
+    ("generate_investigation_report", investigation_tools.generate_investigation_report),
     ("case_create", investigation_tools.case_create),
     ("case_add_issue", investigation_tools.case_add_issue),
     ("cases_list", investigation_tools.cases_list),

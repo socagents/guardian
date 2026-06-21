@@ -19,10 +19,11 @@ store via the `investigation_store()` singleton and return a JSON-able dict
 from __future__ import annotations
 
 import dataclasses
+import json
 import re
 from typing import Any
 
-from usecase.investigation_store import investigation_store
+from usecase.investigation_store import ISSUE_VERDICTS, investigation_store
 
 
 def _store():
@@ -176,6 +177,184 @@ def issue_add_event(issue_id: str, type: str, content: str) -> dict[str, Any]:
     if event is None:
         return {"error": f"issue {issue_id!r} not found"}
     return {"event": dataclasses.asdict(event)}
+
+
+def issue_set_verdict(
+    issue_id: str,
+    verdict: str,
+    confidence: float | None = None,
+    blast_radius: Any = None,
+) -> dict[str, Any]:
+    """Set an Issue's STRUCTURED verdict, confidence, and blast radius.
+
+    The queryable counterpart to writing a `VERDICT:` line in the summary —
+    call this when you conclude an investigation so the outcome is structured
+    (dashboards, the judge, and reports read it).
+
+    Args:
+        issue_id: The Issue id.
+        verdict: one of TRUE_POSITIVE / FALSE_POSITIVE / BENIGN /
+            NEEDS_ESCALATION / INCONCLUSIVE.
+        confidence: 0.0–1.0 — how sure you are.
+        blast_radius: a dict (or JSON string) like
+            {"hosts": [...], "accounts": [...], "related_issue_ids": [...],
+             "summary": "…"} enumerating what the incident touched.
+
+    Returns: {"issue": {...}} or {"error": ...}.
+    """
+    if verdict not in ISSUE_VERDICTS:
+        return {"error": f"verdict must be one of {', '.join(ISSUE_VERDICTS)}"}
+    if confidence is not None and not (0.0 <= float(confidence) <= 1.0):
+        return {"error": "confidence must be between 0.0 and 1.0"}
+    br = blast_radius
+    if isinstance(br, (dict, list)):
+        br = json.dumps(br)
+    s, err = _store()
+    if err:
+        return err
+    updated = s.update_issue(
+        issue_id, verdict=verdict, verdict_confidence=confidence, blast_radius=br,
+    )
+    if updated is None:
+        return {"error": f"issue {issue_id!r} not found"}
+    return {"issue": dataclasses.asdict(updated)}
+
+
+def issue_add_technique(
+    issue_id: str,
+    technique_id: str,
+    tactic: str | None = None,
+    manifestation: str | None = None,
+    evidence_ref: str | None = None,
+    confidence: float | None = None,
+) -> dict[str, Any]:
+    """Map a MITRE ATT&CK technique to an Issue (queryable, with evidence).
+
+    Record each technique you confirmed/suspected so investigations are
+    queryable by technique (incidents_by_technique) and the attack chain is
+    structured — not just cited in prose.
+
+    Args:
+        issue_id: The Issue id.
+        technique_id: ATT&CK id, e.g. "T1566.001".
+        tactic: ATT&CK tactic, e.g. "initial-access".
+        manifestation: how it showed up in THIS incident (markdown).
+        evidence_ref: an indicator id / event id / war-room entry id backing it.
+        confidence: 0.0–1.0 (confirmed vs suspected).
+
+    Re-adding the same technique on an issue updates it. Returns
+    {"technique": {...}} or {"error": ...}.
+    """
+    if not technique_id:
+        return {"error": "technique_id is required"}
+    s, err = _store()
+    if err:
+        return err
+    if s.get_issue(issue_id) is None:
+        return {"error": f"issue {issue_id!r} not found"}
+    tm = s.add_technique_mapping(
+        issue_id, technique_id, tactic=tactic, manifestation=manifestation,
+        evidence_ref=evidence_ref, confidence=confidence,
+    )
+    return {"technique": dataclasses.asdict(tm)}
+
+
+def incidents_by_technique(technique_id: str) -> dict[str, Any]:
+    """List the Issues mapped to a given ATT&CK technique (the inverse query).
+
+    Args:
+        technique_id: ATT&CK id, e.g. "T1566.001".
+
+    Returns: {"issues": [...], "count": N}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    issues = s.list_issues_by_technique(technique_id)
+    return {"issues": [dataclasses.asdict(i) for i in issues], "count": len(issues)}
+
+
+def generate_investigation_report(issue_id: str) -> dict[str, Any]:
+    """Assemble a structured closure report for an Issue and store it.
+
+    Pulls the Issue's fields + verdict/confidence/blast-radius + ATT&CK
+    technique mappings + indicators + timeline into a single human-readable
+    markdown report (and a machine-readable JSON mirror), and persists the
+    markdown on the Issue's `report` field. Pure read+assemble — no external
+    calls. Call at resolve time (or regenerate any time).
+
+    Returns: {"markdown": "...", "json": {...}} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    issue = s.get_issue(issue_id)
+    if issue is None:
+        return {"error": f"issue {issue_id!r} not found"}
+    techniques = [dataclasses.asdict(t) for t in s.list_technique_mappings(issue_id)]
+    indicators = [dataclasses.asdict(i) for i in s.list_indicators_for_issue(issue_id)]
+    events = [dataclasses.asdict(e) for e in s.list_events(issue_id)]
+    try:
+        blast = json.loads(issue.blast_radius) if issue.blast_radius else None
+    except (ValueError, TypeError):
+        blast = {"raw": issue.blast_radius}
+
+    conf = f" (confidence {issue.verdict_confidence:.0%})" if issue.verdict_confidence is not None else ""
+    lines: list[str] = [
+        f"# Investigation Report — {issue.title}",
+        "",
+        f"**Verdict:** {issue.verdict or '(none)'}{conf}",
+        f"**Severity:** {issue.severity} | **Kind:** {issue.kind} | **Status:** {issue.status}",
+    ]
+    if issue.source_ref:
+        lines.append(f"**Source incident:** {issue.source_ref}")
+    for label, val in (
+        ("Summary", issue.summary), ("Scope", issue.scope),
+        ("Conclusions", issue.conclusions), ("Recommendations", issue.recommendations),
+        ("Next steps", issue.next_steps),
+    ):
+        if val:
+            lines += ["", f"## {label}", val]
+    if blast:
+        lines += ["", "## Blast radius"]
+        if isinstance(blast, dict):
+            for k in ("hosts", "accounts", "related_issue_ids"):
+                v = blast.get(k)
+                if v:
+                    lines.append(f"- **{k}** ({len(v)}): {', '.join(map(str, v))}")
+            if blast.get("summary"):
+                lines.append(blast["summary"])
+        else:
+            lines.append(str(blast))
+    if techniques:
+        lines += ["", "## ATT&CK techniques"]
+        for t in techniques:
+            c = f" — confidence {t['confidence']:.0%}" if t.get("confidence") is not None else ""
+            tac = f" [{t['tactic']}]" if t.get("tactic") else ""
+            man = f": {t['manifestation']}" if t.get("manifestation") else ""
+            lines.append(f"- **{t['technique_id']}**{tac}{c}{man}")
+    if indicators:
+        lines += ["", "## Indicators"]
+        for i in indicators:
+            score = f" (DBotScore {i['dbot_score']})" if i.get("dbot_score") is not None else ""
+            lines.append(f"- `{i['value']}` ({i['type']}){score}")
+    if events:
+        lines += ["", "## Timeline"]
+        for e in events:
+            lines.append(f"- {e['ts']} | *{e['type']}* — {e['content']}")
+    markdown = "\n".join(lines)
+
+    s.update_issue(issue_id, report=markdown)
+    report_json = {
+        "issue_id": issue.id, "title": issue.title, "verdict": issue.verdict,
+        "verdict_confidence": issue.verdict_confidence, "severity": issue.severity,
+        "kind": issue.kind, "status": issue.status, "source_ref": issue.source_ref,
+        "summary": issue.summary, "scope": issue.scope, "conclusions": issue.conclusions,
+        "recommendations": issue.recommendations, "next_steps": issue.next_steps,
+        "blast_radius": blast, "techniques": techniques, "indicators": indicators,
+        "timeline": events,
+    }
+    return {"markdown": markdown, "json": report_json}
 
 
 def issue_get(issue_id: str) -> dict[str, Any]:
