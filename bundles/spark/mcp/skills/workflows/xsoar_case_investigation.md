@@ -2,7 +2,7 @@
 name: xsoar_case_investigation
 displayName: Investigate an XSOAR case end-to-end
 category: workflows
-description: '**LOAD-FIRST FOR ANY XSOAR CASE / INCIDENT INVESTIGATION REQUEST.** Whenever the operator asks to investigate, triage-and-decide, enrich, document, work, respond to, escalate, or close a Cortex XSOAR case (incident) — call `skills_read({file_path: "workflows/xsoar_case_investigation.md"})` IMMEDIATELY as your first tool call, BEFORE invoking any `xsoar_*` tool. The skill body contains the mandatory investigation lifecycle: monitor (`xsoar_list_incidents`) → fetch (`xsoar_get_incident` + `xsoar_get_war_room`) → research (cortex-docs `cortex_*` + web `guardian_web_*`) → enrich (`xsoar_enrich_indicator` for reputation + `xsoar_search_indicators` for correlation) → document (`xsoar_add_note` / `xsoar_add_entry`, `xsoar_save_evidence`) → resolve (`xsoar_update_incident` — the connector resolves the version, `xsoar_close_incident` with reason + notes). Carries the status / severity code reference and the never-invent-IDs rule. **For a PURE READ-ONLY request — list cases, show/summarize one case, count by severity, read the War Room, look up a value — you do NOT need the full lifecycle or a local Issue: answer from the read tools (`xsoar_list_incidents` / `xsoar_get_incident` / `xsoar_get_war_room` / `xsoar_search_indicators`), using `xsoar_platform_reference` for exact query syntax. The local Guardian Issue/Case record becomes mandatory the moment you enrich, decide a verdict, document onto the case, or mutate it.** The XSOAR connector talks to BOTH XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud — the tools auto-detect; you do not. Read-then-write — read the case fully before mutating it. For an actual investigation, keep a local Guardian Issue throughout (`issue_create` right after fetch with `source_ref`=the XSOAR id, `issue_add_event` per step, `issue_update` for the prose write-up, then the STRUCTURED record at verdict time — `issue_set_verdict` (verdict enum + confidence + blast radius), `issue_add_technique` per confirmed ATT&CK technique, and `generate_investigation_report` for the deliverable) and group related Issues into Cases (`case_create` / `case_add_issue`) — Guardian''s own investigation record shown in the Investigation UI. Platform syntax/concepts/`!command` reference: `xsoar_platform_reference`.'
+description: '**LOAD-FIRST FOR ANY XSOAR CASE / INCIDENT INVESTIGATION REQUEST.** Whenever the operator asks to investigate, triage-and-decide, enrich, document, work, respond to, escalate, or close a Cortex XSOAR case (incident) — call `skills_read({file_path: "workflows/xsoar_case_investigation.md"})` IMMEDIATELY as your first tool call, BEFORE invoking any `xsoar_*` tool. The skill body contains the mandatory investigation lifecycle: monitor (`xsoar_list_incidents`) → fetch (`xsoar_get_incident` + `xsoar_get_war_room`) → research (cortex-docs `cortex_*` + web `guardian_web_*`) → enrich (`xsoar_enrich_indicator` for reputation + `xsoar_search_indicators` for correlation) → document (`xsoar_add_note` / `xsoar_add_entry`, `xsoar_save_evidence`) → resolve (`xsoar_update_incident` — the connector resolves the version, `xsoar_close_incident` with reason + notes). Carries the status / severity code reference and the never-invent-IDs rule. **For a PURE READ-ONLY request — list cases, show/summarize one case, count by severity, read the War Room, look up a value — you do NOT need the full lifecycle or a local Issue: answer from the read tools (`xsoar_list_incidents` / `xsoar_get_incident` / `xsoar_get_war_room` / `xsoar_search_indicators`), using `xsoar_platform_reference` for exact query syntax. The local Guardian Issue/Case record becomes mandatory the moment you enrich, decide a verdict, document onto the case, or mutate it.** The XSOAR connector talks to BOTH XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud — the tools auto-detect; you do not. Read-then-write — read the case fully before mutating it. For an actual investigation, keep a local Guardian Issue throughout (`issue_create` right after fetch with `source_ref`=the XSOAR id, `issue_add_event` per step, `issue_update` for the prose write-up, then the STRUCTURED record at verdict time — `issue_set_verdict` (verdict enum + confidence + blast radius), `issue_add_technique` per confirmed ATT&CK technique, `generate_investigation_report` for the deliverable, then `push_verdict_to_xsoar` to write the verdict back to the upstream incident''s war room; deepen scope with an XQL telemetry blast-radius hunt (`xql_examples_search` → `xsiam_run_xql_query` with `lookback_hours`) and, for true positives, recommend containment — recommend-only, approval-gated) and group related Issues into Cases (`case_create` / `case_add_issue`) — Guardian''s own investigation record shown in the Investigation UI. Platform syntax/concepts/`!command` reference: `xsoar_platform_reference`.'
 icon: cases
 source: platform
 loadingMode: on-demand
@@ -163,6 +163,29 @@ xsoar_search_indicators(query="value:185.234.219.12")
 - Record the verdict/score/sources per IoC. If an indicator isn't in the store and can't be enriched, say so — don't invent a reputation.
 - **Record each IoC as an Indicator (do this as you enrich).** After enriching an indicator, call `indicator_upsert(value=…, type=ip|domain|url|file_hash|email|cve|host|account, issue_id=<this issue>, dbot_score=<0-3>, enrichment={…}, source="guardian")`. It lands on the Investigation → **Indicators** page + the issue's **Indicators** tab, deduped by value+type and correlated across cases. **Also import the SOAR's own extractions:** for any indicator the fetched XSOAR case already carries (from `xsoar_search_indicators` or the incident record), `indicator_upsert(… source="xsoar")` so XSOAR's enrichment carries into Guardian.
 
+#### Step 4b — Hunt the blast radius in telemetry (XQL)
+
+Reputation tells you *what* an indicator is; telemetry tells you *where else it touched the estate*. When the case has a confirmed-bad or strongly-suspicious **host / user / IP / domain / hash**, pivot into XSIAM with XQL to find every OTHER endpoint, account, or session that saw it — this is what backs the structured `blast_radius` (Step 6) with real evidence instead of an assumption. (Pure scope-deepening; skip only when there are no pivotable indicators.)
+
+```
+# 1. Find an idiomatic hunt for the observed behavior. Returns matching example
+#    XQL queries + the stage syntax + the dataset's field names.
+xql_examples_search(intent="<one line — e.g. 'every host that connected to this C2 ip'>")
+
+# 2. Bind the case's real entities + a time window into the example query, then
+#    run it. lookback_hours sets the window: default 0.5 (= 30 min); use e.g. 72
+#    for a 3-day incident (max 168 = 7 days). xsiam_run_xql_query polls to done.
+xsiam_run_xql_query(query="dataset = xdr_data | filter agent_ip_addresses contains \"185.234.219.12\" | comp count by agent_hostname",
+                    lookback_hours=72)
+
+# (optional) confirm an unfamiliar stage's syntax against the live Cortex docs:
+cortex_xql_lookup(term="comp", kind="stage")
+```
+
+- **Bind real values + the incident window** — substitute the actual indicator(s); set `lookback_hours` to cover the incident (first-seen → now), not the 30-min default. The window the agent passes is the window the hunt sees.
+- **Record what it finds as the blast radius.** The OTHER hosts/accounts/sessions the hunt returns are the scope. Log the hunt + result as evidence (`issue_add_event(type="finding", content="XQL hunt for <indicator> over <window>h → <N> other hosts: <list>. Query: <the xql>")`) and fold those entities into the Step-6 structured `blast_radius`. Every count you cite must come from the returned rows (per the quantitative-claims rule).
+- **Gracefully degrade when there is no XSIAM instance.** If `xsiam_run_xql_query` returns an error like *"xsiam instance has no api_url configured"*, note that telemetry hunting was unavailable and scope the blast radius from XSOAR data instead (`xsoar_search_indicators` + `xsoar_list_incidents` on the value). The XQL hunt deepens the scope; it is **not** a hard dependency — never block the investigation on it.
+
 ### Step 5 — Document: write findings onto the case
 
 Persist your analysis to the war room so it survives independently of this chat:
@@ -262,6 +285,33 @@ Alongside the XSOAR case, keep a **local Guardian Issue** — Guardian's own rec
    ```
 
    Keep the structured `verdict` enum consistent with the `summary` VERDICT line (same disposition, just underscored). If you stay `investigating` (root cause unresolved per Step 6), you may still set `verdict="INCONCLUSIVE"` with the open hypotheses in `conclusions` — but do not generate the report until the investigation is actually resolved.
+
+   **Then push the verdict back to the XSOAR war room.** Once the verdict + report are set, close the loop so the disposition lives where the SOC works the case — call `push_verdict_to_xsoar`:
+
+   ```
+   # d) Write the structured verdict + key findings to the upstream XSOAR
+   #    incident's war room as a pinned evidence entry. Guarded on source_ref —
+   #    a standalone Issue (no XSOAR incident) is a no-op. For a tenant with 2+
+   #    enabled XSOAR instances, pass instance="<name>".
+   push_verdict_to_xsoar(issue_id="<id>")
+   ```
+
+   This is the one local tool that writes to the tenant; it goes through the approval gate like any other XSOAR write, so expect a confirmation prompt and proceed once granted. Only push after you've actually reached a verdict — don't push an `INCONCLUSIVE` placeholder.
+
+   **For a TRUE_POSITIVE, recommend containment — recommend-only, never auto-execute.** When the verdict is `TRUE_POSITIVE` (and as appropriate for `NEEDS_ESCALATION`), produce a structured **recommended containment** record for the operator to approve. You RECOMMEND; the human APPROVES; execution stays behind the existing approval gate. Do NOT call the containment tools yourself.
+
+   ```
+   # e) One structured recommendation per containment action you judge warranted.
+   #    action ∈ {isolate_host, disable_account, block_indicator, run_playbook}.
+   #    Name the EXACT approval-gated tool call the operator would run — so a click
+   #    can action it — but do not invoke it.
+   issue_add_event(issue_id="<id>", type="containment_recommendation", content=
+     "{\"action\":\"isolate_host\",\"target\":\"WS-014\",\"rationale\":\"ran the Emotet loader; confirmed C2 beacon\",\"tool_call\":\"xsiam_endpoints_isolate(endpoint_id_list=[\\\"<endpoint id>\\\"])\",\"approval_required\":true}")
+   issue_add_event(issue_id="<id>", type="containment_recommendation", content=
+     "{\"action\":\"block_indicator\",\"target\":\"185.234.219.12\",\"rationale\":\"confirmed C2\",\"tool_call\":\"xsoar_append_to_list(name=\\\"block-ip\\\", value=\\\"185.234.219.12\\\")\",\"approval_required\":true}")
+   ```
+
+   Also fold the same recommendations into the Issue's `recommendations` field (human-readable) so they ride into the report and the war-room pushback. Containment options by action: **isolate_host** → `xsiam_endpoints_isolate`; **disable_account** → the tenant's identity playbook / `xsoar_run_playbook`; **block_indicator** → `xsoar_append_to_list` (block list) or a block playbook; **run_playbook** → `xsoar_run_playbook`. Recommend only what the evidence supports, and only what the operator can actually action on this tenant. **No auto-containment — Guardian never isolates a host or disables an account on its own.**
 
    Move status `open → investigating → resolved`/`closed` as the work progresses (set `investigating` at Step 3). Per Step 6's resolution gate, only move to `resolved` once a single root cause is supported — otherwise stay `investigating` and name the discriminating query in `next_steps`.
 
