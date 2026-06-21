@@ -2,7 +2,7 @@
 name: xsoar_case_investigation
 displayName: Investigate an XSOAR case end-to-end
 category: workflows
-description: '**LOAD-FIRST FOR ANY XSOAR CASE / INCIDENT INVESTIGATION REQUEST.** Whenever the operator asks to investigate, triage-and-decide, enrich, document, work, respond to, escalate, or close a Cortex XSOAR case (incident) — call `skills_read({file_path: "workflows/xsoar_case_investigation.md"})` IMMEDIATELY as your first tool call, BEFORE invoking any `xsoar_*` tool. The skill body contains the mandatory investigation lifecycle: monitor (`xsoar_list_incidents`) → fetch (`xsoar_get_incident` + `xsoar_get_war_room`) → research (cortex-docs `cortex_*` + web `guardian_web_*`) → enrich (`xsoar_enrich_indicator` for reputation + `xsoar_search_indicators` for correlation) → document (`xsoar_add_note` / `xsoar_add_entry`, `xsoar_save_evidence`) → resolve (`xsoar_update_incident` — the connector resolves the version, `xsoar_close_incident` with reason + notes). Carries the status / severity code reference and the never-invent-IDs rule. **For a PURE READ-ONLY request — list cases, show/summarize one case, count by severity, read the War Room, look up a value — you do NOT need the full lifecycle or a local Issue: answer from the read tools (`xsoar_list_incidents` / `xsoar_get_incident` / `xsoar_get_war_room` / `xsoar_search_indicators`), using `xsoar_platform_reference` for exact query syntax. The local Guardian Issue/Case record becomes mandatory the moment you enrich, decide a verdict, document onto the case, or mutate it.** The XSOAR connector talks to BOTH XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud — the tools auto-detect; you do not. Read-then-write — read the case fully before mutating it. For an actual investigation, keep a local Guardian Issue throughout (`issue_create` right after fetch with `source_ref`=the XSOAR id, `issue_add_event` per step, `issue_update` for the prose write-up, then the STRUCTURED record at verdict time — `issue_set_verdict` (verdict enum + confidence + blast radius), `issue_add_technique` per confirmed ATT&CK technique, `generate_investigation_report` for the deliverable, then `push_verdict_to_xsoar` to write the verdict back to the upstream incident''s war room; deepen scope with an XQL telemetry blast-radius hunt (`xql_examples_search` → `xsiam_run_xql_query` with `lookback_hours`) and, for true positives, recommend containment — recommend-only, approval-gated) and group related Issues into Cases (`case_create` / `case_add_issue`) — Guardian''s own investigation record shown in the Investigation UI. Platform syntax/concepts/`!command` reference: `xsoar_platform_reference`.'
+description: '**LOAD-FIRST FOR ANY XSOAR CASE / INCIDENT INVESTIGATION REQUEST.** Whenever the operator asks to investigate, triage-and-decide, enrich, document, work, respond to, escalate, or close a Cortex XSOAR case (incident) — call `skills_read({file_path: "workflows/xsoar_case_investigation.md"})` IMMEDIATELY as your first tool call, BEFORE invoking any `xsoar_*` tool. The skill body contains the mandatory investigation lifecycle: monitor (`xsoar_list_incidents`) → fetch (`xsoar_get_incident` + `xsoar_get_war_room`) → research (cortex-docs `cortex_*` + web `guardian_web_*`) → enrich (`xsoar_enrich_indicator` for reputation + `xsoar_search_indicators` for correlation) → document (`xsoar_add_note` / `xsoar_add_entry`, `xsoar_save_evidence`) → resolve (`xsoar_update_incident` — the connector resolves the version, `xsoar_close_incident` with reason + notes). Carries the status / severity code reference and the never-invent-IDs rule. **For a PURE READ-ONLY request — list cases, show/summarize one case, count by severity, read the War Room, look up a value — you do NOT need the full lifecycle or a local Issue: answer from the read tools (`xsoar_list_incidents` / `xsoar_get_incident` / `xsoar_get_war_room` / `xsoar_search_indicators`), using `xsoar_platform_reference` for exact query syntax. The local Guardian Issue/Case record becomes mandatory the moment you enrich, decide a verdict, document onto the case, or mutate it.** The XSOAR connector talks to BOTH XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud — the tools auto-detect; you do not. Read-then-write — read the case fully before mutating it. For an actual investigation, keep a local Guardian Issue throughout (`issue_create` right after fetch with `source_ref`=the XSOAR id, `issue_add_event` per step, `issue_update` for the prose write-up, then the STRUCTURED record at verdict time — `issue_set_verdict` (verdict enum + confidence + blast radius), `issue_add_technique` per confirmed ATT&CK technique, `generate_investigation_report` for the deliverable, then `push_verdict_to_xsoar` to write the verdict back to the upstream incident''s war room; deepen scope with an XQL telemetry blast-radius hunt (`xql_examples_search` → `xsiam_run_xql_query` with `lookback_hours`) and, for true positives, recommend containment — recommend-only, approval-gated) and group related Issues into Cases (`case_create` / `case_add_issue`), rolling them up into a typed campaign (`case_rollup` + `infer_relationships` + `case_relate`) — Guardian''s own investigation record shown in the Investigation UI. Platform syntax/concepts/`!command` reference: `xsoar_platform_reference`.'
 icon: cases
 source: platform
 loadingMode: on-demand
@@ -338,7 +338,32 @@ Alongside the XSOAR case, keep a **local Guardian Issue** — Guardian's own rec
    case_add_issue(case_id="<case id>", issue_id="<each related issue>")
    ```
 
-   Use `issues_list` / `cases_list` before creating to avoid duplicates.
+   Use `issues_list` / `cases_list` before creating to avoid duplicates. **Let the graph find the siblings for you:** call `infer_relationships(issue_id="<this issue>")` — it SUGGESTS (never writes) sibling issues that share an ATT&CK technique or an IOC, and transitive STIX edges (`infer_relationships(indicator_id=…)`: A resolves-to V, indicator(V) communicates-with C ⇒ suggest A→C). Confirm a suggestion before acting on it; record a genuine indicator edge with `indicator_relate`.
+
+5. **Roll up the campaign + type it by playbook (stage C).** Once an Issue that belongs to a Case is resolved:
+
+   ```
+   # a) Synthesize the campaign from the case's member issues — the ATT&CK
+   #    technique union, the shared infrastructure (IOCs on >=2 issues), the max
+   #    severity, and the verdict mix — and persist it on the Case. Pass
+   #    threat_actor when research attributed one; else leave it for later.
+   case_rollup(case_id="<case id>", threat_actor="<actor or omit>")
+
+   # b) Type the investigation by the KB playbook you routed it through (Step 3),
+   #    so cases become queryable by playbook ("all ransomware-playbook incidents").
+   #    playbook_doc_id is the knowledge_search doc id of the soc-investigation /
+   #    soar-playbooks doc you followed.
+   issue_match_playbook(issue_id="<id>", playbook_doc_id="<kb doc id>", score=0.9,
+                        matched_criteria="<why this playbook fit>")
+
+   # c) Link this case to a prior related campaign when the evidence supports it
+   #    (sibling / escalation / reopen / same-campaign). SUGGEST from
+   #    infer_relationships / case_related output; create the edge only when sure.
+   case_relate(source_case_id="<this case>", target_case_id="<prior case>",
+               relationship_type="same-campaign", note="<shared actor/infra>")
+   ```
+
+   The rollup shows on the Case's **Campaign** tab (technique union, shared infrastructure, related cases). Only relate cases the evidence actually ties together — a shared benign IP is not a campaign link.
 
 These `issue_*` / `case_*` tools are local Guardian metadata (no tenant credentials) — call them freely; they are not approval-gated. The finished Issue should read as a complete investigation record on its own.
 
