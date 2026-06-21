@@ -281,17 +281,42 @@ def incidents_by_technique(technique_id: str) -> dict[str, Any]:
     return {"issues": [dataclasses.asdict(i) for i in issues], "count": len(issues)}
 
 
-def generate_investigation_report(issue_id: str) -> dict[str, Any]:
-    """Assemble a structured closure report for an Issue and store it.
+REPORT_TEMPLATES = ("technical", "executive", "ioc-list")
 
-    Pulls the Issue's fields + verdict/confidence/blast-radius + ATT&CK
-    technique mappings + indicators + timeline into a single human-readable
-    markdown report (and a machine-readable JSON mirror), and persists the
-    markdown on the Issue's `report` field. Pure read+assemble — no external
-    calls. Call at resolve time (or regenerate any time).
+
+def _blast_lines(blast) -> list[str]:
+    out: list[str] = []
+    if not blast:
+        return out
+    out += ["", "## Blast radius"]
+    if isinstance(blast, dict):
+        for k in ("hosts", "accounts", "related_issue_ids"):
+            v = blast.get(k)
+            if v:
+                out.append(f"- **{k}** ({len(v)}): {', '.join(map(str, v))}")
+        if blast.get("summary"):
+            out.append(blast["summary"])
+    else:
+        out.append(str(blast))
+    return out
+
+
+def generate_investigation_report(issue_id: str, template: str = "technical") -> dict[str, Any]:
+    """Assemble a closure report for an Issue from its structured record and
+    persist it on the Issue's `report` field. Pure read+assemble — no external
+    calls. Templates (v0.2.48):
+
+    - **technical** (default) — the full report: verdict, summary/scope/
+      conclusions/recommendations/next-steps, blast radius, ATT&CK techniques,
+      indicators, and the activity timeline.
+    - **executive** — a brief: verdict + one-paragraph summary + blast radius +
+      recommendations (no timeline, no per-indicator dump).
+    - **ioc-list** — machine-pasteable: just the indicators + ATT&CK technique ids.
 
     Returns: {"markdown": "...", "json": {...}} or {"error": ...}.
     """
+    if template not in REPORT_TEMPLATES:
+        return {"error": f"template must be one of {', '.join(REPORT_TEMPLATES)}"}
     s, err = _store()
     if err:
         return err
@@ -305,50 +330,63 @@ def generate_investigation_report(issue_id: str) -> dict[str, Any]:
         blast = json.loads(issue.blast_radius) if issue.blast_radius else None
     except (ValueError, TypeError):
         blast = {"raw": issue.blast_radius}
-
     conf = f" (confidence {issue.verdict_confidence:.0%})" if issue.verdict_confidence is not None else ""
-    lines: list[str] = [
-        f"# Investigation Report — {issue.title}",
-        "",
-        f"**Verdict:** {issue.verdict or '(none)'}{conf}",
-        f"**Severity:** {issue.severity} | **Kind:** {issue.kind} | **Status:** {issue.status}",
-    ]
-    if issue.source_ref:
-        lines.append(f"**Source incident:** {issue.source_ref}")
-    for label, val in (
-        ("Summary", issue.summary), ("Scope", issue.scope),
-        ("Conclusions", issue.conclusions), ("Recommendations", issue.recommendations),
-        ("Next steps", issue.next_steps),
-    ):
-        if val:
-            lines += ["", f"## {label}", val]
-    if blast:
-        lines += ["", "## Blast radius"]
-        if isinstance(blast, dict):
-            for k in ("hosts", "accounts", "related_issue_ids"):
-                v = blast.get(k)
-                if v:
-                    lines.append(f"- **{k}** ({len(v)}): {', '.join(map(str, v))}")
-            if blast.get("summary"):
-                lines.append(blast["summary"])
-        else:
-            lines.append(str(blast))
-    if techniques:
-        lines += ["", "## ATT&CK techniques"]
-        for t in techniques:
-            c = f" — confidence {t['confidence']:.0%}" if t.get("confidence") is not None else ""
-            tac = f" [{t['tactic']}]" if t.get("tactic") else ""
-            man = f": {t['manifestation']}" if t.get("manifestation") else ""
-            lines.append(f"- **{t['technique_id']}**{tac}{c}{man}")
-    if indicators:
-        lines += ["", "## Indicators"]
-        for i in indicators:
-            score = f" (DBotScore {i['dbot_score']})" if i.get("dbot_score") is not None else ""
-            lines.append(f"- `{i['value']}` ({i['type']}){score}")
-    if events:
-        lines += ["", "## Timeline"]
-        for e in events:
-            lines.append(f"- {e['ts']} | *{e['type']}* — {e['content']}")
+
+    if template == "ioc-list":
+        lines = [f"# IOC list — {issue.title}", "", f"Verdict: {issue.verdict or '(none)'}"]
+        if indicators:
+            lines += ["", "## Indicators"]
+            for i in indicators:
+                score = f" dbot={i['dbot_score']}" if i.get("dbot_score") is not None else ""
+                lines.append(f"- {i['value']}\t{i['type']}{score}")
+        if techniques:
+            lines += ["", "## ATT&CK techniques", ", ".join(t["technique_id"] for t in techniques)]
+    elif template == "executive":
+        lines = [
+            f"# Executive summary — {issue.title}", "",
+            f"**Verdict:** {issue.verdict or '(none)'}{conf}",
+            f"**Severity:** {issue.severity} | **Kind:** {issue.kind}",
+        ]
+        if issue.source_ref:
+            lines.append(f"**Source incident:** {issue.source_ref}")
+        for label, val in (("Summary", issue.summary), ("Recommendations", issue.recommendations)):
+            if val:
+                lines += ["", f"## {label}", val]
+        lines += _blast_lines(blast)
+        if techniques:
+            lines += ["", "## ATT&CK techniques", ", ".join(t["technique_id"] for t in techniques)]
+    else:  # technical
+        lines = [
+            f"# Investigation Report — {issue.title}", "",
+            f"**Verdict:** {issue.verdict or '(none)'}{conf}",
+            f"**Severity:** {issue.severity} | **Kind:** {issue.kind} | **Status:** {issue.status}",
+        ]
+        if issue.source_ref:
+            lines.append(f"**Source incident:** {issue.source_ref}")
+        for label, val in (
+            ("Summary", issue.summary), ("Scope", issue.scope),
+            ("Conclusions", issue.conclusions), ("Recommendations", issue.recommendations),
+            ("Next steps", issue.next_steps),
+        ):
+            if val:
+                lines += ["", f"## {label}", val]
+        lines += _blast_lines(blast)
+        if techniques:
+            lines += ["", "## ATT&CK techniques"]
+            for t in techniques:
+                c = f" — confidence {t['confidence']:.0%}" if t.get("confidence") is not None else ""
+                tac = f" [{t['tactic']}]" if t.get("tactic") else ""
+                man = f": {t['manifestation']}" if t.get("manifestation") else ""
+                lines.append(f"- **{t['technique_id']}**{tac}{c}{man}")
+        if indicators:
+            lines += ["", "## Indicators"]
+            for i in indicators:
+                score = f" (DBotScore {i['dbot_score']})" if i.get("dbot_score") is not None else ""
+                lines.append(f"- `{i['value']}` ({i['type']}){score}")
+        if events:
+            lines += ["", "## Timeline"]
+            for e in events:
+                lines.append(f"- {e['ts']} | *{e['type']}* — {e['content']}")
     markdown = "\n".join(lines)
 
     s.update_issue(issue_id, report=markdown)
@@ -359,9 +397,65 @@ def generate_investigation_report(issue_id: str) -> dict[str, Any]:
         "summary": issue.summary, "scope": issue.scope, "conclusions": issue.conclusions,
         "recommendations": issue.recommendations, "next_steps": issue.next_steps,
         "blast_radius": blast, "techniques": techniques, "indicators": indicators,
-        "timeline": events,
+        "timeline": events, "template": template,
     }
     return {"markdown": markdown, "json": report_json}
+
+
+def generate_campaign_report(case_id: str) -> dict[str, Any]:
+    """Assemble a campaign-level report for a Case from its rollup (C) + member
+    issues — campaign summary, threat actor, severity rollup, the ATT&CK technique
+    union, shared infrastructure, and the member issues with their verdicts.
+    Pure read+assemble. Returns {"markdown": ..., "json": ...} or {"error": ...}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    case = s.get_case(case_id)
+    if case is None:
+        return {"error": f"case {case_id!r} not found"}
+    members = s.list_issues(case_id=case_id)
+    try:
+        techniques = json.loads(case.techniques) if case.techniques else []
+    except (ValueError, TypeError):
+        techniques = []
+    try:
+        infra = json.loads(case.infrastructure) if case.infrastructure else {}
+    except (ValueError, TypeError):
+        infra = {}
+    shared = infra.get("shared_indicators", []) if isinstance(infra, dict) else []
+
+    lines = [f"# Campaign Report — {case.title}", ""]
+    if case.threat_actor:
+        lines.append(f"**Threat actor:** {case.threat_actor}")
+    if case.severity_rollup:
+        lines.append(f"**Severity:** {case.severity_rollup}")
+    lines.append(f"**Member issues:** {len(members)}")
+    if case.campaign_summary:
+        lines += ["", "## Summary", case.campaign_summary]
+    if techniques:
+        lines += ["", "## ATT&CK techniques (union)", ", ".join(techniques)]
+    if shared:
+        lines += ["", "## Shared infrastructure", ", ".join(f"`{v}`" for v in shared)]
+    if members:
+        lines += ["", "## Member issues"]
+        for m in members:
+            v = f" — {m.verdict}" if m.verdict else ""
+            lines.append(f"- **{m.title}** ({m.severity}){v}")
+    related = s.list_case_relationships(case_id)
+    if related:
+        lines += ["", "## Related cases"]
+        for r in related:
+            other_id = r.target_case_id if r.source_case_id == case_id else r.source_case_id
+            oc = s.get_case(other_id)
+            lines.append(f"- {r.relationship_type}: {oc.title if oc else other_id}")
+    markdown = "\n".join(lines)
+    return {"markdown": markdown, "json": {
+        "case_id": case.id, "title": case.title, "threat_actor": case.threat_actor,
+        "severity_rollup": case.severity_rollup, "campaign_summary": case.campaign_summary,
+        "techniques": techniques, "shared_infrastructure": shared,
+        "members": [{"id": m.id, "title": m.title, "severity": m.severity, "verdict": m.verdict} for m in members],
+    }}
 
 
 def _verdict_warroom_markdown(s, issue) -> str:

@@ -309,6 +309,7 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     # record (read/assemble only, no external calls).
     ("export_issue_stix", investigation_tools.export_issue_stix),
     ("export_case_stix", investigation_tools.export_case_stix),
+    ("generate_campaign_report", investigation_tools.generate_campaign_report),
     # v0.2.0 — Indicators (IoCs extracted from issues + imported from the SOAR).
     # Catalog side of the guardrail (investigation metadata, no SecretStore).
     ("indicator_upsert", indicator_tools.indicator_upsert),

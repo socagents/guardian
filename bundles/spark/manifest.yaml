@@ -284,6 +284,7 @@ tools:
     - "infer_relationships"
     - "export_issue_stix"
     - "export_case_stix"
+    - "generate_campaign_report"
     # Built-in skill tools (env.skills)
     - "skills_*"
     # Phase 11 — agent self-modification (Tier 1: read-only tools).
