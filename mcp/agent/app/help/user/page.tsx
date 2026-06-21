@@ -1958,9 +1958,9 @@ Networks documentation and returning evidence-backed, cited answers.
             <SubSection icon="library_books" title="Bundled KB — SOC Investigation (v0.2.16)">
               {/* [guardian v0.1.0] Retired: guardian-soc KB — simulation
                   subsystem removed. */}
-              {/* [guardian XSOAR pivot] Retired: xql-examples KB — it
-                  served XQL authoring against the now-removed XSIAM/XDR
-                  connectors. Replaced in v0.2.16 by soc-investigation. */}
+              {/* [guardian v0.2.44] xql-examples KB REINTRODUCED for Cortex
+                  XSIAM XQL authoring (the XSIAM connector is back) — see the
+                  "XQL query authoring" subsection below. */}
               <p>
                 Guardian ships one knowledge base —{" "}
                 <Link href="/knowledge/soc-investigation" className="link">
@@ -2008,6 +2008,40 @@ Networks documentation and returning evidence-backed, cited answers.
                 redeploy; the loader hash-detects changes and re-embeds only
                 what changed.
               </p>
+            </SubSection>
+
+            <SubSection icon="query_stats" title="XQL query authoring (v0.2.44)">
+              <p>
+                Guardian can author <strong>Cortex XSIAM XQL queries</strong>{" "}
+                for you — ad-hoc (&quot;write an XQL query for failed logins in
+                the last hour&quot;) or mid-investigation (&quot;hunt this host
+                for lateral movement&quot;). Three pieces work together:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 mt-2">
+                <li>
+                  The{" "}
+                  <Link href="/knowledge/xql-examples" className="link">
+                    xql-examples
+                  </Link>{" "}
+                  knowledge base — <strong>201 example queries</strong>:
+                  reusable patterns, per-vendor alert-mapping queries, and an{" "}
+                  ATT&amp;CK-tagged <strong>IR / threat-hunting set</strong>{" "}
+                  (48 hunts — brute force, C2 beaconing, lateral movement,
+                  exfiltration, ransomware, cloud abuse, …). Browse it under{" "}
+                  <Link href="/knowledge" className="link">Knowledge</Link>.
+                </li>
+                <li>
+                  The <Code>cortex_xql_query_authoring</Code> skill (under{" "}
+                  <Link href="/skills" className="link">Skills</Link>) — finds
+                  similar examples, confirms each stage&apos;s syntax against the
+                  live Palo Alto Cortex docs, and writes a cited query.
+                </li>
+                <li>
+                  Mid-incident, it pivots from the case&apos;s indicators to XQL
+                  hunts that scope blast radius, and (with an XSIAM instance
+                  configured) runs them to enumerate affected assets.
+                </li>
+              </ul>
             </SubSection>
 
             <SubSection icon="shield" title="Bundled KB — MITRE ATT&CK Enterprise (v0.2.18)">

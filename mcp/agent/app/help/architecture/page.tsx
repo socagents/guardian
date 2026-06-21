@@ -5746,8 +5746,11 @@ function KnowledgePipeline() {
 #   - name: soc-investigation
 #     path: ./kbs/soc-investigation/
 #     schema: ./kbs/soc-investigation/schema.json
-# [guardian XSOAR pivot] The former xql-examples corpus was retired
-# with the XSIAM/XDR connectors; soc-investigation replaces it.`}</Pre>
+#   - name: xql-examples            # v0.2.44 (see XQL section below)
+#     path: ./kbs/xql-examples/
+#     schema: ./kbs/xql-examples/schema.json
+# Bundled KBs also include mitre-attack-{enterprise,ics,mobile},
+# mitre-atlas, and soar-playbooks (machine-generated, embeddings baked).`}</Pre>
  </SubSection>
  <SubSection icon="loop" title="Boot reconcile">
  <p>
@@ -5867,6 +5870,38 @@ function KnowledgePipeline() {
  a review gate. A future tier-3 may add operator-authored KBs
  with a separate origin tag, but the bundle KBs will stay
  immutable from the UI.
+ </p>
+ </SubSection>
+ <SubSection icon="query_stats" title="XQL examples + xql_examples_search (v0.2.44)">
+ <p>
+ The <Code>xql-examples</Code> KB holds 201 curated Cortex XSIAM
+ XQL queries — reusable patterns, per-vendor alert-mapping queries,
+ and an ATT&amp;CK-tagged IR/threat-hunting set (category{" "}
+ <Code>threat-hunting</Code>). It loads through the same pipeline as
+ the other bundle KBs (frontmatter → schema validate → embed →
+ upsert) and is searchable via <Code>knowledge_search</Code>.
+ </p>
+ <p>
+ A built-in tool, <Code>xql_examples_search(intent, top_k)</Code>{" "}
+ (<Code>builtin_components/cognitive_tools.py</Code>, registered in{" "}
+ <Code>connector_loader._BUILTIN_LEGACY_TOOLS</Code>), wraps that KB
+ search and <em>enriches</em> each hit: it extracts the pipeline
+ stages and dataset names from the matched query and attaches{" "}
+ <Code>stage_docs</Code> (syntax snippets from the bundled{" "}
+ <Code>xql_data/xql_doc.md</Code>) and <Code>dataset_fields</Code>{" "}
+ (field lists from <Code>xql_data/dataset_fields.md</Code>) — pure
+ markdown lookups, no network. Returns{" "}
+ <Code>&#123;matches, stage_docs, dataset_fields&#125;</Code>.
+ </p>
+ <p>
+ <strong>Data flow:</strong> the <Code>cortex_xql_query_authoring</Code>{" "}
+ skill calls <Code>xql_examples_search</Code> (in the agent runtime,
+ where the KB lives) for the pattern prior, then{" "}
+ <Code>cortex-docs/xql_lookup</Code> (the connector, over the public
+ Cortex docs API) for authoritative live syntax, and optionally{" "}
+ <Code>xsiam_run_xql_query</Code> to execute. The enrichment is{" "}
+ <em>agent-side</em> by necessity — connector containers can&apos;t
+ reach the KB, so this is a built-in, not a connector tool.
  </p>
  </SubSection>
  </Section>

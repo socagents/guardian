@@ -10,6 +10,16 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.44] (2026-06-21) — *XQL knowledge base + authoring skill*
+
+Guardian gains a Cortex XSIAM **XQL query** capability for analysts and the investigation agent: a knowledge base of example queries, a search tool that enriches results with syntax + schema context, and a skill that ties them to live Cortex docs.
+
+- **New `xql-examples` knowledge base** — 201 curated Cortex XSIAM XQL examples: reusable query patterns and per-vendor alert-mapping queries, plus a new **ATT&CK-aligned IR/threat-hunting set** (48 hunts across initial access, execution, persistence, privilege escalation, defense evasion, credential access, discovery, lateral movement, C2, exfiltration, impact, and cloud) — each tagged with its technique. Searchable from chat via `knowledge_search` and browsable at `/knowledge`.
+- **New `xql_examples_search` tool** — finds example queries by natural-language intent and enriches each hit with the **XQL stage syntax** and **dataset field lists** the example uses, so the agent can author a query without a lookup per stage.
+- **New `cortex_xql_query_authoring` skill** — composes XQL by chaining the example KB with the live Palo Alto Cortex docs (`cortex-docs/xql_lookup`), and — mid-investigation — pivots from an incident's indicators to XQL hunts that scope blast radius, runnable via `xsiam_run_xql_query`.
+
+---
+
 ## [v0.2.43] (2026-06-21) — *XSOAR playbook tools — fixed end-to-end on fetched incidents*
 
 A full live smoke of all 27 Cortex XSOAR connector tools surfaced — and this release fixes — three bugs in the playbook tooling (the other tools were already correct). The headline fix lets **`run_playbook` actually run a playbook on a freshly-fetched, not-yet-investigated incident** — the path the autonomous investigation loop depends on.

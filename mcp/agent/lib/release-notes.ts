@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.44",
+    date: "2026-06-21",
+    title: "XQL knowledge base + authoring skill for Cortex XSIAM.",
+    highlights: [
+      "New xql-examples knowledge base: 201 curated Cortex XSIAM XQL examples — reusable patterns + per-vendor alert-mapping queries, plus a new ATT&CK-aligned IR/threat-hunting set (48 hunts, technique-tagged). Browse at /knowledge; search from chat with knowledge_search.",
+      "New xql_examples_search tool: finds example queries by intent and enriches each with the XQL stage syntax + dataset field lists it uses — author a query without a lookup per stage.",
+      "New cortex_xql_query_authoring skill: chains the example KB with live Palo Alto Cortex docs (cortex-docs/xql_lookup) to compose pattern- and syntax-correct XQL.",
+      "Investigation pivot: mid-case, go from an incident's indicators to XQL hunts that scope blast radius across XSIAM datasets, runnable via xsiam_run_xql_query.",
+    ],
+  },
+  {
     version: "0.2.43",
     date: "2026-06-21",
     title: "XSOAR playbook tools — fixed end-to-end on fetched incidents.",
