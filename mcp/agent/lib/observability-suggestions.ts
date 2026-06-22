@@ -108,10 +108,6 @@ const KNOWN_ACTIONS: string[] = [
   "personality_changed",
   "agent_self_mod_requested",
   "agent_self_mod_executed",
-  "detections_synced",
-  "coverage_snapshot_taken",
-  "coverage_drift_detected",
-  "coverage_gap_observed",
 ];
 
 const KNOWN_ACTORS: { value: string; hint?: string }[] = [

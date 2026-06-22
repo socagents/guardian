@@ -4901,56 +4901,6 @@ const OBSERVABILITY: ApiEndpoint[] = [
     tags: ["bench", "observability", "runs"],
   },
   {
-    id: "detections",
-    category: "observability",
-    method: "GET",
-    path: "/api/agent/detections",
-    summary: "List detections",
-    description:
-      "Returns the detection-rule inventory as `{ rules: [...], count }`, newest first. Optional query params (`severity`, `technique` MITRE T-code, `limit`) filter and bound the result. Proxies to the embedded MCP at GET /api/v1/detections; backs the /observability/detections page.",
-    responses: [{ status: "200", description: "OK" }],
-  },
-  {
-    id: "detections-by-rule_id",
-    category: "observability",
-    method: "GET",
-    path: "/api/agent/detections/{rule_id}",
-    summary: "Get detections",
-    description:
-      "Returns a single detection rule by id as `{ rule: {...}, fires: { count, last_seen, ... } }`, pairing the rule definition with a rollup of its recent fire activity. Proxies to the embedded MCP at GET /api/v1/detections/{rule_id}.",
-    responses: [{ status: "200", description: "OK" }],
-  },
-  {
-    id: "detections-by-rule_id-fires",
-    category: "observability",
-    method: "GET",
-    path: "/api/agent/detections/{rule_id}/fires",
-    summary: "List rule-fire events for a detection rule",
-    description:
-      "Returns the timeline of individual fire events for one detection rule as `{ fires: [...], count }`, newest first. Optional query params `limit` (default 100) and `since` (ISO-8601 timestamp; only fires after it) bound the window. Proxies to the embedded MCP at GET /api/v1/detections/{rule_id}/fires.",
-    responses: [{ status: "200", description: "OK" }],
-  },
-  {
-    id: "detections-coverage-techniques",
-    category: "observability",
-    method: "GET",
-    path: "/api/agent/detections/coverage/techniques",
-    summary: "Coverage breakdown by MITRE technique",
-    description:
-      "Returns detection coverage aggregated by MITRE ATT&CK technique as `{ techniques: [{ technique, rule_count, fire_count, ... }], count }`, so operators can see which T-codes have detection rules behind them. Proxies to the embedded MCP at GET /api/v1/detections/coverage/techniques; backs the Coverage tab of the /observability/detections page.",
-    responses: [{ status: "200", description: "OK" }],
-  },
-  {
-    id: "detections-sync-post",
-    category: "observability",
-    method: "POST",
-    path: "/api/agent/detections/sync",
-    summary: "Sync detections from configured XSIAM/EDR instances",
-    description:
-      "Bulk-upserts a batch of detection rules into the inventory. Accepts a JSON body of `{ issues: [{ rule_id, rule_name, severity, technique?, last_fired, ... }, ...] }` and writes each row through. Used by external tooling that pre-fetches rules from XSIAM/SIEM outside the standard detection-inventory sync skill (the canonical path for most operators). Proxies to the embedded MCP at POST /api/v1/detections/sync.",
-    responses: [{ status: "200", description: "OK" }],
-  },
-  {
     id: "digests",
     category: "observability",
     method: "GET",

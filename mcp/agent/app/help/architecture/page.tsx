@@ -2179,9 +2179,9 @@ Q: "Did anyone change settings while I was out?"
    → /observability/events (filter by action ∈ {settings_set,
      personality_set, jobs_create, hooks_create, …}).
 
-Q: "Why did this detection rule fire?"
-   → /observability/detections → click the rule → fire history
-     with per-fire context.`}</Pre>
+Q: "What tools did the agent run on this case?"
+   → /observability/events (filter action=tool_call, or
+     target-prefix the connector) → per-call args + duration.`}</Pre>
  </SubSection>
 
  <SubSection icon="rule_folder" title="Retention + privacy">

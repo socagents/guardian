@@ -80,7 +80,6 @@ const SECTIONS: SectionDef[] = [
   { id: "obs-logs", label: "Logs & Events", group: "Observability", icon: "terminal" },
   { id: "cost-ux", label: "Cost Rollup", group: "Observability", icon: "payments" },
   { id: "obs-activity", label: "Live Activity", group: "Observability", icon: "history_toggle_off" },
-  { id: "detection-inventory", label: "Detection Inventory", group: "Observability", icon: "dashboard" },
 
   { id: "settings-services", label: "Services", group: "Settings", icon: "tune" },
   { id: "settings-personality", label: "Personality", group: "Settings", icon: "psychology_alt" },
@@ -3360,60 +3359,6 @@ probed          ── transient state during an in-flight probe`}</Pre>
               agent calling. Re-enable from the same page; nothing else
               changes.
             </Callout>
-          </Section>
-
-          <Section
-            id="detection-inventory"
-            icon="radar"
-            title="Detection inventory"
-          >
-            <p>
-              <Link
-                href="/observability/detections"
-                className="link"
-              >
-                /observability/detections
-              </Link>{" "}
-              is the operator-browsable view of your Cortex tenant&apos;s
-              detection rules + fire history, so operators can browse
-              the inventory and MITRE coverage without typing a chat
-              command.
-            </p>
-
-            <SubSection icon="table_chart" title="Two tabs">
-              <p>
-                <strong>Rules tab</strong> — table of detection rules
-                with severity badge, MITRE technique chips, fire counts
-                in standard windows (24h / 7d / 30d / total), and last-
-                fire timestamp. Filter by severity bucket or MITRE
-                T-code.
-              </p>
-              <p>
-                <strong>Coverage tab</strong> — per-MITRE-T-code
-                aggregation showing how many rules + total fires hit
-                each technique. Useful for spotting coverage gaps in
-                your detection content.
-              </p>
-            </SubSection>
-
-            <SubSection icon="sync" title="Seeding the inventory">
-              <p>
-                Empty page on first visit is expected — detection data
-                isn&apos;t auto-pulled. Seed it via:
-              </p>
-              <ul>
-                <li>
-                  Ask the agent in chat to pull your detection rules
-                  from the Cortex tenant and sync them into the
-                  inventory
-                </li>
-                <li>
-                  Or POST a pre-fetched rules array to{" "}
-                  <Code>/api/agent/detections/sync</Code> for external
-                  tooling integration
-                </li>
-              </ul>
-            </SubSection>
           </Section>
 
           <Section id="marketplace" icon="storefront" title="Marketplace">

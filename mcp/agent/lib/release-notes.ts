@@ -37,6 +37,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.53",
+    date: "2026-06-22",
+    title: "Removed the dead Detections surface — no more 404 nav item.",
+    highlights: [
+      "Retired /observability/detections (the Detection Inventory page), its sidebar nav entry, its /api/agent/detections/* routes, its API-reference entries, and its user-guide section. The backend was removed at the v0.1.0 carve-out, so the page had 404'd ever since — it's now gone rather than left dangling.",
+      "No impact to the agent's investigation, hunt, or connector tooling.",
+    ],
+  },
+  {
     version: "0.2.52",
     date: "2026-06-22",
     title: "Hooks fail closed — a hook-store outage no longer silently disables policy.",

@@ -119,13 +119,6 @@ const navEntries: NavEntry[] = [
       { href: "/observability/logs", label: "Logs", icon: "terminal" },
       { href: "/observability/events", label: "Events", icon: "policy" },
       { href: "/observability/runtime-events", label: "Runtime events", icon: "bolt" },
-      // v0.6.25 — detections inventory + MITRE coverage. Pre-v0.6.25
-      // the MCP exposed /api/v1/detections (Phase 12) but there was
-      // no agent proxy + no UI page + no nav entry. The chat-driven
-      // detections_list tool worked, but operators had no non-chat
-      // path to browse the rule inventory or coverage. Rule-6 gap
-      // closed.
-      { href: "/observability/detections", label: "Detections", icon: "radar" },
       { href: "/observability/connectors", label: "Connectors", icon: "settings_input_component" },
       { href: "/observability/pipeline", label: "Pipeline", icon: "account_tree" },
       { href: "/observability/cost", label: "Cost", icon: "payments" },

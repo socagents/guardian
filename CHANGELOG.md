@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.53] (2026-06-22) — *Remove the dead Detections surface*
+
+- **Retired the non-functional Detection Inventory page.** `/observability/detections` (and its Detections nav entry, its `/api/agent/detections/*` routes, its API-reference entries, and its user-guide section) was a leftover from an earlier product stage — its backend was removed at the v0.1.0 carve-out, so every visit 404'd. The whole surface is now gone rather than dangling. The agent's investigation, hunt, and connector tooling are unaffected.
+
 ## [v0.2.52] (2026-06-22) — *Hooks fail closed*
 
 - **Policy hooks no longer silently disable themselves during an outage.** Previously, if the hook store was briefly unreachable, the dispatcher treated it as "no hooks registered" and let the turn proceed — so a block-policy hook (e.g. "block writes to the production tenant") would quietly stop enforcing. Now a hook-store load failure **fails closed** on the events that can block an action (a tool call, a prompt, a compaction, a turn, a subagent spawn): the action is denied with a clear reason instead of slipping through unchecked. Non-blocking events (post-hoc, notifications) still proceed. Operators who prefer availability over this guarantee can set `GUARDIAN_HOOKS_FAIL_OPEN=true` to restore the previous behavior.
