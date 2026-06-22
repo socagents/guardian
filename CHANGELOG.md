@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.50] (2026-06-22) — *Audit coverage: nothing happens without a trace*
+
+A security-hardening pass closing audit/observability blind spots — every consequential action now leaves a record in `/observability/events`.
+
+- **Built-in tools are now traced.** Investigation, memory, jobs, knowledge, sessions, and skills tools previously executed without writing a `tool_call` audit row, so a session or job that used only built-ins was invisible in the events + traces views. They now emit the same audit row connector tools do (actor, status, duration, argument *names* — never values).
+- **Job edits are audited.** Changing a job (cron, action, model, permission policy) — and especially toggling *bypass-approvals*, which arms unattended auto-approval — now records a `job_updated` event with the changed fields.
+- **Backup + restore are audited and locked down.** Exporting a backup (which contains cleartext secrets) records `backup_exported`; applying a restore records `restore_applied`; and both endpoints are now session-only (API keys can no longer reach them, matching the other credential routes). Restore's `force=true` now actually overwrites a colliding connector instance instead of silently failing.
+- **Skill deletions are audited.** Removing a skill now records `skill_deleted`, symmetric with the existing edit audit.
+
 ## [v0.2.49] (2026-06-21) — *In-product help refresh*
 
 A clean-up pass over the in-product help (User Guide, Architecture, API reference, User Journeys) so every page reads as a description of the product as it is today, plus two coverage fixes operators will notice.

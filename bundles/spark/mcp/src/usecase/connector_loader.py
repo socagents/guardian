@@ -964,7 +964,7 @@ def _wrap_with_instance(
             raise
         finally:
             duration_ms = int((_time.perf_counter() - start) * 1000)
-            meta = _audit_meta(args, kwargs, approval_id)
+            meta = _audit_meta(target, args, kwargs, approval_id)
             if error is not None:
                 meta["error"] = error
             record_event(
@@ -985,6 +985,102 @@ def _wrap_with_instance(
             reset_current_instance(token)
 
     return sync_wrapper
+
+
+def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
+    """Audit shim for built-in legacy tools (#73).
+
+    Built-in tools (memory_*, sessions_*, knowledge_*, jobs_*, the
+    investigation issue_/case_/indicator_ tools, skills_*, etc.) are not
+    part of any connector, so they never pass through `_wrap_with_instance`
+    — the sole emitter of `ACTION_TOOL_CALL`. Without this shim a session
+    or job that calls only built-ins leaves no tool_call row, so the call
+    is invisible in `/observability/events` and `/traces`.
+
+    This shim emits the SAME `ACTION_TOOL_CALL` audit row the connector
+    wrapper does (actor=agent, status, duration_ms, arg_keys — KEY names
+    only, never values) and mirrors failures into `rt.tool.failed`. It
+    deliberately does NOT:
+      - resolve instances/secrets — built-ins have none; and
+      - gate on approval — built-ins that need a human gate self-gate via
+        `_approval_gate.gate_and_execute` (a separate agent_self_mod_*
+        event namespace), so adding a gate here would double-prompt.
+
+    Audit emission is best-effort: a failing sink must never mask the
+    tool's own return value or exception.
+    """
+    import time as _time
+
+    from usecase.audit_log import set_current_actor, reset_current_actor
+
+    def _keys(args: tuple, kwargs: dict[str, Any]) -> list[str]:
+        keys = list(kwargs.keys())
+        if args:
+            keys.append(f"<{len(args)} positional>")
+        return keys
+
+    def _emit(args: tuple, kwargs: dict[str, Any], status: str,
+              error: str | None, start: float) -> None:
+        try:
+            from usecase.audit_log import ACTION_TOOL_CALL, record_event
+            duration_ms = int((_time.perf_counter() - start) * 1000)
+            meta: dict[str, Any] = {
+                "tool": tool_name,
+                "connector_id": None,
+                "arg_keys": _keys(args, kwargs),
+            }
+            if error is not None:
+                meta["error"] = error
+            record_event(
+                ACTION_TOOL_CALL,
+                target=f"tool:{tool_name}",
+                status=status,
+                actor="agent",
+                duration_ms=duration_ms,
+                metadata=meta,
+            )
+            if status == "failure":
+                _emit_tool_failed_event(tool_name, error, duration_ms, None)
+        except Exception as exc:  # pragma: no cover — never break the call
+            logger.debug("builtin tool_call audit suppressed for %s: %s",
+                         tool_name, exc)
+
+    if inspect.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def async_builtin(*args: Any, **kwargs: Any) -> Any:
+            actor_token = set_current_actor("agent")
+            start = _time.perf_counter()
+            status = "success"
+            error: str | None = None
+            try:
+                return await fn(*args, **kwargs)
+            except Exception as exc:
+                status = "failure"
+                error = f"{type(exc).__name__}: {exc}"
+                raise
+            finally:
+                _emit(args, kwargs, status, error, start)
+                reset_current_actor(actor_token)
+
+        return async_builtin
+
+    @functools.wraps(fn)
+    def sync_builtin(*args: Any, **kwargs: Any) -> Any:
+        actor_token = set_current_actor("agent")
+        start = _time.perf_counter()
+        status = "success"
+        error: str | None = None
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            status = "failure"
+            error = f"{type(exc).__name__}: {exc}"
+            raise
+        finally:
+            _emit(args, kwargs, status, error, start)
+            reset_current_actor(actor_token)
+
+    return sync_builtin
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -1153,7 +1249,10 @@ def iter_registrations(
         logger.info("Advertising connectors: %s", "; ".join(advertised))
 
     for legacy_name, fn in _BUILTIN_LEGACY_TOOLS:
-        yield ToolRegistration(legacy_name, None, fn, None)
+        # #73 — wrap built-ins in the audit shim so every built-in call
+        # emits an ACTION_TOOL_CALL row (connector tools get this via
+        # _wrap_with_instance; built-ins previously yielded raw → no row).
+        yield ToolRegistration(legacy_name, None, _wrap_builtin(legacy_name, fn), None)
 
 
 # ─────────────────────────────────────────────────────────────────

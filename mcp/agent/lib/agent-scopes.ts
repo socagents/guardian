@@ -22,6 +22,11 @@ const CREDENTIAL_PREFIXES = [
   "/api/agent/providers",
   "/api/agent/instances",
   "/api/agent/api-keys",
+  // #79/#80 — backup EXPORTS cleartext connector/provider/webhook secrets and
+  // restore OVERWRITES them. Both must stay session-only (API keys denied even
+  // with agent:*), same as the credential routes above.
+  "/api/agent/backup",
+  "/api/agent/restore",
 ];
 
 export function isCredentialRoute(pathname: string): boolean {

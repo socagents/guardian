@@ -1891,6 +1891,30 @@ class CroniterJobScheduler:
                 logger.warning(
                     "YAML mirror update failed for %s: %s", name, exc,
                 )
+            # #77 — audit the mutation. update_job previously wrote
+            # nothing, so cron/action/model_id/permission_policy changes
+            # — and crucially toggling bypass_approvals=true (arming
+            # unattended auto-approval) — were invisible. set_enabled /
+            # add_job / delete_job already audit; this closes the gap.
+            from usecase.audit_log import ACTION_JOB_UPDATED, record_event
+            changed = [
+                field for field, value in (
+                    ("cron", cron),
+                    ("timezone", timezone_name),
+                    ("action", action),
+                    ("enabled", enabled),
+                    ("bypass_approvals", bypass_approvals),
+                    ("model_id", model_id),
+                    ("thinking_enabled", thinking_enabled),
+                    ("permission_policy", permission_policy),
+                ) if value is not None
+            ]
+            record_event(
+                ACTION_JOB_UPDATED,
+                target=f"job:{name}",
+                status="success",
+                metadata={"job_name": name, "changed_fields": changed},
+            )
         return out
 
     def delete_job(self, name: str) -> bool:

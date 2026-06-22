@@ -476,6 +476,33 @@ export async function GET() {
       .replace(/[:.]/g, "-");
     const filename = `guardian-backup-${stamp}.zip`;
 
+    // #79 — audit the export. The bundle carries CLEARTEXT connector +
+    // provider + webhook secrets, so a silent exfiltration previously
+    // looked like a normal GET. Best-effort; the download proceeds
+    // regardless of audit success.
+    try {
+      await fetch(`${mcp.base}/api/v1/audit`, {
+        method: "POST",
+        headers: { ...auth, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "backup_exported",
+          target: "backup:export",
+          status: "success",
+          metadata: {
+            section_counts: sectionCounts,
+            includes_cleartext_secrets: true,
+            bytes: (bytes as ArrayBuffer).byteLength,
+          },
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+    } catch (err) {
+      console.warn(
+        "backup: audit write failed:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+
     return new NextResponse(bytes, {
       status: 200,
       headers: {

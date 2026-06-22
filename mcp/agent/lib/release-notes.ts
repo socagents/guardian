@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.50",
+    date: "2026-06-22",
+    title: "Audit coverage — every consequential action now leaves a trace.",
+    security: true,
+    highlights: [
+      "Built-in tools are now audited: investigation, memory, jobs, knowledge, sessions and skills tools previously wrote no tool_call row, so a session or job using only built-ins was invisible in /observability/events + /traces. They now emit the same row connector tools do (actor, status, duration, argument names — never values).",
+      "Job edits are audited: changing a job — and especially toggling bypass-approvals (which arms unattended auto-approval) — now records a job_updated event with the changed fields.",
+      "Backup + restore audited and locked down: backup_exported + restore_applied events are written, and both endpoints are now session-only (API keys can't reach them, matching the credential routes). Restore force=true now actually overwrites a colliding instance instead of silently failing.",
+      "Skill deletions are audited (skill_deleted), symmetric with the existing skill-edit audit.",
+    ],
+  },
+  {
     version: "0.2.49",
     date: "2026-06-21",
     title: "In-product help refresh — clearer guides, complete journeys + API reference.",

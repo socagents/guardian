@@ -543,6 +543,17 @@ audit:
     - "job_fired"
     - "job_completed"
     - "job_failed"
+    # #77 — job mutation (cron/action/bypass_approvals/model/policy edits).
+    - "job_updated"
+    # #82 — skill lifecycle (update already emitted; delete added so an
+    # operator UI/REST skill removal is visible + reversible).
+    - "skill_updated"
+    - "skill_deleted"
+    # #79/#80 — backup export (carries cleartext secrets) + restore apply
+    # (full-state overwrite incl. secrets). Emitted from the agent backup/
+    # restore routes via POST /api/v1/audit.
+    - "backup_exported"
+    - "restore_applied"
     # API key lifecycle — recorded by SqliteApiKeyStore on mint/revoke.
     # Plaintext is never logged; only id, label, scopes, and timestamps.
     - "api_key_created"

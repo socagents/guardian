@@ -460,6 +460,26 @@ def delete_skill(file_path: str) -> Dict[str, Any]:
 
         skill_path.rename(backup_path)
 
+        # #82 — audit EVERY delete (incl. gate-bypassing operator UI/REST
+        # deletes) so a removed skill is visible + reversible in
+        # /observability/events, symmetric with update_skill's audit.
+        # Best-effort: never fail the delete on an audit hiccup.
+        try:
+            from usecase.audit_log import audit_log
+            log = audit_log()
+            if log is not None:
+                log.record(
+                    action="skill_deleted",
+                    target=f"skill:{file_path}",
+                    status="success",
+                    metadata={
+                        "file_path": file_path,
+                        "backup": str(backup_path.relative_to(SKILLS_DIR)),
+                    },
+                )
+        except Exception:
+            pass
+
         return {
             "success": True,
             "message": f"Deleted skill: {file_path}",

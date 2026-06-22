@@ -318,18 +318,19 @@ export async function POST(request: Request) {
     "instances.json",
   );
   if (instWrap?.instances?.length) {
-    // Pre-fetch existing instances to detect collisions.
-    let existing: Set<string> = new Set();
+    // Pre-fetch existing instances (key -> id) to detect collisions and,
+    // under force, to delete the colliding row before re-creating it.
+    let existing: Map<string, string> = new Map();
     try {
       const cur = await fetch(`${mcp.base}/api/v1/instances`, {
         headers: { Authorization: `Bearer ${mcp.token}` },
       });
       if (cur.ok) {
         const j = (await cur.json()) as {
-          instances?: { connector_id: string; name: string }[];
+          instances?: { id: string; connector_id: string; name: string }[];
         };
-        existing = new Set(
-          (j.instances ?? []).map((i) => `${i.connector_id}/${i.name}`),
+        existing = new Map(
+          (j.instances ?? []).map((i) => [`${i.connector_id}/${i.name}`, i.id]),
         );
       }
     } catch {
@@ -339,15 +340,36 @@ export async function POST(request: Request) {
     let skipped = 0;
     for (const inst of instWrap.instances) {
       const key = `${inst.connector_id}/${inst.name}`;
-      if (existing.has(key) && !force) {
+      const collidingId = existing.get(key);
+      if (collidingId && !force) {
         skipped += 1;
         continue;
       }
-      // For force-overwrite, we'd need PATCH or DELETE+POST. Today
-      // we only support skip-or-create. Operator can manually delete
-      // colliding rows via /connectors before re-running restore with
-      // force, OR pass force=true (which today still skips — TODO
-      // when DELETE/PATCH path is wired through).
+      // #80 — force=true now actually OVERWRITES: DELETE the colliding
+      // instance (and its old secrets) then re-create from the backup.
+      // Previously force fell through to a POST that collided and errored
+      // — a silent overwrite no-op. Without force, collisions skip above.
+      if (collidingId && force) {
+        try {
+          const del = await fetch(
+            `${mcp.base}/api/v1/instances/${collidingId}`,
+            { method: "DELETE", headers: auth, signal: AbortSignal.timeout(20000) },
+          );
+          if (!del.ok && del.status !== 404) {
+            summary.errors.push(
+              `instance ${key} force-overwrite delete returned HTTP ${del.status}`,
+            );
+            continue;
+          }
+        } catch (e) {
+          summary.errors.push(
+            `instance ${key} force-overwrite delete failed: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+          continue;
+        }
+      }
       try {
         const resp = await fetch(`${mcp.base}/api/v1/instances`, {
           method: "POST",
@@ -779,6 +801,35 @@ export async function POST(request: Request) {
     }
     summary.applied.jobs = applied;
     summary.skipped.jobs = skipped;
+  }
+
+  // #80 — audit the restore. A full-state overwrite (personality, memory,
+  // instances + their secrets) previously left no top-level event. Best-
+  // effort: the restore result is returned regardless of audit success.
+  try {
+    await fetch(`${mcp.base}/api/v1/audit`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "restore_applied",
+        target: "backup:restore",
+        status: summary.errors.length === 0 ? "success" : "failure",
+        metadata: {
+          backed_up_from: manifest.guardian_version,
+          schema_version: manifest.schema_version,
+          force,
+          applied: summary.applied,
+          skipped: summary.skipped,
+          error_count: summary.errors.length,
+        },
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch (err) {
+    console.warn(
+      "restore: audit write failed:",
+      err instanceof Error ? err.message : err,
+    );
   }
 
   return NextResponse.json({
