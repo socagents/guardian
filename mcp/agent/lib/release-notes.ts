@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.51",
+    date: "2026-06-22",
+    title: "Approval gating for high-impact actions — endpoint response, egress, skill authoring.",
+    security: true,
+    highlights: [
+      "XSIAM response/EDR actions now require operator approval before running: endpoint isolate/unisolate/scan/scan-all, script + arbitrary-snippet execution, file quarantine, hash blocklist, IOC push/disable/enable, alert exclusions, dataset/distribution create. Enforced on the chat AND autonomous jobs paths (a bypass session/job records an auto_approved audit row). Read/investigation tools are unaffected.",
+      "Outbound webhook export now actually gates: export_to_webhook was listed as approval-required but the gate never fired for built-in tools, so external data egress could happen unconfirmed. Fixed. webhook_preview stays read-only.",
+      "Creating or editing a skill now requires approval (skills_create / skills_update join skills_delete behind the gate) — skill files are instructions the agent trusts next turn — and every create is audited (skill_created).",
+    ],
+  },
+  {
     version: "0.2.50",
     date: "2026-06-22",
     title: "Audit coverage — every consequential action now leaves a trace.",

@@ -69,3 +69,17 @@ def test_delete_audit_failure_never_breaks(skills_dir, monkeypatch):
     monkeypatch.setattr(audit_mod, "audit_log", boom)
     res = sc.delete_skill("workflows/demo.md")
     assert res["success"] is True  # delete still succeeds
+
+
+def test_create_skill_emits_audit(skills_dir, monkeypatch):
+    """#81 — create_skill audits skill_created (covers operator UI/REST path)."""
+    fake = _FakeAudit()
+    monkeypatch.setattr(audit_mod, "audit_log", lambda: fake)
+
+    res = sc.create_skill("workflows", "new.md", "---\nname: new\n---\n# New\n")
+    assert res["success"] is True
+
+    created = [c for c in fake.calls if c.get("action") == "skill_created"]
+    assert len(created) == 1
+    assert created[0]["target"] == "skill:workflows/new.md"
+    assert created[0]["metadata"]["file_path"] == "workflows/new.md"

@@ -135,8 +135,13 @@ def _legacy_alias(function_prefix: str, tool_name: str) -> str | None:
 _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     ("skills_list_all", skills_crud.skills_list_all),
     ("skills_read", skills_crud.skills_read),
-    ("skills_create", skills_crud.skills_create),
-    ("skills_update", skills_crud.skills_update),
+    # #81 — skills_create/update point at the Phase-11 GATED wrappers in
+    # self_mod_tools (NOT skills_crud directly). They mutate the
+    # instruction surface the model trusts, so creation/edit must gate on
+    # operator approval like skills_delete. Pointing these at
+    # skills_crud.skills_* would bypass the gate (the original blind spot).
+    ("skills_create", self_mod_tools.skills_create),
+    ("skills_update", self_mod_tools.skills_update),
     # NB: skills_delete is registered below, NOT here. The Phase-11
     # gated wrapper at self_mod_tools.skills_delete intercepts the call,
     # checks manifest.approvals.humanRequired[], and dispatches through

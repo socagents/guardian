@@ -319,10 +319,26 @@ def create_skill(category: str, filename: str, content: str) -> Dict[str, Any]:
 
     try:
         skill_path.write_text(content, encoding="utf-8")
+        rel = str(skill_path.relative_to(SKILLS_DIR))
+        # #81 — audit EVERY create (incl. the operator UI/REST path, which
+        # bypasses the chat-side gate) so a newly-added skill is visible in
+        # /observability/events, symmetric with update/delete. Best-effort.
+        try:
+            from usecase.audit_log import audit_log
+            log = audit_log()
+            if log is not None:
+                log.record(
+                    action="skill_created",
+                    target=f"skill:{rel}",
+                    status="success",
+                    metadata={"file_path": rel, "bytes": len(content)},
+                )
+        except Exception:
+            pass
         return {
             "success": True,
-            "message": f"Created skill: {skill_path.relative_to(SKILLS_DIR)}",
-            "path": str(skill_path.relative_to(SKILLS_DIR))
+            "message": f"Created skill: {rel}",
+            "path": rel
         }
     except Exception as e:
         return {"success": False, "error": f"Failed to create skill: {str(e)}"}

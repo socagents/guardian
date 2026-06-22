@@ -1483,6 +1483,75 @@ async def skills_delete(file_path: str) -> dict[str, Any]:
         return {"error": str(exc), "tool": "skills_delete"}
 
 
+async def skills_create(category: str, filename: str, content: str) -> dict[str, Any]:
+    """Create a new skill markdown file. Approval-gated (destructive).
+
+    #81: skills_create was registered un-gated and unaudited, so an agent
+    or job could write an arbitrary skill body that the next turn would
+    advertise to the model — a self-modifying instruction surface with no
+    operator confirmation. This wrapper routes creation through the
+    Phase-11 approval gate (like skills_update/skills_delete). risk_tier
+    is `destructive` because a new skill is new active attack surface.
+
+    Args mirror `skills_crud.skills_create` (category, filename, content)
+    so FastMCP's per-tool schema stays correct.
+
+    Returns the underlying skills_crud result on success.
+    """
+    from usecase.builtin_components import skills_crud
+    from usecase.builtin_components._approval_gate import gate_and_execute
+
+    def _exec() -> dict[str, Any]:
+        import json as _json
+        raw = skills_crud.skills_create(category, filename, content)
+        try:
+            return _json.loads(raw) if isinstance(raw, str) else raw
+        except (_json.JSONDecodeError, TypeError):
+            return {"success": True, "raw": raw}
+
+    try:
+        return await gate_and_execute(
+            tool_name="skills_create",
+            args={"category": category, "filename": filename},
+            risk_tier="destructive",
+            executor=_exec,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc), "tool": "skills_create"}
+
+
+async def skills_update(file_path: str, content: str) -> dict[str, Any]:
+    """Overwrite an existing skill markdown file. Approval-gated.
+
+    #81: skills_update was registered un-gated. Like skills_create it
+    mutates the instruction surface the model trusts, so it now routes
+    through the approval gate. risk_tier is `soft` because the existing
+    file is backed up (.bak + .history) and the change is auditable.
+
+    Args mirror `skills_crud.skills_update` (file_path, content).
+    """
+    from usecase.builtin_components import skills_crud
+    from usecase.builtin_components._approval_gate import gate_and_execute
+
+    def _exec() -> dict[str, Any]:
+        import json as _json
+        raw = skills_crud.skills_update(file_path, content)
+        try:
+            return _json.loads(raw) if isinstance(raw, str) else raw
+        except (_json.JSONDecodeError, TypeError):
+            return {"success": True, "raw": raw}
+
+    try:
+        return await gate_and_execute(
+            tool_name="skills_update",
+            args={"file_path": file_path},
+            risk_tier="soft",
+            executor=_exec,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc), "tool": "skills_update"}
+
+
 async def personality_reset() -> dict[str, Any]:
     """Revert the agent's persona to the bundle default. Approval-gated
     (destructive).

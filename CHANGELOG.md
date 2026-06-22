@@ -10,6 +10,14 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.51] (2026-06-22) — *Approval gating for high-impact actions*
+
+A security-hardening pass that puts a human-approval gate in front of the actions that can change security posture or run code — closing gaps where the gate was declared but never actually fired.
+
+- **XSIAM response/EDR actions now require approval.** Isolating or scanning an endpoint, running a script or an arbitrary snippet, quarantining a file, blocklisting a hash, pushing or toggling IOCs, creating alert exclusions, and similar high-impact XSIAM writes now prompt for operator approval before they run — on the chat path **and** the autonomous jobs path (a bypass session/job still records an `auto_approved` audit row). Read/investigation tools are unaffected. The marketplace and docs already described this behavior; the gate now matches the description.
+- **Outbound webhook export now actually gates.** `export_to_webhook` was listed as approval-required but, due to how built-in tools were dispatched, the gate never ran — external data egress could happen without confirmation. It now gates correctly. `webhook_preview` stays read-only.
+- **Creating or editing a skill now requires approval.** `skills_create` and `skills_update` join `skills_delete` behind the approval gate (the skill files become instructions the agent trusts on the next turn), and every create is now audited (`skill_created`).
+
 ## [v0.2.50] (2026-06-22) — *Audit coverage: nothing happens without a trace*
 
 A security-hardening pass closing audit/observability blind spots — every consequential action now leaves a record in `/observability/events`.

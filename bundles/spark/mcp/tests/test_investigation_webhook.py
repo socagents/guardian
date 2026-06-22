@@ -3,11 +3,20 @@
 The send tool reads the target URL from OPERATOR config (env) ONLY — never a
 tool arg — so observed content / the agent cannot redirect the outbound. These
 tests mock the transport (no real network).
+
+#76: export_to_webhook is now async and self-gates via gate_and_execute (it was
+listed in humanRequired but, as an unwrapped built-in, the gate never fired).
+Send tests run under an approval BYPASS context (mirrors a bypass session/job);
+a dedicated test proves the gate BLOCKS the send when neither approved nor
+bypassed.
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -18,6 +27,10 @@ if str(SRC) not in sys.path:
 
 from usecase.investigation_store import InvestigationStore  # noqa: E402
 from usecase.builtin_components import investigation_tools as it  # noqa: E402
+from usecase.audit_log import (  # noqa: E402
+    set_current_approval_bypass,
+    reset_current_approval_bypass,
+)
 
 
 @pytest.fixture()
@@ -35,6 +48,16 @@ def _resolved(store):
     return iss
 
 
+@contextmanager
+def _bypass():
+    """Run with approval bypass active (as a bypass session/job would)."""
+    tok = set_current_approval_bypass(True)
+    try:
+        yield
+    finally:
+        reset_current_approval_bypass(tok)
+
+
 class _Recorder:
     def __init__(self):
         self.calls = []
@@ -49,7 +72,7 @@ def test_webhook_off_by_default(store, monkeypatch):
     rec = _Recorder()
     monkeypatch.setattr(it, "_webhook_post", rec)
     iss = _resolved(store)
-    out = it.export_to_webhook(issue_id=iss.id)
+    out = asyncio.run(it.export_to_webhook(issue_id=iss.id))
     assert "error" in out
     assert rec.calls == []  # nothing sent when unconfigured (opt-in off)
 
@@ -60,7 +83,8 @@ def test_webhook_sends_when_configured(store, monkeypatch):
     rec = _Recorder()
     monkeypatch.setattr(it, "_webhook_post", rec)
     iss = _resolved(store)
-    out = it.export_to_webhook(issue_id=iss.id)
+    with _bypass():
+        out = asyncio.run(it.export_to_webhook(issue_id=iss.id))
     assert out.get("ok") is True and out["status"] == 200
     assert len(rec.calls) == 1
     url, headers, payload = rec.calls[0]
@@ -77,9 +101,39 @@ def test_webhook_token_header(store, monkeypatch):
     rec = _Recorder()
     monkeypatch.setattr(it, "_webhook_post", rec)
     iss = _resolved(store)
-    it.export_to_webhook(issue_id=iss.id)
+    with _bypass():
+        asyncio.run(it.export_to_webhook(issue_id=iss.id))
     _, headers, _ = rec.calls[0]
     assert headers.get("Authorization") == "Bearer s3cret"
+
+
+def test_webhook_gated_blocks_send_without_approval(store, monkeypatch, tmp_path):
+    """#76 — with the tool gated and neither approval nor bypass, the send
+    is blocked and NOTHING leaves the system."""
+    from usecase.approvals_bus import set_approvals_bus
+    from usecase.builtin_components import _approval_gate
+
+    # Seed a manifest that gates export_to_webhook; no bus wired → the gate
+    # fails closed (ApprovalDeniedError) without executing the send.
+    manifest_dir = tmp_path / "bundle"
+    manifest_dir.mkdir(exist_ok=True)
+    (manifest_dir / "manifest.yaml").write_text(
+        "approvals:\n  policy: hybrid\n  humanRequired:\n    - 'export_to_webhook'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("BUNDLE_ROOT", str(manifest_dir))
+    _approval_gate._human_required_set.cache_clear()
+    set_approvals_bus(None)
+    try:
+        monkeypatch.setenv("GUARDIAN_WEBHOOK_URL", "https://soc.example/hook")
+        rec = _Recorder()
+        monkeypatch.setattr(it, "_webhook_post", rec)
+        iss = _resolved(store)
+        out = asyncio.run(it.export_to_webhook(issue_id=iss.id))
+        assert "error" in out  # gate blocked it
+        assert rec.calls == []  # NOTHING sent
+    finally:
+        _approval_gate._human_required_set.cache_clear()
 
 
 def test_webhook_preview_is_readonly(store, monkeypatch):
@@ -106,5 +160,6 @@ def test_webhook_requires_exactly_one(store, monkeypatch):
     monkeypatch.setattr(it, "_webhook_post", _Recorder())
     iss = _resolved(store)
     case = store.create_case(title="c")
-    assert "error" in it.export_to_webhook(issue_id=iss.id, case_id=case.id)
-    assert "error" in it.export_to_webhook()
+    with _bypass():
+        assert "error" in asyncio.run(it.export_to_webhook(issue_id=iss.id, case_id=case.id))
+        assert "error" in asyncio.run(it.export_to_webhook())

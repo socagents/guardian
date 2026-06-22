@@ -517,7 +517,7 @@ def webhook_preview(issue_id: str | None = None, case_id: str | None = None) -> 
     return {"target": target, "would_send": payload}
 
 
-def export_to_webhook(issue_id: str | None = None, case_id: str | None = None) -> dict[str, Any]:
+async def export_to_webhook(issue_id: str | None = None, case_id: str | None = None) -> dict[str, Any]:
     """Send the structured verdict + report + IOCs + STIX to the operator's
     configured outbound webhook (e.g. a SOAR / ticketing / Slack ingress).
 
@@ -526,6 +526,13 @@ def export_to_webhook(issue_id: str | None = None, case_id: str | None = None) -
     operator config (never a tool arg or observed content), and it is
     **approval-gated** (listed in manifest.approvals.humanRequired). Call
     `webhook_preview` first to show what will be sent.
+
+    #76: export_to_webhook is a built-in, so it never passed through the
+    connector wrapper's approval gate even though it's listed in
+    humanRequired — the gate silently never ran. It now self-gates via
+    `gate_and_execute` (the same path the other self-mod built-ins use),
+    so external data egress actually requires operator approval (or an
+    explicit bypass session/job). `webhook_preview` stays read-only/ungated.
 
     Returns {"ok": bool, "status": int, ...} or {"error": ...}.
     """
@@ -543,11 +550,24 @@ def export_to_webhook(issue_id: str | None = None, case_id: str | None = None) -
     token = os.environ.get("GUARDIAN_WEBHOOK_TOKEN", "").strip()
     if token:
         headers["Authorization"] = f"Bearer {token}"
+
+    def _send() -> dict[str, Any]:
+        try:
+            status, _resp = _webhook_post(url, headers, json.dumps(payload).encode())
+        except Exception as e:
+            return {"error": f"webhook POST to {url} failed: {e}"}
+        return {"ok": 200 <= status < 300, "status": status, "url": url, "kind": payload["kind"]}
+
+    from usecase.builtin_components._approval_gate import gate_and_execute
     try:
-        status, _resp = _webhook_post(url, headers, json.dumps(payload).encode())
-    except Exception as e:
-        return {"error": f"webhook POST to {url} failed: {e}"}
-    return {"ok": 200 <= status < 300, "status": status, "url": url, "kind": payload["kind"]}
+        return await gate_and_execute(
+            tool_name="export_to_webhook",
+            args={"issue_id": issue_id, "case_id": case_id, "kind": payload["kind"]},
+            risk_tier="destructive",
+            executor=_send,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc), "tool": "export_to_webhook"}
 
 
 def _verdict_warroom_markdown(s, issue) -> str:

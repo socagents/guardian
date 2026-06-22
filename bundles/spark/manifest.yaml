@@ -369,10 +369,13 @@ tools:
     - "cortex-docs.*"
     # Cortex XSIAM connector — investigation + EDR response over the
     # Cortex public API. Tools advertise once an instance is created.
-    # Write/response tools (endpoint isolate/scan/quarantine, script
-    # run, IOC + hash blocklist, lookup add, alert exclusions, etc.) are
-    # approval-gated by the connector wrapper, same as XSOAR. The single
-    # destructive lookup mutation is denied outright (see deny[]).
+    # Read/investigation tools run freely. The high-impact write/response
+    # tools (endpoint isolate/scan/quarantine, script + snippet execution,
+    # IOC + hash blocklist, lookup add, alert exclusions, distribution +
+    # incident creation) are APPROVAL-GATED — each is listed explicitly in
+    # approvals.humanRequired below (the gate matches exact tool names, so a
+    # `xsiam.*` glob would NOT gate them). The single destructive lookup
+    # mutation is denied outright (see deny[]).
     - "xsiam.*"
   deny:
     - "shell_exec"
@@ -483,6 +486,37 @@ approvals:
     # audit row and executes immediately — see
     # _approval_gate.gate_and_execute and api/trigger_context.py.
     - "web.navigate"
+    # #81 — skills_create/skills_update mutate the instruction surface the
+    # model trusts on the next turn. Gated like skills_delete so the agent
+    # can't author or overwrite a skill without operator confirmation. The
+    # connector_loader registration points these at the gated wrappers in
+    # self_mod_tools (not skills_crud directly).
+    - "skills_create"
+    - "skills_update"
+    # #74 — Cortex XSIAM high-impact write/response/EDR tools. The agent can
+    # REQUEST these during chat (or a job can with bypass_approvals), but the
+    # operator must confirm before a host is isolated, a script/snippet runs,
+    # a hash is blocklisted, IOCs are pushed, etc. Names are the namespaced
+    # form (the gate matches exact bare/namespaced/legacy names — NOT globs).
+    - "xsiam.endpoints_isolate"
+    - "xsiam.endpoints_unisolate"
+    - "xsiam.endpoints_scan"
+    - "xsiam.endpoints_scan_all"
+    - "xsiam.endpoints_quarantine_file"
+    - "xsiam.endpoints_retrieve_file"
+    - "xsiam.scripts_run_script"
+    - "xsiam.scripts_run_snippet"
+    - "xsiam.hash_blocklist"
+    - "xsiam.ioc_insert_json"
+    - "xsiam.ioc_disable"
+    - "xsiam.ioc_enable"
+    - "xsiam.incidents_update"
+    - "xsiam.alerts_update"
+    - "xsiam.alert_exclusions_create"
+    - "xsiam.alert_exclusions_delete"
+    - "xsiam.add_lookup_data"
+    - "xsiam.create_dataset"
+    - "xsiam.distribution_create"
 
 # ─────────────────────────────────────────────────────────────────
 # RUNTIME LAYER
