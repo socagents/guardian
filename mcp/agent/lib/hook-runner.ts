@@ -93,11 +93,14 @@ async function loadHooks(event: HookEvent): Promise<Hook[]> {
     );
     return validated;
   } catch (err) {
-    console.warn(
-      `hooks: failed to load hooks for event ${event}:`,
-      err instanceof Error ? err.message : err,
+    // #75 — do NOT swallow a load failure into an empty list. An empty
+    // list is indistinguishable from "no hooks registered", which made a
+    // transient MCP outage SILENTLY disable EVERY hook (including
+    // block-policy hooks like block-production-writes). Propagate so
+    // dispatchHooks can fail CLOSED on decisional events.
+    throw new HookLoadError(
+      err instanceof Error ? err.message : String(err),
     );
-    return [];
   }
 }
 
@@ -218,6 +221,70 @@ function pruneOldKeys(now: number): void {
  * Returns `decision: undefined` when no hooks fired or all
  * returned no-op.
  */
+/** Raised by loadHooks when the hook store can't be reached (vs. a
+ *  legitimately empty hook list). dispatchHooks turns this into a
+ *  fail-closed decision for decisional events. */
+class HookLoadError extends Error {}
+
+/** Events where a hook can `deny` and thereby BLOCK the operation
+ *  (tool call, prompt, compaction, turn, subagent spawn). For these,
+ *  a hook-store outage must fail CLOSED — proceeding would silently
+ *  bypass a block-policy hook. All other events are non-decisional
+ *  (post-hoc / notification): there's nothing to enforce, so an outage
+ *  is a no-op. Keep in sync with the deny-consuming fire-sites in
+ *  app/api/chat/route.ts. */
+const DECISIONAL_EVENTS: ReadonlySet<HookEvent> = new Set<HookEvent>([
+  "PreToolUse",
+  "UserPromptSubmit",
+  "PreCompact",
+  "RunStart",
+  "SubagentStart",
+]);
+
+/** Operator escape hatch: when the hook store is briefly unreachable,
+ *  prefer availability over the block-policy guarantee. Off by default
+ *  (we fail closed). Set GUARDIAN_HOOKS_FAIL_OPEN=true to restore the
+ *  pre-#75 behavior of proceeding without hooks on a load failure. */
+function hooksFailOpen(): boolean {
+  return (process.env.GUARDIAN_HOOKS_FAIL_OPEN ?? "").toLowerCase() === "true";
+}
+
+/** #75 — decide what to do when the hook store can't be loaded. */
+export function resolveHookLoadFailure(
+  event: HookEvent,
+  err: unknown,
+): HookAggregateResult {
+  const cause = err instanceof Error ? err.message : String(err);
+  if (hooksFailOpen()) {
+    console.warn(
+      `hooks: load failed for ${event}; GUARDIAN_HOOKS_FAIL_OPEN=true → ` +
+        `proceeding WITHOUT hooks (cause: ${cause})`,
+    );
+    return { decision: undefined, decisions: [] };
+  }
+  if (DECISIONAL_EVENTS.has(event)) {
+    console.error(
+      `hooks: load failed for ${event}; failing CLOSED (deny) so a ` +
+        `block-policy hook cannot be silently bypassed. Set ` +
+        `GUARDIAN_HOOKS_FAIL_OPEN=true to override. cause: ${cause}`,
+    );
+    return {
+      decision: "deny",
+      reason:
+        "Hook policy store is unreachable — failing closed so a " +
+        "block-policy hook isn't silently bypassed. Retry shortly (or set " +
+        "GUARDIAN_HOOKS_FAIL_OPEN=true to proceed without hooks).",
+      decisions: [],
+    };
+  }
+  // Non-decisional event (post-hoc / notification): nothing to enforce.
+  console.warn(
+    `hooks: load failed for non-decisional ${event}; nothing to enforce, ` +
+      `proceeding (cause: ${cause})`,
+  );
+  return { decision: undefined, decisions: [] };
+}
+
 export async function dispatchHooks(
   event: HookEvent,
   payload: HookPayload,
@@ -245,7 +312,14 @@ export async function dispatchHooks(
       RECENT_DISPATCH_KEYS.set(key, now);
     }
   }
-  const hooks = await loadHooks(event);
+  let hooks: Hook[];
+  try {
+    hooks = await loadHooks(event);
+  } catch (err) {
+    // #75 — hook store unreachable. Fail CLOSED for decisional events
+    // (don't silently bypass a block-policy hook); no-op for the rest.
+    return resolveHookLoadFailure(event, err);
+  }
   // Filter by matcher BEFORE running so we don't waste subprocess
   // spawns on hooks that don't match.
   const eligible = hooks.filter((h) => matchesHook(h, payload));

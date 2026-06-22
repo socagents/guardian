@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.52",
+    date: "2026-06-22",
+    title: "Hooks fail closed — a hook-store outage no longer silently disables policy.",
+    security: true,
+    highlights: [
+      "Policy hooks no longer fail OPEN: if the hook store was briefly unreachable the dispatcher used to treat it as 'no hooks' and let the turn through, silently disabling block-policy hooks. A load failure now fails CLOSED on the events that can block an action (PreToolUse, UserPromptSubmit, PreCompact, RunStart, SubagentStart) — denied with a clear reason instead of slipping through.",
+      "Non-blocking events (post-hoc, notifications) still proceed on an outage — there's nothing to enforce there.",
+      "Escape hatch for availability-over-policy: set GUARDIAN_HOOKS_FAIL_OPEN=true to restore the previous proceed-without-hooks behavior.",
+    ],
+  },
+  {
     version: "0.2.51",
     date: "2026-06-22",
     title: "Approval gating for high-impact actions — endpoint response, egress, skill authoring.",

@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.52] (2026-06-22) — *Hooks fail closed*
+
+- **Policy hooks no longer silently disable themselves during an outage.** Previously, if the hook store was briefly unreachable, the dispatcher treated it as "no hooks registered" and let the turn proceed — so a block-policy hook (e.g. "block writes to the production tenant") would quietly stop enforcing. Now a hook-store load failure **fails closed** on the events that can block an action (a tool call, a prompt, a compaction, a turn, a subagent spawn): the action is denied with a clear reason instead of slipping through unchecked. Non-blocking events (post-hoc, notifications) still proceed. Operators who prefer availability over this guarantee can set `GUARDIAN_HOOKS_FAIL_OPEN=true` to restore the previous behavior.
+
 ## [v0.2.51] (2026-06-22) — *Approval gating for high-impact actions*
 
 A security-hardening pass that puts a human-approval gate in front of the actions that can change security posture or run code — closing gaps where the gate was declared but never actually fired.
