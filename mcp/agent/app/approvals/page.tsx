@@ -7,13 +7,34 @@ import type { Approval } from "@/lib/api/types";
 
 type TabValue = "pending" | "resolved";
 
-function getRiskLevel(toolName: string): "HIGH" | "MEDIUM" | "LOW" {
+// Keyword fallback — only used for legacy approval rows written before the
+// bus carried a risk_tier (i.e. when riskTier is absent).
+function riskLevelFromName(toolName: string): "HIGH" | "MEDIUM" | "LOW" {
   const high = ["send_email", "delete", "drop", "remove", "execute_command"];
   const medium = ["write_file", "post", "update", "modify"];
   const lower = toolName.toLowerCase();
   if (high.some((k) => lower.includes(k))) return "HIGH";
   if (medium.some((k) => lower.includes(k))) return "MEDIUM";
   return "LOW";
+}
+
+// #HOOK-F12 — badge from the authoritative bus risk_tier when present, so a
+// destructive/credential tool (e.g. personality_reset, instances_delete,
+// api_keys_create) renders HIGH instead of being mis-scored LOW by a
+// tool-name keyword guess. Falls back to the keyword heuristic only when the
+// tier is missing (legacy rows).
+function getRiskLevel(approval: Approval): "HIGH" | "MEDIUM" | "LOW" {
+  switch (approval.riskTier) {
+    case "destructive":
+    case "credential":
+      return "HIGH";
+    case "soft":
+      return "MEDIUM";
+    case "read":
+      return "LOW";
+    default:
+      return riskLevelFromName(approval.toolName);
+  }
 }
 
 const RISK_COLORS: Record<string, { border: string; badge: string; codeBg: string; codeText: string }> = {
@@ -286,7 +307,7 @@ export default function ApprovalsPage() {
           </div>
         ) : activeTab === "pending" ? (
           displayedItems.map((approval) => {
-            const risk = getRiskLevel(approval.toolName);
+            const risk = getRiskLevel(approval);
             const colors = RISK_COLORS[risk];
             const isResolving = resolvingIds.has(approval.id);
             return (

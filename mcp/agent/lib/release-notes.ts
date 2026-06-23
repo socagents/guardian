@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.59",
+    date: "2026-06-23",
+    title: "Hooks & approvals — honest signals, no silent traps.",
+    security: true,
+    highlights: [
+      "Approvals page badges danger from the authoritative risk tier (destructive/credential → HIGH, soft → MEDIUM, read → LOW) instead of keyword-guessing the tool name — dangerous approvals (personality_reset, instances_delete, api_keys_create) no longer mis-render LOW.",
+      "Notification + PermissionRequest hooks (Slack-mirror, PagerDuty, etc.) now write a hook_dispatched audit row — previously they fired on the loopback path with no trace in /observability/events.",
+      "A PermissionRequest hook that returns a definitive allow/deny now resolves the matching approval immediately, instead of leaving the gated tool blocked until the 5-minute timeout.",
+      "Unimplemented hook options are rejected at create/edit with a clear error rather than failing silently: the reserved 'agent' transport (could silently deny everything under failurePolicy:block) and matcher.tenantId (was unenforced — silently fired for ALL tenants).",
+    ],
+  },
+  {
     version: "0.2.58",
     date: "2026-06-23",
     title: "Every button does something — dead/stub UI affordances fixed or removed.",

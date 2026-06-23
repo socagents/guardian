@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.59] (2026-06-23) — *Hooks & approvals: honest signals, no silent traps*
+
+Hardening the hooks subsystem and the approval queue so nothing fails silently:
+
+- **Approval risk is now shown from the authoritative tier, not a guess.** The Approvals page badged danger by keyword-matching the tool name, so genuinely dangerous approvals (resetting personality, deleting an instance, minting an API key) could render LOW. It now uses the approval's real risk tier (destructive/credential → HIGH, soft → MEDIUM, read → LOW), falling back to the old heuristic only for legacy rows.
+- **Notification and PermissionRequest hooks are now audited.** Hooks fired on the internal notification/approval path (e.g. a Slack-mirror or PagerDuty hook) wrote no audit row, so they were invisible in `/observability/events`. They now record a `hook_dispatched` event like every other hook. (The troubleshooting filter in the help guide is corrected to `action:hook_dispatched`.)
+- **A PermissionRequest hook can now resolve the approval it answers.** When such a hook returns a definitive allow/deny, the matching approval is resolved immediately instead of leaving the gated tool blocked until the 5-minute timeout.
+- **Unimplemented hook options are now rejected at creation instead of failing silently.** The reserved `agent` transport (which, mis-set to "block", silently denied every matching event) and the unenforced `matcher.tenantId` (which silently fired for *all* tenants) are now rejected with a clear error when you create or edit a hook, rather than installing a hook that quietly misbehaves.
+
 ## [v0.2.58] (2026-06-23) — *Every button does something: dead/stub UI swept*
 
 A pass over UI affordances that looked clickable but did nothing (or led to a 404), so a customer never clicks and gets silence:

@@ -2613,8 +2613,8 @@ function Hooks() {
  description?: string;
  event: HookEvent; // 10 lifecycle events
  priority?: number; // lower runs first; default 100
- matcher?: HookMatcher; // toolGlob, triggerPrefix, tenantId
- transport: HookTransport;// command | http | builtin | agent
+ matcher?: HookMatcher; // toolGlob, triggerPrefix (tenantId reserved, not yet enforced)
+ transport: HookTransport;// command | http | builtin | plugin (agent reserved, not yet implemented)
  timeoutMs?: number; // default 5000
  failurePolicy?: 'block' | 'allow' | 'warn';
  enabled?: boolean;

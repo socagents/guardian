@@ -322,10 +322,26 @@ def _validate_hook_payload(body: dict[str, Any]) -> str | None:
         transport.get("url"), str
     ):
         return "'transport.url' is required for http transport"
-    if t_type == "agent" and not isinstance(
-        transport.get("toolName"), str
-    ):
-        return "'transport.toolName' is required for agent transport"
+    # #HOOK-F1 — 'agent' transport (MCP-tool dispatch) is reserved but NOT
+    # implemented; the agent-side runner can only stub it. Accepting it let an
+    # operator install a hook that, under failurePolicy:block, silently denied
+    # every matching event, or under :warn silently no-op'd. Reject it with a
+    # clear error until the implementation ships.
+    if t_type == "agent":
+        return (
+            "'agent' transport is not yet implemented (reserved for MCP-tool "
+            "dispatch); use 'command', 'http', 'builtin', or 'plugin'"
+        )
+    # #HOOK-F5 — matcher.tenantId is accepted for forward-compat but tenant
+    # scoping CANNOT be enforced yet (no session-meta plumbing at match time),
+    # so a hook scoped to one tenant would silently fire for ALL tenants.
+    # Reject it rather than mislead the operator.
+    matcher = body.get("matcher")
+    if isinstance(matcher, dict) and matcher.get("tenantId"):
+        return (
+            "matcher.tenantId is not yet supported (tenant-scoped hook policy "
+            "is not enforced); remove the tenantId field to install the hook"
+        )
     if t_type == "builtin":
         b_name = transport.get("name")
         if not isinstance(b_name, str) or not b_name.strip():

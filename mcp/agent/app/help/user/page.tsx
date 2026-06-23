@@ -4124,11 +4124,11 @@ probed          ── transient state during an in-flight probe`}</Pre>
                   <Link href="/observability/events" className="link">
                     /observability/events
                   </Link>{" "}
-                  and filter by <Code>action:hook_fire</Code>. Every
-                  successful fire writes a row with the hook id, event
+                  and filter by <Code>action:hook_dispatched</Code>. Every
+                  fire writes a row with the hook id, event
                   name, matched payload, and the returned decision. No
                   rows for your hook means the matcher didn&apos;t hit
-                  (check toolGlob / triggerPrefix / tenantId) or the
+                  (check toolGlob / triggerPrefix) or the
                   event itself never fired. Tool globs are{" "}
                   <Term>separator-insensitive</Term>: a glob of{" "}
                   <Code>xsoar_close_incident</Code> matches the same tool

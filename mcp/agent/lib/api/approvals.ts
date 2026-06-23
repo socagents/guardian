@@ -80,6 +80,10 @@ export function normalizeApproval(row: unknown): Approval {
     origin: typeof r.origin === "string" && r.origin.length > 0
       ? r.origin
       : "unknown",
+    // #HOOK-F12 — carry the authoritative risk tier (read|soft|destructive|
+    // credential) from the bus so the UI badges the real danger level
+    // instead of keyword-guessing from the tool name.
+    riskTier: typeof r.risk_tier === "string" ? r.risk_tier : undefined,
   };
 }
 

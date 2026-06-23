@@ -472,7 +472,17 @@ export function validateHook(raw: unknown): Hook | null {
   if (transport.type === "http" && typeof transport.url !== "string") {
     return null;
   }
-  if (transport.type === "agent" && typeof transport.toolName !== "string") {
+  // #HOOK-F1 — `agent` transport (MCP-tool dispatch) is reserved but NOT
+  // implemented; the runner can only stub it. Accepting it let an operator
+  // install a hook that, under failurePolicy:block, silently denied every
+  // matching event (the stub error → synthesized deny), or under :warn
+  // silently no-op'd. Reject it here so a stored agent-transport hook is
+  // dropped at load (with this warning) rather than silently blocking, and
+  // hooks.py rejects it at create/update so the operator gets a clear error.
+  if (transport.type === "agent") {
+    console.warn(
+      `hooks: hook ${h.id} uses unimplemented 'agent' transport; dropping (use http/command/builtin/plugin)`,
+    );
     return null;
   }
   if (transport.type === "builtin") {
@@ -581,8 +591,18 @@ export function matchesHook(hook: Hook, payload: HookPayload): boolean {
         : "";
     if (!trigger.startsWith(m.triggerPrefix)) return false;
   }
-  // tenantId matching needs session-meta plumbing; punted to a
-  // follow-up. For now treat it as no-op (matches everything).
+  // #HOOK-F5 — tenantId scoping needs session-meta plumbing that doesn't
+  // exist yet, so it can't be enforced here. New hooks with matcher.tenantId
+  // are now REJECTED at create/update (hooks.py) precisely so an operator
+  // can't install a tenant-scoped policy that silently fires for ALL
+  // tenants. A legacy stored hook may still carry it — surface the no-op
+  // instead of matching all tenants silently.
+  if (m.tenantId) {
+    console.warn(
+      `hooks: hook ${hook.id} has matcher.tenantId='${m.tenantId}' which is NOT enforced ` +
+        `(tenant scoping unsupported); this hook fires for ALL tenants. Remove the field or recreate the hook.`,
+    );
+  }
   return true;
 }
 

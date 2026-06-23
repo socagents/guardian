@@ -231,6 +231,11 @@ export interface Approval {
    *    "unknown"             → legacy / pre-v0.1.24 rows
    */
   origin?: string;
+  /** #HOOK-F12 — authoritative risk tier from the approvals bus:
+   *  "read" | "soft" | "destructive" | "credential". The /approvals page
+   *  badges danger from this, not a keyword-guess on the tool name.
+   *  Absent on pre-existing rows written before the column existed. */
+  riskTier?: string;
 }
 
 /** Agent activity statistics returned by GET /api/v1/agents/:id/stats. */

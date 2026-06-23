@@ -100,17 +100,32 @@ def test_http_transport_missing_url_rejected():
     assert "url" in err
 
 
-def test_agent_transport_valid():
+def test_agent_transport_rejected_not_implemented():
+    # #HOOK-F1 — 'agent' transport is reserved but unimplemented; accepting it
+    # let a failurePolicy:block hook silently deny every event. Now rejected
+    # (with toolName present or not) so it can't be installed until it ships.
     err = _validate_hook_payload(
         _base_payload(transport={"type": "agent", "toolName": "plugin_check"})
     )
-    assert err is None
-
-
-def test_agent_transport_missing_toolname_rejected():
+    assert err is not None
+    assert "not yet implemented" in err
     err = _validate_hook_payload(_base_payload(transport={"type": "agent"}))
     assert err is not None
-    assert "toolName" in err
+
+
+def test_matcher_tenant_id_rejected():
+    # #HOOK-F5 — tenant scoping can't be enforced yet; a tenant-scoped hook
+    # would silently fire for ALL tenants, so reject the field.
+    err = _validate_hook_payload(
+        _base_payload(matcher={"tenantId": "tenant-A"})
+    )
+    assert err is not None
+    assert "tenantId" in err
+
+
+def test_matcher_without_tenant_id_ok():
+    err = _validate_hook_payload(_base_payload(matcher={"toolGlob": "xsoar.*"}))
+    assert err is None
 
 
 def test_unknown_transport_type_rejected():
