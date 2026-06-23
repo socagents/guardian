@@ -33,7 +33,7 @@ import httpx
 
 
 PROBE_IMPLEMENTED: frozenset[str] = frozenset(
-    {"xsoar", "cortex-docs"}
+    {"xsoar", "cortex-docs", "web"}
 )
 
 
@@ -163,6 +163,31 @@ async def real_probe(
             return (
                 False,
                 f"HTTP {r.status_code} from {base}/api/khub/suggest",
+                False,
+            )
+
+        if connector_id == "web":
+            # #CDW-F11 — real probe for the headless-browser connector.
+            # Pre-fix the instance test returned probe_implemented:false
+            # WITHOUT contacting anything, so the operator couldn't tell a
+            # down browser sidecar from a healthy one. Hit the Chromium CDP
+            # HTTP endpoint /json/version — a 200 + JSON proves the sidecar
+            # is up and CDP is reachable (same endpoint Playwright connects
+            # over). No auth; the connector is gated by allowed_domains, not
+            # credentials, so this is purely a reachability check.
+            cdp = _first(
+                cfg.get("cdp_url"),
+                "http://guardian-browser:9222",
+            ).rstrip("/")
+            # CDP config may be a ws:// URL; the version endpoint is HTTP.
+            http_cdp = cdp.replace("ws://", "http://").replace("wss://", "https://")
+            async with httpx.AsyncClient(timeout=timeout, verify=verify) as c:
+                r = await c.get(f"{http_cdp}/json/version")
+            if r.status_code == 200:
+                return (True, None, False)
+            return (
+                False,
+                f"HTTP {r.status_code} from {http_cdp}/json/version",
                 False,
             )
 

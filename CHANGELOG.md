@@ -10,6 +10,14 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.61] (2026-06-23) — *Web tool: gated, audited, and health-checkable*
+
+Hardening the headless-browser connector:
+
+- **A click that navigates off the allowlist is now blocked.** `web.navigate` already enforced the `allowed_domains` allowlist, but a click that triggered navigation slipped past it. Clicks that land on a domain outside the allowlist are now reverted and reported as an error, closing the bypass.
+- **Where a click navigated to is now recorded in the audit trail**, not just in the live tool result — so an attempted off-allowlist navigation leaves a URL trace in `/observability/events`.
+- **The web connector now has a real "Test" probe.** Testing a web instance previously reported a non-committal result without contacting anything; it now checks the Chromium sidecar's debugging endpoint, so a down sidecar shows as unreachable instead of looking fine. (The sidecar image itself is too minimal to carry a container-level healthcheck; the instance Test button is the supported reachability check.)
+
 ## [v0.2.60] (2026-06-23) — *Subagents: scoped, attributed, and tamper-resistant*
 
 Hardening the subagent (custom-agent) subsystem so spawns are scoped, attributed, and protected:

@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.61",
+    date: "2026-06-23",
+    title: "Web tool — gated, audited, health-checkable.",
+    security: true,
+    highlights: [
+      "web.click that triggers navigation now re-checks the allowed_domains allowlist and reverts + errors if the click landed off-list — previously a click bypassed the allowlist + the web.navigate approval gate entirely.",
+      "A click's navigation destination is now recorded in the audit row metadata (navigated_to / blocked_navigation_to), not just the live result — off-allowlist nav attempts leave a URL trace in /observability/events.",
+      "The web connector now has a real instance Test probe (hits the Chromium CDP /json/version endpoint); previously the test reported probe_implemented:false without contacting the sidecar, so a down browser looked healthy.",
+    ],
+  },
+  {
     version: "0.2.60",
     date: "2026-06-23",
     title: "Subagents — scoped, attributed, and tamper-resistant.",

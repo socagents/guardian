@@ -908,7 +908,7 @@ def _wrap_with_instance(
 
     def _audit_meta(
         target: Instance, args: tuple, kwargs: dict[str, Any],
-        approval_id: str | None,
+        approval_id: str | None, result: Any = None,
     ) -> dict[str, Any]:
         meta: dict[str, Any] = {
             "tool": namespaced,
@@ -923,6 +923,16 @@ def _wrap_with_instance(
             approval = bus.get(approval_id) if bus else None
             if approval and approval.resolver:
                 meta["approved_by"] = approval.resolver
+        # #CDW-F5 — capture a navigation destination from the result so an
+        # off-allowlist nav via web.click (or any tool that reports where it
+        # landed) leaves a URL trace in audit, not just in the live result.
+        # arg_keys deliberately omits values; these are non-secret result
+        # URLs, so it's safe to record them explicitly.
+        if isinstance(result, dict):
+            for k in ("navigated_to", "blocked_navigation_to"):
+                v = result.get(k)
+                if v:
+                    meta[k] = v
         return meta
 
     if inspect.iscoroutinefunction(fn):
@@ -938,6 +948,7 @@ def _wrap_with_instance(
             start = _time.perf_counter()
             status = "success"
             error: str | None = None
+            _ret: Any = None
             try:
                 # Phase 7: gate on human approval BEFORE running.
                 approval_id = _gate_request(target, args, kwargs, require_approval)
@@ -956,7 +967,7 @@ def _wrap_with_instance(
                 raise
             finally:
                 duration_ms = int((_time.perf_counter() - start) * 1000)
-                meta = _audit_meta(target, args, kwargs, approval_id)
+                meta = _audit_meta(target, args, kwargs, approval_id, result=_ret)
                 if error is not None:
                     meta["error"] = error
                 record_event(
@@ -992,6 +1003,7 @@ def _wrap_with_instance(
         start = _time.perf_counter()
         status = "success"
         error: str | None = None
+        _ret: Any = None
         try:
             approval_id = _gate_request(target, args, kwargs, require_approval)
             if approval_id is not None:
@@ -1009,7 +1021,7 @@ def _wrap_with_instance(
             raise
         finally:
             duration_ms = int((_time.perf_counter() - start) * 1000)
-            meta = _audit_meta(target, args, kwargs, approval_id)
+            meta = _audit_meta(target, args, kwargs, approval_id, result=_ret)
             if error is not None:
                 meta["error"] = error
             record_event(

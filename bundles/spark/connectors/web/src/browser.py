@@ -644,10 +644,38 @@ async def guardian_web_click(
         }
 
     post_url = sess.page.url
+    navigated = post_url != pre_url
+    # #CDW-F2 — a click that triggers navigation previously skipped the
+    # allowed_domains check that guardian_web_navigate enforces, so a click
+    # could land the browser on an off-allowlist domain (and bypass the
+    # web.navigate approval gate). The destination URL is only knowable
+    # after the browser follows the click, so re-check here and undo the
+    # landing (best-effort navigate back) when the resulting domain is not
+    # allowed.
+    if navigated:
+        deny_reason = _check_allowed_domain(post_url, cfg["allowed_domains"])
+        if deny_reason:
+            reverted = False
+            try:
+                await sess.page.goto(
+                    pre_url, wait_until="load",
+                    timeout=cfg["default_timeout_ms"],
+                )
+                reverted = True
+            except Exception:  # noqa: BLE001 — best-effort revert
+                pass
+            return {
+                "error": (
+                    f"click navigated to a blocked domain and was reverted: "
+                    f"{deny_reason}"
+                ),
+                "blocked_navigation_to": post_url,
+                "reverted": reverted,
+            }
     return {
         "clicked": True,
         "selector": selector,
-        "navigated_to": post_url if post_url != pre_url else None,
+        "navigated_to": post_url if navigated else None,
     }
 
 
