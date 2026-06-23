@@ -2690,7 +2690,9 @@ async def xsoar_import_playbook(
 
     The YAML must be a valid XSOAR playbook (id, name, starttaskid, tasks…);
     validate structure first with playbook_validate. This WRITES to the tenant
-    — it is approval-gated like every connector action.
+    — it is approval-gated (the operator confirms before import; see
+    manifest.approvals.humanRequired — the mutating XSOAR tools gate, reads do
+    not).
 
     Path by generation: imports via the documented `POST /playbook/save/yaml`
     (multipart `file` part carrying the raw YAML — the server parses native v6

@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.55] (2026-06-23) — *Approval gating for XSOAR actions*
+
+- **XSOAR mutating/action tools now require approval.** Running an arbitrary integration command (`run_command`), running or importing a playbook, creating/updating/closing an incident, completing a playbook task, and editing XSOAR Lists now prompt for operator approval before they execute — on the chat path and the autonomous jobs path (a bypass session/job records an `auto_approved` audit row). Reads and routine War-Room documentation (entries, notes, evidence) are unaffected. This brings XSOAR in line with the XSIAM response-tool gating shipped in v0.2.51.
+
 ## [v0.2.54] (2026-06-23) — *Failed tool calls are recorded as failures*
 
 - **A tool that fails without throwing is now logged as a failure.** Connector tools (XSOAR, XSIAM) and several built-ins report a problem by *returning* `{ok: false}` / `{error: …}` rather than raising an exception. The audit log and the job scheduler previously keyed status only on raised exceptions, so these showed up as `status=success` — a failed `close_incident`, a rejected XQL query, or a scheduled tool that errored all looked healthy in `/observability/events` and in the jobs run history. They're now correctly recorded as **failures**, which also means a repeatedly-failing scheduled tool trips the consecutive-failure auto-disable instead of firing silently forever.

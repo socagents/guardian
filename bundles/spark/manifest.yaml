@@ -517,6 +517,23 @@ approvals:
     - "xsiam.add_lookup_data"
     - "xsiam.create_dataset"
     - "xsiam.distribution_create"
+    # XSOAR-F2 — Cortex XSOAR mutating/action tools. The agent can REQUEST
+    # these in chat (or a job can with bypass_approvals), but the operator
+    # confirms before an incident is closed/created/updated, a playbook runs
+    # or is imported, a task completes, a list is mutated, or — most
+    # critically — run_command executes an arbitrary integration command.
+    # Routine war-room DOCUMENTATION (add_entry/add_note/save_evidence) and
+    # all reads/enrichment stay ungated (high-friction, low-risk). Names are
+    # the namespaced form (the gate matches exact names — NOT globs).
+    - "xsoar.run_command"
+    - "xsoar.run_playbook"
+    - "xsoar.import_playbook"
+    - "xsoar.close_incident"
+    - "xsoar.create_incident"
+    - "xsoar.update_incident"
+    - "xsoar.complete_task"
+    - "xsoar.set_list"
+    - "xsoar.append_to_list"
 
 # ─────────────────────────────────────────────────────────────────
 # RUNTIME LAYER

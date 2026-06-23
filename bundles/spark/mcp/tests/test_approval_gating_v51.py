@@ -51,6 +51,32 @@ def test_skills_create_update_are_gated():
     assert "skills_create" in hr and "skills_update" in hr  # #81
 
 
+# v0.2.55 (#XSOAR-F2) — XSOAR mutating/action tools must gate; reads + routine
+# war-room documentation must NOT.
+XSOAR_GATED = [
+    "xsoar.run_command", "xsoar.run_playbook", "xsoar.import_playbook",
+    "xsoar.close_incident", "xsoar.create_incident", "xsoar.update_incident",
+    "xsoar.complete_task", "xsoar.set_list", "xsoar.append_to_list",
+]
+XSOAR_NOT_GATED = [
+    "xsoar.add_entry", "xsoar.add_note", "xsoar.save_evidence",
+    "xsoar.get_incident", "xsoar.list_incidents", "xsoar.search_indicators",
+    "xsoar.enrich_indicator",
+]
+
+
+def test_xsoar_action_tools_are_gated():
+    hr = _human_required()
+    missing = [t for t in XSOAR_GATED if t not in hr]
+    assert not missing, f"XSOAR mutating/action tools missing from humanRequired (#XSOAR-F2): {missing}"
+
+
+def test_xsoar_reads_and_docs_not_gated():
+    hr = _human_required()
+    wrong = [t for t in XSOAR_NOT_GATED if t in hr]
+    assert not wrong, f"XSOAR reads/war-room docs should NOT be gated (friction): {wrong}"
+
+
 def test_export_to_webhook_is_gated():
     assert "export_to_webhook" in _human_required()  # #76
 

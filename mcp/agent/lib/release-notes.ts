@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.55",
+    date: "2026-06-23",
+    title: "Approval gating for XSOAR actions — command exec, playbooks, incident state.",
+    security: true,
+    highlights: [
+      "XSOAR mutating/action tools now require operator approval before running: run_command (arbitrary integration command exec), run_playbook, import_playbook, create/update/close_incident, complete_task, and List edits (set_list/append_to_list). Enforced on the chat AND autonomous jobs paths (a bypass session/job records an auto_approved audit row).",
+      "Reads and routine War-Room documentation (add_entry/add_note/save_evidence) and enrichment/search stay ungated — no friction on low-risk work.",
+      "Brings XSOAR in line with the XSIAM response-tool gating shipped in v0.2.51.",
+    ],
+  },
+  {
     version: "0.2.54",
     date: "2026-06-23",
     highlights: [
