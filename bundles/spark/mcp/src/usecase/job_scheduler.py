@@ -915,6 +915,19 @@ class CroniterJobScheduler:
             error = f"{type(exc).__name__}: {exc}"
             logger.exception("JobScheduler %s failed: %s", row.name, exc)
 
+        # v0.2.54 (#JOBS-F8/XSOAR-F7) — a tool_call that RETURNS an
+        # error-shaped dict ({ok:false}/{error}) without raising was
+        # recorded status=success, so a failing scheduled tool looked
+        # healthy + never tripped the consecutive-failure auto-disable.
+        # Inspect the dispatched result's shape.
+        if status == "success" and action_type == "tool_call":
+            from usecase.connector_loader import (
+                is_error_result, error_result_message,
+            )
+            if is_error_result(result):
+                status = "failure"
+                error = error_result_message(result)
+
         duration_ms = int((time.perf_counter() - start_perf) * 1000)
         finished_at = self._now_iso_usec()
 

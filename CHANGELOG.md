@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.54] (2026-06-23) — *Failed tool calls are recorded as failures*
+
+- **A tool that fails without throwing is now logged as a failure.** Connector tools (XSOAR, XSIAM) and several built-ins report a problem by *returning* `{ok: false}` / `{error: …}` rather than raising an exception. The audit log and the job scheduler previously keyed status only on raised exceptions, so these showed up as `status=success` — a failed `close_incident`, a rejected XQL query, or a scheduled tool that errored all looked healthy in `/observability/events` and in the jobs run history. They're now correctly recorded as **failures**, which also means a repeatedly-failing scheduled tool trips the consecutive-failure auto-disable instead of firing silently forever.
+
 ## [v0.2.53] (2026-06-22) — *Remove the dead Detections surface*
 
 - **Retired the non-functional Detection Inventory page.** `/observability/detections` (and its Detections nav entry, its `/api/agent/detections/*` routes, its API-reference entries, and its user-guide section) was a leftover from an earlier product stage — its backend was removed at the v0.1.0 carve-out, so every visit 404'd. The whole surface is now gone rather than dangling. The agent's investigation, hunt, and connector tooling are unaffected.

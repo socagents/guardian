@@ -88,6 +88,38 @@ def _emit_tool_failed_event(
         logger.debug("rt.tool.failed emit suppressed: %s", exc)
 
 
+def is_error_result(result: Any) -> bool:
+    """True when a tool's RETURN value signals a logical failure without
+    having raised.
+
+    #OBS-F5/XSOAR-F1/F7/XSIAM-F4/JOBS-F8 — connector tools (xsoar/xsiam)
+    and several built-ins report failure as ``{ok: False}`` or
+    ``{error: ...}`` rather than raising, so the audit wrapper + job
+    scheduler (which set ``failure`` only on a raised exception) recorded
+    ``status=success`` on real failures. Conservative: only dicts with an
+    explicit ``ok == False``, or a truthy top-level ``error``/``isError``
+    and not ``ok == True``, count as failures.
+    """
+    if not isinstance(result, dict):
+        return False
+    if result.get("ok") is False:
+        return True
+    if result.get("ok") is True:
+        return False
+    return bool(result.get("error") or result.get("isError"))
+
+
+def error_result_message(result: Any) -> str | None:
+    """Extract a short failure message from an error-shaped result."""
+    if not isinstance(result, dict):
+        return None
+    for k in ("error", "message", "detail"):
+        v = result.get(k)
+        if isinstance(v, str) and v:
+            return v[:300]
+    return "tool returned a failure result (ok=false)"
+
+
 class ToolRegistration(NamedTuple):
     """One tool the MCP should register at startup.
 
@@ -913,7 +945,11 @@ def _wrap_with_instance(
                     bus = approvals_bus()
                     decision, reason = await bus.wait_async(approval_id)
                     _gate_finish(approval_id, decision, reason)
-                return await fn(*args, **kwargs)
+                _ret = await fn(*args, **kwargs)
+                if is_error_result(_ret):
+                    status = "failure"
+                    error = error_result_message(_ret)
+                return _ret
             except Exception as exc:
                 status = "failure"
                 error = f"{type(exc).__name__}: {exc}"
@@ -962,7 +998,11 @@ def _wrap_with_instance(
                 bus = approvals_bus()
                 decision, reason = bus.wait_sync(approval_id)
                 _gate_finish(approval_id, decision, reason)
-            return fn(*args, **kwargs)
+            _ret = fn(*args, **kwargs)
+            if is_error_result(_ret):
+                status = "failure"
+                error = error_result_message(_ret)
+            return _ret
         except Exception as exc:
             status = "failure"
             error = f"{type(exc).__name__}: {exc}"
@@ -1058,7 +1098,11 @@ def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
             status = "success"
             error: str | None = None
             try:
-                return await fn(*args, **kwargs)
+                _ret = await fn(*args, **kwargs)
+                if is_error_result(_ret):
+                    status = "failure"
+                    error = error_result_message(_ret)
+                return _ret
             except Exception as exc:
                 status = "failure"
                 error = f"{type(exc).__name__}: {exc}"
@@ -1076,7 +1120,11 @@ def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
         status = "success"
         error: str | None = None
         try:
-            return fn(*args, **kwargs)
+            _ret = fn(*args, **kwargs)
+            if is_error_result(_ret):
+                status = "failure"
+                error = error_result_message(_ret)
+            return _ret
         except Exception as exc:
             status = "failure"
             error = f"{type(exc).__name__}: {exc}"

@@ -37,6 +37,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.54",
+    date: "2026-06-23",
+    highlights: [
+      "Failed tool calls are now recorded as failures. Connector tools (XSOAR/XSIAM) + several built-ins report problems by RETURNING {ok:false}/{error} instead of raising; audit + the job scheduler keyed status only on raised exceptions, so a failed close_incident, a rejected XQL query, or an errored scheduled tool showed status=success. They're now correctly logged as failures in /observability/events and the jobs run history.",
+      "A repeatedly-failing scheduled tool now trips the consecutive-failure auto-disable instead of firing silently forever.",
+    ],
+    title: "Failed tool calls are recorded as failures — no more green-on-error.",
+  },
+  {
     version: "0.2.53",
     date: "2026-06-22",
     title: "Removed the dead Detections surface — no more 404 nav item.",
