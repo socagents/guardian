@@ -295,6 +295,11 @@ export async function POST(request: Request): Promise<NextResponse<ToolCallRespo
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
       'mcp-session-id': sessionId,
+      // #CHAT-F24/OBS-F3/API-F12 — mark this as an operator-typed ^tool
+      // direct dispatch so the MCP-side tool_call audit row is
+      // distinguishable from a model-driven call (which carries the
+      // chat/job trigger). TriggerContextMiddleware reads this header.
+      'X-Guardian-Trigger': 'operator:direct',
     },
     body: JSON.stringify({
       jsonrpc: '2.0',

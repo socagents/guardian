@@ -37,6 +37,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.56",
+    date: "2026-06-23",
+    title: "Audit attribution — turn-start events + operator-direct tool calls.",
+    highlights: [
+      "Chat turns now write a chat_turn_started event up front, so a turn that fails before the first model call (auth/setup error, hook denial, unreachable provider) is visible in /observability/events instead of leaving no trace.",
+      "Operator-typed ^tool calls now tag their audit row with the operator:direct trigger, so a direct tool dispatch is distinguishable from a model-driven one in the events view.",
+    ],
+  },
+  {
     version: "0.2.55",
     date: "2026-06-23",
     title: "Approval gating for XSOAR actions — command exec, playbooks, incident state.",

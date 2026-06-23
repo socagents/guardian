@@ -660,6 +660,10 @@ audit:
     # input/cached/output tokens + USD breakdown by component.
     # /observability/cost aggregates these.
     - "chat_turn_cost"
+    # #CHAT-F1 — turn START row (emitted before the first Gemini call) so a
+    # turn that errors early (auth/setup/hook-deny/provider-down) is still
+    # visible in /observability/events, not only when it reaches turn_cost.
+    - "chat_turn_started"
     # Round-15 / Phase X — plugin lifecycle. Plugins are
     # filesystem-discovered under bundles/spark/plugins/; this
     # event lands when an operator clicks Reload (or the loader

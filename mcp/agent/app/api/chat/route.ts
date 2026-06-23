@@ -3965,6 +3965,23 @@ export async function POST(request: NextRequest) {
           trigger = `chat:${sessionId}`;
         }
 
+        // #CHAT-F1 — audit the turn START. Previously the first audit row
+        // for a turn was chat_turn_cost (emitted at the END), so a turn
+        // that errored before the first Gemini call (auth/setup/hook deny,
+        // provider unreachable) left NO trace in /observability/events.
+        // Fire-and-forget; the turn proceeds regardless.
+        void safeAudit('chat_turn_started', {
+          target: `session:${sessionId}`,
+          status: 'success',
+          metadata: {
+            session_id: sessionId,
+            new_session: isNewSession,
+            model: requestedModel ?? 'default',
+            provider: requestedProvider ?? 'default',
+          },
+          trigger,
+        });
+
         const turnStartedAt = Date.now();
         sendEvent('meta', {
           run_id: `r_${crypto.randomUUID()}`,

@@ -10,6 +10,11 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.56] (2026-06-23) — *Audit attribution: turn-start + direct tool calls*
+
+- **Chat turns are now logged the moment they start.** Previously the first audit record for a turn was its end-of-turn cost row, so a turn that failed before the first model call (an auth/setup error, a hook denial, an unreachable provider) left no trace in `/observability/events`. Each turn now writes a `chat_turn_started` event up front.
+- **Operator-typed `^tool` calls are distinguishable from the agent's own calls.** A direct tool dispatch from the chat input now tags its audit row with the `operator:direct` trigger, so you can tell an operator-run tool apart from a model-driven one in the events view.
+
 ## [v0.2.55] (2026-06-23) — *Approval gating for XSOAR actions*
 
 - **XSOAR mutating/action tools now require approval.** Running an arbitrary integration command (`run_command`), running or importing a playbook, creating/updating/closing an incident, completing a playbook task, and editing XSOAR Lists now prompt for operator approval before they execute — on the chat path and the autonomous jobs path (a bypass session/job records an `auto_approved` audit row). Reads and routine War-Room documentation (entries, notes, evidence) are unaffected. This brings XSOAR in line with the XSIAM response-tool gating shipped in v0.2.51.
