@@ -33,7 +33,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
-from usecase.audit_log import audit_log, reset_current_actor, set_current_actor
+from usecase.audit_log import (
+    audit_log,
+    record_event,
+    reset_current_actor,
+    set_current_actor,
+)
 from usecase.connector_probes import PROBE_IMPLEMENTED, real_probe
 from usecase.connector_state import get_connector_state_store
 from usecase.instance_store import Instance, InstanceStore
@@ -948,6 +953,20 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
             if cid not in PROBE_IMPLEMENTED:
                 # No real probe — return current state with a flag so
                 # the UI doesn't claim the test "passed" misleadingly.
+                # #CONN-F9 — still audit the attempt: credential/reachability
+                # tests must leave a trace in /observability/events even when
+                # the connector has no probe wired.
+                record_event(
+                    "connector_probed",
+                    target=f"instance:{instance_id}",
+                    status="skipped",
+                    metadata={
+                        "instance_id": instance_id,
+                        "connector_id": cid,
+                        "probe_implemented": False,
+                        "reason": "no_probe_implemented",
+                    },
+                )
                 current = cs_store.get(cid) if cs_store else None
                 return JSONResponse(
                     {
@@ -994,6 +1013,23 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
                         cid, error=err or "probe failed", is_auth_error=is_auth
                     )
 
+            # #CONN-F9 — audit the probe result (success/failure incl. the
+            # auth-error flag) so credential validation against XSOAR /
+            # cortex-docs / web leaves a forensic trace. Fires for dry-run
+            # too (flagged in metadata) — a dry-run probe is still an action.
+            record_event(
+                "connector_probed",
+                target=f"instance:{instance_id}",
+                status="success" if ok else "failure",
+                metadata={
+                    "instance_id": instance_id,
+                    "connector_id": cid,
+                    "probe_implemented": True,
+                    "dry_run": dry_run,
+                    "is_auth_error": is_auth,
+                    "error": err,
+                },
+            )
             current = cs_store.get(cid) if cs_store else None
             return JSONResponse(
                 {

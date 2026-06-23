@@ -1523,6 +1523,15 @@ async def update_apply():
                         })
                         return
 
+                # #CONN-F10 — record the completed stack update.
+                await _audit_event(
+                    "stack_update_applied",
+                    status="success",
+                    metadata={
+                        "target_version": target_version,
+                        "services_updated": update_services,
+                    },
+                )
                 yield _sse("phase", {
                     "phase": "complete",
                     "target_version": target_version,
@@ -1602,6 +1611,13 @@ async def restart_service(service: str):
                 "output": output[-2000:],
             },
         )
+    # #CONN-F10 — record the managed-service restart.
+    await _audit_event(
+        "managed_service_restarted",
+        target=f"service:{service}",
+        status="success",
+        metadata={"service": service},
+    )
     return {"restarted": service, "output": output[-500:]}
 
 
@@ -1991,6 +2007,50 @@ async def _agent_set_container_url(
         )
 
 
+async def _audit_event(
+    action: str,
+    *,
+    target: str | None = None,
+    status: str | None = None,
+    metadata: dict | None = None,
+) -> None:
+    """#CONN-F10 — fire-and-forget audit row to the agent's MCP.
+
+    The guardian-updater is a separate service; before this its container
+    lifecycle (start/stop/restart), reconcile ticks, digest-drift repairs,
+    managed-service restarts, and stack updates were observable only in the
+    updater's own logs — invisible in /observability/events, /traces, and
+    audit.db. This posts to the MCP's POST /api/v1/audit (same Bearer
+    MCP_TOKEN + TLS-verify the container_url callback uses), tagged with
+    X-Guardian-Actor: system:updater so the rows attribute to the automated
+    service, not the operator. Strictly best-effort: never raises, never
+    blocks a container op; a hiccup is logged at DEBUG, not WARNING.
+    """
+    agent_url = _resolve_agent_internal_url()
+    url = f"{agent_url}/api/v1/audit"
+    headers = {
+        "Content-Type": "application/json",
+        # Attribute updater-originated rows to the automated service.
+        "X-Guardian-Actor": "system:updater",
+    }
+    if MCP_TOKEN:
+        headers["Authorization"] = f"Bearer {MCP_TOKEN}"
+    body: dict = {"action": action}
+    if target is not None:
+        body["target"] = target
+    if status is not None:
+        body["status"] = status
+    if metadata:
+        body["metadata"] = metadata
+    try:
+        async with httpx.AsyncClient(
+            timeout=5.0, verify=_agent_tls_verify()
+        ) as client:
+            await client.post(url, json=body, headers=headers)
+    except Exception as exc:  # noqa: BLE001 — audit is best-effort
+        log.debug("audit_event %s: forward failed (non-fatal): %s", action, exc)
+
+
 def _normalize_instance_name(name: str) -> str:
     """Normalize an operator-supplied instance name to a docker-safe
     form.
@@ -2215,6 +2275,18 @@ async def start_connector_instance(
         )
     except DockerException as exc:
         log.exception("container start failed for %s", container_name)
+        # #CONN-F10 — a failed start must leave a trace too.
+        await _audit_event(
+            "container_started",
+            target=f"connector:{connector_id}/{instance_name}",
+            status="failure",
+            metadata={
+                "connector_id": connector_id,
+                "instance_name": instance_name,
+                "container_name": container_name,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
         raise HTTPException(500, f"container start failed: {exc}") from exc
 
     # Build the URL the agent's loader will use to reach this container.
@@ -2227,6 +2299,22 @@ async def start_connector_instance(
     log.info(
         "started connector container: %s (instance_id=%s, image=%s)",
         container_name, instance_id, image,
+    )
+
+    # #CONN-F10 — record the container start in the agent's audit log so the
+    # lifecycle is visible in /observability/events (covers reconcile-driven
+    # starts too, since reconcile calls this function).
+    await _audit_event(
+        "container_started",
+        target=f"instance:{instance_id}" if instance_id else f"connector:{connector_id}",
+        status="success",
+        metadata={
+            "connector_id": connector_id,
+            "instance_name": instance_name,
+            "container_name": container_name,
+            "image": image,
+            "image_pull": pull_status,
+        },
     )
 
     return {
@@ -2280,6 +2368,17 @@ async def stop_connector_instance(connector_id: str, instance_name: str):
         await _agent_set_container_url(instance_id, None)
 
     log.info("stopped connector container: %s", container_name)
+    # #CONN-F10 — record the container stop/removal.
+    await _audit_event(
+        "container_stopped",
+        target=f"instance:{instance_id}" if instance_id else f"connector:{connector_id}/{instance_name}",
+        status="success",
+        metadata={
+            "connector_id": connector_id,
+            "instance_name": instance_name,
+            "container_name": container_name,
+        },
+    )
     return {"status": "stopped", "container_name": container_name}
 
 

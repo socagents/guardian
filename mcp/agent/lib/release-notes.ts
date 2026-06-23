@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.62",
+    date: "2026-06-23",
+    title: "Connector & updater actions now in the audit trail.",
+    security: true,
+    highlights: [
+      "Testing a connector instance now writes a connector_probed audit event (success/failure/skipped) — credential/reachability validation against XSOAR / Cortex docs / the browser sidecar previously left no trace in /observability/events.",
+      "The guardian-updater's container lifecycle (start/stop/restart), managed-service restart, and stack-update completion are now audited (posted to the MCP, attributed to system:updater) — previously visible only in the updater's own logs. Reconcile-driven container starts surface through the same container_started events.",
+    ],
+  },
+  {
     version: "0.2.61",
     date: "2026-06-23",
     title: "Web tool — gated, audited, health-checkable.",

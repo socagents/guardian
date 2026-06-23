@@ -10,6 +10,13 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.62] (2026-06-23) — *Connector & updater actions are now in the audit trail*
+
+Closing observability gaps around connector instances and the self-update service:
+
+- **Testing a connector instance is now recorded.** Clicking "Test" on an instance — credential/reachability validation against XSOAR, Cortex docs, or the browser sidecar — now writes a `connector_probed` event (success / failure / skipped) to `/observability/events`, where before it left no trace.
+- **The updater's container and stack actions are now audited.** Starting, stopping, and restarting connector containers, restarting the agent, and applying a stack update were previously visible only in the updater's own logs. They now appear in `/observability/events` (and `audit.db`) — attributed to `system:updater` so they're distinguishable from operator actions. Reconcile-driven container starts surface through the same container-start events.
+
 ## [v0.2.61] (2026-06-23) — *Web tool: gated, audited, and health-checkable*
 
 Hardening the headless-browser connector:

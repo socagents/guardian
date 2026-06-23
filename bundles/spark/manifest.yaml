@@ -659,6 +659,15 @@ audit:
     - "connector_disabled"
     - "connector_enabled"
     - "connector_probed"
+    # #CONN-F10 — guardian-updater container/stack lifecycle. The updater
+    # is a separate service; these are posted to POST /api/v1/audit with
+    # X-Guardian-Actor: system:updater so its container start/stop,
+    # managed-service restart, and stack update are visible in
+    # /observability/events instead of only the updater's own logs.
+    - "container_started"
+    - "container_stopped"
+    - "managed_service_restarted"
+    - "stack_update_applied"
     # Round-15 / Phase $ — per-Gemini-call cost row. One row per
     # callGemini (initial + each follow-up). Metadata carries
     # input/cached/output tokens + USD breakdown by component.
