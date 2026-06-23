@@ -386,23 +386,38 @@ function AgentRowCard({
           )}
         </div>
       </div>
+      {/* #SUB-F3 — edit/delete are operator-only. A plugin:<name> / builtin
+          agent is owned by its source (rewritten on reload); the API now
+          rejects mutating/deleting it (403), so hide the controls and show a
+          lock instead of offering an action that 403s. */}
       <div className="flex flex-col gap-1.5 shrink-0">
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label="Edit agent"
-          className="p-1.5 rounded hover:bg-white/5 text-on-surface-variant hover:text-on-surface transition-colors"
-        >
-          <span className="material-symbols-outlined text-lg">edit</span>
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          aria-label="Delete agent"
-          className="p-1.5 rounded hover:bg-white/5 text-on-surface-variant hover:text-error transition-colors"
-        >
-          <span className="material-symbols-outlined text-lg">delete</span>
-        </button>
+        {def.origin === "operator" ? (
+          <>
+            <button
+              type="button"
+              onClick={onEdit}
+              aria-label="Edit agent"
+              className="p-1.5 rounded hover:bg-white/5 text-on-surface-variant hover:text-on-surface transition-colors"
+            >
+              <span className="material-symbols-outlined text-lg">edit</span>
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              aria-label="Delete agent"
+              className="p-1.5 rounded hover:bg-white/5 text-on-surface-variant hover:text-error transition-colors"
+            >
+              <span className="material-symbols-outlined text-lg">delete</span>
+            </button>
+          </>
+        ) : (
+          <span
+            className="p-1.5 text-on-surface-variant/50"
+            title={`${def.origin} agent — managed by its source; not editable here`}
+          >
+            <span className="material-symbols-outlined text-lg">lock</span>
+          </span>
+        )}
       </div>
     </div>
   );

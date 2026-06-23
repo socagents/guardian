@@ -4341,7 +4341,7 @@ function Subagents() {
  description one-line operator summary
  system_prompt the subagent's system instruction
  (NOT inherited from parent)
- tools_allowed glob list (empty = all tools, NOT recommended)
+ tools_allowed glob list — required, ≥1 pattern; use ["*"] for all
  tools_denied glob list (deny wins on overlap)
  model optional override (null = inherit)
  max_turns 1..50, default 10

@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.60",
+    date: "2026-06-23",
+    title: "Subagents — scoped, attributed, and tamper-resistant.",
+    security: true,
+    highlights: [
+      "Subagent definitions now require an explicit tools_allowed allowlist; an empty/missing one is rejected instead of silently inheriting the FULL parent tool catalog (incl. high-impact response tools) with no approval. Use ['*'] to deliberately grant all.",
+      "Builtin and plugin-provided agents are no longer editable/deletable via API or UI (only operator-created agents are mutable; others are owned by their source). The API returns 403 and the UI shows a lock.",
+      "Renaming an agent to an existing name returns a clean error instead of a 500; spawning an agent by name is now case-insensitive.",
+      "Failed spawns (not-found / disabled / hook-denied) write a chat_subagent_dispatch_failed audit event, and a subagent's out-of-scope tool attempt writes subagent_tool_blocked (and is persisted to the sidechain) — previously both left no trace in /observability/events.",
+    ],
+  },
+  {
     version: "0.2.59",
     date: "2026-06-23",
     title: "Hooks & approvals — honest signals, no silent traps.",

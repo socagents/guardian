@@ -178,6 +178,23 @@ def register_agent_definition_routes(
                     metadata={"name": d.name},
                 )
                 return JSONResponse({"agent_definition": d.to_dict()})
+            # #SUB-F3 — content edits are operator-only. plugin:<name> and
+            # builtin agents are owned by their source (the plugin loader
+            # rewrites them on reload); mutating them via API/UI is spec-
+            # violating and silently lost on the next reload. The enabled
+            # toggle above is allowed for any origin (operators can disable a
+            # builtin); only the full-content merge is gated here.
+            if existing.origin != "operator":
+                return JSONResponse(
+                    {
+                        "error": (
+                            f"cannot modify a {existing.origin!r} agent; only "
+                            "operator-created agents are editable (you may "
+                            "still enable/disable it)"
+                        )
+                    },
+                    status_code=403,
+                )
             # Full upsert merge.
             merged = {
                 **existing.to_dict(),
@@ -214,6 +231,24 @@ def register_agent_definition_routes(
         try:
             agent_id = request.path_params["agent_id"]
             existing = defs.get(agent_id)
+            if existing is None:
+                return JSONResponse(
+                    {"error": "not found"}, status_code=404
+                )
+            # #SUB-F3 — only operator-created agents are deletable. A
+            # plugin:<name> / builtin agent is owned by its source and would
+            # reappear on the next reload anyway; deleting it via API/UI is
+            # spec-violating, so reject it.
+            if existing.origin != "operator":
+                return JSONResponse(
+                    {
+                        "error": (
+                            f"cannot delete a {existing.origin!r} agent; only "
+                            "operator-created agents can be deleted"
+                        )
+                    },
+                    status_code=403,
+                )
             ok = defs.delete(agent_id)
             if not ok:
                 return JSONResponse(
@@ -259,6 +294,18 @@ def _validate_definition(body: dict[str, Any]) -> str | None:
         v = body.get(key)
         if v is not None and not isinstance(v, list):
             return f"'{key}' must be a list of glob patterns"
+    # #SUB-F11 — a missing/empty tools_allowed meant "inherit the FULL parent
+    # catalog" at dispatch, including un-gated high-impact tools (e.g. XSIAM
+    # EDR) with no approval — a silent privilege grant the API accepted
+    # without complaint. Require an explicit allowlist; an operator who truly
+    # wants every tool must opt in with ["*"].
+    allowed = body.get("tools_allowed")
+    if not isinstance(allowed, list) or len(allowed) == 0:
+        return (
+            "'tools_allowed' must list at least one glob pattern (an empty or "
+            "missing allowlist would expose the full parent tool catalog); "
+            "use [\"*\"] to explicitly grant all tools"
+        )
     return None
 
 

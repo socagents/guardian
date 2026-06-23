@@ -679,6 +679,13 @@ audit:
     - "chat_subagent_started"
     - "chat_subagent_completed"
     - "chat_subagent_failed"
+    # #SUB-F1 — a spawn that fails BEFORE the sub-loop starts (hook deny,
+    # name not found, lookup error, disabled agent) — previously returned
+    # with no audit row, a forensic blind spot.
+    - "chat_subagent_dispatch_failed"
+    # #SUB-F6 — a subagent attempting an out-of-scope/denied tool. Was SSE-
+    # only; now audited + persisted so the attempt leaves a trace.
+    - "subagent_tool_blocked"
     # Phase S — agent-definition lifecycle. Agent definitions live
     # in the SqliteAgentDefinitionStore; operator + plugin writes
     # both flow here.

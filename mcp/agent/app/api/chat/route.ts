@@ -417,6 +417,21 @@ async function runSubagent(args: {
     args.trigger,
   );
   if (startHook.decision === 'deny') {
+    // #SUB-F1 — record the denied spawn. Pre-fix every pre-start failure
+    // (hook deny, not-found, lookup error, disabled) returned before any
+    // audit write, so a blocked/failed subagent spawn left no row in the
+    // audit log — a forensic blind spot. (The SubagentStart hook's own
+    // hook_dispatched row covers the hook decision, not the spawn outcome.)
+    void safeAudit('chat_subagent_dispatch_failed', {
+      target: `agent:${args.agentName}`,
+      status: 'failure',
+      trigger: args.trigger,
+      metadata: {
+        agent_name: args.agentName,
+        reason: 'denied_by_subagent_start_hook',
+        parent_session_id: args.parentSessionId,
+      },
+    });
     return {
       subagent_session_id: '',
       agent_name: args.agentName,
@@ -458,6 +473,16 @@ async function runSubagent(args: {
       },
     );
     if (!resp?.agent_definition) {
+      void safeAudit('chat_subagent_dispatch_failed', {
+        target: `agent:${args.agentName}`,
+        status: 'failure',
+        trigger: args.trigger,
+        metadata: {
+          agent_name: args.agentName,
+          reason: 'not_found',
+          parent_session_id: args.parentSessionId,
+        },
+      });
       return {
         subagent_session_id: '',
         agent_name: args.agentName,
@@ -473,6 +498,17 @@ async function runSubagent(args: {
     }
     agentDef = resp.agent_definition;
   } catch (err) {
+    void safeAudit('chat_subagent_dispatch_failed', {
+      target: `agent:${args.agentName}`,
+      status: 'failure',
+      trigger: args.trigger,
+      metadata: {
+        agent_name: args.agentName,
+        reason: 'lookup_error',
+        error: err instanceof Error ? err.message : String(err),
+        parent_session_id: args.parentSessionId,
+      },
+    });
     return {
       subagent_session_id: '',
       agent_name: args.agentName,
@@ -487,6 +523,17 @@ async function runSubagent(args: {
     };
   }
   if (!agentDef.enabled) {
+    void safeAudit('chat_subagent_dispatch_failed', {
+      target: `agent:${agentDef.id}`,
+      status: 'failure',
+      trigger: args.trigger,
+      metadata: {
+        agent_name: args.agentName,
+        agent_id: agentDef.id,
+        reason: 'disabled',
+        parent_session_id: args.parentSessionId,
+      },
+    });
     return {
       subagent_session_id: '',
       agent_name: args.agentName,
@@ -707,6 +754,33 @@ async function runSubagent(args: {
             tool: toolName,
             reason,
           });
+          // #SUB-F6 — a subagent attempting an out-of-scope tool was SSE-only:
+          // never audited, never persisted, so a malicious out-of-scope attempt
+          // left no forensic trace once the stream closed. Record it to the
+          // audit log AND the subagent's sidechain transcript.
+          void safeAudit('subagent_tool_blocked', {
+            target: `tool:${toolName}`,
+            status: 'failure',
+            trigger: args.trigger,
+            metadata: {
+              subagent_session_id: subagentSessionId,
+              parent_session_id: args.parentSessionId,
+              agent_name: args.agentName,
+              agent_id: agentDef.id,
+              tool: toolName,
+              reason,
+            },
+          });
+          void safePersist(
+            subagentSessionId,
+            {
+              role: 'tool',
+              content: reason,
+              tool_call_id: toolName,
+              meta: { tool: toolName, blocked_by: 'subagent_scope', status: 'blocked' },
+            },
+            args.trigger,
+          );
           responseParts.push({
             functionResponse: {
               name: toolName,

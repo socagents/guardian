@@ -240,11 +240,15 @@ class SqliteAgentDefinitionStore:
 
     def get_by_name(self, name: str) -> AgentDefinition | None:
         with self._conn() as c:
+            # #SUB-F1 — case-insensitive resolve. SQLite TEXT defaults to
+            # BINARY (case-sensitive) collation, so a spawn for "Case-Triage"
+            # missed a stored "case-triage" and the failure left no trace.
+            # COLLATE NOCASE matches how operators reference agents by name.
             row = c.execute(
                 "SELECT id, name, description, system_prompt, "
                 "tools_allowed, tools_denied, model, max_turns, "
                 "isolation, origin, enabled, created_at, updated_at "
-                "FROM agent_definitions WHERE name = ?",
+                "FROM agent_definitions WHERE name = ? COLLATE NOCASE",
                 (name,),
             ).fetchone()
         if row is None:
@@ -309,28 +313,38 @@ class SqliteAgentDefinitionStore:
         effective_origin = origin
 
         with self._lock, self._conn() as c:
-            c.execute(
-                "INSERT INTO agent_definitions "
-                "(id, name, description, system_prompt, tools_allowed, "
-                " tools_denied, model, max_turns, isolation, origin, "
-                " enabled, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(id) DO UPDATE SET "
-                "name=excluded.name, description=excluded.description, "
-                "system_prompt=excluded.system_prompt, "
-                "tools_allowed=excluded.tools_allowed, "
-                "tools_denied=excluded.tools_denied, "
-                "model=excluded.model, max_turns=excluded.max_turns, "
-                "isolation=excluded.isolation, "
-                "enabled=excluded.enabled, "
-                "updated_at=excluded.updated_at",
-                (
-                    agent_id, name, description, system_prompt,
-                    json.dumps(tools_allowed), json.dumps(tools_denied),
-                    model, max_turns, isolation, effective_origin,
-                    1 if enabled else 0, created_at, now,
-                ),
-            )
+            try:
+                c.execute(
+                    "INSERT INTO agent_definitions "
+                    "(id, name, description, system_prompt, tools_allowed, "
+                    " tools_denied, model, max_turns, isolation, origin, "
+                    " enabled, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(id) DO UPDATE SET "
+                    "name=excluded.name, description=excluded.description, "
+                    "system_prompt=excluded.system_prompt, "
+                    "tools_allowed=excluded.tools_allowed, "
+                    "tools_denied=excluded.tools_denied, "
+                    "model=excluded.model, max_turns=excluded.max_turns, "
+                    "isolation=excluded.isolation, "
+                    "enabled=excluded.enabled, "
+                    "updated_at=excluded.updated_at",
+                    (
+                        agent_id, name, description, system_prompt,
+                        json.dumps(tools_allowed), json.dumps(tools_denied),
+                        model, max_turns, isolation, effective_origin,
+                        1 if enabled else 0, created_at, now,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                # #SUB-F2 — name is UNIQUE; the ON CONFLICT clause covers id,
+                # not name. A create/rename to an already-used name otherwise
+                # raised an uncaught IntegrityError → HTTP 500. Translate to a
+                # ValueError so the route returns a clean 409/400 (mirrors the
+                # instance_store precedent).
+                raise ValueError(
+                    f"an agent named {name!r} already exists"
+                ) from exc
         return self.get(agent_id)  # type: ignore[return-value]
 
     def delete(self, agent_id: str) -> bool:

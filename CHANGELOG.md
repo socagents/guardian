@@ -10,6 +10,16 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.60] (2026-06-23) — *Subagents: scoped, attributed, and tamper-resistant*
+
+Hardening the subagent (custom-agent) subsystem so spawns are scoped, attributed, and protected:
+
+- **A subagent must be given an explicit tool allowlist.** Creating or editing an agent with an empty allowlist is now rejected — previously it silently inherited the *full* parent tool catalog (including high-impact response tools) with no approval. Use `["*"]` to deliberately grant everything.
+- **Builtin and plugin-provided agents can no longer be edited or deleted via the API/UI.** Only operator-created agents are mutable; the others are owned by their source and would be overwritten on reload. The UI now shows a lock on those rows, and the API returns a clear 403.
+- **Renaming an agent to a name already in use returns a clean error** instead of a 500.
+- **Spawning an agent by name is now case-insensitive** — `Case-Triage` resolves `case-triage`.
+- **Failed and blocked subagent activity is now audited.** A spawn that fails before it starts (agent not found, disabled, or denied by a hook) writes a `chat_subagent_dispatch_failed` event, and a subagent attempting a tool outside its allowed scope writes a `subagent_tool_blocked` event (and records it in the sidechain transcript) — previously both were invisible in `/observability/events`.
+
 ## [v0.2.59] (2026-06-23) — *Hooks & approvals: honest signals, no silent traps*
 
 Hardening the hooks subsystem and the approval queue so nothing fails silently:
