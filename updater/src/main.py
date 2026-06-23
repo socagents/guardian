@@ -2813,14 +2813,16 @@ async def reconcile_connector_containers():
         iid = inst.get("id")
         existing_url = inst.get("container_url")
 
-        if not _is_known_id(cid):
-            # Not a connector/service we have a guardian-connector-<id>
-            # image for (e.g. a user-uploaded connector) — skip silently.
-            # Module-style connectors don't get per-instance
-            # containers; only container-style ones (e.g. web) do.
+        # #CONN-F12 — user-uploaded connectors carry an explicit image_ref
+        # (the agent surfaces it on /api/v1/instances). Self-heal those too,
+        # not just bundle KNOWN_CONNECTORS|KNOWN_SERVICES. Only skip when the
+        # id is unknown AND there's no image to start from (module-style /
+        # in-process connectors get no per-instance container).
+        inst_image_ref = inst.get("image_ref")
+        if not _is_known_id(cid) and not inst_image_ref:
             skipped.append({
                 "connector_id": cid, "instance_name": name,
-                "reason": "connector_id not in KNOWN_CONNECTORS|KNOWN_SERVICES",
+                "reason": "unknown connector_id and no image_ref (module-style or unknown)",
             })
             continue
 
@@ -2846,10 +2848,15 @@ async def reconcile_connector_containers():
                 )
 
         # Call our own start endpoint. Reuses all the validation +
-        # image-pull-with-retry + lifecycle logic.
+        # image-pull-with-retry + lifecycle logic. #CONN-F12 — forward the
+        # image_ref for user connectors so start_connector_instance takes its
+        # explicit-image path instead of deriving a bundle image ref.
         class _StubReq:
-            async def json(self):
-                return {"instance_id": iid}
+            async def json(self, _img=inst_image_ref):
+                body = {"instance_id": iid}
+                if _img:
+                    body["image_ref"] = _img
+                return body
 
         try:
             result = await start_connector_instance(cid, name, _StubReq())

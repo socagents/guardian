@@ -10,6 +10,12 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.64] (2026-06-23) — *Connector lifecycle: self-heal user connectors, longer research runs*
+
+- **Auto-restart now covers user-uploaded connectors.** The self-healing reconcile (which restarts a connector container that has died) previously only covered the built-in connectors; a custom connector you uploaded was skipped and stayed down. Reconcile now restarts user connectors too, using the image declared in their connector definition.
+- **Deep research runs to completion via `^tool`.** The direct-tool-call path's timeout was raised from 150s to 300s so a full `deep_research` run (which can take 1–3 minutes) returns its complete result instead of being cut off mid-run.
+- **Groundwork for removing user connectors from the UI.** Added the agent-side API to fully delete a user-uploaded connector (previously only reachable with a direct token call); the in-app button to surface and remove user connectors follows in the next release.
+
 ## [v0.2.63] (2026-06-23) — *Audit now records what a tool did, not just which fields it used*
 
 - **Tool-call audit rows now capture argument values, with secrets redacted.** Previously the audit log recorded only the *names* of a tool's arguments — so the command an analyst ran, the XQL query, the IoC enriched, or the note added were forensically invisible. Audit rows now include the argument *values* (e.g. `arg_values: {command: "!whois ip=1.2.3.4"}`), so `/observability/events` shows what actually happened. Values are redacted at capture time: arguments that are credential/code/config blobs (script snippets, skill/playbook/connector content, memory/personality/settings/job payloads, XSOAR list contents) are stored as `[redacted]`, any argument whose name looks secret (token/password/key/…) is redacted regardless of type, and long values are truncated. This is on by default; set `GUARDIAN_AUDIT_ARG_VALUES=0` to disable for strict-data-policy deployments.

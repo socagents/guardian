@@ -129,20 +129,23 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
             instances = store.list_for(connector_id)
         else:
             instances = store.list_all()
-        return JSONResponse(
-            {
-                "instances": [
-                    _instance_to_dict(
-                        i,
-                        redact_secrets=not include_secrets,
-                        secret_store=(
-                            store._secret_store if include_secrets else None
-                        ),
-                    )
-                    for i in instances
-                ]
-            }
-        )
+        out = []
+        for i in instances:
+            d = _instance_to_dict(
+                i,
+                redact_secrets=not include_secrets,
+                secret_store=(
+                    store._secret_store if include_secrets else None
+                ),
+            )
+            # #CONN-F12 — surface the connector's explicit image so the
+            # guardian-updater reconcile can self-heal USER-uploaded
+            # connector containers (it can't derive their image from the
+            # connector_id the way it does for bundle connectors). None for
+            # bundle connectors → updater derives guardian-connector-<id>.
+            d["image_ref"] = _connector_image_ref(d["connector_id"])
+            out.append(d)
+        return JSONResponse({"instances": out})
 
     # ─── v0.1.31 — connector container lifecycle helpers (Phase 2) ───────
     #

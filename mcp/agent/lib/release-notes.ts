@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.64",
+    date: "2026-06-23",
+    title: "Connector lifecycle — user-connector self-heal + longer research runs.",
+    highlights: [
+      "The self-healing reconcile now restarts user-uploaded connector containers too (was bundle-connectors-only); the agent surfaces each instance's image_ref on /api/v1/instances so the updater can start the right image.",
+      "The ^tool direct-call timeout raised 150s→300s so a full deep_research run (1–3 min) returns its complete deliverable instead of a proxy timeout.",
+      "Added the agent-side delete API for a user-uploaded connector (DELETE /api/agent/marketplace/{id}) — previously only reachable via a raw MCP_TOKEN call. The in-app UI affordance to surface + remove user connectors follows next release.",
+    ],
+  },
+  {
     version: "0.2.63",
     date: "2026-06-23",
     title: "Audit captures tool argument values (secrets redacted).",

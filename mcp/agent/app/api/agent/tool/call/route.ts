@@ -308,9 +308,12 @@ export async function POST(request: Request): Promise<NextResponse<ToolCallRespo
       params: { name: resolvedName, arguments: args },
     }),
     // Tool calls can take a while (XQL polling defaults to 40 × 3s = 2 min).
-    // Generous timeout so the operator gets the real result, not a proxy
-    // timeout. The connector container has its own internal polling cap.
-    signal: AbortSignal.timeout(150_000),
+    // #CDW-F1 — raised 150s → 300s so a full deep_research run (advertised
+    // 1–3 min, occasionally longer) returns its complete deliverable via the
+    // ^tool path instead of hitting a proxy timeout mid-run. deep_research is
+    // the only tool that runs past ~2 min; the connector container keeps its
+    // own internal polling caps so this is purely the proxy ceiling.
+    signal: AbortSignal.timeout(300_000),
   });
   if (!callResp.ok) {
     return NextResponse.json(

@@ -27,6 +27,9 @@ export interface MarketplaceConnector {
   installs: string;
   installCount: number;
   status: "installed" | "not_installed";
+  // #CONN-F3 — origin distinguishes a bundle (image-baked, undeletable)
+  // connector from a user-uploaded one (deletable). Absent on older payloads.
+  origin?: "bundle" | "user";
   reliability: string;
   authType: string;
   tools: Array<{
@@ -100,6 +103,16 @@ export async function installConnector(connectorId: string, version: string) {
 export async function uninstallConnector(connectorId: string) {
   return apiRequest<void>(
     `/api/v1/marketplace/${encodeURIComponent(connectorId)}/uninstall`,
+    { method: "DELETE" },
+  );
+}
+
+/** #CONN-F3 — fully remove a USER-uploaded connector (uninstall marker +
+ *  on-disk YAML). The MCP returns 403 (cannot_delete_bundle) for bundle
+ *  connectors and 409 (has_instances) if instances still exist. */
+export async function deleteConnector(connectorId: string) {
+  return apiRequest<{ ok: boolean; deleted: string }>(
+    `/api/v1/marketplace/${encodeURIComponent(connectorId)}`,
     { method: "DELETE" },
   );
 }
