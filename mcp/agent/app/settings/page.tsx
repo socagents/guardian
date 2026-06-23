@@ -215,6 +215,43 @@ export default function ServicesSettingsPage() {
     });
   }
 
+  // #PLAT-F19 — restart a managed service via the updater. Only
+  // guardian-agent is updater-managed (the embedded MCP / sqlite run
+  // in-process and can't be restarted independently). Restarting the
+  // agent briefly disconnects this UI session, so we confirm first.
+  const [restarting, setRestarting] = useState(false);
+  const [restartMsg, setRestartMsg] = useState<string | null>(null);
+  const RESTARTABLE_SERVICES = new Set(["guardian-agent"]);
+
+  async function restartService(name: string) {
+    setRestartMsg(null);
+    const ok = window.confirm(
+      `Restart ${name}? This runs 'docker compose restart ${name}' on the host. ` +
+        `The agent UI will briefly disconnect while it comes back up.`,
+    );
+    if (!ok) return;
+    setRestarting(true);
+    try {
+      const r = await fetch(
+        `/api/agent/services/${encodeURIComponent(name)}/restart`,
+        { method: "POST" },
+      );
+      if (!r.ok) {
+        const data = (await r.json().catch(() => ({}))) as { error?: string };
+        setRestartMsg(`Restart failed: ${data.error || r.status}`);
+      } else {
+        setRestartMsg(`Restart requested — ${name} is coming back up.`);
+        setTimeout(() => loadStatuses(), 8000);
+      }
+    } catch (err) {
+      setRestartMsg(
+        `Restart failed: ${err instanceof Error ? err.message : "network error"}`,
+      );
+    } finally {
+      setRestarting(false);
+    }
+  }
+
   const selectedDef = ALL_SERVICES.find((s) => s.name === selectedService);
   const healthyCount = ALL_SERVICES.filter((s) => getStatus(s.name) === "healthy").length;
 
@@ -567,21 +604,39 @@ export default function ServicesSettingsPage() {
             </div>
 
             {/* Footer */}
-            <div className="p-8 pt-6 border-t border-outline-variant/10 bg-surface-container-low/80 backdrop-blur-md flex gap-4">
-              <a
-                href={`/monitor/logs?service=${selectedDef.name}`}
-                className="flex-1 flex items-center justify-center gap-2 h-11 border border-outline-variant/40 rounded-lg text-sm font-bold text-on-surface hover:bg-surface-bright transition-colors"
-              >
-                <span className="material-symbols-outlined text-lg">terminal</span>
-                View Logs
-              </a>
-              <button
-                type="button"
-                className="flex-1 flex items-center justify-center gap-2 h-11 border border-error/40 rounded-lg text-sm font-bold text-error hover:bg-error/10 transition-colors"
-              >
-                <span className="material-symbols-outlined text-lg">restart_alt</span>
-                Restart Service
-              </button>
+            <div className="p-8 pt-6 border-t border-outline-variant/10 bg-surface-container-low/80 backdrop-blur-md space-y-3">
+              {restartMsg && (
+                <p className="text-xs text-on-surface-variant text-center">{restartMsg}</p>
+              )}
+              <div className="flex gap-4">
+                {/* #PLAT-F18 — link to the real logs surface (the old
+                    /monitor/logs route never existed → 404). The
+                    observability log tail filters by ?q=. */}
+                <a
+                  href={`/observability/logs?q=${encodeURIComponent(selectedDef.name)}`}
+                  className="flex-1 flex items-center justify-center gap-2 h-11 border border-outline-variant/40 rounded-lg text-sm font-bold text-on-surface hover:bg-surface-bright transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">terminal</span>
+                  View Logs
+                </a>
+                {/* #PLAT-F19 — wired to the updater restart endpoint.
+                    Disabled for the in-process pseudo-services (embedded
+                    MCP / sqlite) the updater can't restart. */}
+                <button
+                  type="button"
+                  disabled={restarting || !RESTARTABLE_SERVICES.has(selectedDef.name)}
+                  onClick={() => restartService(selectedDef.name)}
+                  title={
+                    RESTARTABLE_SERVICES.has(selectedDef.name)
+                      ? "Restart this service via the updater"
+                      : "This service runs in-process and can't be restarted independently"
+                  }
+                  className="flex-1 flex items-center justify-center gap-2 h-11 border border-error/40 rounded-lg text-sm font-bold text-error hover:bg-error/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <span className="material-symbols-outlined text-lg">restart_alt</span>
+                  {restarting ? "Restarting…" : "Restart Service"}
+                </button>
+              </div>
             </div>
           </aside>
         </>

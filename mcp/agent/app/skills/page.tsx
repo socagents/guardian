@@ -23,6 +23,10 @@ type LoadingMode = "always" | "on-demand";
 
 interface SkillDef {
   id: string;
+  // #SKILL-F7 — canonical on-disk path (e.g. "workflows/foo.md"), carried
+  // so the enable/disable toggle can PATCH the right skill. Optional: the
+  // static fallback SKILLS array omits it (derived from category/name then).
+  filePath?: string;
   name: string;
   displayName: string;
   category: Exclude<CategoryKey, "all">;
@@ -1578,6 +1582,8 @@ interface LiveSkillRow {
   size_bytes?: number;
   modified?: number;
   has_frontmatter?: boolean;
+  // #SKILL-F7 — per-skill enable flag from frontmatter (default true).
+  enabled?: boolean;
   // v0.1.34+ — present only on plugin-contributed skills (those
   // discovered under plugins/<vendor>/*.md). Surfaces vendor
   // attribution to the UI without forcing the row's main category
@@ -1605,6 +1611,7 @@ function liveRowToSkillDef(row: LiveSkillRow): SkillDef {
 
   return {
     id: `${category}-${row.name}`,
+    filePath: row.file_path,
     name: row.name,
     displayName: row.displayName || row.name,
     category,
@@ -1614,7 +1621,8 @@ function liveRowToSkillDef(row: LiveSkillRow): SkillDef {
     icon: row.icon || "extension",
     source: ((row.source as SourceType) || "platform"),
     loadingMode: ((row.loadingMode as LoadingMode) || "on-demand"),
-    enabled: true,
+    // #SKILL-F7 — reflect the persisted frontmatter flag (default on).
+    enabled: row.enabled !== false,
     locked: Boolean(row.locked),
     agentCount: 1,
     calls7d: 0,
@@ -1679,16 +1687,56 @@ export default function SkillsPage() {
     };
   }, []);
 
-  const toggleEnabled = useCallback((id: string) => {
-    setSkills((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)),
-    );
-    // Keep the open detail panel in sync if it's the same skill —
-    // otherwise the panel's availability toggle would lag the card.
-    setSelectedSkill((cur) =>
-      cur && cur.id === id ? { ...cur, enabled: !cur.enabled } : cur,
-    );
-  }, []);
+  const toggleEnabled = useCallback(
+    (id: string) => {
+      // #SKILL-F7 — persist the toggle. Pre-fix this mutated React state
+      // only (cosmetic, reset on refresh, disabled skills still injected
+      // into the prompt). Now it PATCHes the skill's `enabled` frontmatter
+      // via /api/skills; fetchSkillsForPrompt() drops disabled skills.
+      let target: SkillDef | undefined;
+      setSkills((prev) => {
+        target = prev.find((s) => s.id === id);
+        return prev;
+      });
+      if (!target) return;
+      const next = !target.enabled;
+      const filePath = target.filePath || `${target.category}/${target.name}.md`;
+
+      // Optimistic update (card + open detail panel).
+      setSkills((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, enabled: next } : s)),
+      );
+      setSelectedSkill((cur) =>
+        cur && cur.id === id ? { ...cur, enabled: next } : cur,
+      );
+
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/skills?file_path=${encodeURIComponent(filePath)}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ enabled: next }),
+            },
+          );
+          if (!res.ok) throw new Error(`status ${res.status}`);
+          const body = (await res.json()) as { success?: boolean };
+          if (!body.success) throw new Error("toggle rejected");
+        } catch {
+          // Revert on failure so the UI never claims a state the backend
+          // didn't accept.
+          setSkills((prev) =>
+            prev.map((s) => (s.id === id ? { ...s, enabled: !next } : s)),
+          );
+          setSelectedSkill((cur) =>
+            cur && cur.id === id ? { ...cur, enabled: !next } : cur,
+          );
+        }
+      })();
+    },
+    [],
+  );
 
   // ─── CRUD handlers (Phase 2 wiring) ─────────────────────────────
   // All four backend operations (skills_create / skills_read /

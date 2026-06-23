@@ -265,11 +265,34 @@ export default function PersonalityPage() {
     [triggerSave],
   );
 
-  const handleReset = useCallback(() => {
-    setConfig(DEFAULT_CONFIG);
-    configRef.current = DEFAULT_CONFIG;
-    triggerSave();
-  }, [triggerSave]);
+  // #PLAT-F2 — reset to the SERVER-SIDE bundle default via the dedicated
+  // reset endpoint, not by PUTting the Next.js DEFAULT_CONFIG constant
+  // (which drifts from the bundle default across releases and bypasses
+  // the reset endpoint's gating). The response carries the canonical
+  // personality, which we merge over local defaults like the load path.
+  const handleReset = useCallback(async () => {
+    setSaveStatus("saving");
+    setErrorMessage(null);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    try {
+      const r = await fetch("/api/agent/personality/reset", { method: "POST" });
+      if (!r.ok) {
+        const data = (await r.json().catch(() => ({}))) as { error?: string };
+        setErrorMessage(data.error || `reset ${r.status}`);
+        setSaveStatus("error");
+        return;
+      }
+      const data = (await r.json()) as { personality?: Partial<AgentConfig> };
+      const merged = { ...DEFAULT_CONFIG, ...(data.personality ?? {}) };
+      setConfig(merged);
+      configRef.current = merged;
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "reset failed");
+      setSaveStatus("error");
+    }
+  }, []);
 
   return (
     <div className="h-screen overflow-y-auto custom-scrollbar">

@@ -10,6 +10,17 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.58] (2026-06-23) — *Every button does something: dead/stub UI swept*
+
+A pass over UI affordances that looked clickable but did nothing (or led to a 404), so a customer never clicks and gets silence:
+
+- **Skill enable/disable now persists and takes effect.** Toggling a skill off on the `/skills` page writes an `enabled` flag to the skill and drops it from the agent's prompt — it no longer reverts on refresh or stays silently loadable. Re-enabling restores it. Both are recorded in the audit log.
+- **Memory search "Advanced" sliders now work.** The MMR (diversity) and temporal-decay (recency) sliders on `/memory` now actually re-rank results — previously they were sent but ignored by the search backend.
+- **Personality "Reset Defaults" restores the true bundle default** via the server-side reset endpoint, instead of writing a copy of the UI's built-in defaults (which could drift from the shipped default over time).
+- **Services panel — "View Logs" and "Restart Service" now function.** "View Logs" opens the observability log view filtered to the service (was a dead `/monitor/logs` link → 404). "Restart Service" restarts the agent via the updater after a confirmation; it's disabled for the in-process components that can't be restarted on their own.
+- **Notifications toolbar wired up.** "Mark All Read" marks every unread notification read; "Load more" pages through history; the inert date-filter and gear buttons were removed. Approval notifications now link to the Approvals page (the place that can actually approve/deny) instead of showing buttons that did nothing.
+- **Password recovery instructions corrected.** The backup/restore page now shows the in-container `reset-admin.mjs` command for recovering a lost UI password, replacing a "download" button that pointed at a removed endpoint.
+
 ## [v0.2.57] (2026-06-23) — *Audit attribution: who made the change*
 
 - **Audit events now record the principal behind a change, not just `user:operator`.** Every authenticated request is now stamped with its principal — `apikey:<id>` for an API-key caller, `user:operator` for a UI session — and that flows through to the audit trail. Mutations made via the REST API and chat turns are attributed to the specific API key or operator session that made them, so a multi-admin / multi-key deployment can answer "who did this" in `/observability/events`. (A client cannot spoof the attribution; the server sets it after authentication.)

@@ -27,6 +27,9 @@ interface SkillsListResponse {
   category: string;
   description?: string;
   attack?: string[];
+  // #SKILL-F7 — per-skill enable flag from frontmatter (default true).
+  // A skill with enabled:false is excluded from the system prompt below.
+  enabled?: boolean;
 }
 
 /**
@@ -52,7 +55,12 @@ export async function fetchSkillsForPrompt(): Promise<SkillSummary[]> {
     const rows = JSON.parse(raw) as SkillsListResponse[];
     if (!Array.isArray(rows)) return [];
 
-    return rows.map((row) => ({
+    return rows
+      // #SKILL-F7 — honor the /skills enable toggle. A skill the operator
+      // disabled (enabled:false in frontmatter) is dropped from the prompt
+      // so the agent neither sees nor loads it. Absence = enabled.
+      .filter((row) => row.enabled !== false)
+      .map((row) => ({
       name: row.name,
       displayName: row.displayName || row.name,
       category: row.category,

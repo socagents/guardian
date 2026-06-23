@@ -72,9 +72,6 @@ export default function BackupRestorePage() {
   const [force, setForce] = useState(false);
   const [result, setResult] = useState<ApplyResponse | null>(null);
 
-  // ── Recovery-tool state (v0.2.1+) ───────────────────────────────
-  const [downloadingScript, setDownloadingScript] = useState(false);
-
   async function handleDownload() {
     setDownloading(true);
     try {
@@ -192,44 +189,6 @@ export default function BackupRestorePage() {
       });
     } finally {
       setApplying(false);
-    }
-  }
-
-  async function handleDownloadResetScript() {
-    setDownloadingScript(true);
-    try {
-      const r = await fetch("/api/agent/recovery/reset-ui-password", {
-        cache: "no-store",
-      });
-      if (!r.ok) {
-        const detail = await r.text();
-        throw new Error(
-          `Server returned ${r.status}: ${detail.slice(0, 200)}`,
-        );
-      }
-      const blob = await r.blob();
-      const a = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-      a.href = url;
-      a.download = "reset-ui-password.sh";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      addToast({
-        variant: "success",
-        title: "reset-ui-password.sh downloaded",
-        description:
-          "Save it to /opt/guardian/ on your VM (chmod 755) and run sudo ./reset-ui-password.sh if you ever lose UI access.",
-      });
-    } catch (err) {
-      addToast({
-        variant: "error",
-        title: "Could not download recovery script",
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setDownloadingScript(false);
     }
   }
 
@@ -486,52 +445,31 @@ export default function BackupRestorePage() {
         <div className="space-y-3">
           <div>
             <p className="text-sm text-on-surface font-medium">
-              <code className="font-mono text-sm">reset-ui-password.sh</code>
+              Reset the admin / UI password
             </p>
             <p className="text-xs text-on-surface-variant/85 mt-1">
-              CLI for recovering a lost UI password. Wipes the
-              SecretStore hash and writes a fresh PBKDF2 hash — no{" "}
-              <code className="font-mono">docker compose down -v</code>
-              , no SQLite surgery. Reads <code className="font-mono">MCP_TOKEN</code>
-              {" "}from the running guardian_agent container, so the
-              operator never has to know it.
-            </p>
-            <p className="text-xs text-on-surface-variant/70 mt-2">
-              The v0.1.36+ guardian-installer already deposits this
-              file at <code className="font-mono">/opt/guardian/reset-ui-password.sh</code>
-              {" "}on every install. <strong>If you upgraded the agent
-              image with an older installer binary (e.g. via{" "}
-              <code className="font-mono">--upgrade-to</code>) the
-              file may not be on disk</strong> — download it here and
-              copy to <code className="font-mono">/opt/guardian/</code>.
+              If you lose UI access, reset the credential from the host
+              shell. The recovery CLI (<code className="font-mono">reset-admin.mjs</code>)
+              {" "}is baked into the agent image — it wipes the stored
+              hash and writes a fresh one without a{" "}
+              <code className="font-mono">docker compose down -v</code> or
+              any SQLite surgery. Run it via{" "}
+              <code className="font-mono">docker exec</code> on the VM that
+              hosts the stack:
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleDownloadResetScript}
-            disabled={downloadingScript}
-            className="px-5 py-2.5 rounded-xl bg-surface-container-highest text-on-surface text-sm font-medium hover:bg-surface-container transition-colors disabled:opacity-50 inline-flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">
-              {downloadingScript ? "hourglass_top" : "lock_reset"}
-            </span>
-            {downloadingScript
-              ? "Downloading…"
-              : "Download reset-ui-password.sh"}
-          </button>
-
-          <div className="text-xs text-on-surface-variant/80 pt-2 border-t border-white/5">
-            <p className="font-medium text-on-surface mb-1">
-              Install on your VM
-            </p>
+          <div className="text-xs text-on-surface-variant/80">
             <pre className="font-mono text-[11px] bg-surface-container-highest rounded-lg p-3 overflow-x-auto">
-{`# After downloading via the button above, copy to the install dir:
-sudo install -m 755 ~/Downloads/reset-ui-password.sh /opt/guardian/
+{`# On the host running the Guardian stack:
+docker exec -it guardian_agent node /app/cli/reset-admin.mjs
 
-# Then if you ever lose your UI password:
-cd /opt/guardian && sudo ./reset-ui-password.sh`}
+# Follow the prompts to set a new password, then sign in again.`}
             </pre>
+            <p className="text-on-surface-variant/70 mt-2">
+              No download needed — the tool ships inside the running
+              container, so it always matches your installed version.
+            </p>
           </div>
         </div>
       </section>

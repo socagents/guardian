@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.58",
+    date: "2026-06-23",
+    title: "Every button does something — dead/stub UI affordances fixed or removed.",
+    highlights: [
+      "Skill enable/disable on /skills now persists (writes an `enabled` flag to the skill) and actually drops a disabled skill from the agent's prompt — it no longer reverts on refresh or stays silently loadable. Audited as skill_enabled / skill_disabled.",
+      "Memory search Advanced sliders (MMR diversity, temporal-decay recency) on /memory now re-rank results — they were previously sent but ignored by the search backend.",
+      "Services panel: 'View Logs' opens the observability log view filtered to the service (was a dead /monitor/logs 404); 'Restart Service' restarts the agent via the updater behind a confirmation (disabled for in-process components).",
+      "Notifications: 'Mark All Read' and 'Load more' now work; the inert date-filter and gear buttons were removed; approval notifications link to /approvals (which can actually approve/deny) instead of dead buttons.",
+      "Personality 'Reset Defaults' now restores the server-side bundle default; backup/restore password-recovery shows the in-container reset-admin.mjs command instead of a download button pointing at a removed endpoint.",
+    ],
+  },
+  {
     version: "0.2.57",
     date: "2026-06-23",
     title: "Audit attribution — events record which API key / session made the change.",

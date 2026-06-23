@@ -658,11 +658,22 @@ def register_cognitive_routes(
             return JSONResponse(
                 {"error": "'query' is required (non-empty string)"}, status_code=400
             )
+        # #MEM-F6 — honor the /memory page's Advanced sliders. The store's
+        # search() already implements MMR re-rank (_apply_mmr) and temporal
+        # decay; pre-fix this route dropped mmr_lambda/temporal_decay_lambda
+        # so the sliders were inert. Forward them only when supplied (None →
+        # store keeps its own defaults).
+        rank_kwargs: dict[str, float] = {}
+        if body.get("mmr_lambda") is not None:
+            rank_kwargs["mmr_lambda"] = float(body["mmr_lambda"])
+        if body.get("temporal_decay_lambda") is not None:
+            rank_kwargs["temporal_decay_lambda"] = float(body["temporal_decay_lambda"])
         hits = memories.search(
             query,
             limit=int(body.get("limit") or 5),
             scope=body.get("scope") or None,
             min_score=float(body.get("min_score") or 0.0),
+            **rank_kwargs,
         )
         return JSONResponse(
             {

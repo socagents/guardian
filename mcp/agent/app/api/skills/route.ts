@@ -100,6 +100,28 @@ export async function PUT(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  // #SKILL-F7 — operator-direct enable/disable toggle. Mirrors DELETE:
+  // file_path arrives as a query param; the {enabled: bool} body is
+  // forwarded to the MCP REST PATCH endpoint (api/skills.py:patch_skill),
+  // which writes the flag into the skill's frontmatter. A disabled skill
+  // is dropped from the system prompt by fetchSkillsForPrompt(). The
+  // operator UI click IS the approval — no /approvals queue step.
+  const { searchParams } = new URL(request.url);
+  const filePath = searchParams.get("file_path");
+  if (!filePath) {
+    return NextResponse.json(
+      { success: false, error: "file_path is required." },
+      { status: 400 },
+    );
+  }
+  const encoded = filePath
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+  return proxyToMcp(request, `/api/v1/skills/${encoded}`);
+}
+
 export async function DELETE(request: NextRequest) {
   // Operator-direct soft-delete. Proxies to the MCP REST endpoint
   // (`bundles/spark/mcp/src/api/skills.py:delete_skill`) which calls

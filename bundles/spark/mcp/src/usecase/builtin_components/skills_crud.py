@@ -193,6 +193,12 @@ def get_all_skills() -> List[Dict[str, Any]]:
             "source": fm.get("source") or ("plugin" if plugin_vendor else "platform"),
             "loadingMode": fm.get("loadingMode") or "on-demand",
             "locked": bool(fm.get("locked", False)),
+            # #SKILL-F7 — per-skill enable flag. Default True (absence = on)
+            # so every pre-existing skill stays active. A skill with
+            # `enabled: false` in frontmatter is excluded from the system
+            # prompt by fetchSkillsForPrompt() (skills-registry.ts) — the
+            # /skills toggle now persists here instead of being cosmetic.
+            "enabled": bool(fm.get("enabled", True)),
             "attack": fm.get("attack") or [],
             # v0.3.26 — full frontmatter passthrough. Each skill
             # carries its own metadata in frontmatter, making the
@@ -448,6 +454,67 @@ def update_skill(file_path: str, content: str) -> Dict[str, Any]:
         return {"success": False, "error": f"Failed to update skill: {str(e)}"}
 
 
+def set_skill_enabled(file_path: str, enabled: bool) -> Dict[str, Any]:
+    """
+    Toggle a skill's `enabled` frontmatter flag (#SKILL-F7).
+
+    Rewrites only the YAML frontmatter's `enabled` key, preserving the
+    body verbatim. A disabled skill (`enabled: false`) is excluded from
+    the system prompt by fetchSkillsForPrompt(). Before this, the /skills
+    toggle mutated React state only — cosmetic, reset on refresh.
+
+    Args:
+        file_path: Relative path from skills directory.
+        enabled: Desired state.
+
+    Returns:
+        Result dict with success status + new enabled value.
+    """
+    skill_path = SKILLS_DIR / file_path
+    if not skill_path.exists():
+        return {"success": False, "error": f"Skill not found: {file_path}"}
+    if not skill_path.is_file():
+        return {"success": False, "error": f"Not a file: {file_path}"}
+
+    try:
+        original = skill_path.read_text(encoding="utf-8")
+        fm, body = parse_frontmatter(original)
+        # No frontmatter block at all → start one so the flag has a home.
+        fm = dict(fm)
+        fm["enabled"] = bool(enabled)
+        fm_yaml = yaml.safe_dump(fm, sort_keys=False, default_flow_style=False)
+        new_content = f"---\n{fm_yaml}---\n{body}"
+
+        # Single-level backup, same as update_skill's `.md.bak`.
+        try:
+            skill_path.with_suffix(".md.bak").write_text(original, encoding="utf-8")
+        except Exception:
+            pass
+        skill_path.write_text(new_content, encoding="utf-8")
+
+        try:
+            from usecase.audit_log import audit_log
+            log = audit_log()
+            if log is not None:
+                log.record(
+                    action="skill_enabled" if enabled else "skill_disabled",
+                    target=f"skill:{file_path}",
+                    status="success",
+                    metadata={"file_path": file_path, "enabled": bool(enabled)},
+                )
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "message": f"Skill {'enabled' if enabled else 'disabled'}: {file_path}",
+            "path": file_path,
+            "enabled": bool(enabled),
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Failed to toggle skill: {str(e)}"}
+
+
 def delete_skill(file_path: str) -> Dict[str, Any]:
     """
     Delete a skill file.
@@ -664,4 +731,22 @@ def skills_delete(file_path: str) -> str:
         JSON with success status and backup file location
     """
     result = delete_skill(file_path)
+    return json.dumps(result, indent=2)
+
+
+def skills_set_enabled(file_path: str, enabled: bool) -> str:
+    """
+    Enable or disable a skill (#SKILL-F7).
+
+    Writes the `enabled` flag into the skill's frontmatter. Disabled
+    skills are excluded from the agent's system prompt.
+
+    Args:
+        file_path: Relative path to skill file.
+        enabled: Desired state.
+
+    Returns:
+        JSON with success status and new enabled value.
+    """
+    result = set_skill_enabled(file_path, enabled)
     return json.dumps(result, indent=2)

@@ -600,6 +600,10 @@ audit:
     # operator UI/REST skill removal is visible + reversible).
     - "skill_updated"
     - "skill_deleted"
+    # #SKILL-F7 — per-skill enable/disable (operator /skills toggle now
+    # persists to frontmatter; a disabled skill is dropped from the prompt).
+    - "skill_enabled"
+    - "skill_disabled"
     # #79/#80 — backup export (carries cleartext secrets) + restore apply
     # (full-state overwrite incl. secrets). Emitted from the agent backup/
     # restore routes via POST /api/v1/audit.

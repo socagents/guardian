@@ -123,12 +123,20 @@ function matchesSearch(n: Notification, query: string): boolean {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+// Page size for the notification feed. "Load more" bumps the cap by
+// this increment and refetches (the store returns newest-first).
+const PAGE_SIZE = 50;
+
 export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateFilter, setDateFilter] = useState("Today");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  // True while the last fetch returned a full page — i.e. there may be
+  // more rows beyond the current cap, so "Load more" is meaningful.
+  const [hasMore, setHasMore] = useState(false);
+  const [marking, setMarking] = useState(false);
 
   // Live load from the guardian MCP's notification store via the
   // /api/agent/* proxy. Empty store → empty UI ("0 of 0"); no demo
@@ -137,16 +145,19 @@ export default function NotificationsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch("/api/agent/notifications?limit=100", {
+        const r = await fetch(`/api/agent/notifications?limit=${limit}`, {
           cache: "no-store",
         });
         if (!r.ok) throw new Error(`notifications fetch ${r.status}`);
         const data = (await r.json()) as { notifications?: unknown[] };
         if (cancelled) return;
-        const adapted = (data.notifications ?? []).map((row) =>
+        const rows = data.notifications ?? [];
+        const adapted = rows.map((row) =>
           adaptNotif(row as Parameters<typeof adaptNotif>[0])
         );
         setNotifications(adapted);
+        setHasMore(rows.length >= limit);
+        setError(null);
       } catch (err) {
         if (!cancelled) setError(String(err));
       }
@@ -154,7 +165,38 @@ export default function NotificationsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [limit]);
+
+  // #PLAT-F9/XCUT-F5 — Mark All Read. No bulk endpoint exists server-side,
+  // so ack each currently-unread notification (POST .../{id}/ack) then
+  // reflect the result locally. Failures leave that row unread.
+  const markAllRead = async () => {
+    const unread = notifications.filter((n) => !n.read);
+    if (unread.length === 0 || marking) return;
+    setMarking(true);
+    try {
+      const results = await Promise.allSettled(
+        unread.map((n) =>
+          fetch(`/api/agent/notifications/${encodeURIComponent(n.id)}/ack`, {
+            method: "POST",
+          }),
+        ),
+      );
+      const acked = new Set(
+        unread
+          .filter((_, i) => {
+            const r = results[i];
+            return r.status === "fulfilled" && r.value.ok;
+          })
+          .map((n) => n.id),
+      );
+      setNotifications((prev) =>
+        prev.map((n) => (acked.has(n.id) ? { ...n, read: true } : n)),
+      );
+    } finally {
+      setMarking(false);
+    }
+  };
 
   const source = notifications;
   const filtered = source.filter(
@@ -184,17 +226,13 @@ export default function NotificationsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="glass-panel flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors"
+            onClick={markAllRead}
+            disabled={marking || notifications.every((n) => n.read)}
+            className="glass-panel flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label="Mark all as read"
           >
             <span className="material-symbols-outlined text-base">done_all</span>
-            Mark All Read
-          </button>
-          <button
-            className="glass-panel w-9 h-9 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
-            aria-label="Notification settings"
-          >
-            <span className="material-symbols-outlined text-lg">settings</span>
+            {marking ? "Marking…" : "Mark All Read"}
           </button>
         </div>
       </div>
@@ -234,16 +272,6 @@ export default function NotificationsPage() {
               className="w-64 h-8 pl-8 pr-3 rounded-lg bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary/40 transition-colors"
             />
           </div>
-
-          {/* Divider */}
-          <div className="w-px h-6 bg-outline-variant/20" />
-
-          {/* Date dropdown */}
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-on-surface-variant hover:text-on-surface transition-colors">
-            <span className="material-symbols-outlined text-sm">calendar_today</span>
-            {dateFilter}
-            <span className="material-symbols-outlined text-sm">expand_more</span>
-          </button>
         </div>
       </div>
 
@@ -319,19 +347,22 @@ export default function NotificationsPage() {
                   </span>
                 </div>
 
-                {/* Action buttons for approvals */}
+                {/* #PLAT-F9/XCUT-F5 — approvals resolve on the dedicated
+                    /approvals page (and inline in the chat where they're
+                    raised), which carry the approval id the notification
+                    row doesn't. A no-op Approve/Deny here would let the
+                    operator think a destructive tool was released while it
+                    stayed blocked on the bus until the 5-min timeout, so
+                    we deep-link to the real surface instead. */}
                 {n.actions && (
                   <div className="flex items-center gap-2 mt-3">
-                    {n.actions.approve && (
-                      <button className="px-4 py-1.5 rounded-lg bg-secondary/20 text-secondary text-xs font-medium hover:bg-secondary/30 transition-colors">
-                        Approve
-                      </button>
-                    )}
-                    {n.actions.deny && (
-                      <button className="px-4 py-1.5 rounded-lg bg-error/10 text-error text-xs font-medium hover:bg-error/20 transition-colors">
-                        Deny
-                      </button>
-                    )}
+                    <a
+                      href="/approvals"
+                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-tertiary-container/40 text-tertiary text-xs font-medium hover:bg-tertiary-container/60 transition-colors"
+                    >
+                      Review in Approvals
+                      <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    </a>
                   </div>
                 )}
               </div>
@@ -345,9 +376,16 @@ export default function NotificationsPage() {
         <span className="text-xs text-on-surface-variant/60 font-mono">
           Showing {filtered.length} of {source.length} notifications
         </span>
-        <button className="glass-panel px-4 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors">
-          Load more
-        </button>
+        {/* #PLAT-F9 — Load more raises the fetch cap and refetches. Hidden
+            when the last page wasn't full (no more rows to pull). */}
+        {hasMore && (
+          <button
+            onClick={() => setLimit((l) => l + PAGE_SIZE)}
+            className="glass-panel px-4 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors"
+          >
+            Load more
+          </button>
+        )}
       </div>
     </div>
   );

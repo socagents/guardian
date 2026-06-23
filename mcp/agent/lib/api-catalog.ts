@@ -778,6 +778,58 @@ const COGNITIVE: ApiEndpoint[] = [
     tags: ["skills", "catalog", "delete"],
   },
   {
+    id: "skills-patch",
+    category: "cognitive",
+    method: "PATCH",
+    path: "/api/skills",
+    summary: "Enable or disable a skill",
+    description: "Native agent route. Like DELETE, it proxies to the MCP REST endpoint PATCH /api/v1/skills/{file_path:path} (api/skills.py patch_skill → skills_crud.set_skill_enabled) rather than calling a tool. file_path arrives as a query param; the {enabled: boolean} body is forwarded. The handler writes the `enabled` flag into the skill's YAML frontmatter (preserving the body). A skill with enabled=false is excluded from the agent's system prompt by fetchSkillsForPrompt — disabling hides it from the agent entirely. Recorded in the audit log as skill_enabled / skill_disabled. The operator UI click is the approval (no /approvals step).",
+    queryParams: [
+      {
+        name: "file_path",
+        type: "string",
+        description: "Relative path from the skills directory of the skill to toggle, e.g. 'workflows/xsoar_case_investigation.md'. Read from the query string, then forwarded as the {file_path:path} suffix to the MCP REST endpoint.",
+        required: true,
+        example: "workflows/xsoar_case_investigation.md"
+      }
+    ],
+    body: {
+      contentType: "application/json",
+      schema: {
+        type: "object",
+        required: ["enabled"],
+        properties: {
+          enabled: { type: "boolean", description: "Desired state. false drops the skill from the agent prompt." }
+        }
+      },
+      example: { enabled: false }
+    },
+    responses: [
+      {
+        status: "200",
+        description: "Skill toggled. set_skill_enabled returns {success:true, message:'Skill disabled: <path>', path:'<path>', enabled:false}.",
+        example: {
+          success: true,
+          message: "Skill disabled: workflows/xsoar_case_investigation.md",
+          path: "workflows/xsoar_case_investigation.md",
+          enabled: false
+        }
+      },
+      {
+        status: "400",
+        description: "file_path query param missing, or the body's 'enabled' is not a boolean.",
+        example: { success: false, error: "file_path is required." }
+      },
+      {
+        status: "404",
+        description: "Skill not found. The MCP REST patch_skill handler sets 404 when set_skill_enabled returns {success:false, error:'Skill not found: <path>'}.",
+        example: { success: false, error: "Skill not found: workflows/missing.md" }
+      }
+    ],
+    riskTier: "soft",
+    tags: ["skills", "catalog", "update"],
+  },
+  {
     id: "skills-post",
     category: "cognitive",
     method: "POST",

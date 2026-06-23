@@ -16,6 +16,8 @@ Endpoints (all require `Authorization: Bearer <MCP_TOKEN>`):
                                                    filename, content)
   PUT    /api/v1/skills/{file_path:path}         → update content
                                                    (body: content)
+  PATCH  /api/v1/skills/{file_path:path}         → toggle enabled flag
+                                                   (body: {enabled: bool})
   DELETE /api/v1/skills/{file_path:path}         → soft-delete one
                                                    (file moves to
                                                    /app/skills/.deleted/)
@@ -178,6 +180,38 @@ def register_skill_routes(mcp: FastMCP) -> None:
 
     @mcp.custom_route(
         "/api/v1/skills/{file_path:path}",
+        methods=["PATCH"],
+        include_in_schema=False,
+    )
+    async def patch_skill(request: Request) -> JSONResponse:
+        """Partial update — currently the `enabled` toggle (#SKILL-F7).
+
+        Body: {"enabled": true|false}. Operator-direct, same as the
+        other mutating routes (the UI click is the approval). A disabled
+        skill is excluded from the agent's system prompt.
+        """
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        actor_token = set_current_actor("user:operator")
+        try:
+            file_path = request.path_params["file_path"]
+            body = await request.json()
+            enabled = (body or {}).get("enabled")
+            if not isinstance(enabled, bool):
+                return JSONResponse(
+                    {"success": False, "error": "'enabled' (boolean) is required"},
+                    status_code=400,
+                )
+            result = _decode(
+                skills_crud.skills_set_enabled(file_path=file_path, enabled=enabled)
+            )
+            status = 200 if result.get("success") else 404
+            return JSONResponse(result, status_code=status)
+        finally:
+            reset_current_actor(actor_token)
+
+    @mcp.custom_route(
+        "/api/v1/skills/{file_path:path}",
         methods=["DELETE"],
         include_in_schema=False,
     )
@@ -200,5 +234,5 @@ def register_skill_routes(mcp: FastMCP) -> None:
 
     logger.info(
         "Skills REST routes registered: GET/POST /api/v1/skills, "
-        "GET/PUT/DELETE /api/v1/skills/{file_path:path}"
+        "GET/PUT/PATCH/DELETE /api/v1/skills/{file_path:path}"
     )
