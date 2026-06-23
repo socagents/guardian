@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.63",
+    date: "2026-06-23",
+    title: "Audit captures tool argument values (secrets redacted).",
+    security: true,
+    highlights: [
+      "Tool-call audit rows now include argument VALUES (arg_values) — the command run, XQL query, IoC enriched, note added — not just the argument names, closing a forensic gap in /observability/events.",
+      "Secrets are redacted at capture time: credential/code/config-blob args (snippet_code, skill/playbook/connector content, memory/personality/settings/job payloads, XSOAR list contents) → [redacted]; any secret-named arg (token/password/key/…) → [redacted] regardless of type; long values truncated to 512 chars. Forensic action data (command/query/IoC) is captured, not redacted.",
+      "On by default; GUARDIAN_AUDIT_ARG_VALUES=0 disables it. The shared secret-key redaction list was hardened and de-duplicated (one source of truth), strengthening the approval-card scrubber too.",
+    ],
+  },
+  {
     version: "0.2.62",
     date: "2026-06-23",
     title: "Connector & updater actions now in the audit trail.",

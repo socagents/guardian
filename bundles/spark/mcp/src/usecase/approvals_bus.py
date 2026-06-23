@@ -458,7 +458,10 @@ class InProcessApprovalsBus:
 
     @staticmethod
     def _sanitize_args(args: dict[str, Any]) -> dict[str, Any]:
-        SENSITIVE = ("token", "password", "secret", "bearer", "apikey", "api_key", "auth")
+        # #XSOAR-F4/XSIAM-F5 — reuse the one authoritative sensitive-key set
+        # (hardened beyond the original 7) instead of a local duplicate.
+        from usecase.audit_log import AUDIT_SENSITIVE_KEY_SUBSTRINGS
+        SENSITIVE = AUDIT_SENSITIVE_KEY_SUBSTRINGS
         out: dict[str, Any] = {}
         for k, v in args.items():
             if not isinstance(v, str):

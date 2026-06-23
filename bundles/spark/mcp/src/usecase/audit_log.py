@@ -99,6 +99,19 @@ logger = logging.getLogger("Guardian MCP")
 
 DEFAULT_DATA_ROOT = Path("/app/data")
 
+# #XSOAR-F4/XSIAM-F5 — single authoritative set of key-name substrings that
+# mark a metadata field as secret-bearing. Used by SqliteAuditLog._sanitize
+# (last-line scrub) AND by connector_loader._sanitize_arg_values (capture-time
+# redaction of tool argument values) AND approvals_bus arg sanitizing — kept
+# in ONE place so the three stay in sync. Hardened beyond the original 7 to
+# catch the credential-name variants an adversarial review surfaced.
+AUDIT_SENSITIVE_KEY_SUBSTRINGS: tuple[str, ...] = (
+    "token", "password", "secret", "bearer", "apikey", "api_key", "auth",
+    "credential", "passwd", "pwd", "session", "cookie", "private",
+    "passphrase", "privatekey", "private_key", "client_secret", "refresh",
+    "access_key", "secretkey", "secret_key", "signature", "otp", "pin",
+)
+
 # Contextvar for actor attribution. The admin HTTP layer sets this to
 # "user:operator" for the duration of a request; the connector-loader
 # wrapper sets it to "agent" for the duration of a tool call. Anything
@@ -402,7 +415,7 @@ class SqliteAuditLog:
           - Strings that look like SecretStore PATHS (`/agents/...`)
             pass through — they're references, not values.
         """
-        SENSITIVE = ("token", "password", "secret", "bearer", "apikey", "api_key", "auth")
+        SENSITIVE = AUDIT_SENSITIVE_KEY_SUBSTRINGS
         scrubbed: dict[str, Any] = {}
         for k, v in meta.items():
             if not isinstance(v, str):

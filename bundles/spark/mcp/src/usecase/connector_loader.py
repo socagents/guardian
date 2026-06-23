@@ -32,6 +32,7 @@ from __future__ import annotations
 import functools
 import importlib
 import inspect
+import json
 import logging
 import os
 from pathlib import Path
@@ -366,6 +367,107 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
 # ─────────────────────────────────────────────────────────────────
 
 DEFAULT_BUNDLE_ROOT = "/app/bundle"
+
+
+# #XSOAR-F4/XSIAM-F5 — tool-arg auditing. _audit_arg_keys records only arg KEY
+# names; these helpers add the VALUES (forensic visibility of WHAT the agent
+# did) while redacting secrets AT CAPTURE TIME — because audit_log._sanitize
+# only scrubs top-level STRING values (proven by adversarial review: it does
+# not recurse into dicts and skips non-str values at a sensitive key), so a
+# nested or non-str secret would slip through if we relied on it alone.
+#
+# Tool-arg VALUES that are full credential/code/config blobs — or a known
+# cred-storage surface (XSOAR Lists) — are redacted to a sentinel rather than
+# captured. NOTE: forensic action data (run_command command strings, XQL
+# queries, IoC values, incident notes) is deliberately NOT here — capturing it
+# (truncated) is the whole point of the finding; the 512-char cap bounds any
+# inline-secret blast radius and GUARDIAN_AUDIT_ARG_VALUES=0 is the kill switch
+# for high-sensitivity tenants. Matched on the bare "<tool_basename>:<arg>" so
+# the namespace/separator form (xsoar.run_command vs builtins:skills_create)
+# doesn't matter.
+_ALWAYS_REDACT_ARG_PAIRS: frozenset = frozenset({
+    "scripts_run_snippet:snippet_code",
+    "scripts_run_script:parameters_values",
+    "set_list:content",
+    "append_to_list:items",
+    "import_playbook:yaml_content",
+    "add_lookup_data:data",
+    "skills_create:content",
+    "skills_update:content",
+    "memory_store:value",
+    "personality_update:blob",
+    "personality_patch:updates",
+    "settings_update:updates",
+    "connector_upload:yaml_content",
+    "playbook_validate:playbook_yaml",
+    "agent_batch_propose:actions",
+    "jobs_create:action",
+    "jobs_update:action",
+    "indicator_upsert:enrichment",
+})
+
+_ARG_VALUE_MAX = 512
+_ARG_VALUES_TOTAL_MAX = 8192
+_REDACTED = "[redacted]"
+
+
+def _arg_values_enabled() -> bool:
+    """Capture is ON by default; GUARDIAN_AUDIT_ARG_VALUES=0/false/no/off disables."""
+    return os.getenv("GUARDIAN_AUDIT_ARG_VALUES", "1").strip().lower() not in (
+        "0", "false", "no", "off",
+    )
+
+
+def _sanitize_arg_values(tool_ns: str, kwargs: dict[str, Any]) -> dict[str, str]:
+    """Capture tool-call argument VALUES for the audit trail, redacting
+    secrets AT CAPTURE TIME (#XSOAR-F4/XSIAM-F5).
+
+    Returns a FLAT dict[str,str] (never nested) so audit_log._sanitize stays a
+    redundant last line of defense. Redaction order: (1) enable flag;
+    (2) skip framework kwargs (instance selector, FastMCP Context); (3) always-
+    redact (tool:arg) blobs → sentinel; (4) sensitive key-name substring
+    (type-agnostic) → sentinel; (5) else coerce to str (json for dict/list) +
+    truncate to 512 chars. The whole dict is size-bounded.
+    """
+    from usecase.audit_log import AUDIT_SENSITIVE_KEY_SUBSTRINGS
+
+    if not _arg_values_enabled():
+        return {}
+    tool_base = tool_ns.rsplit(".", 1)[-1].rsplit(":", 1)[-1]
+    out: dict[str, str] = {}
+    total = 0
+    for k, v in kwargs.items():
+        if k == "instance":
+            continue  # multi-instance selector, not a real tool arg
+        if type(v).__name__ == "Context":
+            continue  # FastMCP request-context object, not an arg value
+        kl = k.lower() if isinstance(k, str) else str(k).lower()
+        if (
+            f"{tool_base}:{k}" in _ALWAYS_REDACT_ARG_PAIRS
+            or any(s in kl for s in AUDIT_SENSITIVE_KEY_SUBSTRINGS)
+        ):
+            sval = _REDACTED
+        else:
+            if isinstance(v, str):
+                sval = v
+            elif isinstance(v, (dict, list)):
+                try:
+                    sval = json.dumps(v, default=str)
+                except Exception:  # noqa: BLE001
+                    sval = str(v)
+            else:
+                sval = str(v)
+            if len(sval) > _ARG_VALUE_MAX:
+                sval = (
+                    sval[:_ARG_VALUE_MAX]
+                    + f"…(truncated {len(sval) - _ARG_VALUE_MAX} chars)"
+                )
+        if total + len(sval) > _ARG_VALUES_TOTAL_MAX:
+            out["_arg_values_truncated"] = "true"
+            break
+        out[str(k)] = sval
+        total += len(sval)
+    return out
 
 
 def _bundle_root() -> Path:
@@ -933,6 +1035,11 @@ def _wrap_with_instance(
                 v = result.get(k)
                 if v:
                     meta[k] = v
+        # #XSOAR-F4/XSIAM-F5 — capture arg VALUES (redacted at capture) so the
+        # audit row shows WHAT the agent did, not just which arg keys it used.
+        arg_values = _sanitize_arg_values(namespaced, kwargs)
+        if arg_values:
+            meta["arg_values"] = arg_values
         return meta
 
     if inspect.iscoroutinefunction(fn):
@@ -1086,6 +1193,11 @@ def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
                 "connector_id": None,
                 "arg_keys": _keys(args, kwargs),
             }
+            # #XSOAR-F4/XSIAM-F5 — builtins flow through this separate emit
+            # (they never call _audit_meta), so capture arg values here too.
+            arg_values = _sanitize_arg_values(f"builtins:{tool_name}", kwargs)
+            if arg_values:
+                meta["arg_values"] = arg_values
             if error is not None:
                 meta["error"] = error
             record_event(
