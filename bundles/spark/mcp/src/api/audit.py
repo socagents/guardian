@@ -224,8 +224,15 @@ def register_audit_routes(mcp: FastMCP, audit: SqliteAuditLog) -> None:
         """
         if (resp := require_bearer(request)) is not None:
             return resp
-        from usecase.audit_log import set_current_actor, reset_current_actor
-        actor_token = set_current_actor("user:operator")
+        from usecase.audit_log import (
+            set_current_actor, reset_current_actor, get_current_actor,
+        )
+        # #API-F18/OBS-F8 — attribute to the authenticated principal the
+        # Next.js middleware stamped (X-Guardian-Actor → actor contextvar via
+        # TriggerContextMiddleware: apikey:<id> | user:operator). Falls back
+        # to user:operator when no principal header was forwarded (e.g. an
+        # internal/loopback caller).
+        actor_token = set_current_actor(get_current_actor() or "user:operator")
         try:
             try:
                 body = await request.json()

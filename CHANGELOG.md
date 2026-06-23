@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.57] (2026-06-23) — *Audit attribution: who made the change*
+
+- **Audit events now record the principal behind a change, not just `user:operator`.** Every authenticated request is now stamped with its principal — `apikey:<id>` for an API-key caller, `user:operator` for a UI session — and that flows through to the audit trail. Mutations made via the REST API and chat turns are attributed to the specific API key or operator session that made them, so a multi-admin / multi-key deployment can answer "who did this" in `/observability/events`. (A client cannot spoof the attribution; the server sets it after authentication.)
+
 ## [v0.2.56] (2026-06-23) — *Audit attribution: turn-start + direct tool calls*
 
 - **Chat turns are now logged the moment they start.** Previously the first audit record for a turn was its end-of-turn cost row, so a turn that failed before the first model call (an auth/setup error, a hook denial, an unreachable provider) left no trace in `/observability/events`. Each turn now writes a `chat_turn_started` event up front.

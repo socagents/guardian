@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.57",
+    date: "2026-06-23",
+    title: "Audit attribution — events record which API key / session made the change.",
+    security: true,
+    highlights: [
+      "Audit events now record the authenticated principal — apikey:<id> for an API-key caller, user:operator for a UI session — instead of a blanket user:operator. The server stamps it after auth (clients can't spoof it) and it flows through the proxy to the MCP audit log.",
+      "REST-API mutations and chat turns are attributed to the specific key/session, so a multi-admin or multi-key deployment can answer 'who did this' in /observability/events.",
+    ],
+  },
+  {
     version: "0.2.56",
     date: "2026-06-23",
     title: "Audit attribution — turn-start events + operator-direct tool calls.",

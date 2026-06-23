@@ -106,9 +106,17 @@ async function safeAudit(
     durationMs?: number;
     metadata?: Record<string, unknown>;
     trigger?: string;
+    // #CHAT-F2 — the authenticated principal (apikey:<id> | user:operator),
+    // captured from the middleware-stamped X-Guardian-Actor on the chat
+    // request, so chat-path audit rows attribute to the real caller instead
+    // of the MCP's default user:operator.
+    actor?: string;
   } = {},
 ): Promise<void> {
   try {
+    const headers: Record<string, string> = {};
+    if (args.trigger) headers['X-Guardian-Trigger'] = args.trigger;
+    if (args.actor) headers['X-Guardian-Actor'] = args.actor;
     await callMcpServer('/api/v1/audit', {
       method: 'POST',
       body: {
@@ -118,7 +126,7 @@ async function safeAudit(
         duration_ms: args.durationMs,
         metadata: args.metadata ?? {},
       },
-      headers: args.trigger ? { 'X-Guardian-Trigger': args.trigger } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
     });
   } catch (err) {
     console.warn(
@@ -3824,6 +3832,10 @@ export async function POST(request: NextRequest) {
   // is resolved below — that way the operator typing in the UI
   // also gets a stable origin in audit + approvals tables.
   let trigger = request.headers.get('x-guardian-trigger') || undefined;
+  // #CHAT-F2 — the principal the middleware attributed (apikey:<id> |
+  // user:operator). Threaded into chat-path audit so turns attribute to the
+  // real caller, not the MCP's hardcoded user:operator default.
+  const actor = request.headers.get('x-guardian-actor') || undefined;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -3980,6 +3992,7 @@ export async function POST(request: NextRequest) {
             provider: requestedProvider ?? 'default',
           },
           trigger,
+          actor,
         });
 
         const turnStartedAt = Date.now();

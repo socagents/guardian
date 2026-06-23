@@ -85,6 +85,17 @@ const EXEMPT_PATHS = new Set<string>([
   "/api/agent/internal/fire-hook",
 ]);
 
+// #API-F18/OBS-F8 — stamp the authenticated principal on the request so the
+// MCP-side audit attributes a mutation to the specific operator session or
+// API key (forwarded by lib/mcp-proxy → TriggerContextMiddleware → audit
+// actor), instead of a hardcoded "user:operator". We OVERWRITE any inbound
+// X-Guardian-Actor so a client can't spoof attribution.
+function nextWithActor(request: NextRequest, actor: string): NextResponse {
+  const headers = new Headers(request.headers);
+  headers.set("x-guardian-actor", actor);
+  return NextResponse.next({ request: { headers } });
+}
+
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
 
@@ -143,7 +154,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
         { status: 403 },
       );
     }
-    return NextResponse.next();
+    return nextWithActor(request, `apikey:${keyResult.keyId || "unknown"}`);
   }
 
   const cookie = request.cookies.get(SESSION_COOKIE_NAME);
@@ -166,7 +177,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  return NextResponse.next();
+  return nextWithActor(request, "user:operator");
 }
 
 // Next.js requires `matcher` to be statically analyzable — string literals,

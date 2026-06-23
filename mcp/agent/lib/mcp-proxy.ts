@@ -92,6 +92,14 @@ export async function proxyToMcp(
   } else if (body !== null) {
     headers['Content-Type'] = 'application/json';
   }
+  // #API-F18/OBS-F8 — forward the principal the middleware attributed
+  // (X-Guardian-Actor) + the trigger so the MCP-side audit row records WHO
+  // made the change (apikey:<id> | user:operator) instead of a hardcoded
+  // user:operator. Both are set on the incoming request by middleware.ts.
+  const fwdActor = request.headers.get('x-guardian-actor');
+  if (fwdActor) headers['X-Guardian-Actor'] = fwdActor;
+  const fwdTrigger = request.headers.get('x-guardian-trigger');
+  if (fwdTrigger) headers['X-Guardian-Trigger'] = fwdTrigger;
 
   try {
     const resp = await fetch(upstreamUrl, {

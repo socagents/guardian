@@ -40,8 +40,10 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from usecase.audit_log import (
+    reset_current_actor,
     reset_current_approval_bypass,
     reset_current_trigger,
+    set_current_actor,
     set_current_approval_bypass,
     set_current_trigger,
 )
@@ -49,6 +51,14 @@ from usecase.audit_log import (
 logger = logging.getLogger("Guardian MCP.trigger")
 
 HEADER_NAME = "X-Guardian-Trigger"
+
+# #API-F18/OBS-F8/CHAT-F2 — the authenticated principal, set by the Next.js
+# middleware after it validates the request (apikey:<id> | user:operator).
+# Lets audit attribute a REST mutation to the specific operator session or
+# API key instead of the hardcoded "user:operator". Same per-request
+# contextvar lifetime as the trigger header.
+ACTOR_HEADER_NAME = "X-Guardian-Actor"
+MAX_ACTOR_LEN = 128
 
 # v0.1.27: optional bypass header. Same lifetime as the trigger header
 # (per-request contextvar). Truthy values activate bypass; anything
@@ -81,6 +91,14 @@ class TriggerContextMiddleware(BaseHTTPMiddleware):
             if trigger:
                 token = set_current_trigger(trigger)
 
+        # Principal attribution (set by the Next.js middleware post-auth).
+        actor_token = None
+        actor_raw = request.headers.get(ACTOR_HEADER_NAME)
+        if actor_raw:
+            actor = actor_raw.strip()[:MAX_ACTOR_LEN] or None
+            if actor:
+                actor_token = set_current_actor(actor)
+
         # Bypass header: any of the truthy strings activates it.
         # Logged at INFO when active so operators can see post-hoc that
         # an approval was skipped due to bypass policy.
@@ -98,6 +116,8 @@ class TriggerContextMiddleware(BaseHTTPMiddleware):
         finally:
             if token is not None:
                 reset_current_trigger(token)
+            if actor_token is not None:
+                reset_current_actor(actor_token)
             if bypass_token is not None:
                 reset_current_approval_bypass(bypass_token)
 
