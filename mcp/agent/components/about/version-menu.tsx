@@ -130,6 +130,12 @@ export function VersionMenu({ collapsed }: VersionMenuProps) {
               onClick={handleAbout}
             />
             <MenuItem
+              icon="system_update_alt"
+              label="Check for updates"
+              hint="Compare running vs latest release"
+              onClick={handleAbout}
+            />
+            <MenuItem
               icon="auto_awesome"
               label="What's new"
               hint="Highlights of the running release"

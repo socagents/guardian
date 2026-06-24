@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.65",
+    date: "2026-06-24",
+    title: "Upgrade Guardian from inside the app.",
+    highlights: [
+      "One-click stack upgrade in the About modal: open About (or 'Check for updates' in its menu) and, when a newer release exists, an 'Update available — v<running> → v<latest>' banner offers an Upgrade button — no SSH.",
+      "Upgrade pulls the new images and swaps containers in place, streaming live progress (fetching manifest → pulling → swapping → healthcheck). The agent restarts during the swap; the page waits for it to come back and reloads onto the new version automatically.",
+      "Safe to leave running: closing the modal won't cancel an in-progress upgrade, and if one is already running (e.g. from another tab) the modal attaches to it instead of starting a second. The installer-binary path remains for clean re-installs and version pinning.",
+    ],
+  },
+  {
     version: "0.2.64",
     date: "2026-06-23",
     title: "Connector lifecycle — user-connector self-heal + longer research runs.",

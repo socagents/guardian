@@ -947,14 +947,38 @@ POST   /api/v1/connectors/reconcile`}</Pre>
 
  <SubSection icon="callback" title="Update flow → operator visibility">
  <p>
- An update is an SSE stream from{" "}
- <Code>POST /api/v1/update</Code>. The chat UI&apos;s About
- modal renders a progress bar while the stream is active; the
- sidebar version chip flips green only after every service is
- healthy. Failures are surfaced verbatim (image-pull error
- string, healthcheck timeout, etc.) — no silent retries on
- long-tail failures. Recovery is a manual SSH job; v1 has no
- rollback.
+ The operator drives the whole upgrade from the chat UI&apos;s
+ About modal — no SSH. Opening the modal fires{" "}
+ <Code>GET /api/agent/update/check</Code>, which the agent
+ proxies (bearer <Code>MCP_TOKEN</Code>, 15s timeout) to
+ guardian-updater&apos;s <Code>GET /api/v1/version/check</Code>;
+ when a newer GitHub Release exists the modal shows an{" "}
+ <em>Update available — v{`{running}`} → v{`{latest}`}</em>{" "}
+ banner with an <strong>Upgrade</strong> button. Clicking it
+ POSTs <Code>/api/agent/update/apply</Code>, a{" "}
+ <Code>runtime:&apos;nodejs&apos;</Code> SSE pass-through to
+ guardian-updater&apos;s <Code>POST /api/v1/update</Code>. The
+ updater streams typed <Code>phase</Code> /{" "}
+ <Code>pull_progress</Code> / <Code>error</Code> frames that the
+ modal renders as a live progress log.
+ </p>
+ <p>
+ The swap is the tricky part: after the{" "}
+ <Code>swapping</Code> phase guardian-agent&apos;s own container
+ is replaced, severing the SSE stream mid-flight. The client
+ (<Code>lib/use-update-stream.ts</Code>) treats a disconnect{" "}
+ <em>after</em> <Code>swapping</Code> as an expected restart,
+ not an error — it flips to a &quot;restarting&quot; state and
+ polls <Code>GET /api/agent/version</Code> until the new agent
+ answers, then reloads the page onto the new version. Because
+ the updater holds a single-flight lock for the whole run, a
+ second trigger returns <Code>409</Code>; the UI re-attaches via{" "}
+ <Code>GET /api/agent/update/status</Code> rather than opening a
+ second stream. The sidebar version chip flips green only after
+ every service is healthy. Failures are surfaced verbatim
+ (image-pull error string, healthcheck timeout, etc.) — no
+ silent retries on long-tail failures. Recovery is a manual SSH
+ job; v1 has no rollback.
  </p>
  </SubSection>
  </Section>

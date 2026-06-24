@@ -27,13 +27,21 @@
  *   `fixed` resolves against the viewport again.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { findRelease } from "@/lib/release-notes";
+import { useUpdateStream } from "@/lib/use-update-stream";
 
 interface AboutModalProps {
   open: boolean;
   onClose: () => void;
+}
+
+interface UpdateCheck {
+  updates_available?: boolean;
+  latest_version?: string;
+  running_version?: string;
+  error?: string;
 }
 
 const glassStyle = {
@@ -51,10 +59,37 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
   // initial render, so the modal wouldn't try to render anyway —
   // but this protects future callers that might force-open.)
   const [mounted, setMounted] = useState(false);
+  // #CONN-F13 — in-place upgrade affordance.
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheck | null>(null);
+  const upd = useUpdateStream();
+  const logEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // #CONN-F13 — check for a newer release when the modal opens.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setUpdateCheck(null);
+    fetch("/api/agent/update/check", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setUpdateCheck(data as UpdateCheck);
+      })
+      .catch(() => {
+        /* updater unreachable → no update affordance */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // Keep the progress log scrolled to the newest line.
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ block: "end" });
+  }, [upd.log]);
 
   useEffect(() => {
     if (!open) return;
@@ -129,6 +164,110 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
               <p className="text-[11px] text-on-surface-variant mt-2">
                 Dev build — release notes not yet committed for this version.
               </p>
+            )}
+          </section>
+
+          {/* #CONN-F13 — in-place upgrade. Idle: show "update available"
+              banner + Upgrade button (or an up-to-date note). Streaming /
+              restarting: phase label + scrollable progress log. */}
+          <section aria-live="polite">
+            {upd.status === "idle" && updateCheck?.updates_available && (
+              <div
+                className="rounded-xl px-4 py-3"
+                style={{ background: "var(--secondary-container, rgba(86,181,90,0.12))" }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-on-surface">
+                      Update available
+                    </p>
+                    <p className="text-[11px] text-on-surface-variant font-mono mt-0.5">
+                      v{updateCheck.running_version ?? version ?? "—"} → v
+                      {updateCheck.latest_version ?? "?"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={upd.startUpdate}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-4 h-9 rounded-lg bg-secondary text-on-secondary text-sm font-bold hover:opacity-90 transition-opacity"
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      system_update_alt
+                    </span>
+                    Upgrade
+                  </button>
+                </div>
+                <p className="text-[10px] text-on-surface-variant/80 mt-2">
+                  Pulls the new images and swaps containers in place; the agent
+                  briefly restarts and this page reloads when it&apos;s back.
+                </p>
+              </div>
+            )}
+
+            {upd.status === "idle" &&
+              updateCheck &&
+              !updateCheck.updates_available &&
+              !updateCheck.error && (
+                <p className="text-[12px] text-on-surface-variant text-center inline-flex items-center justify-center gap-1.5 w-full">
+                  <span className="material-symbols-outlined text-[16px] text-secondary">
+                    check_circle
+                  </span>
+                  You&apos;re on the latest release.
+                </p>
+              )}
+
+            {(upd.status === "streaming" ||
+              upd.status === "restarting" ||
+              upd.status === "complete" ||
+              upd.status === "error") && (
+              <div className="rounded-xl px-4 py-3" style={glassStyle}>
+                <div className="flex items-center gap-2">
+                  {upd.status === "complete" ? (
+                    <span className="material-symbols-outlined text-lg text-secondary">
+                      check_circle
+                    </span>
+                  ) : upd.status === "error" ? (
+                    <span className="material-symbols-outlined text-lg text-error">
+                      error
+                    </span>
+                  ) : (
+                    <span className="material-symbols-outlined text-lg text-primary animate-spin">
+                      progress_activity
+                    </span>
+                  )}
+                  <p className="text-[13px] font-semibold text-on-surface">
+                    {upd.status === "complete"
+                      ? "Update complete — reloading…"
+                      : upd.status === "error"
+                      ? "Update failed"
+                      : upd.status === "restarting"
+                      ? "Restarting — waiting for the agent to come back…"
+                      : "Updating…"}
+                  </p>
+                </div>
+                {upd.error && (
+                  <p className="text-[11px] text-error mt-2">{upd.error}</p>
+                )}
+                {upd.log.length > 0 && (
+                  <div className="mt-2 max-h-32 overflow-y-auto rounded-lg bg-black/20 p-2 font-mono text-[10px] text-on-surface-variant leading-relaxed">
+                    {upd.log.map((line, i) => (
+                      <div key={i} className="whitespace-pre-wrap">
+                        {line}
+                      </div>
+                    ))}
+                    <div ref={logEndRef} />
+                  </div>
+                )}
+                {upd.status === "error" && (
+                  <button
+                    type="button"
+                    onClick={upd.startUpdate}
+                    className="mt-2 text-[12px] text-primary hover:underline"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
             )}
           </section>
 

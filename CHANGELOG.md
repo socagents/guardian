@@ -10,6 +10,11 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.65] (2026-06-24) — *Upgrade Guardian from inside the app*
+
+- **One-click stack upgrade in the About modal.** You no longer need to SSH in and run the installer for a routine update. Open **About** in the sidebar (or **Check for updates** in its menu): when a newer release exists you'll see an *Update available — v\<running\> → v\<latest\>* banner with an **Upgrade** button. Clicking it pulls the new images and swaps the containers in place, streaming live progress (fetching manifest → pulling images → swapping → healthcheck) into the modal. The agent restarts briefly during the swap — the page detects this, waits for it to come back, and reloads onto the new version automatically. The installer-binary path remains available for clean re-installs and pinning a specific version.
+- **Safe to leave running.** Closing the modal or navigating away doesn't cancel an in-progress upgrade, and if one is already running (e.g. started from another tab) the modal attaches to it rather than starting a second.
+
 ## [v0.2.64] (2026-06-23) — *Connector lifecycle: self-heal user connectors, longer research runs*
 
 - **Auto-restart now covers user-uploaded connectors.** The self-healing reconcile (which restarts a connector container that has died) previously only covered the built-in connectors; a custom connector you uploaded was skipped and stayed down. Reconcile now restarts user connectors too, using the image declared in their connector definition.

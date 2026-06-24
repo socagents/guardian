@@ -5181,6 +5181,84 @@ const OBSERVABILITY: ApiEndpoint[] = [
     ],
     tags: ["observability", "version", "digests"],
   },
+  {
+    id: "update-check",
+    category: "observability",
+    method: "GET",
+    path: "/api/agent/update/check",
+    summary: "Compare the running stack against the latest release",
+    description: "Proxy route (bearer MCP_TOKEN, 15s AbortSignal timeout) forwarding to guardian-updater's GET /api/v1/version/check. The updater resolves the running stack version, queries the latest published GitHub Release, and resolves each service's target image digest, returning updates_available plus a per-service breakdown (current vs target digest, whether each needs an update). Drives the About modal's 'Update available' banner (the in-place upgrade affordance). Degrades to a soft {updates_available:false,error} body at HTTP 200 — never a 5xx — when the updater is unreachable, so the modal renders 'couldn't check' rather than breaking. Session-cookie/bearer authenticated like the rest of /api/agent/*.",
+    responses: [
+      {
+        status: "200",
+        description: "Version-check report. running_version + latest_version + updates_available are present on success; services maps each compose service to {current_version,current_digest,target_digest,update,running}. On updater failure the body is the degraded form {updates_available:false,error} (still 200).",
+        example: {
+          running_version: "0.2.64",
+          latest_version: "0.2.65",
+          updates_available: true,
+          services: {
+            "guardian-agent": {
+              current_digest: "sha256:9f1c...",
+              target_digest: "sha256:1a2b...",
+              update: true,
+              running: true
+            }
+          },
+          checked_at: "2026-06-24T10:15:02.441Z"
+        }
+      }
+    ],
+    riskTier: "soft",
+    tags: ["observability", "update", "version", "release"],
+  },
+  {
+    id: "update-status",
+    category: "observability",
+    method: "GET",
+    path: "/api/agent/update/status",
+    summary: "Report whether an in-place update is in progress",
+    description: "Proxy route (bearer MCP_TOKEN, 3s AbortSignal timeout) forwarding to guardian-updater's GET /api/v1/update/status. Returns the updater's single-flight in-progress flag so the About modal can re-attach after a page reload — or detect an update started from another tab — without opening a second SSE stream. Degrades to {in_progress:false} at HTTP 200 when the updater is unreachable so the UI stays usable.",
+    responses: [
+      {
+        status: "200",
+        description: "Update-lock state. in_progress is true while a POST /api/agent/update/apply run holds the updater's lock. The degraded (updater-unreachable) variant returns the same shape with in_progress:false.",
+        example: { in_progress: false }
+      }
+    ],
+    riskTier: "soft",
+    tags: ["observability", "update", "status"],
+  },
+  {
+    id: "update-apply",
+    category: "observability",
+    method: "POST",
+    path: "/api/agent/update/apply",
+    summary: "Trigger an in-place stack upgrade (SSE progress stream)",
+    description: "SSE pass-through (runtime:'nodejs', bearer MCP_TOKEN, request.signal forwarded) to guardian-updater's POST /api/v1/update — the push-button in-place upgrade. Streams typed `phase` / `pull_progress` / `error` events to the About-modal progress panel as the updater fetches the release manifest, compares digests, pulls new images, applies the manifest, and swaps containers. After the `swapping` phase the guardian-agent container is replaced, severing the stream — the client treats a disconnect after `swapping` as an expected restart and polls /api/agent/version until the agent answers, then reloads. The updater holds a single-flight lock for the whole run and returns 409 (passed through verbatim) if one is already active; the UI then re-attaches via /api/agent/update/status rather than starting a second stream. Closing the modal aborts the upstream connection, but the updater's own finally releases the lock independently so the update itself is not interrupted.",
+    responses: [
+      {
+        status: "200",
+        description: "text/event-stream of update progress. Frames: `event: phase` (data.phase ∈ checking|fetching_manifest|comparing_digests|pulling|pulled|applying_manifest|swapping|waiting_healthy|complete|noop), `event: pull_progress` (data.service + data.ref), `event: error` (data.detail). The stream ends with a terminal `complete`/`noop` phase, or is severed mid-run by the container swap (expected)."
+      },
+      {
+        status: "409",
+        description: "An update is already in progress (the updater's single-flight lock is held). Body passed through verbatim; the UI re-attaches via GET /api/agent/update/status.",
+        example: { detail: "update already in progress" }
+      },
+      {
+        status: "502",
+        description: "guardian-updater unreachable — the upstream fetch threw before any stream was established.",
+        example: "updater unreachable"
+      },
+      {
+        status: "503",
+        description: "MCP_TOKEN is not configured in the agent environment, so the route cannot authenticate to the updater.",
+        example: "MCP_TOKEN not configured"
+      }
+    ],
+    riskTier: "destructive",
+    tags: ["observability", "update", "upgrade", "sse", "updater"],
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────

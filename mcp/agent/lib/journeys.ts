@@ -1016,6 +1016,55 @@ export const JOURNEYS: Journey[] = [
     components: ["chat", "models", "settings"],
   },
 
+  {
+    id: "update-check-and-apply",
+    category: "ops",
+    title: "Check for and apply a stack update in-app",
+    summary:
+      "Open the About modal to see whether a newer release exists, then upgrade the whole stack in place — images pull, containers swap, and the page reloads onto the new version without SSH.",
+    difficulty: "starter",
+    durationMin: 5,
+    icon: "system_update_alt",
+    prompts: [],
+    toolsExercised: [],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/agent/update/check",
+        description:
+          "Proxies guardian-updater's /api/v1/version/check (bearer MCP_TOKEN, 15s timeout). Returns running_version, latest_version, updates_available, and a per-service digest breakdown. Degrades to {updates_available:false,error} at HTTP 200 if the updater is unreachable.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/update/apply",
+        description:
+          "SSE pass-through to guardian-updater's /api/v1/update. Streams phase / pull_progress / error frames. Returns 409 if an update is already running. The agent container is replaced after the 'swapping' phase — the stream is expected to sever there.",
+      },
+      {
+        method: "GET",
+        path: "/api/agent/update/status",
+        description:
+          "Proxies guardian-updater's /api/v1/update/status ({in_progress}). The UI polls this to re-attach to an in-progress run after a reload or when an update was started from another tab.",
+      },
+    ],
+    howToTest: [
+      "Click 'About' in the left sidebar (or open the About menu and pick 'Check for updates').",
+      "The modal fires /api/agent/update/check on open. If a newer release exists you see an 'Update available — v<running> → v<latest>' banner with an Upgrade button; otherwise it reads 'You're on the latest release.'",
+      "Click 'Upgrade'. A live progress log streams the phases: fetching manifest → comparing digests → pulling images → swapping containers → waiting healthy.",
+      "When the swap happens the agent restarts; the panel switches to 'Restarting — waiting for the agent to come back…' and polls /api/agent/version.",
+      "Once the new agent answers, the page reloads automatically and the sidebar version chip shows the new version.",
+    ],
+    expectedResult:
+      "On a stack that's behind, the modal shows the update banner, the Upgrade button streams real progress, the agent restarts during the swap, and the page reloads onto the new version with the sidebar chip updated. On an up-to-date stack the modal shows 'You're on the latest release' and no Upgrade button. If the updater is unreachable, the modal still opens — it just shows no update affordance rather than erroring.",
+    verifyVia: [
+      "GET /api/agent/update/check → updates_available true (behind) or false (current); running_version and latest_version match the sidebar chip + the latest GitHub Release.",
+      "During an upgrade, GET /api/agent/update/status → {in_progress:true}; a second Upgrade trigger returns 409.",
+      "After reload, GET /api/agent/version → the new version; the audit feed at /observability/events shows the update run.",
+    ],
+    related: ["get-oriented"],
+    components: ["settings", "mcp"],
+  },
+
   // ─────────────────────────────────────────────────────────────────
   // OPS — chat-driven self-modification
   // ─────────────────────────────────────────────────────────────────

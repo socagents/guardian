@@ -767,10 +767,40 @@ curl -b /tmp/cookies.txt -k https://localhost:3001/api/agent/memory`}</Pre>
               </a>
               . Each release includes a <Code>guardian-installer</Code>{" "}
               binary stamped at that version, plus the docker images on
-              GHCR. Customer-side upgrades go through the installer.
+              GHCR. You can upgrade two ways: the in-app button (no SSH,
+              best for routine updates) or the installer binary (for a
+              clean re-install or a specific pinned version).
             </p>
 
-            <SubSection icon="auto_awesome" title="Recommended upgrade flow">
+            <SubSection icon="system_update_alt" title="In-app upgrade (About modal)">
+              <p>
+                Click <Term>About</Term> in the sidebar (or{" "}
+                <Term>Check for updates</Term> in its menu). When a newer
+                release is available you&apos;ll see an{" "}
+                <em>Update available</em> banner with the running and
+                latest versions and an <Term>Upgrade</Term> button.
+              </p>
+              <p className="text-sm text-on-surface-variant mt-2">
+                Clicking <Term>Upgrade</Term> pulls the new images and
+                swaps the containers in place, streaming live progress
+                (fetching manifest → pulling images → swapping →
+                healthcheck) into the modal. The agent itself restarts
+                briefly during the swap — the page detects this, waits
+                for the agent to come back, and reloads onto the new
+                version automatically. You don&apos;t need to do anything
+                while it runs; leaving the page won&apos;t cancel the
+                update.
+              </p>
+              <Callout tone="info">
+                If the banner shows &quot;You&apos;re on the latest
+                release,&quot; no images need pulling. If an update is
+                already running (e.g. started from another tab), the
+                modal attaches to the in-progress run instead of starting
+                a second one.
+              </Callout>
+            </SubSection>
+
+            <SubSection icon="auto_awesome" title="Installer upgrade flow">
               <ol className="list-decimal pl-5 space-y-1.5 text-sm">
                 <li>
                   Download the <Code>guardian-installer</Code> binary
