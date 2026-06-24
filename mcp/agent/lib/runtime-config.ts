@@ -65,6 +65,24 @@ export type EffectiveRuntimeConfig = RuntimeConfigValues & {
 
 const DEFAULT_MODEL = "gemini-3.1-pro-preview";
 
+// #CHAT-F11 — the GEMINI_MODEL fallback to DEFAULT_MODEL was silent: an
+// unset env var, or a DEFAULT_MODEL alias that Google later retires/renames,
+// would degrade with no operator-visible signal. Warn ONCE per process when
+// the fallback engages so the condition is surfaced in the agent logs instead
+// of only manifesting as model-not-found errors at call time.
+let _warnedModelFallback = false;
+function noteModelFallback(): void {
+  if (_warnedModelFallback) return;
+  _warnedModelFallback = true;
+  console.warn(
+    `[runtime-config] GEMINI_MODEL is unset — falling back to the built-in ` +
+      `default "${DEFAULT_MODEL}". Set GEMINI_MODEL (or an operator default ` +
+      `model in /settings/personality) to pin the model explicitly; if this ` +
+      `default alias is ever retired upstream, calls will fail with ` +
+      `model-not-found until it is updated.`,
+  );
+}
+
 /** Bundle-internal coordination keys. Container env wins; never
  *  operator-typed. The embedded MCP reads MCP_TOKEN from the same
  *  process env, so divergence between agent-side and MCP-side would
@@ -114,7 +132,11 @@ export async function getEffectiveRuntimeConfig(): Promise<EffectiveRuntimeConfi
     GOOGLE_APPLICATION_CREDENTIALS:
       vertexFromStore || get("GOOGLE_APPLICATION_CREDENTIALS"),
     GEMINI_API_KEY: get("GEMINI_API_KEY"),
-    GEMINI_MODEL: get("GEMINI_MODEL", DEFAULT_MODEL),
+    GEMINI_MODEL: (() => {
+      const fromEnv = envValue("GEMINI_MODEL");
+      if (!fromEnv) noteModelFallback();
+      return fromEnv || DEFAULT_MODEL;
+    })(),
     SSL_CERT_PEM: get("SSL_CERT_PEM"),
     SSL_KEY_PEM: get("SSL_KEY_PEM"),
     GUARDIAN_TLS_VERIFY: get("GUARDIAN_TLS_VERIFY"),

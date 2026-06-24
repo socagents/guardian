@@ -470,6 +470,12 @@ def generate_campaign_report(case_id: str) -> dict[str, Any]:
     issues — campaign summary, threat actor, severity rollup, the ATT&CK technique
     union, shared infrastructure, and the member issues with their verdicts.
     Pure read+assemble. Returns {"markdown": ..., "json": ...} or {"error": ...}.
+
+    Unlike generate_investigation_report (which persists the markdown back onto
+    the Issue via update_issue(report=...)), the campaign report is EPHEMERAL:
+    the Case has no report column, so nothing is written back. The returned
+    markdown lives only in the Chat/Jobs response — capture or export it from
+    there if you need it retained; re-run this tool to regenerate.
     """
     s, err = _store()
     if err:
@@ -978,6 +984,11 @@ def case_add_issue(case_id: str, issue_id: str) -> dict[str, Any]:
         issue_id: The Issue id to add.
 
     Returns: {"issue": {...}} updated, or {"error": ...} if either is missing.
+
+    Note: adding an Issue does NOT re-run case_rollup — the persisted
+    campaign_summary/techniques/infrastructure/severity_rollup on the Case
+    reflect the membership AT THE TIME case_rollup last ran. Call case_rollup
+    again after changing membership to refresh the campaign view.
     """
     s, err = _store()
     if err:
@@ -1028,6 +1039,11 @@ def case_rollup(case_id: str, threat_actor: str | None = None,
     shared infrastructure (indicator values seen on >=2 members), the max
     severity, and the verdict mix. `threat_actor` / `campaign_summary` are the
     two non-derivable fields — pass them to set, else a summary is generated.
+
+    This is a one-shot compute: nothing re-runs it automatically. After
+    case_add_issue (or any change to the Case's membership), the persisted
+    rollup goes stale until you call case_rollup again — the campaign view
+    keeps showing the snapshot from the last run.
 
     Returns {"rollup": {...}} or {"error": ...}.
     """

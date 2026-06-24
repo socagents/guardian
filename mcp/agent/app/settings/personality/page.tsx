@@ -164,6 +164,7 @@ documentation.
 // Guardian's chat path is Vertex Gemini only today (Anthropic + OpenAI
 // are WIP — see /providers). This list mirrors /api/agent/models.
 const MODEL_OPTIONS = [
+  { value: "gemini-3.5-flash", label: "Gemini 3.5 Flash" },
   { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (preview)" },
   { value: "gemini-3.0-pro", label: "Gemini 3.0 Pro" },
   { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },

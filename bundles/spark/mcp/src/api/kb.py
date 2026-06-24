@@ -72,6 +72,12 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
             status="success",
             metadata={"scope": "all_kbs", "count": len(summary)},
         )
+        # #KB-F5 — surface the RUNTIME embedder's model_id so the UI can show
+        # the actual embedding model instead of a hardcoded "text-embedding-004"
+        # string. When the runtime falls back to TextHashEmbedder this reports
+        # "texthash-v1-768d" (the honest value) rather than implying a Vertex
+        # embedding that isn't in play.
+        embedder_model = getattr(getattr(kb, "embedder", None), "model_id", None)
         return JSONResponse(
             {
                 "kbs": [
@@ -79,6 +85,7 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
                     for name, stats in sorted(summary.items())
                 ],
                 "count": len(summary),
+                "embedder_model": embedder_model,
             }
         )
 

@@ -112,6 +112,10 @@ export default function KbDetailPage({
   // v0.2.20 — server-side tag facets + AND-filter selection
   const [tagFacets, setTagFacets] = useState<TagFacet[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // #KB-F5 — the actual runtime embedder model_id, fetched from the KB index
+  // so the header + search footer report the real embedder (e.g.
+  // "texthash-v1-768d" when Vertex isn't wired) instead of a hardcoded string.
+  const [embedderModel, setEmbedderModel] = useState<string | null>(null);
 
   // Search tab state
   const [searchQuery, setSearchQuery] = useState("");
@@ -201,6 +205,26 @@ export default function KbDetailPage({
       cancelled = true;
     };
   }, [name]);
+
+  // #KB-F5 — fetch the runtime embedder model from the KB index once.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/agent/knowledge", { cache: "no-store" });
+        if (!r.ok) return;
+        const data = (await r.json()) as { embedder_model?: string | null };
+        if (!cancelled && data.embedder_model) {
+          setEmbedderModel(data.embedder_model);
+        }
+      } catch {
+        /* embedder label is optional polish — ignore fetch errors */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggleTag = useCallback((tag: string) => {
     setSelectedTags((prev) =>
@@ -316,7 +340,7 @@ export default function KbDetailPage({
                 </h1>
                 <p className="text-xs text-on-surface-variant/60 font-mono">
                   {total} {total === 1 ? "entry" : "entries"}
-                  {" · "}embedded with text-embedding-004
+                  {embedderModel ? ` · embedded with ${embedderModel}` : ""}
                 </p>
               </div>
             </div>
@@ -580,9 +604,9 @@ export default function KbDetailPage({
               </div>
               {searchElapsedMs !== null ? (
                 <div className="text-[11px] font-mono text-on-surface-variant/60">
-                  {searchResults.length} result(s) in {searchElapsedMs}ms ·
-                  query embedded via text-embedding-004 · cosine similarity
-                  ranked across all entries
+                  {searchResults.length} result(s) in {searchElapsedMs}ms
+                  {embedderModel ? ` · query embedded via ${embedderModel}` : ""} ·
+                  cosine similarity ranked across all entries
                 </div>
               ) : null}
             </div>

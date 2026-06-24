@@ -13,13 +13,20 @@ Endpoints (all require `Authorization: Bearer <MCP_TOKEN>`):
   GET    /api/v1/instances/{instance_id}   → fetch one
   DELETE /api/v1/instances/{instance_id}   → delete one
 
-NOTE: tool re-advertisement after CRUD is NOT yet live — the MCP needs
-a process restart to re-run iter_registrations and pick up new
-instances. The CRUD response includes `requires_mcp_restart: true` so
-clients (the agent) can show the right UX. Live re-advertisement is a
-follow-up — the simplest path is to fire `docker compose restart
-guardian-mcp` after a successful CRUD; fastmcp 2.13+ may support
-notifications/tools/list_changed but I haven't validated that path yet.
+Tool re-advertisement after CRUD depends on the connector's runtime style:
+
+  - CONTAINER connectors: live re-advertisement IS wired. After create,
+    the updater callback `set_instance_container_url` fires
+    `reload_tools_now()` once the container reports its URL, so the new
+    instance's tools become callable without a restart. Delete likewise
+    tears the container down.
+  - NON-CONTAINER connectors: there is no container_url callback, so
+    neither create nor delete triggers a reload — the MCP still needs a
+    process restart to re-run iter_registrations and pick up the change.
+
+The CRUD response still includes `requires_mcp_restart: true` as a
+conservative signal for that non-container case; the agent UI does not
+currently surface a restart prompt from it.
 """
 
 from __future__ import annotations

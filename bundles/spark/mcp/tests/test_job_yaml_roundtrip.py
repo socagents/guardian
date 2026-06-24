@@ -201,6 +201,42 @@ def test_load_yaml_jobs_reconciles_into_fresh_db(tmp_path: Path) -> None:
     }
 
 
+def test_load_yaml_jobs_preserves_execution_policy(tmp_path: Path) -> None:
+    """#JOBS-F10 — bypass_approvals / model_id / thinking_enabled /
+    permission_policy are part of the DEFINITION and must survive a
+    SQLite-wipe boot reconcile. Before the fix, _row_to_yaml_doc omitted
+    them and load_yaml_jobs defaulted them to False/None, so a bypass=True
+    job silently lost its bypass on the next boot — a security-relevant
+    downgrade (a job authored to run unattended quietly re-armed its gate)."""
+    s1 = _scheduler(tmp_path)
+    s1.add_job(
+        name="armed-hunt",
+        cron="0 2 * * *",
+        action={"type": "chat", "message": "hunt"},
+        bypass_approvals=True,
+        model_id="gemini-3.5-flash",
+        thinking_enabled=True,
+        permission_policy={"deny": ["xsoar_close_incident"]},
+    )
+
+    # The YAML mirror carries the policy fields.
+    doc = yaml.safe_load((tmp_path / "jobs" / "armed-hunt.yaml").read_text())
+    assert doc["bypass_approvals"] is True
+    assert doc["model_id"] == "gemini-3.5-flash"
+    assert doc["thinking_enabled"] is True
+    assert doc["permission_policy"] == {"deny": ["xsoar_close_incident"]}
+
+    # Wipe SQLite, keep YAML, boot fresh — policy must reconcile back.
+    (tmp_path / "jobs.db").unlink()
+    s2 = _scheduler(tmp_path)
+    j = s2.get_job("armed-hunt")
+    assert j is not None
+    assert j.bypass_approvals is True, "bypass must NOT silently downgrade on boot"
+    assert j.model_id == "gemini-3.5-flash"
+    assert j.thinking_enabled is True
+    assert j.permission_policy == {"deny": ["xsoar_close_incident"]}
+
+
 def test_load_yaml_jobs_idempotent_on_repeat_boot(tmp_path: Path) -> None:
     """Running boot twice should NOT duplicate jobs — the ON CONFLICT
     clause in add_job's INSERT handles the idempotent case."""

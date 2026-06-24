@@ -10,6 +10,14 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.80] (2026-06-24) — *Doc accuracy, version sync, honest tool status*
+
+- **OpenAPI spec reports the real version.** The downloaded API spec carried a hardcoded `0.2.0`; it now reflects the running stack version, and both its JSON and YAML paths fail gracefully.
+- **EDR/exclusion tools report honest status.** Several XSIAM write tools (IOC enable/disable, endpoint alias, hash blocklist, alert-exclusion delete) echoed input-derived "success" without checking the API reply; they now inspect the response and surface the real error on failure.
+- **Bypass mode covers connector tools.** A job running with approvals bypassed no longer stalls on a connector-gated tool (e.g. web navigation) waiting for an approval that auto-resolves — it now auto-approves immediately and records an `auto_approved` trace, matching built-in tools.
+- **Job round-trip fidelity.** A job's `bypass_approvals` / model / thinking / permission-policy settings now survive a YAML reload instead of silently reverting to defaults on boot.
+- **Docs match reality.** The knowledge pages show the actual embedding model in use (not a hardcoded one); the observability Traces tile describes the audit-derived view honestly; connector/version pins, model lists, service counts, and several tool/docstring catalogs were corrected to match the code.
+
 ## [v0.2.79] (2026-06-24) — *No dead clicks: every affordance wired to real backing (or removed)*
 
 - **Chat affordances are real.** A plan's "Approve & run" button now executes the reviewed plan in one informed step (single-use, prompt-matched bypass — not a standing setting); chat-session rename from the header works; reasoning and per-tool error state + durations now survive a reload; the export menu greys out YAML when the server lacks PyYAML.

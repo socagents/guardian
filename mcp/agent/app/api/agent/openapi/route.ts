@@ -39,7 +39,14 @@ export async function GET(request: Request) {
   // hard-coded into a spec downloaded from the deployed VM.
   const proto = request.headers.get("x-forwarded-proto") ?? "http";
   const host = request.headers.get("host") ?? "localhost:3000";
-  const spec = generateOpenApiSpec({ serverUrl: `${proto}://${host}` });
+  // #API-F14 — stamp the spec with the running stack version instead of the
+  // generator's hardcoded "0.2.0" placeholder. Same source/precedence as
+  // /api/agent/version; falls back to "dev" on a build with no version env.
+  const version =
+    process.env.GUARDIAN_VERSION?.trim() ||
+    process.env.NEXT_PUBLIC_GUARDIAN_VERSION?.trim() ||
+    "dev";
+  const spec = generateOpenApiSpec({ serverUrl: `${proto}://${host}`, version });
 
   if (format === "yaml" || format === "yml") {
     // Defense in depth: a YAML-conversion crash should return a
@@ -70,11 +77,24 @@ export async function GET(request: Request) {
   // Default JSON. Pretty-printed for human eyeballs; the file size
   // (~50 endpoints) is small enough that compaction isn't worth the
   // worse readability.
-  return new NextResponse(JSON.stringify(spec, null, 2), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": 'inline; filename="guardian-agent-openapi.json"',
-    },
-  });
+  // #XCUT-F24 — mirror the YAML path's defense in depth: a serialization
+  // crash should return a structured 500 with a real error body, not the
+  // bare empty 500 Next.js emits when an exception escapes the handler.
+  try {
+    return new NextResponse(JSON.stringify(spec, null, 2), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Disposition": 'inline; filename="guardian-agent-openapi.json"',
+      },
+    });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: "openapi_spec_serialization_failed",
+        message: err instanceof Error ? err.message : String(err),
+      },
+      { status: 500 },
+    );
+  }
 }

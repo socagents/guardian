@@ -363,7 +363,7 @@ export default function ServicesSettingsPage() {
           <footer className="pt-10 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-outline-variant/15">
             <div className="rounded-xl p-6 flex flex-col justify-center" style={glassPanel}>
               <p className="text-[10px] font-mono uppercase tracking-widest text-outline mb-2">Total Services</p>
-              <p className="text-4xl font-headline font-bold text-on-surface">14</p>
+              <p className="text-4xl font-headline font-bold text-on-surface">{ALL_SERVICES.length}</p>
             </div>
             <div className="rounded-xl p-6 flex flex-col justify-center" style={glassPanel}>
               <p className="text-[10px] font-mono uppercase tracking-widest text-outline mb-2">Healthy</p>
@@ -374,10 +374,10 @@ export default function ServicesSettingsPage() {
             </div>
             <div className="rounded-xl p-6 flex flex-col justify-center" style={glassPanel}>
               <p className="text-[10px] font-mono uppercase tracking-widest text-outline mb-3">Languages</p>
-              <p className="text-sm font-mono text-primary-fixed-dim">Go (11) · Python (2) · TS (1)</p>
+              <p className="text-sm font-mono text-primary-fixed-dim">TS (1) · Python (1) · C (1)</p>
               <div className="flex gap-1 mt-4">
-                <div className="h-1 flex-[11] bg-primary rounded-full" />
-                <div className="h-1 flex-[2] bg-secondary rounded-full" />
+                <div className="h-1 flex-[1] bg-primary rounded-full" />
+                <div className="h-1 flex-[1] bg-secondary rounded-full" />
                 <div className="h-1 flex-[1] bg-[#00AADE] rounded-full" />
               </div>
             </div>

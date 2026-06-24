@@ -8,7 +8,7 @@ GETs) a logical XSOAR REST path. The fetcher applies the dual-
 generation base-URL + header rules (v6 vs v8) — every tool here stays
 generation-agnostic.
 
-Tool catalog (21):
+Tool catalog (27):
   xsoar_list_incidents        POST /incidents/search — filtered case list
   xsoar_get_incident          POST /incidents/search (filter.id) — one case
   xsoar_get_war_room          POST /investigation/{id} — war-room entries
@@ -22,7 +22,12 @@ Tool catalog (21):
   xsoar_save_evidence         POST /evidence — mark an entry as evidence
   xsoar_search_evidence       POST /evidence/search — list a case's evidence
   xsoar_health_check          GET /health — server-availability probe
-  ── action toolset (v0.2.0) ──
+  ── integration toolset ──
+  xsoar_list_integrations         POST /settings/integration/search — installed brands + commands
+  xsoar_get_integration_status    POST /settings/integration/search — instance health + last error
+  xsoar_test_integration_instance POST /settings/integration/test — actively re-run an instance Test
+  xsoar_get_integration_fetch_history POST /settings/integration/fetch-history — per-instance fetch errors (v8)
+  ── action toolset ──
   xsoar_run_command           POST /entry/execute/sync — run any !command (playground)
   xsoar_enrich_indicator      POST /entry/execute/sync — ip/url/domain/file/cve reputation
   xsoar_complete_task         POST /entry/execute/sync — !taskComplete a playbook task
@@ -31,6 +36,8 @@ Tool catalog (21):
   xsoar_append_to_list        GET /lists/ + POST /lists/save — append to a list
   xsoar_create_incident       POST /incident — create a case
   xsoar_run_playbook          POST /inv-playbook/{pb}/{inv} — run a playbook on a case
+  xsoar_get_playbook_state    GET /inv-playbook/{inv} — playbook tasks + state on a case
+  xsoar_import_playbook       POST /playbook/import — upload a playbook YAML
 
 Auth model (see _xsoar_client.XSOARFetcher):
   XSOAR 6 — Authorization: <api_key>                       (api_id unset)
@@ -1707,8 +1714,16 @@ async def xsoar_get_integration_status(
     is failing, and the string is the exact error XSOAR recorded (e.g. "Could
     not fetch Splunk time"). Pairs with xsoar_test_integration_instance (which
     actively RE-RUNS the test) and xsoar_list_integrations (which lists the
-    commands each exposes). Does NOT require playground_id. Works on XSOAR 6
-    and XSOAR 8 / Cortex.
+    commands each exposes). Does NOT require playground_id.
+
+    Generation note: the `health` map's per-instance `lastError` is reliably
+    populated on XSOAR 6. On XSOAR 8 / Cortex the integration-search response
+    OFTEN OMITS that block, so `last_error` comes back None and `healthy`
+    reads true even for an instance that is in fact failing to fetch. On v8,
+    treat a true `healthy` here as "no recorded error in this response", not a
+    guarantee of health — confirm with xsoar_get_integration_fetch_history
+    (the per-instance fetch-error log, the correct v8 path) or
+    xsoar_test_integration_instance (which actively re-runs the Test).
 
     Args:
         brand: optional — filter to one integration brand (case-insensitive

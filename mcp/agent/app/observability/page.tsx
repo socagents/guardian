@@ -128,7 +128,7 @@ export default function ObservabilityOverview() {
         <Tile icon="dns" accent="text-tertiary" label="Services"
           value="3" hint="guardian-agent · guardian-mcp · embedded sqlite." />
         <Tile icon="timeline" accent="text-primary-fixed-dim" label="Traces"
-          value="OTel-ready" hint="Auto-instrumented OTLP. Configure an exporter to capture." />
+          value="Audit-derived" hint="Spans-flavored view over the audit log. Set GUARDIAN_OTEL=1 to also export to an external OTLP collector." />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

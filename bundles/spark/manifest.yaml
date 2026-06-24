@@ -187,7 +187,7 @@ toolConnectors:
   # connector treats the tenant as v8; otherwise v6.
   - id: "xsoar"
     path: "./connectors/xsoar/"
-    version: "0.1.0"
+    version: "0.2.8"
     required: false              # agent functions without an XSOAR
                                  # tenant (no case investigation, but
                                  # docs lookups still work)
@@ -222,7 +222,7 @@ toolConnectors:
   # just falls back to operator-KB-only mode with a confidence note.
   - id: "cortex-docs"
     path: "./connectors/cortex-docs/"
-    version: "0.3.1"
+    version: "0.3.2"
     required: false
 
   # Cortex XSIAM connector — investigation (XQL queries, incidents,

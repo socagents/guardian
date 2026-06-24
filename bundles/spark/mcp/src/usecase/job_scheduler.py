@@ -2167,15 +2167,33 @@ class CroniterJobScheduler:
         Excludes runtime state (last_fired_at, last_status, next_due_at,
         registered_at, removed) so the YAML stays a pure DEFINITION —
         diffable across operators without spurious "next_due_at moved
-        by 24h" noise on every cron tick."""
-        return {
+        by 24h" noise on every cron tick.
+
+        #JOBS-F10 — the execution-policy fields (bypass_approvals, model_id,
+        # thinking_enabled, permission_policy) ARE part of the definition, not
+        # runtime state: omitting them meant a bypass=True job silently lost
+        # its bypass on the next boot reload (load_yaml_jobs → add_job
+        # defaulted them to False/None). Emitted here + read back in
+        # load_yaml_jobs so the YAML round-trips the full policy. Only non-
+        # default values are written, keeping plain jobs' YAML uncluttered."""
+        doc: dict[str, Any] = {
             "name": row.name,
             "cron": row.cron,
             "timezone": row.timezone,
             "enabled": row.enabled,
             "run_once": row.run_once,
-            "action": row.action,
         }
+        if row.bypass_approvals:
+            doc["bypass_approvals"] = row.bypass_approvals
+        if row.model_id:
+            doc["model_id"] = row.model_id
+        if row.thinking_enabled:
+            doc["thinking_enabled"] = row.thinking_enabled
+        if row.permission_policy:
+            doc["permission_policy"] = row.permission_policy
+        # `action` last so the YAML reads policy-then-action top-to-bottom.
+        doc["action"] = row.action
+        return doc
 
     def _write_job_yaml(self, row: JobRow) -> None:
         """Write a runtime job's definition to <data_root>/jobs/<name>.yaml.
@@ -2261,6 +2279,11 @@ class CroniterJobScheduler:
                 if not isinstance(doc, dict):
                     raise ValueError("top-level must be a mapping")
                 name = str(doc.get("name") or path.stem)
+                # #JOBS-F10 — round-trip the execution-policy fields written
+                # by _row_to_yaml_doc; absent keys fall back to add_job's
+                # safe defaults (False/None) so legacy/plain YAML still loads.
+                raw_model = doc.get("model_id")
+                raw_policy = doc.get("permission_policy")
                 self.add_job(
                     name=name,
                     cron=str(doc.get("cron") or ""),
@@ -2268,6 +2291,11 @@ class CroniterJobScheduler:
                     action=doc.get("action") or {},
                     enabled=bool(doc.get("enabled", True)),
                     run_once=bool(doc.get("run_once", False)),
+                    bypass_approvals=bool(doc.get("bypass_approvals", False)),
+                    model_id=str(raw_model) if raw_model else None,
+                    thinking_enabled=bool(doc.get("thinking_enabled", False)),
+                    permission_policy=raw_policy
+                    if isinstance(raw_policy, dict) else None,
                 )
                 loaded += 1
             except Exception as exc:  # noqa: BLE001

@@ -633,6 +633,34 @@ def _xsiam_ok(payload: dict) -> dict:
     return out
 
 
+def _papi_reply_succeeded(resp: Any) -> tuple[bool, Any]:
+    """Inspect a PAPI mutation response and report honest success.
+
+    #XSIAM-F6/F7 — Cortex PAPI mutation endpoints (disable/enable IoCs,
+    set-alias, blocklist, delete-alert-exclusion) return HTTP 200 even for
+    logical failures, with the real verdict carried in the `reply` field
+    (typically a boolean `true`, or an error envelope). The non-2xx cases
+    already raise in the PAPI client; this guards the HTTP-200-with-error-body
+    case so a tool cannot echo an input-derived count as success when PAPI
+    actually refused. Returns (succeeded, reply): `succeeded` is False only
+    when `reply` is an explicit falsy/error signal; a missing or opaque reply
+    is treated as success (no evidence of failure) but the raw reply is always
+    surfaced so the agent can see partial-failure detail.
+    """
+    if not isinstance(resp, dict):
+        return True, resp
+    reply = resp.get("reply")
+    if reply is False:
+        return False, reply
+    if isinstance(reply, dict):
+        # Some PAPI error bodies arrive as {"reply": {"err_code": ..., ...}}.
+        if reply.get("err_code") is not None or reply.get("error"):
+            return False, reply
+    if resp.get("err_code") is not None:
+        return False, reply
+    return True, reply
+
+
 def _xsiam_wrap(fn):
     """Mirror of XDR's _wrap_xdr_call. Catches exceptions, returns error envelope."""
     @functools.wraps(fn)
@@ -773,7 +801,12 @@ async def xsiam_ioc_disable(indicators: list[str]) -> dict:
     fetcher = _get_fetcher()
     body = {"request_data": {"indicators": indicators}}
     resp = await fetcher.send_request("/indicators/disable_iocs/", data=body)
-    return _xsiam_ok({"disabled_count": len(indicators), "indicators": indicators})
+    succeeded, reply = _papi_reply_succeeded(resp)
+    if not succeeded:
+        return _xsiam_err("PAPI did not confirm IoC disable", reply=reply,
+                          indicators=indicators)
+    return _xsiam_ok({"disabled_count": len(indicators), "indicators": indicators,
+                      "reply": reply})
 
 
 @_xsiam_wrap
@@ -784,7 +817,12 @@ async def xsiam_ioc_enable(indicators: list[str]) -> dict:
     fetcher = _get_fetcher()
     body = {"request_data": {"indicators": indicators}}
     resp = await fetcher.send_request("/indicators/enable_iocs/", data=body)
-    return _xsiam_ok({"enabled_count": len(indicators), "indicators": indicators})
+    succeeded, reply = _papi_reply_succeeded(resp)
+    if not succeeded:
+        return _xsiam_err("PAPI did not confirm IoC enable", reply=reply,
+                          indicators=indicators)
+    return _xsiam_ok({"enabled_count": len(indicators), "indicators": indicators,
+                      "reply": reply})
 
 
 # ─── File download ────────────────────────────────────────────────
@@ -968,7 +1006,12 @@ async def xsiam_endpoints_set_alias(endpoint_id_list: list[str], alias_name: str
         "alias": alias_name,
     }}
     resp = await fetcher.send_request("/endpoints/update_agent_name/", data=body)
-    return _xsiam_ok({"endpoint_id_list": endpoint_id_list, "alias_name": alias_name})
+    succeeded, reply = _papi_reply_succeeded(resp)
+    if not succeeded:
+        return _xsiam_err("PAPI did not confirm alias update", reply=reply,
+                          endpoint_id_list=endpoint_id_list, alias_name=alias_name)
+    return _xsiam_ok({"endpoint_id_list": endpoint_id_list, "alias_name": alias_name,
+                      "reply": reply})
 
 
 @_xsiam_wrap
@@ -1299,7 +1342,13 @@ async def xsiam_alert_exclusions_delete(alert_exclusion_id: str) -> dict:
     fetcher = _get_fetcher()
     body = {"request_data": {"alert_exclusion_id": alert_exclusion_id}}
     resp = await fetcher.send_request("/alerts_exclusion/delete_alert_exclusion/", data=body)
-    return _xsiam_ok({"alert_exclusion_id": alert_exclusion_id, "deleted": True})
+    succeeded, reply = _papi_reply_succeeded(resp)
+    if not succeeded:
+        return _xsiam_err("PAPI did not confirm alert-exclusion delete",
+                          reply=reply, alert_exclusion_id=alert_exclusion_id,
+                          deleted=False)
+    return _xsiam_ok({"alert_exclusion_id": alert_exclusion_id, "deleted": True,
+                      "reply": reply})
 
 
 # ─── Hash analytics ──────────────────────────────────────────────
@@ -1326,7 +1375,12 @@ async def xsiam_hash_blocklist(file_hashes: list[str], comment: Optional[str] = 
     if comment:
         rd["comment"] = comment
     resp = await fetcher.send_request("/hash_exceptions/blocklist/", data={"request_data": rd})
-    return _xsiam_ok({"blocked_count": len(file_hashes), "file_hashes": file_hashes})
+    succeeded, reply = _papi_reply_succeeded(resp)
+    if not succeeded:
+        return _xsiam_err("PAPI did not confirm hash blocklist", reply=reply,
+                          file_hashes=file_hashes)
+    return _xsiam_ok({"blocked_count": len(file_hashes), "file_hashes": file_hashes,
+                      "reply": reply})
 
 
 # ─── Exploits ────────────────────────────────────────────────────

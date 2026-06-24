@@ -870,6 +870,8 @@ def _wrap_with_instance(
         ACTION_APPROVAL_REQUESTED,
         ACTION_APPROVAL_RESOLVED,
         ACTION_TOOL_CALL,
+        get_current_approval_bypass,
+        get_current_trigger,
         record_event,
         set_current_actor,
         reset_current_actor,
@@ -946,6 +948,30 @@ def _wrap_with_instance(
     ) -> str | None:
         """Open an approval request if needed; return id or None."""
         if not require_approval:
+            return None
+        # #CDW-F12 — honor approval bypass for connector-gated tools, mirroring
+        # the builtin gate (_approval_gate.gate_and_execute). When the inbound
+        # request carried `X-Guardian-Approval-Bypass: 1` (a chat session with
+        # the bypass dropdown, or a job with bypass_approvals=true), do NOT open
+        # a real pending row + block on wait_async (which would otherwise hang
+        # until timeout, since nobody is there to click approve). Record an
+        # `auto_approved` audit row + execute immediately by returning None.
+        if get_current_approval_bypass():
+            trigger = get_current_trigger() or "unknown"
+            record_event(
+                ACTION_APPROVAL_REQUESTED,
+                target=f"approval:bypass:{namespaced}",
+                status="auto_approved",
+                actor="agent",
+                metadata={
+                    "tool": namespaced,
+                    "connector_id": connector_id,
+                    "instance_id": target.id,
+                    "arg_keys": _audit_arg_keys(args, kwargs),
+                    "auto_approved": True,
+                    "bypass_source": trigger,
+                },
+            )
             return None
         bus = approvals_bus()
         if bus is None:

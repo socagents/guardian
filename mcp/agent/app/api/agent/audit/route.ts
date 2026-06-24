@@ -14,11 +14,13 @@ export async function GET(request: Request) {
     (config.MCP_TOKEN || '').trim() || process.env.MCP_TOKEN?.trim() || '';
   if (!mcpToken)
     return NextResponse.json({ error: 'MCP_TOKEN not configured' }, { status: 503 });
-  const mcpUrl =
-    (config.MCP_URL || '').trim() ||
-    process.env.MCP_URL?.trim() ||
-    'http://guardian-mcp:8080/api/v1/stream/mcp';
-  const base = deriveMcpBaseUrl(mcpUrl);
+  // #API-F19 — getEffectiveRuntimeConfig() always returns a non-empty
+  // MCP_URL (defaults to localhost:8080 in runtime-config.ts), so the old
+  // hardcoded `guardian-mcp:8080` third fallback was dead code that pinned a
+  // stale compose service name. Resolve from config (env still wins inside
+  // getEffectiveRuntimeConfig for this bundle-internal key).
+  const mcpUrl = (config.MCP_URL || '').trim() || process.env.MCP_URL?.trim() || '';
+  const base = mcpUrl ? deriveMcpBaseUrl(mcpUrl) : '';
   if (!base)
     return NextResponse.json({ error: 'bad MCP URL' }, { status: 500 });
   const url = new URL(request.url);

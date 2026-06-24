@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.80",
+    date: "2026-06-24",
+    title: "Doc accuracy, version sync, honest tool status.",
+    highlights: [
+      "The downloaded OpenAPI spec now reports the real stack version (was a hardcoded 0.2.0) and both its JSON/YAML paths fail gracefully.",
+      "XSIAM write tools (IOC enable/disable, endpoint alias, hash blocklist, alert-exclusion delete) now inspect the API reply and surface the real error instead of echoing input-derived success.",
+      "A bypass-approvals job no longer stalls on a connector-gated tool — it auto-approves immediately with an auto_approved trace, matching built-in tools.",
+      "A job's bypass_approvals/model/thinking/permission-policy settings survive a YAML reload instead of reverting to defaults on boot.",
+      "Docs corrected to match the code: knowledge pages show the real embedding model, the Traces tile describes the audit-derived view, and connector/version pins + model lists + service counts + tool catalogs were synced.",
+    ],
+  },
+  {
     version: "0.2.79",
     date: "2026-06-24",
     title: "No dead clicks: every operator affordance now wires to real backing or is retired.",
