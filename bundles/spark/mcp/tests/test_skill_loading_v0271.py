@@ -6,7 +6,7 @@ SKILL-F16 (entrypoint boot-merge backup) is a shell change, validated by
 """
 
 from usecase.builtin_components import skills_crud
-from usecase.job_scheduler import JobScheduler
+from usecase.job_scheduler import CroniterJobScheduler
 
 
 def test_create_skill_accepts_all_four_categories(tmp_path, monkeypatch):
@@ -34,7 +34,7 @@ def test_create_skill_rejects_non_md(tmp_path, monkeypatch):
 
 def _load(name):
     # _load_skill_body doesn't use instance state — bind it to a bare object.
-    return JobScheduler._load_skill_body(object(), name)
+    return CroniterJobScheduler._load_skill_body(object(), name)
 
 
 def test_load_skill_body_resolves_plugin_skill(tmp_path, monkeypatch):
