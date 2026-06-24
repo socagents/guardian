@@ -23,6 +23,12 @@ class _StubKb:
     def list_docs(self, kb_name, limit=20):
         return self._docs
 
+    def kb_summary(self):
+        # #KB-F14 (v0.2.78) — knowledge_list now validates kb_name against the
+        # real kb_summary() before listing; the stub must expose the same name
+        # the test lists ("cortex-docs") so validation passes.
+        return {"cortex-docs": {"doc_count": len(self._docs)}}
+
     def search(self, query, kb_name=None, category=None, tags=None, limit=5):
         return [(d, 0.9) for d in self._docs]
 
