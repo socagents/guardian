@@ -10,6 +10,13 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.68] (2026-06-24) — *Lock down two exposed surfaces: metrics + plugin pip-install*
+
+Security hardening of two over-exposed endpoints:
+
+- **The Prometheus metrics endpoint now requires authentication.** `GET /api/v1/metrics` on the embedded MCP was open — anything that could reach the MCP port read every counter name and value without a credential. It now requires the MCP token or an API key. The in-app metrics panel is unaffected (it already authenticates through the agent proxy).
+- **Installing a plugin package now requires admin rights and an explicit approval.** The plugin entry-point install/uninstall endpoints run `pip`, which executes arbitrary package code inside the agent container. Previously any valid API key could trigger it with no confirmation. Now it's restricted to the internal admin token (operator-minted API keys are refused) **and** gated behind a human approval — the request blocks until an operator confirms it in **Approvals** (or it's denied/times out). The install/uninstall audit events are now declared so they show up in the `/observability/events` filter chips.
+
 ## [v0.2.67] (2026-06-24) — *Close audit blind spots: reads, auth, and KB access now leave a trace*
 
 Security/observability hardening — seven forensic gaps where an action left no audit row:

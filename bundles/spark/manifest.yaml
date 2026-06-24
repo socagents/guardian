@@ -731,6 +731,11 @@ audit:
     # #CHAT-F26 — Claude Code CLI turns (start + end phases) — previously
     # invisible to observability despite a docstring claiming otherwise.
     - "chat_cli_turn"
+    # #PLAT-F11 — pip install/uninstall of plugin entry-point packages.
+    # These already fired from api/plugin_entry_points_routes.py but were
+    # undeclared. Now MCP-token-only + human-approval-gated (RCE-class).
+    - "plugin_install"
+    - "plugin_uninstall"
 
 notifications:
   topics:

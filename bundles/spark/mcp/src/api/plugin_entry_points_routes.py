@@ -26,6 +26,60 @@ from api.auth import require_bearer
 logger = logging.getLogger("Guardian MCP")
 
 
+def _require_mcp_token(request: Request) -> JSONResponse | None:
+    """#PLAT-F11 — restrict pip install/uninstall to the internal MCP_TOKEN
+    admin principal. require_bearer() also accepts operator-minted API keys;
+    a read-scoped key could otherwise trigger arbitrary package code
+    execution in the MCP container. Returns a 403 JSONResponse for any
+    non-MCP_TOKEN principal, else None. Call AFTER require_bearer()."""
+    if getattr(request.state, "auth_principal", "") != "mcp_token":
+        return JSONResponse(
+            {"error": "plugin install/uninstall requires the MCP admin token"},
+            status_code=403,
+        )
+    return None
+
+
+async def _gate_pip_op(*, tool: str, args: dict) -> JSONResponse | None:
+    """#PLAT-F11 — human-approval gate for a pip operation (RCE-class). A
+    REST route can't use the tool-call gate_and_execute, so we drive the
+    approvals bus directly: open a destructive-tier request and block until a
+    human resolves it in /approvals (or it times out). Returns a JSONResponse
+    on deny/timeout (caller should return it), None when approved. If the bus
+    isn't wired (shouldn't happen in a booted MCP), we fail OPEN to the
+    MCP-token-only protection rather than hard-blocking admin recovery."""
+    try:
+        from usecase.approvals_bus import (
+            STATUS_APPROVED,
+            STATUS_DENIED,
+            STATUS_TIMEOUT,
+            approvals_bus,
+        )
+    except Exception:  # pragma: no cover - import guard
+        return None
+    bus = approvals_bus()
+    if bus is None:
+        return None
+    approval_id = bus.request(
+        tool=tool,
+        namespaced=tool,
+        actor="operator",
+        args=args,
+        risk_tier="destructive",
+    )
+    status, reason = await bus.wait_async(approval_id)
+    if status == STATUS_APPROVED:
+        return None
+    if status == STATUS_DENIED:
+        return JSONResponse({"error": f"approval denied: {reason}"}, status_code=403)
+    if status == STATUS_TIMEOUT:
+        return JSONResponse(
+            {"error": "approval timed out — no operator confirmed the install"},
+            status_code=408,
+        )
+    return JSONResponse({"error": f"approval failed: {status}"}, status_code=500)
+
+
 def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
     @mcp.custom_route(
         "/api/v1/plugin-entries", methods=["GET"], include_in_schema=False,
@@ -54,6 +108,8 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
     async def install_entry(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
+        if (resp := _require_mcp_token(request)) is not None:
+            return resp
         try:
             body = await request.json()
         except Exception:
@@ -74,6 +130,11 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
                 {"error": "spec contains disallowed shell characters"},
                 status_code=400,
             )
+        # #PLAT-F11 — pip install runs arbitrary package code (setup.py /
+        # build hooks) in the MCP container. Require an explicit human
+        # approval before the subprocess runs.
+        if (resp := await _gate_pip_op(tool="plugin_entry_install", args={"spec": spec})) is not None:
+            return resp
         logger.info("plugin-entries install: %s", spec)
         proc = await asyncio.create_subprocess_exec(
             sys.executable, "-m", "pip", "install", "--user",
@@ -142,6 +203,8 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
     async def uninstall_entry(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
+        if (resp := _require_mcp_token(request)) is not None:
+            return resp
         dist_name = request.path_params["dist_name"]
         if any(ch in dist_name for ch in (";", "|", "&", "$", "`", "/", "\n", "\r", " ")):
             return JSONResponse(
@@ -150,6 +213,10 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
             )
         if not dist_name.strip():
             return JSONResponse({"error": "dist_name is required"}, status_code=400)
+        # #PLAT-F11 — removing a package the MCP imports can break the
+        # process; gate it the same way as install.
+        if (resp := await _gate_pip_op(tool="plugin_entry_uninstall", args={"dist_name": dist_name})) is not None:
+            return resp
         logger.info("plugin-entries uninstall: %s", dist_name)
         proc = await asyncio.create_subprocess_exec(
             sys.executable, "-m", "pip", "uninstall", "-y",

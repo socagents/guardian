@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.68",
+    date: "2026-06-24",
+    title: "Lock down two exposed surfaces: metrics + plugin pip-install.",
+    security: true,
+    highlights: [
+      "The Prometheus metrics endpoint (GET /api/v1/metrics on the embedded MCP) now requires authentication — it was open, so anything reaching the MCP port read all counter names+values uncredentialed. The in-app metrics panel is unaffected (it authenticates through the agent proxy).",
+      "Plugin pip-install/uninstall is now admin-only + approval-gated. These endpoints run pip (arbitrary package code execution in the agent container); previously any valid API key could trigger them with no confirmation. Now restricted to the internal admin token AND blocked until an operator confirms in Approvals (deny/timeout refuses the install).",
+      "plugin_install / plugin_uninstall audit events are now declared so they appear in the /observability/events filter chips.",
+    ],
+  },
+  {
     version: "0.2.67",
     date: "2026-06-24",
     title: "Close audit blind spots: reads, auth, and KB access now leave a trace.",

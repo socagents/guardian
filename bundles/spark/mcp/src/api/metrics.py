@@ -5,12 +5,15 @@
   GET /api/v1/metrics/snapshot    → JSON snapshot {name: kind} for
                                      the agent UI's debug panel.
 
-The Prometheus endpoint is intentionally NOT auth-gated — Prometheus
-servers don't speak bearer tokens and operators expect /metrics to be
-scrapable. This is the standard exposition pattern; if metrics are
-sensitive the operator's network ACL gates instead. The JSON snapshot
-DOES require bearer auth since it's an admin-debug surface, not an
-ingestion target.
+Both endpoints require bearer auth (MCP_TOKEN or an API key). #API-F16/
+#OBS-F12 — the Prometheus exposition was previously un-gated, so anything
+reaching the MCP port read every counter name + value without auth. The MCP
+port is loopback-only and the only in-stack caller is the Next.js
+`/api/agent/metrics` proxy (which already attaches the MCP_TOKEN bearer), so
+gating is transparent to the metrics panel. There is no external Prometheus
+scraper pointed at this endpoint in the shipped compose; an operator who
+wants to scrape it directly should mint an API key rather than reopen the
+endpoint.
 
 # Embedder stats refreshed at scrape time
 
@@ -104,7 +107,11 @@ def register_metrics_routes(mcp: FastMCP, registry: MetricsRegistry) -> None:
         "/api/v1/metrics", methods=["GET"], include_in_schema=False
     )
     async def prometheus_exposition(request: Request) -> Response:
-        # Unauthenticated — see module docstring.
+        # #API-F16/#OBS-F12 — require bearer auth. Was previously open; see
+        # module docstring. The only in-stack caller (the Next.js
+        # /api/agent/metrics proxy) already attaches the MCP_TOKEN bearer.
+        if (resp := require_bearer(request)) is not None:
+            return resp
         _refresh_embedder_gauges()
         body = registry.format_prometheus()
         return Response(

@@ -4122,7 +4122,7 @@ const SELF_MOD: ApiEndpoint[] = [
     method: "DELETE",
     path: "/api/agent/plugin-entries/{dist_name}",
     summary: "Uninstall a plugin distribution via pip",
-    description: "Runs `pip uninstall -y --disable-pip-version-check <dist_name>` for the named distribution. The MCP handler rejects a dist_name containing disallowed characters (; | & $ backtick / CR LF space) and rejects an empty value. On success it clears the plugin-hook handler cache and records a 'plugin_uninstall' audit event; skill/connector/provider/scanner caches still require a guardian-agent restart to fully purge. The agent route URL-encodes dist_name and forwards to DELETE /api/v1/plugin-entries/{dist_name} with the MCP_TOKEN bearer (no explicit client timeout).",
+    description: "Runs `pip uninstall -y --disable-pip-version-check <dist_name>` for the named distribution. #PLAT-F11: restricted to the internal MCP_TOKEN admin principal (API keys → 403) and human-approval-gated (deny → 403, timeout → 408) — removing a package the MCP imports can break the process. The MCP handler rejects a dist_name containing disallowed characters (; | & $ backtick / CR LF space) and rejects an empty value. On approval + success it clears the plugin-hook handler cache and records a 'plugin_uninstall' audit event; skill/connector/provider/scanner caches still require a guardian-agent restart to fully purge. The agent route URL-encodes dist_name and forwards to DELETE /api/v1/plugin-entries/{dist_name} with the MCP_TOKEN bearer (no explicit client timeout, so the approval wait is held by the proxy).",
     pathParams: [
       {
         name: "dist_name",
@@ -4178,7 +4178,7 @@ const SELF_MOD: ApiEndpoint[] = [
     method: "POST",
     path: "/api/agent/plugin-entries/install",
     summary: "Install a plugin distribution via pip",
-    description: "Runs `pip install --user --disable-pip-version-check --quiet <spec>` for a single dist spec (PyPI name, git+url, or local path). The MCP handler requires the body to be a JSON object with a non-empty string 'spec', and rejects any spec containing shell metacharacters (; | & $ backtick CR LF). On success it re-discovers entry-points, clears the plugin-hook handler cache (so guardian.hooks handlers become invokable without restart), records a 'plugin_install' audit event, and returns 201. Other contribution types (skills/connectors/scanners/providers) still need a guardian-agent restart. The agent route parses req.json() (returning its own 400 {error:'body must be JSON'} if that fails) and forwards the parsed body to POST /api/v1/plugin-entries/install with the MCP_TOKEN bearer (no explicit client timeout).",
+    description: "Runs `pip install --user --disable-pip-version-check --quiet <spec>` for a single dist spec (PyPI name, git+url, or local path). #PLAT-F11: because pip executes arbitrary package build code in the MCP container (RCE-class), this is restricted to the internal MCP_TOKEN admin principal (operator-minted API keys are rejected with 403) AND gated behind a human approval — the MCP opens a destructive-tier approval and blocks until an operator resolves it in /approvals (deny → 403, timeout → 408). The MCP handler requires the body to be a JSON object with a non-empty string 'spec', and rejects any spec containing shell metacharacters (; | & $ backtick CR LF). On approval + success it re-discovers entry-points, clears the plugin-hook handler cache (so guardian.hooks handlers become invokable without restart), records a 'plugin_install' audit event, and returns 201. Other contribution types (skills/connectors/scanners/providers) still need a guardian-agent restart. The agent route parses req.json() (returning its own 400 {error:'body must be JSON'} if that fails) and forwards the parsed body to POST /api/v1/plugin-entries/install with the MCP_TOKEN bearer (no explicit client timeout, so the approval wait is held by the proxy).",
     body: {
       contentType: "application/json",
       schema: {
@@ -4214,6 +4214,16 @@ const SELF_MOD: ApiEndpoint[] = [
         status: "401",
         description: "Missing or malformed Authorization header (passed through from the MCP's require_bearer).",
         example: { error: "missing or malformed Authorization header" }
+      },
+      {
+        status: "403",
+        description: "#PLAT-F11 — caller authenticated with an operator-minted API key, not the internal MCP_TOKEN admin principal; pip install is admin-only. Also returned when the human approval is DENIED ({error:'approval denied: <reason>'}).",
+        example: { error: "plugin install/uninstall requires the MCP admin token" }
+      },
+      {
+        status: "408",
+        description: "#PLAT-F11 — the install approval timed out (no operator confirmed it in /approvals within the bus window).",
+        example: { error: "approval timed out — no operator confirmed the install" }
       },
       {
         status: "500",
