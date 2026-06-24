@@ -79,6 +79,18 @@ logger = logging.getLogger("Guardian MCP")
 DEFAULT_DATA_ROOT = Path("/app/data")
 DEFAULT_EMBED_DIMS = 768  # matches manifest.memory.embeddingDims
 
+# #MEM-F3 — reap-on-read predicate. The boot-only TTL reaper meant expired
+# rows kept being returned by get/list/search until the next restart. AND-ing
+# this into every read WHERE clause hides expired rows immediately, even
+# before the periodic reaper deletes them. updated_at is stored as
+# 'YYYY-MM-DDTHH:MM:SSZ'; substr(...,1,19) strips the 'Z' so SQLite's
+# datetime() parses it reliably across versions, and both sides are UTC.
+_NOT_EXPIRED_SQL = (
+    "(ttl_seconds IS NULL OR "
+    "datetime(substr(updated_at, 1, 19)) >= "
+    "datetime('now', '-' || ttl_seconds || ' seconds'))"
+)
+
 
 class Embedder(Protocol):
     """Minimal interface the memory store needs from any embedding backend."""
@@ -493,7 +505,8 @@ class SqliteMemoryStore:
     def get(self, *, key: str, scope: str = "agent") -> Memory | None:
         with self._lock, self._conn() as c:
             row = c.execute(
-                "SELECT * FROM memories WHERE key = ? AND scope = ?",
+                f"SELECT * FROM memories WHERE key = ? AND scope = ? "
+                f"AND {_NOT_EXPIRED_SQL}",
                 (key, scope),
             ).fetchone()
         return self._row_to_memory(row) if row else None
@@ -501,18 +514,20 @@ class SqliteMemoryStore:
     def get_by_id(self, memory_id: str) -> Memory | None:
         with self._lock, self._conn() as c:
             row = c.execute(
-                "SELECT * FROM memories WHERE id = ?", (memory_id,)
+                f"SELECT * FROM memories WHERE id = ? AND {_NOT_EXPIRED_SQL}",
+                (memory_id,),
             ).fetchone()
         return self._row_to_memory(row) if row else None
 
     def list_all(
         self, *, scope: str | None = None, limit: int = 100, offset: int = 0
     ) -> list[Memory]:
-        clauses, params = [], []
+        # #MEM-F3 — always exclude expired rows from listings.
+        clauses, params = [_NOT_EXPIRED_SQL], []
         if scope is not None:
             clauses.append("scope = ?")
             params.append(scope)
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = "WHERE " + " AND ".join(clauses)
         params.extend([max(1, min(limit, 500)), max(0, offset)])
         with self._lock, self._conn() as c:
             rows = c.execute(
@@ -596,11 +611,13 @@ class SqliteMemoryStore:
         if not isinstance(query, str) or not query.strip():
             return []
         query_vec = self._embedder.embed(query)
-        clauses, params = [], []
+        # #MEM-F3 — exclude expired rows from the candidate pool so they can't
+        # surface in search results between reaper runs.
+        clauses, params = [_NOT_EXPIRED_SQL], []
         if scope is not None:
             clauses.append("scope = ?")
             params.append(scope)
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = "WHERE " + " AND ".join(clauses)
 
         # Phase 4.3 — hybrid candidate gathering. The vector query
         # below scans all rows (n is small for SOC ops; brute-force is
@@ -767,9 +784,13 @@ class SqliteMemoryStore:
     def _reap_expired(self) -> int:
         """Delete memory rows whose TTL has passed.
 
-        TTL is interpreted as seconds since `updated_at`. Run at boot
-        and (Phase 9) on a scheduled job.
+        TTL is interpreted as seconds since `updated_at`. #MEM-F3 — this runs
+        at boot AND now on a periodic loop (main.py async task), and emits an
+        audit row + metric when it deletes anything; reads also filter expired
+        rows (see _NOT_EXPIRED_SQL) so nothing leaks between sweeps.
         """
+        import calendar
+
         now_epoch = time.time()
         deleted = 0
         with self._lock, self._conn() as c:
@@ -782,10 +803,13 @@ class SqliteMemoryStore:
                 ttl = r["ttl_seconds"]
                 if ttl is None:
                     continue
-                # Parse updated_at (assume ISO8601 UTC seconds-precision).
+                # Parse updated_at (ISO8601 UTC, seconds precision). Use
+                # calendar.timegm so the struct_time is interpreted as UTC —
+                # time.mktime() treats it as LOCAL time and the manual
+                # `- time.timezone` correction broke under DST.
                 try:
                     upd = time.strptime(r["updated_at"], "%Y-%m-%dT%H:%M:%SZ")
-                    upd_epoch = time.mktime(upd) - time.timezone
+                    upd_epoch = calendar.timegm(upd)
                 except ValueError:
                     continue
                 if upd_epoch + ttl < now_epoch:
@@ -795,6 +819,30 @@ class SqliteMemoryStore:
                 if self._fts_available:
                     c.execute("DELETE FROM memories_fts WHERE id = ?", (mid,))
                 deleted += 1
+        if deleted > 0:
+            # #MEM-F3 — the boot-only reaper used to delete silently (log
+            # only). Leave a forensic trace + a metric for the deletion.
+            try:
+                from usecase.audit_log import ACTION_MEMORY_DELETED, record_event
+                record_event(
+                    ACTION_MEMORY_DELETED,
+                    target="memory:_expired_",
+                    status="success",
+                    actor="system",
+                    metadata={"reaped_count": deleted, "trigger": "ttl_reaper"},
+                )
+            except Exception:  # pragma: no cover - audit best-effort
+                pass
+            try:
+                from usecase.metrics_registry import metrics_registry
+                reg = metrics_registry()
+                if reg is not None:
+                    reg.counter(
+                        "guardian_memory_ttl_reaped_total",
+                        "Total expired memory rows deleted by the TTL reaper.",
+                    ).inc(float(deleted))
+            except Exception:  # pragma: no cover - metric best-effort
+                pass
         return deleted
 
     # ─── Mappers ───────────────────────────────────────────────

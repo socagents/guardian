@@ -10,6 +10,11 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.70] (2026-06-24) — *Bound database growth: memory TTL + audit retention*
+
+- **Expired memories now disappear immediately.** The memory TTL cleanup only ran at startup, so an expired memory could still be returned by reads (and surface in search) until the next restart. Reads now exclude expired entries the moment they expire, a cleanup sweep runs hourly (not just at boot), and the cleanup leaves an audit row + a metric. (Also fixed a timezone bug in the expiry calculation.)
+- **The audit log can now be size-bounded (opt-in) and its growth is observable.** `audit.db` had no retention and no size signal, so it grew without bound. It now exposes row-count and on-disk-size metrics, and supports an optional retention window via `AUDIT_RETENTION_DAYS` (a positive integer). Retention is **off by default** — the audit log is forensic, so history is never pruned unless an operator opts in; when it is, the pruning sweep itself is recorded as an `audit_reaped` event.
+
 ## [v0.2.69] (2026-06-24) — *Close two cache-staleness windows in auth + approvals*
 
 - **A revoked API key now stops working immediately.** Deleting an API key only revoked it server-side; a warm validation cache on the agent could keep accepting the key for up to 30 seconds. The delete now evicts the key from that cache by id, so revocation takes effect on the next request.

@@ -283,6 +283,11 @@ ACTION_API_KEY_SCOPE_DENIED = "api_key_scope_denied"
 ACTION_API_KEY_CREDENTIAL_ROUTE_DENIED = "api_key_credential_route_denied"
 ACTION_MCP_BEARER_AUTH_FAILED = "mcp_bearer_auth_failed"
 
+# #OBS-F10 — the audit log's own retention sweep (opt-in, default off). The
+# reap writes one of these rows so deletion of forensic history is itself
+# audited (and the row, being newer than the cutoff, survives the sweep).
+ACTION_AUDIT_REAPED = "audit_reaped"
+
 
 class SqliteAuditLog:
     """Append-only audit trail at ``<data_root>/audit.db``.
@@ -294,18 +299,124 @@ class SqliteAuditLog:
     the common query shapes.
     """
 
-    def __init__(self, data_root: Path | None = None) -> None:
+    def __init__(
+        self, data_root: Path | None = None, retention_days: int | None = None
+    ) -> None:
         self._data_root = (data_root or self._resolve_data_root()).resolve()
         self._data_root.mkdir(parents=True, exist_ok=True)
         self._db_path = self._data_root / "audit.db"
         self._lock = threading.Lock()
+        # #OBS-F10 — retention is OFF by default (None). audit.db is the
+        # forensic log; we never silently delete history. Operators opt in by
+        # setting AUDIT_RETENTION_DAYS to a positive integer (a long floor,
+        # e.g. 365, is recommended). Explicit constructor arg wins (tests).
+        self._retention_days = (
+            retention_days
+            if retention_days is not None
+            else self._resolve_retention_days()
+        )
         self._init_schema()
-        logger.info("SqliteAuditLog at %s", self._db_path)
+        logger.info(
+            "SqliteAuditLog at %s (retention=%s)",
+            self._db_path,
+            f"{self._retention_days}d" if self._retention_days else "off",
+        )
+        self._reap_old()
+        self._emit_size_gauge()
 
     @staticmethod
     def _resolve_data_root() -> Path:
         raw = os.getenv("DATA_ROOT", str(DEFAULT_DATA_ROOT))
         return Path(raw)
+
+    @staticmethod
+    def _resolve_retention_days() -> int | None:
+        """#OBS-F10 — read AUDIT_RETENTION_DAYS; default OFF. A non-positive
+        or non-integer value disables retention (the safe default for a
+        forensic log)."""
+        raw = os.getenv("AUDIT_RETENTION_DAYS")
+        if raw is None or not raw.strip():
+            return None
+        try:
+            v = int(raw)
+        except ValueError:
+            logger.warning(
+                "AUDIT_RETENTION_DAYS=%r is not an integer; retention disabled",
+                raw,
+            )
+            return None
+        return v if v > 0 else None
+
+    def _row_count(self) -> int:
+        try:
+            with self._lock, self._conn() as c:
+                return int(
+                    c.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0]
+                )
+        except Exception:  # pragma: no cover - best-effort
+            return 0
+
+    def _emit_size_gauge(self) -> None:
+        """#OBS-F10 — publish audit.db row-count + on-disk size so unbounded
+        growth is observable (the finding's 'no gauge/warning' gap). Pulled
+        at boot + after each reap; the Prometheus scrape can also refresh."""
+        try:
+            from usecase.metrics_registry import metrics_registry
+
+            reg = metrics_registry()
+            if reg is None:
+                return
+            reg.gauge(
+                "guardian_audit_db_row_count",
+                "Current number of rows in the audit_events table.",
+            ).set(float(self._row_count()))
+            size = self._db_path.stat().st_size if self._db_path.exists() else 0
+            reg.gauge(
+                "guardian_audit_db_size_bytes",
+                "On-disk size of audit.db in bytes.",
+            ).set(float(size))
+        except Exception:  # pragma: no cover - best-effort
+            pass
+
+    def _reap_old(self) -> int:
+        """#OBS-F10 — delete audit rows older than the retention window, if
+        enabled. No-op when retention is off (the default). Best-effort; a
+        failure logs a warning but never breaks boot. Emits an audit_reaped
+        row (actor=system) so the deletion of forensic history is itself
+        traced, and refreshes the size gauges."""
+        if self._retention_days is None:
+            return 0
+        cutoff_epoch = time.time() - (self._retention_days * 86400)
+        cutoff = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cutoff_epoch))
+        try:
+            with self._lock, self._conn() as c:
+                cur = c.execute(
+                    "DELETE FROM audit_events WHERE ts < ?", (cutoff,)
+                )
+                n = cur.rowcount or 0
+        except Exception as exc:
+            logger.warning("audit retention sweep failed: %s", exc)
+            return 0
+        if n > 0:
+            logger.info(
+                "audit log: reaped %d row(s) older than %s", n, cutoff
+            )
+            try:
+                self.record(
+                    ACTION_AUDIT_REAPED,
+                    target="audit.db",
+                    status="success",
+                    actor="system",
+                    metadata={
+                        "rows_deleted": n,
+                        "cutoff": cutoff,
+                        "retention_days": self._retention_days,
+                    },
+                )
+            except Exception:  # pragma: no cover - best-effort
+                pass
+            self._emit_size_gauge()
+        return n
 
     @property
     def db_path(self) -> Path:

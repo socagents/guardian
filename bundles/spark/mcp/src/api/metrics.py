@@ -113,6 +113,15 @@ def register_metrics_routes(mcp: FastMCP, registry: MetricsRegistry) -> None:
         if (resp := require_bearer(request)) is not None:
             return resp
         _refresh_embedder_gauges()
+        # #OBS-F10 — pull audit.db row-count + size gauges at scrape time so
+        # unbounded growth is always observable (mirrors the embedder pull).
+        try:
+            from usecase.audit_log import audit_log as _audit_log_singleton
+            _al = _audit_log_singleton()
+            if _al is not None:
+                _al._emit_size_gauge()
+        except Exception:  # noqa: BLE001 - never break the scrape
+            pass
         body = registry.format_prometheus()
         return Response(
             content=body,

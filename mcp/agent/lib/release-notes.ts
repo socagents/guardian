@@ -37,6 +37,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.70",
+    date: "2026-06-24",
+    title: "Bound database growth: memory TTL + audit retention.",
+    highlights: [
+      "Expired memories now disappear immediately. The TTL cleanup was boot-only, so expired rows kept being returned by get/list/search until restart. Reads now filter expired entries, an hourly sweep deletes them (not just at boot), and the sweep emits an audit row + metric (plus a timezone-math fix in the expiry calc).",
+      "audit.db is now size-observable + optionally retention-bounded. It exposes row-count + on-disk-size metrics, and supports an opt-in retention window via AUDIT_RETENTION_DAYS. Retention is OFF by default (the audit log is forensic — history is never pruned unless an operator opts in); when enabled, the prune itself is recorded as an audit_reaped event.",
+    ],
+  },
+  {
     version: "0.2.69",
     date: "2026-06-24",
     title: "Close two cache-staleness windows in auth + approvals.",

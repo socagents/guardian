@@ -736,6 +736,10 @@ audit:
     # undeclared. Now MCP-token-only + human-approval-gated (RCE-class).
     - "plugin_install"
     - "plugin_uninstall"
+    # #OBS-F10 — the audit log's own retention sweep (opt-in via
+    # AUDIT_RETENTION_DAYS; off by default). Emitted so deletion of forensic
+    # history is itself traced.
+    - "audit_reaped"
 
 notifications:
   topics:

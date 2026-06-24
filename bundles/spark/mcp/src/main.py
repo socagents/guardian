@@ -176,6 +176,20 @@ async def async_main(transport: str):
     audit = SqliteAuditLog()
     set_audit_log(audit)
 
+    # #OBS-F10 — periodic audit retention sweep (only when AUDIT_RETENTION_DAYS
+    # is set; OFF by default — audit.db is forensic, never pruned silently).
+    # The boot sweep already ran in the constructor; a 24h loop catches rows
+    # that age past the window between restarts.
+    if audit._retention_days is not None:
+        async def _audit_reaper_loop() -> None:
+            while True:
+                await asyncio.sleep(86_400)
+                try:
+                    audit._reap_old()
+                except Exception as exc:  # pragma: no cover
+                    logger.warning("audit reaper loop failed: %s", exc)
+        asyncio.create_task(_audit_reaper_loop())
+
     # Observability — Prometheus-format metrics registry, built-in
     # counters/gauges/histogram registered first. Manifest-declared
     # counters get pre-registered AFTER the manifest is parsed below
@@ -538,6 +552,23 @@ async def async_main(transport: str):
 
     memory_store = SqliteMemoryStore(embedder=embedder)
     set_memory_store(memory_store)
+
+    # #MEM-F3 — periodic TTL reaper. The boot reap ran in the constructor;
+    # an hourly loop deletes rows that expire while the process is up (reads
+    # already filter expired rows, so this is about reclaiming space + the
+    # audit/metric signal, not correctness).
+    async def _memory_reaper_loop() -> None:
+        while True:
+            await asyncio.sleep(3_600)
+            try:
+                n = memory_store._reap_expired()
+                if n:
+                    logger.info(
+                        "memory_store: periodic reaper deleted %d expired row(s)", n
+                    )
+            except Exception as exc:  # pragma: no cover
+                logger.warning("memory reaper loop failed: %s", exc)
+    asyncio.create_task(_memory_reaper_loop())
 
     # v1.2 Phase 10 — knowledge base. Same Embedder protocol as memory
     # (in fact we share the same instance, since dims must match for
