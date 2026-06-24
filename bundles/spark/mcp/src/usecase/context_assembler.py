@@ -118,6 +118,33 @@ def estimate_tokens(text: str) -> int:
     return max(1, len(text) // CHARS_PER_TOKEN)
 
 
+def _personality_rank_kwargs() -> dict[str, float]:
+    """#MEM-F7 — read the personality-level memory ranking knobs
+    (memoryMmrLambda / memoryTemporalDecayLambda) and translate them to
+    memory_store.search() kwargs (mmr_lambda / temporal_decay_lambda).
+
+    Returns only the keys that are present + numeric so search() falls back
+    to its own defaults otherwise. Best-effort: any store/parse error yields
+    {} (defaults), never raising into the per-turn assembly path.
+    """
+    try:
+        from usecase.personality_store import personality_store as _ps
+        store = _ps()
+        if store is None:
+            return {}
+        blob = store.get_or_default().blob or {}
+        out: dict[str, float] = {}
+        mmr = blob.get("memoryMmrLambda")
+        if isinstance(mmr, (int, float)):
+            out["mmr_lambda"] = float(mmr)
+        decay = blob.get("memoryTemporalDecayLambda")
+        if isinstance(decay, (int, float)):
+            out["temporal_decay_lambda"] = float(decay)
+        return out
+    except Exception:  # noqa: BLE001 — ranking knobs must never break assembly
+        return {}
+
+
 class ContextAssembler:
     """Assembles per-turn context from session + memory stores.
 
@@ -220,6 +247,18 @@ class ContextAssembler:
             if session_id:
                 scopes_to_search.append(f"session:{session_id}")
 
+            # #MEM-F7 — the personality blob exposes memoryMmrLambda /
+            # memoryTemporalDecayLambda as persisted server defaults, but the
+            # assembler's passive search never forwarded them, so they were
+            # dead for the per-turn injection path (only the /memory search
+            # page's per-query override was wired, see api/cognitive.py).
+            # Read them lazily from the personality store at assemble time
+            # (the store is a singleton constructed after this assembler, and
+            # runtime edits should take effect) and forward as rank kwargs.
+            # Absent / malformed → omit so memory_store.search keeps its own
+            # defaults (mmr_lambda=0.7, temporal_decay_lambda=0.01).
+            rank_kwargs = _personality_rank_kwargs()
+
             seen: set[str] = set()
             all_hits: list[tuple[Any, float]] = []
             for sc in scopes_to_search:
@@ -229,6 +268,7 @@ class ContextAssembler:
                     scope=sc,
                     min_score=self._memory_min_score,
                     mode="passive",  # #MEM-F4 — discriminate per-turn injection
+                    **rank_kwargs,
                 )
                 for mem, score in hits:
                     if mem.id in seen:

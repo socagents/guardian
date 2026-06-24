@@ -29,6 +29,17 @@ export async function GET(request: NextRequest) {
     if (filePath) {
       const result = await mcpClient.callTool("skills_read", { file_path: filePath });
       const parsed = parseToolResult<{ success: boolean; content?: string; error?: string }>(result);
+      // #SKILL-F3 — forward the not-found / invalid-path failure as a non-2xx
+      // status. Previously a {success:false, error:"Skill not found: ..."}
+      // returned HTTP 200, so a caller checking res.ok saw success and only a
+      // caller reading the body's `success` field detected the error. The MCP
+      // REST GET (api/skills.py) returns 404; mirror that here. The MCP tool
+      // now also returns "Invalid skill path" for traversal attempts
+      // (#SKILL-F11) — surface that as 400.
+      if (!parsed.success) {
+        const status = /invalid skill path/i.test(parsed.error ?? "") ? 400 : 404;
+        return NextResponse.json(parsed, { status });
+      }
       return NextResponse.json(parsed);
     }
 

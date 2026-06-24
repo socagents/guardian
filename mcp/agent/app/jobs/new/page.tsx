@@ -330,7 +330,21 @@ function CreateJobPage() {
   const [intervalN, setIntervalN] = useState(5);
   const [intervalUnit, setIntervalUnit] = useState<IntervalUnit>("minutes");
   const [customCron, setCustomCron] = useState("0 9 * * 1-5");
-  const [timezone, setTimezone] = useState("UTC");
+  // #JOBS-F5 — default the timezone field to the BROWSER's IANA zone, not a
+  // hardcoded "UTC". buildOnceCron emits browser-local getHours()/getMinutes()
+  // for the `now`/`once` modes, so a non-UTC operator who picked "8pm tonight"
+  // previously submitted `0 20 …` with timezone="UTC" and the scheduler fired
+  // at 8pm UTC instead of 8pm local. Auto-filling the operator's real zone
+  // keeps the cron's local clock values and the declared timezone consistent.
+  // The operator can still override the field; the edit path below restores
+  // the saved job.timezone verbatim.
+  const [timezone, setTimezone] = useState(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch {
+      return "UTC";
+    }
+  });
   const [enabled, setEnabled] = useState(true);
   // v0.1.27: per-job approval bypass. When true, the scheduler sets
   // `X-Guardian-Approval-Bypass: 1` on every chat dispatch for this job

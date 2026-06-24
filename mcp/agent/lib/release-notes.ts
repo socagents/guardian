@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.78",
+    date: "2026-06-24",
+    title: "Input-validation hardening: path-traversal guard, deny-list enforcement, fail-closed rejections.",
+    highlights: [
+      "Skill read/update/enable/delete reject paths that are absolute or escape the skills directory (../../…) — closes a path-traversal vector.",
+      "A connector manifest's tools.deny[] is enforced at registration, so a denied tool can't be reached even by direct dispatch; subagents can't call the parent-only subagent_create and PreToolUse hooks run before subagent dispatch.",
+      "Unknown API-key scopes map to read/write tiers correctly (unknown→nothing); reading a missing skill returns 404; listing an unknown KB returns valid names; memory-store embed failures return a friendly error.",
+      "Vertex / XSOAR / XSIAM instance probes now validate credentials instead of always reporting success.",
+      "New-job timezone defaults to the browser zone; an unsupported-action job auto-disables on first fire; regenerating an unchanged report/diagram no longer collides on a duplicate job name; a partial backup is detectable from response headers.",
+    ],
+  },
+  {
     version: "0.2.77",
     date: "2026-06-24",
     title: "Observability granularity, part 2: job runtime events, quieter-failure signals, proxy failure traces.",

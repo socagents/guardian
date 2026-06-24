@@ -70,7 +70,7 @@ import type { RunStatusReason } from '@/lib/run-status';
 // `subagent_create` as a synthetic tool; the chat-route intercepts,
 // resolves the agent definition from MCP, and runs a tightly-
 // scoped sub-loop. Reuses callGemini + the hook framework
-// (PreToolUse/PostToolUse fire inside subagents too) + the task
+// (PreToolUse fires inside subagents too, #SUB-F4) + the task
 // registry (each subagent run is a task).
 import { globMatch } from '@/lib/hooks';
 import {
@@ -388,6 +388,15 @@ function filterToolsForAgent(
     const filtered = decls.filter((d) => {
       const name = d.name;
       if (!name) return false;
+      // #SUB-F5 — never expose subagent_create to a subagent. It is a
+      // synthetic parent-loop-only meta-tool (intercepted in the main loop,
+      // NOT an MCP tool); a subagent that calls it would dispatch to
+      // mcpClient.callTool and waste a whole turn on a "tool not found"
+      // error. Recursive spawning is unsupported, so hard-drop it here
+      // regardless of the allowlist — including allowlists with '*' or an
+      // explicit 'subagent_create', which the v0.2.60 non-empty-allowlist
+      // requirement did not catch.
+      if (name === SUBAGENT_CREATE_TOOL) return false;
       if (denyGlob && globMatch(name, denyGlob)) return false;
       if (allowGlob && !globMatch(name, allowGlob)) return false;
       return true;
@@ -407,7 +416,9 @@ function filterToolsForAgent(
  *
  * Reuses Round-15 substrates:
  *   - Phase H hooks: SubagentStart fires before, SubagentEnd after.
- *     PreToolUse/PostToolUse fire INSIDE the subagent's tool loop too.
+ *     PreToolUse fires INSIDE the subagent's tool loop too (#SUB-F4),
+ *     so deny/replace hooks apply to subagent tool calls. (PostToolUse
+ *     is not yet wired into the subagent loop.)
  *   - Phase T tasks: each subagent run is a Task with progress.
  *   - Phase $ cost tracking: subagent's Gemini calls write
  *     chat_turn_cost rows tagged with the subagent session id.
@@ -814,7 +825,9 @@ async function runSubagent(args: {
       const responseParts: GeminiPart[] = [];
       for (const call of functionCalls) {
         const toolName = call.name;
-        const toolArgs = call.args || {};
+        // #SUB-F4 — `let` (was `const`) so a PreToolUse hook's `replace`
+        // decision can swap the args before dispatch, mirroring the main loop.
+        let toolArgs = call.args || {};
 
         // Defense in depth: re-check scope. The model shouldn't
         // even see denied tools, but if a hook injected a tool
@@ -875,6 +888,74 @@ async function runSubagent(args: {
             },
           });
           continue;
+        }
+
+        // #SUB-F4 — fire PreToolUse INSIDE the subagent's tool loop too.
+        // Previously the subagent dispatched straight to mcpClient.callTool
+        // with no PreToolUse hook (so a deny/replace hook silently did NOT
+        // apply to subagent tool calls — a privilege gap vs. the main loop,
+        // which fires it at the analogous site). The MCP-side approval gate
+        // (manifest.approvals.humanRequired) still blocks the callTool below
+        // on bus.wait_async for ANY caller, so gated tools are not bypassed;
+        // this closes the hook half. A `deny` short-circuits to a synthetic
+        // error the subagent model sees; a `replace` swaps the args.
+        const subPreToolHook = await fireHookEvent(
+          'PreToolUse',
+          {
+            event: 'PreToolUse',
+            sessionId: subagentSessionId,
+            toolName,
+            args: toolArgs as Record<string, unknown>,
+            trigger: args.trigger,
+          },
+          args.trigger,
+        );
+        if (subPreToolHook.decision === 'deny') {
+          const hookReason =
+            subPreToolHook.reason ?? 'Tool call blocked by a PreToolUse hook.';
+          args.sendEvent('subagent_tool_blocked', {
+            subagent_session_id: subagentSessionId,
+            tool: toolName,
+            reason: hookReason,
+          });
+          void safeAudit('subagent_tool_blocked', {
+            target: `tool:${toolName}`,
+            status: 'failure',
+            trigger: args.trigger,
+            actor: 'agent',
+            metadata: {
+              subagent_session_id: subagentSessionId,
+              parent_session_id: args.parentSessionId,
+              agent_name: args.agentName,
+              agent_id: agentDef.id,
+              tool: toolName,
+              reason: hookReason,
+              blocked_by: 'pre_tool_use_hook',
+            },
+          });
+          void safePersist(
+            subagentSessionId,
+            {
+              role: 'tool',
+              content: hookReason,
+              tool_call_id: toolName,
+              meta: { tool: toolName, blocked_by: 'pre_tool_use_hook', status: 'blocked' },
+            },
+            args.trigger,
+          );
+          responseParts.push({
+            functionResponse: {
+              name: toolName,
+              response: { error: hookReason, blocked_by: 'pre_tool_use_hook' },
+            },
+          });
+          continue;
+        }
+        if (
+          subPreToolHook.replace &&
+          typeof subPreToolHook.replace === 'object'
+        ) {
+          toolArgs = subPreToolHook.replace as typeof toolArgs;
         }
 
         // Stream a sub-tool-call event so the parent UI can show
@@ -3594,6 +3675,13 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
       // a local id so the UI still gets a clean slate; subsequent
       // turns will lazy-create properly when MCP recovers.
       let newSessionId: string;
+      // #CHAT-F20 — track whether the replacement session was actually
+      // persisted by the MCP. When it wasn't (MCP unreachable, or the create
+      // returned no id), the synthesized `s_*` id is an orphan: the UI swaps
+      // to it but it never exists server-side, so the next turn lazy-creates a
+      // DIFFERENT session and this id silently dangles. Surface that to the
+      // operator instead of pretending the clean slate is durable.
+      let persisted = false;
       try {
         const created = await callMcpServer<{ session?: { id?: string } }>(
           '/api/v1/sessions',
@@ -3603,7 +3691,12 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
             headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
           },
         );
-        newSessionId = created?.session?.id ?? `s_${crypto.randomUUID()}`;
+        if (created?.session?.id) {
+          newSessionId = created.session.id;
+          persisted = true;
+        } else {
+          newSessionId = `s_${crypto.randomUUID()}`;
+        }
       } catch (err) {
         console.warn(
           'chat: /clear: failed to create replacement session:',
@@ -3615,6 +3708,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
       sendEvent('session_cleared', {
         previous_session_id: sessionId,
         session_id: newSessionId,
+        persisted,
       });
       // #CHAT-F21 — /clear ends a session + opens a fresh one; the MCP-side
       // session_ended/created rows capture the lifecycle, but a dedicated
@@ -3627,12 +3721,15 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           session_id: sessionId,
           command: 'clear',
           new_session_id: newSessionId,
+          persisted,
         },
         trigger,
         actor,
       });
       sendEvent('text_delta', {
-        text: `Started a fresh session. The previous transcript is still in the sidebar and exportable.`,
+        text: persisted
+          ? `Started a fresh session. The previous transcript is still in the sidebar and exportable.`
+          : `Started a fresh session locally, but couldn't reach the session store to persist it — this new session won't appear in the sidebar until the store recovers, and your next message will start a different session. The previous transcript is unaffected.`,
       });
       sendEvent('done', { session_id: newSessionId });
       controller.close();

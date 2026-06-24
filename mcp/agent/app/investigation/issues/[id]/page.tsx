@@ -196,11 +196,17 @@ export default function IssueDetailPage() {
       // A unique suffix avoids colliding with a prior one-shot job of the same
       // name (which the scheduler 400s on) — the deterministic name was the
       // v0.2.3 silent-spinner trigger.
+      // #INV-F8 — `before.length` is NOT actually unique: when the SVG is
+      // unchanged between clicks (e.g. the job failed without writing it, so
+      // length stays 0), `regen-${kind}-${id}-0` repeats and the scheduler
+      // 400s on the duplicate name on every retry. Append a real nonce
+      // (timestamp + random) so each click gets a fresh name.
+      const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       const resp = await fetch("/api/agent/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `regen-${kind}-${id}-${before.length}`,
+          name: `regen-${kind}-${id}-${before.length}-${nonce}`,
           cron: "* * * * *",
           timezone: "UTC",
           run_once: true,
@@ -287,11 +293,16 @@ export default function IssueDetailPage() {
       `generate_investigation_report(issue_id="${id}") to assemble and store the ` +
       `report. Do only this — do not change unrelated fields.`;
     try {
+      // #INV-F8 — same deterministic-collision fix as the SVG regen path:
+      // an empty report (before.length=0) that the job fails to fill makes
+      // the next click reproduce `gen-report-${id}-0`, which the scheduler
+      // 400s as a duplicate. A per-click nonce guarantees a fresh name.
+      const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       const resp = await fetch("/api/agent/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `gen-report-${id}-${before.length}`,
+          name: `gen-report-${id}-${before.length}-${nonce}`,
           cron: "* * * * *",
           timezone: "UTC",
           run_once: true,

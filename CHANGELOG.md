@@ -10,6 +10,14 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.78] (2026-06-24) — *Input-validation hardening: path-traversal guard, deny-list enforcement, fail-closed rejections*
+
+- **Skill paths can't escape the skills directory.** The skills read/update/enable/delete routes now resolve the path and reject anything absolute or traversing outside the skills tree (`../../…`) with a clear error — closing a path-traversal vector.
+- **Denied connector tools are never registered.** A connector manifest's `tools.deny[]` is now enforced at registration time, so a denied tool (e.g. an XSIAM lookup-removal) can't be reached even by direct tool dispatch.
+- **Subagents stay in their lane.** A subagent can no longer call the parent-only `subagent_create` meta-tool (dropped from its set regardless of allowlist), and `PreToolUse` hooks now run before a subagent's tool dispatch (deny/replace honored).
+- **Clearer, earlier rejections.** Unknown API-key scopes now map correctly to read/write tiers (and unknown scopes grant nothing); reading a non-existent skill returns 404 (not 200); listing an unknown knowledge base returns an error with the valid names; a memory-store embed failure returns a friendly error; the Vertex/XSOAR/XSIAM instance probes now actually validate credentials instead of always reporting success.
+- **Scheduling correctness.** A new job's timezone defaults to the browser's zone (matching the clock values shown); a job whose action type is unsupported now auto-disables on first fire instead of erroring forever; regenerating an unchanged report/diagram no longer collides on a duplicate job name; a partial backup is now detectable from response headers.
+
 ## [v0.2.77] (2026-06-24) — *Observability granularity, part 2: job runtime events, quieter-failure signals, proxy failure traces*
 
 - **The runtime-events page reflects job activity.** Scheduled-job fire / complete / fail now mirror into the runtime event log (with per-event counters), so a healthy install's events view is no longer near-empty.

@@ -33,7 +33,7 @@ import httpx
 
 
 PROBE_IMPLEMENTED: frozenset[str] = frozenset(
-    {"xsoar", "cortex-docs", "web"}
+    {"xsoar", "xsiam", "cortex-docs", "web"}
 )
 
 
@@ -116,12 +116,81 @@ async def real_probe(
                     json={"filter": {"page": 0, "size": 1}},
                 )
             if r.status_code == 200:
+                # #XSOAR-F5 — upstream + creds are good, but six tools
+                # (run_command, enrich_indicator, complete_task, get_list,
+                # set_list, append_to_list) need `playground_id`. If it's
+                # blank, those tools fail only at call-time with a confusing
+                # {ok:false}. The probe can't fail-closed the whole instance
+                # (the non-playground tools work fine), so surface a warning
+                # in the message slot — the route returns `error` in the body
+                # even when ok=True — so the operator learns at setup, not
+                # mid-investigation.
+                playground = _first(cfg.get("playground_id"))
+                if not playground:
+                    return (
+                        True,
+                        "connected — but playground_id is not set, so the "
+                        "command tools (run_command, enrich_indicator, "
+                        "complete_task, get_list, set_list, append_to_list) "
+                        "will fail at call-time. Set playground_id in the "
+                        "instance config if you use them.",
+                        False,
+                    )
                 return (True, None, False)
             if r.status_code in (401, 403):
                 return (False, f"HTTP {r.status_code} from XSOAR API (creds rejected)", True)
             return (
                 False,
                 f"HTTP {r.status_code} from {base}/incidents/search",
+                False,
+            )
+
+        if connector_id == "xsiam":
+            # #XSIAM-F12 — wire a real probe. Previously xsiam fell through
+            # to the default branch returning (True, None, False), so a
+            # misconfigured api_key/api_id/url reported healthy and the first
+            # error only surfaced on a real (billable) PAPI call. Cortex XSIAM
+            # uses the same public-API auth pair as XSOAR v8: api_key in the
+            # Authorization header + api_id in x-xdr-auth-id. The connector
+            # appends /public_api/v1 to api_url.
+            #
+            # Probe endpoint: POST /public_api/v1/incidents/get_incidents/
+            # with a minimal request (search_to: 1). Authenticated, no side
+            # effects — proves creds + reachability without an XQL run.
+            base = _first(
+                cfg.get("api_url"),
+                cfg.get("baseUrl"),
+            ).rstrip("/")
+            if not base:
+                return (False, "api_url is not configured", False)
+            api_key = _first(sec.get("api_key"))
+            if not api_key:
+                return (False, "api_key (Authorization header) is not configured", True)
+            api_id = _first(cfg.get("api_id"), sec.get("api_id"))
+            if not api_id:
+                return (False, "api_id (x-xdr-auth-id header) is not configured", True)
+
+            if "/public_api/v1" not in base:
+                base = base + "/public_api/v1"
+            headers = {
+                "Authorization": api_key,
+                "x-xdr-auth-id": str(api_id),
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            async with httpx.AsyncClient(timeout=timeout, verify=verify) as c:
+                r = await c.post(
+                    f"{base}/incidents/get_incidents/",
+                    headers=headers,
+                    json={"request_data": {"search_from": 0, "search_to": 1}},
+                )
+            if r.status_code == 200:
+                return (True, None, False)
+            if r.status_code in (401, 403):
+                return (False, f"HTTP {r.status_code} from XSIAM API (creds rejected)", True)
+            return (
+                False,
+                f"HTTP {r.status_code} from {base}/incidents/get_incidents/",
                 False,
             )
 

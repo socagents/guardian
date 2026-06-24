@@ -503,6 +503,13 @@ export async function GET() {
       );
     }
 
+    // #PLAT-F23 — a per-section failure only landed in manifest.json's
+    // backup_warnings array INSIDE the zip; the HTTP status/headers gave no
+    // hint, so a caller checking only res.ok saw success even when every
+    // section failed. The zip must still download (a partial backup is better
+    // than none), so we keep 200 but expose the partial-failure signal in
+    // response HEADERS a non-zip-parsing caller can read: a boolean flag + the
+    // count. Detailed messages stay in the in-zip manifest.
     return new NextResponse(bytes, {
       status: 200,
       headers: {
@@ -510,6 +517,8 @@ export async function GET() {
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
         "X-Guardian-Backup-Schema": String(SCHEMA_VERSION),
+        "X-Guardian-Backup-Partial": warnings.length ? "true" : "false",
+        "X-Guardian-Backup-Warning-Count": String(warnings.length),
       },
     });
   } catch (err) {

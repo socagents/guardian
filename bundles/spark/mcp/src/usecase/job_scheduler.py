@@ -1056,6 +1056,23 @@ class CroniterJobScheduler:
                 "(error: %s). Re-enable via PATCH after the tool is shipped.",
                 row.name, error,
             )
+        # #JOBS-F9/#OBS-F21 — a row with an unsupported action.type (e.g. a
+        # pre-v0.1.32 'log' job that escaped the boot migration, which only
+        # converts chat→prompt) hits the _fire else branch → status='skipped'.
+        # That is a PERMANENT condition (the action type will never become
+        # supported without operator intervention), and the consecutive-failure
+        # backoff below only counts status=='failure' — so before this guard a
+        # skipped job re-fired every cron tick forever, writing skipped rows
+        # indefinitely with no auto-disable. Treat a skipped non-run_once job
+        # exactly like the unknown_tool case: disable on first occurrence.
+        elif status == "skipped" and not row.run_once and new_enabled == 1:
+            new_enabled = 0
+            disable_reason = "unsupported_action_type"
+            logger.warning(
+                "JobScheduler auto-disabled %s — unsupported action type "
+                "(error: %s). Recreate it via /jobs/new with a supported type.",
+                row.name, error,
+            )
         # v0.17.126 — also back off jobs that fail for ANY persistent
         # reason (not just unknown-tool). Count trailing consecutive
         # failures (this run is still 'pending' in job_runs, so add 1);

@@ -89,6 +89,31 @@ def find_skills_dir(start_path: Path) -> Path:
 SKILLS_DIR = find_skills_dir(_current_file)
 
 
+def _resolve_skill_path(file_path: str) -> Tuple[Optional[Path], Optional[str]]:
+    """Resolve ``file_path`` against SKILLS_DIR, rejecting traversal (#SKILL-F11).
+
+    The REST route declares ``{file_path:path}`` (Starlette's path converter
+    permits slashes, including ``..``), so a payload like ``../../etc/passwd``
+    would otherwise escape SKILLS_DIR via ``SKILLS_DIR / file_path``. We
+    resolve the candidate and require it to stay inside SKILLS_DIR; on any
+    escape we fail CLOSED with a structured error rather than touching the
+    out-of-tree path.
+
+    Returns ``(resolved_path, None)`` on success or ``(None, error)`` when the
+    path is absolute or escapes SKILLS_DIR.
+    """
+    if not isinstance(file_path, str) or not file_path.strip():
+        return None, "file_path is required"
+    # An absolute path would discard SKILLS_DIR entirely under `/`.
+    if Path(file_path).is_absolute():
+        return None, f"Invalid skill path: {file_path}"
+    base = SKILLS_DIR.resolve()
+    candidate = (base / file_path).resolve()
+    if candidate != base and base not in candidate.parents:
+        return None, f"Invalid skill path: {file_path}"
+    return candidate, None
+
+
 def get_all_skills() -> List[Dict[str, Any]]:
     """
     Get list of all skills with metadata.
@@ -372,7 +397,9 @@ def read_skill(file_path: str) -> Dict[str, Any]:
     Returns:
         Result dictionary with skill content
     """
-    skill_path = SKILLS_DIR / file_path
+    skill_path, err = _resolve_skill_path(file_path)
+    if err:
+        return {"success": False, "error": err}
 
     if not skill_path.exists():
         return {"success": False, "error": f"Skill not found: {file_path}"}
@@ -403,7 +430,9 @@ def update_skill(file_path: str, content: str) -> Dict[str, Any]:
     Returns:
         Result dictionary with success status
     """
-    skill_path = SKILLS_DIR / file_path
+    skill_path, err = _resolve_skill_path(file_path)
+    if err:
+        return {"success": False, "error": err}
 
     if not skill_path.exists():
         return {"success": False, "error": f"Skill not found: {file_path}"}
@@ -493,7 +522,9 @@ def set_skill_enabled(file_path: str, enabled: bool) -> Dict[str, Any]:
     Returns:
         Result dict with success status + new enabled value.
     """
-    skill_path = SKILLS_DIR / file_path
+    skill_path, err = _resolve_skill_path(file_path)
+    if err:
+        return {"success": False, "error": err}
     if not skill_path.exists():
         return {"success": False, "error": f"Skill not found: {file_path}"}
     if not skill_path.is_file():
@@ -548,7 +579,9 @@ def delete_skill(file_path: str) -> Dict[str, Any]:
     Returns:
         Result dictionary with success status
     """
-    skill_path = SKILLS_DIR / file_path
+    skill_path, err = _resolve_skill_path(file_path)
+    if err:
+        return {"success": False, "error": err}
 
     if not skill_path.exists():
         return {"success": False, "error": f"Skill not found: {file_path}"}

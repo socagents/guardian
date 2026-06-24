@@ -109,19 +109,40 @@ def _issue_objects(store, issue) -> tuple[dict, list[dict]]:
         objs.append(_relationship(sdo["id"], "related-to", incident["id"]))
 
     # attack-patterns
+    ap_id_by_technique: dict[str, str] = {}
     for t in store.list_technique_mappings(issue.id):
         ap = _attack_pattern(t.technique_id, t.tactic)
         objs.append(ap)
+        ap_id_by_technique[t.technique_id] = ap["id"]
         objs.append(_relationship(incident["id"], "related-to", ap["id"]))
 
-    # stored relationship graph — only edges where BOTH ends are indicators in
-    # this bundle become STIX relationships (need real object refs on both ends).
+    # stored relationship graph → STIX relationships.
+    #
+    # #INV-F4 — previously the target ref was resolved ONLY via the
+    # indicator-value map, so any edge whose target is an attack-pattern /
+    # malware / threat-actor / campaign (target_value like 'T1071.004' or a
+    # malware name, never an indicator value) silently resolved to None and
+    # the edge was dropped. Now we resolve the target ref by target_type:
+    # indicator targets via the value map (as before), attack-pattern targets
+    # via the technique→SDO map built above. We still require BOTH ends to be
+    # real objects in THIS bundle (fail-closed: no dangling target_ref that
+    # would make the bundle fail STIX validation), so an edge to an SDO not
+    # present in the bundle is still skipped — but matched attack-pattern
+    # edges now connect instead of vanishing.
     for r in store.list_relationships():
         src = store.get_indicator(r["source_id"])
         if not src:
             continue
         src_ref = ind_sdo_by_value.get(src["value"])
-        tgt_ref = ind_sdo_by_value.get(r["target_value"])
+        if not src_ref:
+            continue
+        tgt_type = (r.get("target_type") or "").lower()
+        tgt_value = r["target_value"]
+        if tgt_type in ("attack-pattern", "attack_pattern", "technique"):
+            tgt_ref = ap_id_by_technique.get(tgt_value)
+        else:
+            # indicator (and any other value-keyed) target
+            tgt_ref = ind_sdo_by_value.get(tgt_value)
         if src_ref and tgt_ref:
             objs.append(_relationship(src_ref, r["relationship_type"], tgt_ref))
 

@@ -234,18 +234,27 @@ def _scan_catalogue() -> dict[str, dict[str, Any]]:
 
 def _instances_count(store: InstanceStore, connector_id: str) -> int:
     """How many instances exist for this connector_id. Used to gate
-    uninstall (and Phase E's DELETE)."""
+    uninstall (and Phase E's DELETE).
+
+    #CONN-F15 — returns -1 to signal a STORE ERROR (list_for raised),
+    distinct from 0 (no instances) and >0 (real instances). Previously
+    a transient sqlite error returned a phantom 1, which 409'd a
+    legitimate removal with no way for the caller to tell "real
+    instances exist" from "the store hiccuped". The removal gates now
+    map -1 to a 503 (retryable store error) rather than a misleading
+    409; read-only callers can treat -1 as "unknown".
+    """
     try:
         return len(store.list_for(connector_id))
     except Exception:  # noqa: BLE001
-        # If list_for misbehaves for any reason, be conservative and
-        # report >0 so the uninstall path errs on the side of refusal.
-        # Logged so the operator can see what happened.
+        # Logged so the operator can see what happened. Fail-CLOSED on the
+        # removal gate (don't remove while the count is unknowable) but via
+        # an honest "store error" 503, not a fabricated instance count.
         logger.exception(
-            "marketplace: list_for(%s) failed; assuming instances present",
+            "marketplace: list_for(%s) failed; instance count unknown",
             connector_id,
         )
-        return 1
+        return -1
 
 
 def _install_to_dict(row: MarketplaceInstall | None) -> dict[str, Any] | None:
@@ -538,6 +547,21 @@ def register_marketplace_routes(
             )
 
         n_instances = _instances_count(instance_store, connector_id)
+        if n_instances < 0:
+            # #CONN-F15 — the instance store errored; don't masquerade it as a
+            # phantom 409. Return a distinct, retryable 503 so the operator can
+            # tell "instances exist" from "couldn't check".
+            return JSONResponse(
+                {
+                    "error": (
+                        f"could not determine instance count for "
+                        f"{connector_id!r} (instance store error); retry once "
+                        f"the store recovers"
+                    ),
+                    "code": "instance_store_error",
+                },
+                status_code=503,
+            )
         if n_instances > 0:
             return JSONResponse(
                 {
@@ -832,6 +856,20 @@ def register_marketplace_routes(
 
         # Refuse if instances exist
         n_instances = _instances_count(instance_store, connector_id)
+        if n_instances < 0:
+            # #CONN-F15 — store error, not a real instance count. Distinct 503
+            # instead of a misleading 409 has_instances.
+            return JSONResponse(
+                {
+                    "error": (
+                        f"could not determine instance count for "
+                        f"{connector_id!r} (instance store error); retry once "
+                        f"the store recovers"
+                    ),
+                    "code": "instance_store_error",
+                },
+                status_code=503,
+            )
         if n_instances > 0:
             return JSONResponse(
                 {

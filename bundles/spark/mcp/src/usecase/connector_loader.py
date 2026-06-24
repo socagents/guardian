@@ -1318,6 +1318,29 @@ def iter_registrations(
             len(human_required), sorted(human_required),
         )
 
+    # #XSIAM-F8 — manifest.tools.deny[] was previously a system-prompt-only
+    # boundary: the tool was still registered with FastMCP, so a direct
+    # /api/agent/tool/call dispatch (which bypasses the prompt) reached the
+    # live function (e.g. xsiam.remove_lookup_data, a destructive lookup
+    # mutation). Enforce the deny list at REGISTRATION so a denied tool is
+    # never callable by any path (fail-closed). Entries may be a bare tool
+    # name, a namespaced `<cid>.<tool>`, or a `<cid>.*` glob — same vocabulary
+    # the allow[] list uses. Built-in / self-mod deny entries (shell_exec,
+    # manifest_set, …) simply never match a connector tool, which is correct.
+    tools_block = manifest.get("tools") or {}
+    raw_deny = tools_block.get("deny") or []
+    deny_set: set[str] = {s for s in raw_deny if isinstance(s, str)}
+
+    def _tool_denied(cid: str, bare: str) -> bool:
+        if not deny_set:
+            return False
+        namespaced = f"{cid}.{bare}"
+        return (
+            bare in deny_set
+            or namespaced in deny_set
+            or f"{cid}.*" in deny_set
+        )
+
     if store is None:
         store = InstanceStore(secret_store=secret_store)
     if secret_store is None:
@@ -1404,6 +1427,17 @@ def iter_registrations(
                 "Connector %r: %d/%d tools advertised (disabled across ALL "
                 "enabled instances: %s)",
                 cid, len(pairs), original_count, sorted(catalog_disabled),
+            )
+
+        # #XSIAM-F8 — drop manifest-denied tools so they are never registered
+        # with FastMCP (and thus unreachable by direct ^tool dispatch too).
+        denied_here = [t for (t, _f) in pairs if _tool_denied(cid, t)]
+        if denied_here:
+            pairs = [(t, f) for (t, f) in pairs if not _tool_denied(cid, t)]
+            logger.warning(
+                "Connector %r: %d tool(s) NOT registered — denied by "
+                "manifest.tools.deny[]: %s",
+                cid, len(denied_here), sorted(denied_here),
             )
         _names_str = ", ".join(instance_names)
         advertised.append(

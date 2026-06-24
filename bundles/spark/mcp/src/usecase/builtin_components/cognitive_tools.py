@@ -106,7 +106,14 @@ def memory_store(
     try:
         m = s.store(key=key, value=value, scope=scope, ttl_seconds=ttl_seconds)
     except ValueError as exc:
+        # Key/value validation failures from SqliteMemoryStore.store().
         return {"error": str(exc)}
+    except Exception as exc:
+        # #MEM-F15 — store() embeds `value` (memory_store.py: self._embedder.
+        # embed(value)). A Vertex network failure (404/429/connection) would
+        # otherwise propagate as a raw exception. Mirror memory_search's
+        # _friendly_embed_error wrap so the operator gets actionable text.
+        return {"error": _friendly_embed_error(exc, "memory_store")}
     return m.to_dict()
 
 
@@ -249,6 +256,16 @@ def knowledge_list(kb_name: str, limit: int = 20) -> dict[str, Any]:
     kb = knowledge_base()
     if kb is None:
         return {"error": "knowledge base not initialized on this MCP runtime"}
+    # #KB-F14 — list_docs returns [] for an unknown kb_name (SQL finds no
+    # rows), so a typo'd KB looked like an empty-but-valid KB. Mirror the REST
+    # _kb_exists_or_404 helper: reject the unknown name with the valid set so
+    # the agent can self-correct, instead of silently returning count:0.
+    summary = kb.kb_summary()
+    if kb_name not in summary:
+        return {
+            "error": f"unknown knowledge base {kb_name!r}",
+            "valid_kbs": sorted(summary.keys()),
+        }
     docs = kb.list_docs(kb_name, limit=limit)
     # #KB-F6 — enumerating a whole KB was invisible beyond the generic
     # tool_call row. Emit kb_searched (mode=list) so it surfaces under the
