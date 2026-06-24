@@ -10,6 +10,14 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.75] (2026-06-24) — *Forensic audit trail, part 3: chat-turn observability*
+
+- **Chat-turn decisions are now traceable.** A turn auto-retry (recovering a leaked tool call or an empty response), a safety/recitation block, a context-window hard block, a turn-cache hit that skipped the MCP, and a suppressed repeat-failing tool call now each leave a distinct audit row — previously these were only in debug logs or invisible.
+- **Slash commands and model switches are audited.** `/model` (set/clear), `/clear`, `/help`, and `/tasks` record audit rows attributed to the operator; read-only status queries are intentionally left out to keep the log signal-rich.
+- **Turn origin is captured.** A turn started from a quick-action chip is now distinguishable from a typed message in both the audit trail and the live stream.
+- **Operator-state attribution.** The operator-state (e.g. subagents-enabled) toggle now attributes to the real principal and its events are declared for the observability filter; the agent proxy forwards the actor/trigger headers it previously dropped.
+- **Action recap completeness.** The end-of-turn "changes applied" recap now recognizes newly-shipped mutating tools (investigation / XSOAR / webhook) via a write-verb heuristic, so a side-effecting tool isn't silently omitted from the summary.
+
 ## [v0.2.74] (2026-06-24) — *Forensic audit trail, part 2: knowledge / memory / skills / subagents / hooks / providers / auth probes*
 
 - **Knowledge & memory access leaves a trace.** Listing knowledge bases and their tags, and searches that fail to embed, now record audit rows; memory and KB search rows now carry a bounded query preview (and the active/passive mode + session) so "what was searched, by whom" is answerable.

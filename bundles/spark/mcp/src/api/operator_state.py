@@ -52,9 +52,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
 from usecase.audit_log import (
+    ACTION_OPERATOR_STATE_DELETE,
     ACTION_OPERATOR_STATE_LISTED,
     ACTION_OPERATOR_STATE_READ,
+    ACTION_OPERATOR_STATE_SET,
     record_event,
     reset_current_actor,
     set_current_actor,
@@ -163,7 +166,11 @@ def register_operator_state_routes(
                 status_code=400,
             )
 
-        actor_token = set_current_actor("user:operator")
+        # #CHAT-F14 — attribute to the real principal (apikey:<id> |
+        # user:operator) the Next.js middleware stamped, not a hardcoded
+        # "user:operator" that clobbers it. The chat subagents-enabled toggle
+        # flows through here.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             # #SUB-F10 — capture the prior value BEFORE the write so the audit
             # row records WHAT changed (old → new), not just that a write
@@ -182,7 +189,7 @@ def register_operator_state_routes(
             # "saved bookmarks" history is auditable like everything
             # else in v0.4.0+.
             record_event(
-                action="operator_state_set",
+                action=ACTION_OPERATOR_STATE_SET,
                 target=f"operator-state:{key}",
                 status="success",
                 metadata={
@@ -206,11 +213,12 @@ def register_operator_state_routes(
             return resp
         key = request.path_params["key"]
 
-        actor_token = set_current_actor("user:operator")
+        # #CHAT-F14 — attribute to the real principal (see PUT handler).
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             removed = store.delete(key)
             record_event(
-                action="operator_state_delete",
+                action=ACTION_OPERATOR_STATE_DELETE,
                 target=f"operator-state:{key}",
                 status="success" if removed else "noop",
                 metadata={},

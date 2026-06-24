@@ -92,6 +92,15 @@ export const AUDIT_EVENT_NAME_ALIASES: Record<string, string> = {
   provider_probed: "agent.provider.probed", // #API-F17/#PLAT-F6
   login_lockout: "agent.auth.login.lockout", // #API-F3
   approval_self_resolve_blocked: "agent.approval.self_resolve_blocked", // #HOOK-F10
+
+  // v0.2.75 audit batch — CHAT subsystem trace gaps (all TS-emitted).
+  chat_turn_retried: "agent.chat.turn.retried", // #CHAT-F4
+  chat_response_blocked: "agent.chat.response.blocked", // #CHAT-F5
+  chat_tool_call_suppressed: "agent.chat.tool.suppressed", // #CHAT-F8
+  chat_tool_cache_hit: "agent.chat.tool.cache.hit", // #CHAT-F9
+  chat_model_changed: "agent.chat.model.changed", // #CHAT-F10
+  chat_slash_command: "agent.chat.slash_command", // #CHAT-F21
+  chat_context_blocked: "agent.chat.context.blocked", // #CHAT-F19
 };
 
 /** Inverse mapping: standard name → guardian action. Used by

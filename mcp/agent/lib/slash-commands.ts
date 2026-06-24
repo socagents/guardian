@@ -51,6 +51,11 @@ export interface SlashCommandContext {
   isNewSession: boolean;
   /** X-Guardian-Trigger header value, propagated to MCP audit rows. */
   trigger: string | undefined;
+  /** #CHAT-F21 — the authenticated principal (apikey:<id> | user:operator)
+   *  from the middleware-stamped X-Guardian-Actor on the chat request, so a
+   *  slash command's audit row attributes to the real caller rather than the
+   *  MCP's default user:operator. Undefined when no header was present. */
+  actor: string | undefined;
   /** Resolved runtime config (Gemini key, Vertex creds, MCP URL).
    *  Async-fetched once by route.ts before dispatch. */
   runtimeConfig: EffectiveRuntimeConfig;

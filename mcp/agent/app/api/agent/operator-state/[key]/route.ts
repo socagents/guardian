@@ -46,9 +46,22 @@ async function forward(
   if (r instanceof NextResponse) return r;
 
   const url = `${r.base}/api/v1/operator-state/${encodeURIComponent(key)}`;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${r.token}`,
+  };
+  // #CHAT-F14 — forward the principal the middleware attributed
+  // (X-Guardian-Actor) so the MCP-side PUT/DELETE audit row attributes the
+  // operator-state mutation (e.g. the chat subagents-enabled toggle) to the
+  // real caller instead of the hardcoded user:operator default. Mirrors
+  // lib/mcp-proxy.ts; this route hand-rolls its forward() so it must do the
+  // same explicitly.
+  const fwdActor = request.headers.get("x-guardian-actor");
+  if (fwdActor) headers["X-Guardian-Actor"] = fwdActor;
+  const fwdTrigger = request.headers.get("x-guardian-trigger");
+  if (fwdTrigger) headers["X-Guardian-Trigger"] = fwdTrigger;
   const init: RequestInit = {
     method,
-    headers: { Authorization: `Bearer ${r.token}` },
+    headers,
     cache: "no-store",
   };
 

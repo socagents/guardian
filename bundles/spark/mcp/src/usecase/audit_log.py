@@ -326,6 +326,13 @@ ACTION_NOTIFICATION_ACKED = "notification_acked"
 # PUT/DELETE mutations were audited; silent key enumeration left no trace.
 ACTION_OPERATOR_STATE_LISTED = "operator_state_listed"
 ACTION_OPERATOR_STATE_READ = "operator_state_read"
+# #CHAT-F14 — operator-state PUT/DELETE mutations. The action strings were
+# already emitted by api/operator_state.py as bare literals (the chat
+# subagents-enabled toggle writes operator_state_set) but had no named constant
+# — a typo would emit an unknown action with no catch. Promoted to constants so
+# the route references them and the manifest declaration is verifiable.
+ACTION_OPERATOR_STATE_SET = "operator_state_set"
+ACTION_OPERATOR_STATE_DELETE = "operator_state_delete"
 # #SUB-F8 — agent-definition enumeration / point-read. Reading agent system
 # prompts (list / by-id / by-name) was unobservable; only mutations were
 # audited. Mirrors the v0.2.67 memory/kb/api-key read-audit work.

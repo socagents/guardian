@@ -762,7 +762,10 @@ export default function ChatPage() {
 
   const handleQuickAction = useCallback(
     (prompt: string) => {
-      sendMessage(prompt);
+      // #CHAT-F25 — tag quick-action chip turns with origin:chip so they're
+      // distinguishable from typed messages in the SSE meta + chat_turn_started
+      // audit row (typed turns omit the marker and default to "typed").
+      sendMessage(prompt, "chip");
     },
     [sendMessage]
   );

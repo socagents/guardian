@@ -311,7 +311,10 @@ export interface UseChatReturn {
    *  subagent_create dispatch. MessageList renders a SubagentCard
    *  per active/recent entry inline in the chat thread. */
   subagents: SubagentActivity[];
-  sendMessage: (text: string) => void;
+  /** #CHAT-F25 — optional `origin` marks how the turn was initiated so the
+   *  chat-route's chat_turn_started audit row (+ SSE meta) can distinguish a
+   *  quick-action chip from a typed message. Omitted ⇒ `typed`. */
+  sendMessage: (text: string, origin?: string) => void;
   resetChat: () => void;
   /**
    * v0.17.85 — chat route is now DERIVED from the selected model's
@@ -552,7 +555,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
     [],
   );
 
-  const sendMessage = useCallback((text: string) => {
+  const sendMessage = useCallback((text: string, origin?: string) => {
     // Guard: don't send while already streaming.
     if (streamingRef.current) return;
 
@@ -706,6 +709,12 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
       body = { message: text };
       if (sessionRef.current) {
         body.session_id = sessionRef.current;
+      }
+      // #CHAT-F25 — propagate the turn origin (e.g. "chip" for a quick-action
+      // chip) so the chat route can mark chat_turn_started + the SSE meta;
+      // omitted ⇒ the route defaults to "typed".
+      if (origin) {
+        body.origin = origin;
       }
       const effectiveModel = overrideModelRef.current || currentOptions?.defaultModel;
       const effectiveProvider = overrideProviderRef.current || currentOptions?.defaultProvider;

@@ -810,6 +810,42 @@ audit:
     # prompts). Only mutations were audited before.
     - "agent_definition_listed"
     - "agent_definition_read"
+    # ── v0.2.75 audit batch — CHAT subsystem trace gaps ──
+    # #CHAT-F4 — a suppressed/retried turn (no row was emitted for the
+    # re-issued Gemini call before). `kind` discriminates leaked-tool-call
+    # recovery from a genuinely-empty-turn auto-retry.
+    - "chat_turn_retried"
+    # #CHAT-F5 — a SAFETY/RECITATION-blocked model response. Previously the
+    # block reason landed only inside the persisted assistant text, never as a
+    # distinct audit action the observability filter could surface.
+    - "chat_response_blocked"
+    # #CHAT-F8 — a tool dispatch short-circuited by the identical-fail ledger
+    # (same tool+args failed MAX_IDENTICAL_FAILS times this turn). The model
+    # attempted a call that never reached the MCP, so it had no tool_call row.
+    - "chat_tool_call_suppressed"
+    # #CHAT-F9 — a turn-cache hit: an idempotent read whose identical result was
+    # already fetched this turn is reused, skipping the MCP dispatch. The
+    # MCP-side tool_call row is therefore absent; this records the served-from-
+    # cache decision so the audit log still reflects the call.
+    - "chat_tool_cache_hit"
+    # #CHAT-F10 — per-session model-preference change via the /model slash
+    # command (or the header dropdown PATCH). A dedicated action beyond the
+    # generic session_updated row.
+    - "chat_model_changed"
+    # #CHAT-F21 — operator-invoked slash commands that mutate or surface state
+    # (/help, /clear, /tasks). /compress, /plan, /model already had dedicated
+    # rows; these three were untraced. `command` carries which one fired.
+    - "chat_slash_command"
+    # #CHAT-F19 — a turn hard-blocked at >=99% context utilization (the turn is
+    # terminated before the first Gemini call). The >=90% soft-warn already
+    # emitted chat_context_warning; the blocking path left no row.
+    - "chat_context_blocked"
+    # #CHAT-F14 — operator-state mutations (these action strings were already
+    # emitted by api/operator_state.py PUT/DELETE but undeclared, so the
+    # observability filter chips couldn't surface them — e.g. the chat
+    # subagents-enabled toggle writes operator_state_set).
+    - "operator_state_set"
+    - "operator_state_delete"
 
 notifications:
   topics:

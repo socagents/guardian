@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.75",
+    date: "2026-06-24",
+    title: "Forensic audit trail, part 3: chat-turn observability.",
+    highlights: [
+      "Chat-turn auto-retries (leaked tool call / empty response), safety/recitation blocks, context-window hard blocks, turn-cache hits, and suppressed repeat-failing tool calls now each leave a distinct audit row.",
+      "Slash commands (/model set+clear, /clear, /help, /tasks) and model switches are audited to the operator; read-only status queries are not, to keep the log signal-rich.",
+      "A turn started from a quick-action chip is now distinguishable from a typed message in the audit + live stream.",
+      "Operator-state toggles attribute to the real principal (proxy now forwards actor/trigger headers); their events are declared for the observability filter.",
+      "The end-of-turn 'changes applied' recap now recognizes newly-shipped mutating tools via a write-verb heuristic so a side-effecting tool isn't omitted.",
+    ],
+  },
+  {
     version: "0.2.74",
     date: "2026-06-24",
     title: "Forensic audit trail, part 2: knowledge / memory / skills / subagents / hooks / providers / auth probes.",

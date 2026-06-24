@@ -2082,7 +2082,21 @@ function synthesizeFallbackText(
     'marketplace_install', 'marketplace_uninstall', 'connector_upload',
   ]);
 
-  const sideEffects = toolCalls.filter((tc) => SIDE_EFFECT_TOOLS.has(tc.tool));
+  // #CHAT-F6 — the explicit set above drifts: tools that shipped after it was
+  // last touched (investigation push/containment, XSOAR write tools, webhook
+  // tools, etc.) were silently recapped as read-only — a side-effecting call
+  // not in the set was omitted from the "Applied N changes" recap. Augment the
+  // static set with a self-maintaining write-verb heuristic on the tool name so
+  // a newly-shipped mutator is named in the recap even if no one updated the
+  // set. The regex matches the verb anywhere as a `_`-delimited segment (so
+  // `xsoar_incident_create`, `push_verdict_to_xsoar`, `webhook_send` all hit)
+  // while a read like `xsiam_get_datasets` / `memory_search` stays excluded.
+  // Conservative on false positives: only well-known mutation verbs.
+  const SIDE_EFFECT_VERB = /(?:^|_)(?:create|update|delete|remove|run|reset|store|install|uninstall|upload|rotate|revoke|resolve|dismiss|push|send|set|add|write|enable|disable|trigger|execute|apply|contain|isolate|block|assign|close|relate|export)(?:_|$)/i;
+  const isSideEffecting = (tool: string): boolean =>
+    SIDE_EFFECT_TOOLS.has(tool) || SIDE_EFFECT_VERB.test(tool);
+
+  const sideEffects = toolCalls.filter((tc) => isSideEffecting(tc.tool));
 
   // Truncation / safety prefixes — these go FIRST so the operator sees
   // the limit cause before the recap.
@@ -3402,7 +3416,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
     name: 'clear',
     description: 'End this session and start a fresh one. Transcript stays exportable.',
     handler: async (ctx) => {
-      const { sessionId, isNewSession, trigger, sendEvent, controller } = ctx;
+      const { sessionId, isNewSession, trigger, actor, sendEvent, controller } = ctx;
       if (isNewSession) {
         sendEvent('text_delta', {
           text: 'This session is brand-new — nothing to clear yet.',
@@ -3457,6 +3471,21 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
         previous_session_id: sessionId,
         session_id: newSessionId,
       });
+      // #CHAT-F21 — /clear ends a session + opens a fresh one; the MCP-side
+      // session_ended/created rows capture the lifecycle, but a dedicated
+      // chat_slash_command row attributes the operator action that drove it
+      // and links the old → new session ids.
+      void safeAudit('chat_slash_command', {
+        target: `session:${sessionId}`,
+        status: 'success',
+        metadata: {
+          session_id: sessionId,
+          command: 'clear',
+          new_session_id: newSessionId,
+        },
+        trigger,
+        actor,
+      });
       sendEvent('text_delta', {
         text: `Started a fresh session. The previous transcript is still in the sidebar and exportable.`,
       });
@@ -3472,8 +3501,16 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
     name: 'help',
     description: 'Show this list of slash commands.',
     handler: async (ctx) => {
-      const { sessionId, sendEvent, controller } = ctx;
+      const { sessionId, trigger, actor, sendEvent, controller } = ctx;
       sendEvent('text_delta', { text: renderSlashHelp(SLASH_COMMANDS) });
+      // #CHAT-F21 — operator-invoked slash command; previously untraced.
+      void safeAudit('chat_slash_command', {
+        target: `session:${sessionId}`,
+        status: 'success',
+        metadata: { session_id: sessionId, command: 'help' },
+        trigger,
+        actor,
+      });
       sendEvent('done', { session_id: sessionId });
       controller.close();
     },
@@ -3566,7 +3603,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
     name: 'tasks',
     description: 'Show active background tasks (long-running XQL hunts, evidence-collection jobs, etc).',
     handler: async (ctx) => {
-      const { sessionId, trigger, sendEvent, controller } = ctx;
+      const { sessionId, trigger, actor, sendEvent, controller } = ctx;
       try {
         const data = await callMcpServer<{ tasks?: Array<{
           id: string;
@@ -3616,6 +3653,18 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
               `\n\nVisit [/tasks](/tasks) to see completed tasks or abort running ones.`,
           });
         }
+        // #CHAT-F21 — operator-invoked slash command; previously untraced.
+        void safeAudit('chat_slash_command', {
+          target: `session:${sessionId}`,
+          status: 'success',
+          metadata: {
+            session_id: sessionId,
+            command: 'tasks',
+            active_count: tasks.length,
+          },
+          trigger,
+          actor,
+        });
         sendEvent('done', { session_id: sessionId });
       } catch (err) {
         sendEvent('error', {
@@ -3772,7 +3821,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
     argHint: '<name>',
     description: 'Override the model for this session. `/model auto` clears.',
     handler: async (ctx) => {
-      const { args, sessionId, trigger, runtimeConfig, sendEvent, controller } = ctx;
+      const { args, sessionId, trigger, actor, runtimeConfig, sendEvent, controller } = ctx;
       const arg = args.trim();
 
       // No-arg: report the current preference.
@@ -3802,6 +3851,23 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           },
         );
         invalidateSessionPreferredModelCache(sessionId);
+        // #CHAT-F10 — the model switch only produced a generic session_updated
+        // row (from the MCP-side PATCH) with no dedicated action. Emit a
+        // distinct chat_model_changed row so the operator can chart per-session
+        // model overrides directly. `cleared` distinguishes `/model auto` (back
+        // to runtime default) from an explicit override.
+        void safeAudit('chat_model_changed', {
+          target: `session:${sessionId}`,
+          status: 'success',
+          metadata: {
+            session_id: sessionId,
+            source: 'slash_command',
+            preferred_model: newValue,
+            cleared: clearing,
+          },
+          trigger,
+          actor,
+        });
         sendEvent('model_preference_changed', {
           session_id: sessionId,
           preferred_model: newValue,
@@ -3958,11 +4024,16 @@ export async function POST(request: NextRequest) {
           provider: requestedProvider,
           permission_policy: requestedPolicy,
           thinking: requestedThinking,
+          origin: requestedOrigin,
         } = (await request.json()) as {
           message?: string;
           session_id?: string;
           model?: string;
           provider?: string;
+          // #CHAT-F25 — how the turn was initiated. The chat UI passes
+          // "chip" for quick-action chip turns; typed messages omit it. Used
+          // only for audit/telemetry attribution (no behavioral effect).
+          origin?: string;
           // v0.5.23 / Issue #23 — per-request permission policy. The
           // scheduler attaches this on job-driven dispatches; chat
           // header has no UI for it today (operators set it on the
@@ -3979,6 +4050,13 @@ export async function POST(request: NextRequest) {
         // validator's lenient mode matches the rest of the route's
         // best-effort discipline.
         const turnPolicy = validatePermissionPolicy(requestedPolicy);
+        // #CHAT-F25 — bounded turn-origin marker for audit/telemetry. Defaults
+        // to "typed"; the chat UI passes "chip" for quick-action chip turns.
+        // Capped + whitespace-trimmed so a malformed body can't bloat the row.
+        const turnOrigin =
+          typeof requestedOrigin === 'string' && requestedOrigin.trim()
+            ? requestedOrigin.trim().slice(0, 32)
+            : 'typed';
         // v0.6.67 — chat turns DEFAULT to thinking enabled. Operator
         // observation at v0.6.66 release time: "I feel the agent
         // response pretty fast, I wanted to make sure we actually
@@ -4086,6 +4164,9 @@ export async function POST(request: NextRequest) {
             new_session: isNewSession,
             model: requestedModel ?? 'default',
             provider: requestedProvider ?? 'default',
+            // #CHAT-F25 — origin marker so chip-initiated turns are
+            // distinguishable from typed ones in the forensic trail.
+            origin: turnOrigin,
           },
           trigger,
           actor,
@@ -4096,6 +4177,9 @@ export async function POST(request: NextRequest) {
           run_id: `r_${crypto.randomUUID()}`,
           session_id: sessionId,
           agent_id: 'guardian-soc-ir',
+          // #CHAT-F25 — expose the turn origin on the SSE stream so a chip turn
+          // is distinguishable live (not just in the persisted audit row).
+          origin: turnOrigin,
         });
 
         // Round-15 / Phase H — RunStart hook fire-site. Hooks can
@@ -4183,6 +4267,7 @@ export async function POST(request: NextRequest) {
             sessionId,
             isNewSession,
             trigger,
+            actor,
             runtimeConfig,
             requestedModel,
             requestedProvider,
@@ -4521,6 +4606,23 @@ export async function POST(request: NextRequest) {
               output_reserve: reservedOutput,
             },
           });
+          // #CHAT-F19 — the hard-block path terminates the turn but, unlike the
+          // >=90% soft-warn (which fires chat_context_warning below), left no
+          // audit row. Emit a distinct blocking action so operators can see
+          // which turns were refused outright for a full context window.
+          void safeAudit('chat_context_blocked', {
+            target: `session:${sessionId}`,
+            status: 'failure',
+            metadata: {
+              session_id: sessionId,
+              tokens_estimated: totalRequired,
+              tokens_cap: ctxCap,
+              utilization: Number(utilization.toFixed(4)),
+              model: effectiveModel,
+            },
+            trigger,
+            actor,
+          });
           controller.close();
           return;
         }
@@ -4757,6 +4859,24 @@ export async function POST(request: NextRequest) {
                 'model',
                 `Tool call leaked into thinking channel; retrying with forced function-calling (attempt ${leakRecoveryAttempts}/${MAX_LEAK_RECOVERY})`,
               );
+              // #CHAT-F4 — the retry re-calls Gemini and continues the loop;
+              // the suppressed (leaked) turn previously left no audit trace.
+              // Record the recovery so /observability/events shows a turn that
+              // had to be re-issued (vs. a clean single-call turn).
+              void safeAudit('chat_turn_retried', {
+                target: `session:${sessionId}`,
+                status: 'success',
+                metadata: {
+                  session_id: sessionId,
+                  kind: 'leaked_tool_call',
+                  attempt: leakRecoveryAttempts,
+                  max_attempts: MAX_LEAK_RECOVERY,
+                  step,
+                  model: effectiveModel,
+                },
+                trigger,
+                actor,
+              });
               response = await callGemini(
                 contents,
                 tools,
@@ -4785,6 +4905,24 @@ export async function POST(request: NextRequest) {
                 'model',
                 `Empty model turn (no text, no tool calls); auto-retrying (attempt ${emptyTurnRetries}/${MAX_EMPTY_TURN_RETRIES})`,
               );
+              // #CHAT-F4 — a genuinely-empty turn re-invokes Gemini and
+              // continues; the suppressed empty turn previously left only a
+              // logDebug. Audit it so an intermittent model hiccup that forced
+              // a silent re-issue is visible in the forensic trail.
+              void safeAudit('chat_turn_retried', {
+                target: `session:${sessionId}`,
+                status: 'success',
+                metadata: {
+                  session_id: sessionId,
+                  kind: 'empty_turn',
+                  attempt: emptyTurnRetries,
+                  max_attempts: MAX_EMPTY_TURN_RETRIES,
+                  step,
+                  model: effectiveModel,
+                },
+                trigger,
+                actor,
+              });
               response = await callGemini(
                 contents,
                 tools,
@@ -5191,6 +5329,22 @@ export async function POST(request: NextRequest) {
                 'mcp',
                 `turn-cache hit: ${toolName} — reused this-turn result, skipped redundant MCP dispatch`,
               );
+              // #CHAT-F9 — the MCP dispatch is skipped, so no MCP-side tool_call
+              // row is written for this reused read. The live UI shows it as
+              // cached:true (tool_result event below), but the audit log would
+              // otherwise show fewer tool calls than the model issued. Record
+              // the served-from-cache decision so the audit reflects the call.
+              void safeAudit('chat_tool_cache_hit', {
+                target: `tool:${toolName}`,
+                status: 'success',
+                metadata: {
+                  session_id: sessionId,
+                  tool_name: toolName,
+                  step,
+                },
+                trigger,
+                actor,
+              });
             } else if (!isPollTool(toolName) && priorFails >= MAX_IDENTICAL_FAILS) {
               // v0.17.131 - this exact (tool, args) call already failed
               // MAX_IDENTICAL_FAILS times this turn. Stop re-dispatching and
@@ -5215,6 +5369,25 @@ export async function POST(request: NextRequest) {
                 'mcp',
                 `turn-fail short-circuit: ${toolName} failed ${priorFails}x this turn, not re-dispatching`,
               );
+              // #CHAT-F8 — the dispatch is suppressed (synthetic {ok:false}), so
+              // the MCP never sees this attempt and writes no tool_call row. The
+              // audit log would show fewer tool calls than the model issued.
+              // Record the suppression so the forensic trail reflects the
+              // attempt + why it was blocked.
+              void safeAudit('chat_tool_call_suppressed', {
+                target: `tool:${toolName}`,
+                status: 'failure',
+                metadata: {
+                  session_id: sessionId,
+                  tool_name: toolName,
+                  prior_fails: priorFails,
+                  max_identical_fails: MAX_IDENTICAL_FAILS,
+                  reason: 'identical_fail_short_circuit',
+                  step,
+                },
+                trigger,
+                actor,
+              });
             } else {
               try {
                 result = await mcpClient.callTool(toolName, toolArgs);
@@ -5619,6 +5792,24 @@ export async function POST(request: NextRequest) {
           const finishReason = lastCandidate?.finishReason;
           finalResponse = synthesizeFallbackText(toolCalls, finishReason);
           sendEvent('text_delta', { text: finalResponse });
+          // #CHAT-F5 — a SAFETY/RECITATION block was only surfaced inside the
+          // persisted assistant text (synthesizeFallbackText above). Emit a
+          // distinct audit action so /observability/events can chart blocked
+          // turns by reason, independent of the message body.
+          if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+            void safeAudit('chat_response_blocked', {
+              target: `session:${sessionId}`,
+              status: 'failure',
+              metadata: {
+                session_id: sessionId,
+                finish_reason: finishReason,
+                tool_calls: toolCalls.length,
+                model: effectiveModel,
+              },
+              trigger,
+              actor,
+            });
+          }
         }
 
         // Persist tool round-trips first, then the assistant's final
