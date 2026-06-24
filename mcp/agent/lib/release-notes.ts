@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.69",
+    date: "2026-06-24",
+    title: "Close two cache-staleness windows in auth + approvals.",
+    security: true,
+    highlights: [
+      "Revoked API keys stop working immediately. Deleting a key only revoked it server-side; a warm 30s validation cache on the agent could keep accepting it. Delete now evicts the key from that cache by id (bustApiKeyCacheByKeyId).",
+      "Re-enabling approvals in a chat takes effect right away. The per-session approval mode was cached 30s and never invalidated on change, so flipping a session back to 'manual' could keep auto-approving gated tools. The cache moved to a shared module that the session-update path now invalidates on every PATCH; an uncertain read defaults to 'manual' (require approval) instead of a stale bypass.",
+    ],
+  },
+  {
     version: "0.2.68",
     date: "2026-06-24",
     title: "Lock down two exposed surfaces: metrics + plugin pip-install.",

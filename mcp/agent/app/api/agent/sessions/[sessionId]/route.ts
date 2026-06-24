@@ -12,6 +12,7 @@
  */
 
 import { proxyToMcp } from '@/lib/mcp-proxy';
+import { invalidateApprovalModeCache } from '@/lib/approval-mode-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,10 +32,16 @@ export async function PATCH(
   { params }: { params: Promise<{ sessionId: string }> },
 ) {
   const { sessionId } = await params;
-  return proxyToMcp(
+  const res = await proxyToMcp(
     request,
     `/api/v1/sessions/${encodeURIComponent(sessionId)}`,
   );
+  // #CHAT-F13 — a PATCH may change approval_mode (the chat-header dropdown's
+  // write path). Evict the chat handler's cache so the new mode takes effect
+  // on the next turn instead of after the 30s TTL — closing the window where
+  // a session re-tightened to 'manual' kept auto-approving gated tools.
+  invalidateApprovalModeCache(sessionId);
+  return res;
 }
 
 export async function DELETE(

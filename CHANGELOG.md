@@ -10,6 +10,11 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.69] (2026-06-24) — *Close two cache-staleness windows in auth + approvals*
+
+- **A revoked API key now stops working immediately.** Deleting an API key only revoked it server-side; a warm validation cache on the agent could keep accepting the key for up to 30 seconds. The delete now evicts the key from that cache by id, so revocation takes effect on the next request.
+- **Re-enabling approvals in a chat takes effect right away.** A session's approval mode (manual vs bypass) was cached for 30 seconds, and the cache was never cleared when the mode changed — so flipping a session back to *manual* could still auto-approve gated tools for up to 30 seconds. The session-update path now clears that cache immediately, and an uncertain read now defaults to *manual* (require approval) rather than risking a stale bypass.
+
 ## [v0.2.68] (2026-06-24) — *Lock down two exposed surfaces: metrics + plugin pip-install*
 
 Security hardening of two over-exposed endpoints:

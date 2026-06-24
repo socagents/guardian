@@ -21,6 +21,10 @@ import {
 // model loop, then threaded through callGemini to all downstream
 // model calls so the same registry view is consistent across the turn.
 import { fetchSkillsForPrompt } from '@/lib/skills-registry';
+import {
+  getCachedApprovalMode,
+  setCachedApprovalMode,
+} from '@/lib/approval-mode-cache';
 // Round-13 / Phase 2 — token-aware budgeting helpers.
 import { estimateMessageTokens, estimateTokens } from '@/lib/tokens';
 import {
@@ -1511,20 +1515,17 @@ async function loadSessionPreferredModel(
  * Imported from there at the top of this file.
  */
 
-interface ApprovalModeCacheEntry {
-  value: ApprovalMode;
-  expiresAt: number;
-}
-const APPROVAL_MODE_CACHE_TTL_MS = 30_000;
-const approvalModeCache = new Map<string, ApprovalModeCacheEntry>();
-
+// #CHAT-F13 — the cache itself + its invalidator now live in
+// lib/approval-mode-cache.ts so the session-meta PATCH route (the dropdown's
+// write path, a different module) can evict an entry the moment the mode
+// changes, instead of leaving the chat handler to serve a stale value for up
+// to the 30s TTL.
 async function loadSessionApprovalMode(
   sessionId: string,
   trigger: string | undefined,
 ): Promise<ApprovalMode> {
-  const now = Date.now();
-  const cached = approvalModeCache.get(sessionId);
-  if (cached && cached.expiresAt > now) return cached.value;
+  const cached = getCachedApprovalMode(sessionId);
+  if (cached !== undefined) return cached;
   try {
     const data = await callMcpServer<{
       session?: { meta?: Record<string, unknown> };
@@ -1534,13 +1535,11 @@ async function loadSessionApprovalMode(
     });
     const raw = data?.session?.meta?.['approval_mode'];
     const value: ApprovalMode = raw === 'bypass' ? 'bypass' : 'manual';
-    approvalModeCache.set(sessionId, {
-      value,
-      expiresAt: now + APPROVAL_MODE_CACHE_TTL_MS,
-    });
+    setCachedApprovalMode(sessionId, value);
     return value;
   } catch (err) {
-    if (cached) return cached.value;
+    // No fresh cache + a failed read → default-secure to 'manual' (require
+    // approvals) rather than risk serving a stale 'bypass'.
     console.warn(
       `chat: failed to read approval_mode for ${sessionId}:`,
       err instanceof Error ? err.message : err,
@@ -1548,19 +1547,6 @@ async function loadSessionApprovalMode(
     return 'manual';
   }
 }
-
-/** Invalidate the approval-mode cache for a session. Currently unused
- *  externally — the dropdown PATCHes via the proxy route, then the
- *  next chat turn naturally re-reads after the 30s TTL elapses. Kept
- *  as a non-exported helper in case the dropdown needs immediate
- *  consistency in a future patch (e.g. "switch to bypass NOW for the
- *  in-flight turn"). Cannot be `export`ed from a Next.js route file —
- *  the App Router rejects non-method exports. */
-function invalidateSessionApprovalModeCache(sessionId: string): void {
-  approvalModeCache.delete(sessionId);
-}
-// Suppress "unused" lint until a caller materializes; harmless.
-void invalidateSessionApprovalModeCache;
 
 /** Invalidate the preferred-model cache for a session. Called by the
  *  /model handler after a PATCH so the same turn (or the next one)

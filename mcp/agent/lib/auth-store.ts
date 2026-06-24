@@ -150,6 +150,18 @@ export function bustApiKeyCache(token: string): void {
   apiKeyCache.delete(token);
 }
 
+/** #API-F11 — drop a key from the validation cache by its key ID. The
+ *  revoke/delete route only knows the key ID (not the plaintext token the
+ *  cache is keyed by), so it couldn't call bustApiKeyCache(token); a revoked
+ *  key therefore kept passing middleware for up to the 30s cache TTL on a
+ *  warm node. This scans the cache for the matching keyId and evicts it, so
+ *  revocation takes effect on the next request. */
+export function bustApiKeyCacheByKeyId(keyId: string): void {
+  for (const [token, entry] of apiKeyCache) {
+    if (entry.result.keyId === keyId) apiKeyCache.delete(token);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Internal — bearer-authenticated POST to MCP
 // ─────────────────────────────────────────────────────────────────
