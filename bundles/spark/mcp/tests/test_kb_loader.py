@@ -56,6 +56,10 @@ class _FakeKb:
         source_hash: str,
         precomputed_embedding: list[float] | None = None,
         precomputed_model: str | None = None,
+        # #KB-F9 (v0.2.76) — the loader now passes an out-dict it owns so the
+        # kb_loaded row can split precomputed vs live-embedded docs. Mirror the
+        # real kb_store.upsert signature + increment the dict like it does.
+        embedding_stats: dict[str, int] | None = None,
     ) -> tuple[object, str]:
         self.upserts.append({
             "kb_name": kb_name,
@@ -67,6 +71,9 @@ class _FakeKb:
             "precomputed_embedding": precomputed_embedding,
             "precomputed_model": precomputed_model,
         })
+        if embedding_stats is not None:
+            key = "precomputed" if precomputed_embedding is not None else "live_embedded"
+            embedding_stats[key] = embedding_stats.get(key, 0) + 1
         return (None, "insert")
 
     def kb_doc_ids(self, kb_name: str) -> set[str]:
