@@ -210,6 +210,25 @@ def knowledge_search(
         hits = kb.search(query, kb_name=kb_name, category=category, tags=tags, limit=limit)
     except Exception as exc:
         return {"error": _friendly_embed_error(exc, "knowledge_search")}
+    # #KB-F6/#KB-F7 — emit a dedicated kb_searched row (mode=active) so an
+    # agent enumerating KB content is visible under a KB-specific filter, not
+    # only buried under action=tool_call. Mode discriminates this active agent
+    # search from the passive per-turn ContextAssembler injection.
+    from usecase.audit_log import ACTION_KB_SEARCHED, record_event
+    record_event(
+        ACTION_KB_SEARCHED,
+        target=f"kb:{kb_name or '*'}",
+        status="success",
+        metadata={
+            "mode": "active",
+            "kb_name": kb_name,
+            "category": category,
+            "tags": tags,
+            "limit": limit,
+            "query_chars": len(query),
+            "hits_returned": len(hits),
+        },
+    )
     return {
         "results": [doc.to_dict(score=score) for doc, score in hits],
         "count": len(hits),
@@ -231,6 +250,21 @@ def knowledge_list(kb_name: str, limit: int = 20) -> dict[str, Any]:
     if kb is None:
         return {"error": "knowledge base not initialized on this MCP runtime"}
     docs = kb.list_docs(kb_name, limit=limit)
+    # #KB-F6 — enumerating a whole KB was invisible beyond the generic
+    # tool_call row. Emit kb_searched (mode=list) so it surfaces under the
+    # KB filter chip.
+    from usecase.audit_log import ACTION_KB_SEARCHED, record_event
+    record_event(
+        ACTION_KB_SEARCHED,
+        target=f"kb:{kb_name}",
+        status="success",
+        metadata={
+            "mode": "list",
+            "kb_name": kb_name,
+            "limit": limit,
+            "count": len(docs),
+        },
+    )
     return {
         "kb_name": kb_name,
         "documents": [d.to_dict(include_content=False) for d in docs],

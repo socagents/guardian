@@ -240,6 +240,9 @@ ACTION_MEMORY_STORED = "memory_stored"
 ACTION_MEMORY_SEARCHED = "memory_searched"
 ACTION_MEMORY_DELETED = "memory_deleted"
 ACTION_CONTEXT_ASSEMBLED = "context_assembled"
+# #MEM-F9 — silent read paths now audited (operator list + point-read).
+ACTION_MEMORY_LISTED = "memory_listed"
+ACTION_MEMORY_READ = "memory_read"
 
 # Phase 9 — jobs scheduler (spec §6.10 row "scheduling").
 ACTION_JOB_REGISTERED = "job_registered"
@@ -270,6 +273,15 @@ ACTION_KB_DOC_READ = "kb_doc_read"
 ACTION_PERSONALITY_CHANGED = "personality_changed"
 ACTION_AGENT_SELF_MOD_REQUESTED = "agent_self_mod_requested"
 ACTION_AGENT_SELF_MOD_EXECUTED = "agent_self_mod_executed"
+
+# #API-F7 — authentication/authorization forensic trail. Previously a
+# leaked/revoked key or a scope/credential-route denial left no audit row;
+# a valid key's use bumped last_used_at silently. These close that gap.
+ACTION_API_KEY_USED = "api_key_used"
+ACTION_API_KEY_AUTH_FAILED = "api_key_auth_failed"
+ACTION_API_KEY_SCOPE_DENIED = "api_key_scope_denied"
+ACTION_API_KEY_CREDENTIAL_ROUTE_DENIED = "api_key_credential_route_denied"
+ACTION_MCP_BEARER_AUTH_FAILED = "mcp_bearer_auth_failed"
 
 
 class SqliteAuditLog:

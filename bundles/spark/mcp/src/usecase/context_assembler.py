@@ -173,7 +173,11 @@ class ContextAssembler:
         message), the recency window is empty and only memory hits
         contribute.
         """
-        from usecase.audit_log import ACTION_CONTEXT_ASSEMBLED, record_event
+        from usecase.audit_log import (
+            ACTION_CONTEXT_ASSEMBLED,
+            ACTION_KB_SEARCHED,
+            record_event,
+        )
         from usecase.kb_store import knowledge_base as _knowledge_base
         from usecase.memory_store import memory_store as _memory_store
         from usecase.session_store import session_store as _session_store
@@ -252,8 +256,15 @@ class ContextAssembler:
         # into whatever budget remains after recency + memory.
         kb_results: list[dict[str, Any]] = []
         kb_tokens = 0
+        # #KB-F7 — track whether the passive per-turn KB search actually ran
+        # so we can emit a kb_searched(mode=passive) row that mirrors the
+        # active knowledge_search tool's audit. Without it, passive injection
+        # and active agent search were indistinguishable except by actor.
+        kb_search_attempted = False
+        kb_search_failed = False
         remaining_after_mem = max(0, self._budget_tokens - recency_tokens - mem_tokens)
         if kb is not None and self._strategy in {"hybrid", "kb_only"} and not truncated:
+            kb_search_attempted = True
             try:
                 # Over-fetch, then drop specialist-ecosystem docs (ICS/Mobile/
                 # ATLAS) so they don't crowd IT investigations' passive context
@@ -269,6 +280,7 @@ class ContextAssembler:
             except Exception as exc:
                 logger.warning("ContextAssembler: KB search failed (%s)", exc)
                 hits = []
+                kb_search_failed = True
             for doc, score in hits:
                 t = estimate_tokens(doc.content) + estimate_tokens(doc.title or "")
                 if kb_tokens + t > remaining_after_mem:
@@ -285,6 +297,24 @@ class ContextAssembler:
                 kb_tokens += t
 
         total_tokens = recency_tokens + mem_tokens + kb_tokens
+
+        # #KB-F7 — passive KB search audit, distinct from the active
+        # knowledge_search tool. mode=passive + actor=system (assemble() runs
+        # outside any tool-call actor scope) makes the two filterable apart.
+        if kb_search_attempted:
+            record_event(
+                ACTION_KB_SEARCHED,
+                target="kb:*",
+                status="skipped" if kb_search_failed else "success",
+                metadata={
+                    "mode": "passive",
+                    "session_id": session_id,
+                    "query_chars": len(query),
+                    "hits_returned": len(kb_results),
+                    "ecosystems_excluded": sorted(self._kb_passive_exclude),
+                    **({"reason": "search_failed"} if kb_search_failed else {}),
+                },
+            )
 
         record_event(
             ACTION_CONTEXT_ASSEMBLED,

@@ -24,6 +24,11 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from usecase.audit_log import (
+    ACTION_KB_DOC_READ,
+    ACTION_KB_SEARCHED,
+    record_event,
+)
 from usecase.kb_store import SqliteKnowledgeBase
 
 logger = logging.getLogger("Guardian MCP")
@@ -98,6 +103,21 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
         # size) which silently hid the true total — a 787-row KB
         # returned 500 with no signal of the 287 remaining rows.
         total = kb.count_docs(name, category=category, tags=tags)
+        # #KB-F6 — operator-driven KB doc listing now leaves a trace.
+        record_event(
+            ACTION_KB_SEARCHED,
+            target=f"kb:{name}",
+            status="success",
+            metadata={
+                "mode": "list",
+                "kb_name": name,
+                "category": category,
+                "tags": tags,
+                "limit": limit,
+                "offset": offset,
+                "count": len(docs),
+            },
+        )
         return JSONResponse(
             {
                 # Default to NOT including content here — the list view
@@ -142,6 +162,18 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
                 {"error": f"doc {doc_id!r} not found in kb {name!r}"},
                 status_code=404,
             )
+        # #KB-F6 — the module docstring claimed this endpoint was audited but
+        # it emitted nothing. Now it does (kb_doc_read).
+        record_event(
+            ACTION_KB_DOC_READ,
+            target=f"kb:{name}/docs/{doc_id}",
+            status="success",
+            metadata={
+                "kb_name": name,
+                "doc_id": doc_id,
+                "title": getattr(doc, "title", None),
+            },
+        )
         return JSONResponse({"document": doc.to_dict()})
 
     @mcp.custom_route(

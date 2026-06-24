@@ -203,6 +203,50 @@ async function mcpPost(
   }
 }
 
+/**
+ * #API-F7 — fire-and-forget audit write from the Edge middleware. The
+ * middleware's auth-denial branches (invalid key, scope denied, credential-
+ * route denied) previously returned 401/403 with no forensic trace. This
+ * posts to the MCP's /api/v1/audit, forwarding the resolved principal as
+ * X-Guardian-Actor so the row is attributed correctly. NEVER awaited in a
+ * way that gates the response, and NEVER throws — a down MCP must not turn
+ * an auth denial into a hang. Reuses resolveMcp + the MCP_TOKEN bearer.
+ */
+export function postAudit(
+  action: string,
+  opts: {
+    target?: string;
+    status?: string;
+    actor?: string;
+    metadata?: Record<string, unknown>;
+  } = {},
+): void {
+  void (async () => {
+    try {
+      const r = await resolveMcp().catch(() => null);
+      if (!r || "status" in r) return;
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${r.token}`,
+        "Content-Type": "application/json",
+      };
+      if (opts.actor) headers["X-Guardian-Actor"] = opts.actor;
+      await fetch(`${r.base}/api/v1/audit`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          action,
+          target: opts.target,
+          status: opts.status ?? "failure",
+          metadata: opts.metadata ?? {},
+        }),
+        cache: "no-store",
+      });
+    } catch {
+      // Audit is best-effort; auth denials must never depend on it.
+    }
+  })();
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────

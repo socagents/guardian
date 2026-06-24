@@ -223,6 +223,17 @@ class SqliteApiKeyStore:
                 "UPDATE api_keys SET last_used_at = ? WHERE id = ?",
                 (ts, key_id),
             )
+            label = row["label"]
+        # #API-F7 — a successful key use previously only bumped last_used_at
+        # silently. Emit api_key_used (AFTER releasing the lock so the audit
+        # write doesn't serialize with key lookups) so leaked-key probing
+        # leaves a per-use forensic trace.
+        self._audit_event(
+            "api_key_used",
+            actor=f"api_key:{key_id}",
+            target=f"api_key:{key_id}",
+            metadata={"label": label, "last_used_at": ts},
+        )
         return ApiKey(
             id=row["id"],
             label=row["label"],

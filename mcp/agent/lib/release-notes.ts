@@ -37,6 +37,19 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.67",
+    date: "2026-06-24",
+    title: "Close audit blind spots: reads, auth, and KB access now leave a trace.",
+    security: true,
+    highlights: [
+      "Memory reads are now audited: listing the store (memory_listed) and reading a key (memory_read) previously left no trace — full enumeration / key probing was invisible.",
+      "Knowledge-base access now emits kb_searched / kb_doc_read, with a mode field (active agent search vs passive per-turn context injection vs list) so the two are distinguishable.",
+      "API-key auth has a forensic trail: api_key_used (every successful use), api_key_auth_failed (invalid/revoked-key probing), api_key_scope_denied, api_key_credential_route_denied, and mcp_bearer_auth_failed. Only key prefixes are logged, never secret material.",
+      "Password-change failure paths (bad credential write, forged/expired session) now record password_change_rejected; all auth events (login/logout/password) are discoverable in the /observability/events filter chips.",
+      "Claude Code CLI turns (/api/chat/cli) now emit chat_cli_turn (start + end) — they were invisible to observability despite a docstring claiming otherwise.",
+    ],
+  },
+  {
     version: "0.2.66",
     date: "2026-06-24",
     title: "Remove a custom connector from the marketplace.",

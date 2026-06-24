@@ -71,7 +71,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/lib/auth-defaults";
-import { validateSession, validateApiKey } from "@/lib/auth-store";
+import { validateSession, validateApiKey, postAudit } from "@/lib/auth-store";
 import {
   requiredScope,
   isCredentialRoute,
@@ -136,12 +136,26 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     const apiKey = authz.slice("bearer ".length).trim();
     const keyResult = await validateApiKey(apiKey);
     if (!keyResult.valid) {
+      // #API-F7 — invalid/revoked key probing now leaves a trace. Key did
+      // not authenticate → actor anonymous. Log only the prefix.
+      postAudit("api_key_auth_failed", {
+        target: `api_key:${apiKey.slice(0, 20)}`,
+        actor: "anonymous",
+        metadata: { reason: keyResult.reason, path: pathname, method: request.method },
+      });
       return NextResponse.json(
         { error: "unauthenticated", code: keyResult.reason },
         { status: 401 },
       );
     }
     if (isCredentialRoute(pathname)) {
+      // #API-F7 — a valid key blocked from a credential route is a real
+      // authz event; record it (actor known — the key authenticated).
+      postAudit("api_key_credential_route_denied", {
+        target: `route:${pathname}`,
+        actor: `apikey:${keyResult.keyId || "unknown"}`,
+        metadata: { key_id: keyResult.keyId, path: pathname, method: request.method },
+      });
       return NextResponse.json(
         { error: "forbidden", code: "api_key_credential_route_forbidden" },
         { status: 403 },
@@ -149,6 +163,19 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     }
     const needed = requiredScope(pathname, request.method);
     if (!scopeSatisfied(keyResult.scopes, needed)) {
+      // #API-F7 — scope denial is now audited (under-scoped key probing
+      // write routes leaves a trace).
+      postAudit("api_key_scope_denied", {
+        target: `route:${pathname}`,
+        actor: `apikey:${keyResult.keyId || "unknown"}`,
+        metadata: {
+          key_id: keyResult.keyId,
+          required_scope: needed,
+          key_scopes: keyResult.scopes,
+          path: pathname,
+          method: request.method,
+        },
+      });
       return NextResponse.json(
         { error: "forbidden", code: "insufficient_scope", required: needed },
         { status: 403 },

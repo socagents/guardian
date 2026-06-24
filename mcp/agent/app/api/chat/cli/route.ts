@@ -50,8 +50,30 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { runCliStreaming } from "@/lib/cli-wrapper";
 import { resolveAnthropicCliKey } from "@/lib/anthropic-credentials";
+import { callMcpServer } from "@/lib/mcp-proxy";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * #CHAT-F26 — the CLI route's docstring claimed it "writes an audit row" but
+ * the implementation emitted nothing, so every Claude Code CLI turn was
+ * invisible to /observability/events. This fires a chat_cli_turn row at the
+ * start and end of a turn. Fire-and-forget: a failed audit write must never
+ * kill the SSE stream or change the response. Only prompt LENGTH is logged,
+ * never content.
+ */
+function auditCliTurn(
+  actor: string | null,
+  body: Record<string, unknown>,
+): void {
+  void callMcpServer("/api/v1/audit", {
+    method: "POST",
+    body,
+    headers: actor ? { "X-Guardian-Actor": actor } : undefined,
+  }).catch(() => {
+    /* best-effort */
+  });
+}
 
 const CLAUDE_CODE_TIMEOUT_MS = 600_000; // 10 minutes — matches Spark's plugin.yaml.
 const STDERR_TAIL_BYTES = 2_000;
@@ -95,6 +117,18 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  // #CHAT-F26 — capture actor + start time at handler scope (before the
+  // stream closure) and audit the turn start. The middleware stamps
+  // X-Guardian-Actor on /api/chat/* requests.
+  const actor = request.headers.get("x-guardian-actor") ?? "user:operator";
+  const startedAt = Date.now();
+  auditCliTurn(actor, {
+    action: "chat_cli_turn",
+    target: "provider:claude-code",
+    status: "success",
+    metadata: { phase: "start", prompt_length: prompt.length },
+  });
 
   // SSE stream. ReadableStream pattern matches lib/system-prompt.ts +
   // the main chat route — Next.js 15 + Edge-runtime-safe.
@@ -198,9 +232,34 @@ export async function POST(request: NextRequest) {
           timed_out: result.timedOut,
           stderr_tail: result.stderr.slice(-STDERR_TAIL_BYTES),
         });
+        // #CHAT-F26 — turn-end audit (success path).
+        auditCliTurn(actor, {
+          action: "chat_cli_turn",
+          target: "provider:claude-code",
+          status: result.exitCode === 0 && !result.timedOut ? "success" : "failure",
+          duration_ms: Date.now() - startedAt,
+          metadata: {
+            phase: "end",
+            exit_code: result.exitCode,
+            timed_out: result.timedOut,
+            prompt_length: prompt.length,
+          },
+        });
       } catch (err) {
         send("error", {
           message: err instanceof Error ? err.message : String(err),
+        });
+        // #CHAT-F26 — turn-end audit (error path).
+        auditCliTurn(actor, {
+          action: "chat_cli_turn",
+          target: "provider:claude-code",
+          status: "failure",
+          duration_ms: Date.now() - startedAt,
+          metadata: {
+            phase: "end",
+            error: err instanceof Error ? err.message : String(err),
+            prompt_length: prompt.length,
+          },
         });
       } finally {
         try {

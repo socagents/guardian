@@ -702,6 +702,35 @@ audit:
     - "agent_definition_enabled"
     - "agent_definition_disabled"
     - "agent_definition_deleted"
+    # #MEM-F9 — silent memory read paths (operator list + arbitrary-key
+    # point-read) now leave an audit trace.
+    - "memory_listed"
+    - "memory_read"
+    # #KB-F6/#KB-F7 — KB access is now visible under a dedicated filter.
+    # kb_searched carries a mode field (active=agent tool, passive=per-turn
+    # ContextAssembler injection, list=enumerate). kb_doc_read = full-doc fetch.
+    - "kb_searched"
+    - "kb_doc_read"
+    # #API-F6 — operator/CLI credential rotation + auth lifecycle (these
+    # action strings were already emitted by api/ui_auth.py but undeclared,
+    # so the observability filter chips couldn't surface them).
+    - "password_changed_ui"
+    - "password_changed_cli"
+    - "password_change_rejected"
+    - "login_success"
+    - "login_failed"
+    - "logout"
+    # #API-F7 — API-key / bearer authentication + authorization forensic
+    # trail (key use, invalid-key probing, scope + credential-route denials,
+    # direct-to-MCP bearer failures).
+    - "api_key_used"
+    - "api_key_auth_failed"
+    - "api_key_scope_denied"
+    - "api_key_credential_route_denied"
+    - "mcp_bearer_auth_failed"
+    # #CHAT-F26 — Claude Code CLI turns (start + end phases) — previously
+    # invisible to observability despite a docstring claiming otherwise.
+    - "chat_cli_turn"
 
 notifications:
   topics:

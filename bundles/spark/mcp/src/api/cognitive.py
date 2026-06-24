@@ -43,7 +43,13 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
-from usecase.audit_log import reset_current_actor, set_current_actor
+from usecase.audit_log import (
+    ACTION_MEMORY_LISTED,
+    ACTION_MEMORY_READ,
+    record_event,
+    reset_current_actor,
+    set_current_actor,
+)
 from usecase.context_assembler import ContextAssembler
 from usecase.memory_store import SqliteMemoryStore
 from usecase.session_store import SqliteSessionStore
@@ -603,6 +609,20 @@ def register_cognitive_routes(
             limit=_int(q, "limit", 100),
             offset=_int(q, "offset", 0),
         )
+        # #MEM-F9 — enumerate-the-store reads were previously silent. Record
+        # who listed memory + the scope/window so probing leaves a trace.
+        record_event(
+            ACTION_MEMORY_LISTED,
+            target="memory:list",
+            status="success",
+            actor="user:operator",
+            metadata={
+                "scope": q.get("scope") or None,
+                "limit": _int(q, "limit", 100),
+                "offset": _int(q, "offset", 0),
+                "count": len(rows),
+            },
+        )
         return JSONResponse(
             {"memories": [m.to_dict() for m in rows], "count": len(rows)}
         )
@@ -695,6 +715,16 @@ def register_cognitive_routes(
         m = memories.get(key=key, scope=scope)
         if m is None:
             return JSONResponse({"error": "not found"}, status_code=404)
+        # #MEM-F9 — arbitrary-key point-reads were silent. Audit successful
+        # reads only (a 404 miss reveals nothing and would let probing bloat
+        # the log — same omission as GET /api/v1/sessions/{id}).
+        record_event(
+            ACTION_MEMORY_READ,
+            target=f"memory:{key}",
+            status="success",
+            actor="user:operator",
+            metadata={"scope": scope, "key": key},
+        )
         return JSONResponse({"memory": m.to_dict()})
 
     @mcp.custom_route(

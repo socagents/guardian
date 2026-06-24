@@ -762,6 +762,9 @@ async function runSubagent(args: {
             target: `tool:${toolName}`,
             status: 'failure',
             trigger: args.trigger,
+            // #CHAT-F15 — attribute the block to the subagent, not the
+            // ambient operator default (the block is a machine-driven event).
+            actor: 'agent',
             metadata: {
               subagent_session_id: subagentSessionId,
               parent_session_id: args.parentSessionId,

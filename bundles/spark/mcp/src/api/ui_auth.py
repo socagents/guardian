@@ -91,6 +91,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.api_keys import api_key_store
 from usecase.audit_log import (
+    ACTION_API_KEY_AUTH_FAILED,
     record_event,
     reset_current_actor,
     set_current_actor,
@@ -347,6 +348,17 @@ def register_ui_auth_routes(mcp: FastMCP) -> None:
 
         row = store.verify(api_key)
         if row is None:
+            # #API-F7 — leaked/revoked-key probing through verify_key left no
+            # trace. The first 20 chars are the guardian_ak_ prefix + part of
+            # the key id (no secret material). Actor is anonymous (the key did
+            # not authenticate).
+            record_event(
+                ACTION_API_KEY_AUTH_FAILED,
+                target=f"api_key:{api_key[:20]}",
+                status="failure",
+                actor="anonymous",
+                metadata={"reason": "unknown_or_revoked"},
+            )
             return JSONResponse({"valid": False, "reason": "unknown_or_revoked"})
 
         return JSONResponse(
@@ -396,6 +408,15 @@ def register_ui_auth_routes(mcp: FastMCP) -> None:
         store = auth_store()
         validation = store.validate_session(token)
         if validation is None:
+            # #API-F6 GAP-3 — probing change_password with a forged/expired
+            # session token was silent. The actor can't be resolved (the
+            # session is invalid), so attribute to the ambient default.
+            record_event(
+                "password_change_rejected",
+                target="user:unknown",
+                status="failure",
+                metadata={"reason": "invalid_session"},
+            )
             return JSONResponse(
                 {"error": "invalid session"}, status_code=401,
             )
@@ -423,6 +444,15 @@ def register_ui_auth_routes(mcp: FastMCP) -> None:
         try:
             store.set_password(username, new_password, mark_changed=True)
         except UiAuthError as exc:
+            # #API-F6 GAP-2 — a set_password failure (e.g. SecretStore error
+            # mid-operation) returned 400 with no audit trace. Record it.
+            _record(
+                "password_change_rejected",
+                actor=f"user:{username}",
+                status="failure",
+                target=f"user:{username}",
+                reason="set_password_failed",
+            )
             return JSONResponse({"error": str(exc)}, status_code=400)
 
         # Revoke ALL sessions for this user — including the one that

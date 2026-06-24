@@ -30,6 +30,7 @@ from starlette.responses import JSONResponse
 
 from config.config import config
 from usecase.api_keys import api_key_store
+from usecase.audit_log import ACTION_MCP_BEARER_AUTH_FAILED, record_event
 
 
 def _extract_token(request: Request) -> str | None:
@@ -37,6 +38,26 @@ def _extract_token(request: Request) -> str | None:
     if not header.lower().startswith("bearer "):
         return None
     return header[len("bearer "):].strip()
+
+
+def _audit_bearer_failure(request: Request, reason: str, token: str | None) -> None:
+    """#API-F7 — record a direct-to-MCP bearer auth failure. Best-effort:
+    never let an audit error break the auth response. Only the key PREFIX
+    (≤12 chars, the guardian_ak_ tag) is logged — no secret material."""
+    try:
+        record_event(
+            ACTION_MCP_BEARER_AUTH_FAILED,
+            target="mcp_bearer",
+            status="failure",
+            actor="anonymous",
+            metadata={
+                "reason": reason,
+                "path": str(request.url.path),
+                "key_prefix": (token[:12] if token else ""),
+            },
+        )
+    except Exception:  # pragma: no cover - audit must never break auth
+        pass
 
 
 def require_bearer(request: Request) -> JSONResponse | None:
@@ -54,6 +75,7 @@ def require_bearer(request: Request) -> JSONResponse | None:
         )
     token = _extract_token(request)
     if token is None:
+        _audit_bearer_failure(request, "missing_or_malformed_header", None)
         return JSONResponse(
             {"error": "missing or malformed Authorization header"},
             status_code=401,
@@ -77,6 +99,7 @@ def require_bearer(request: Request) -> JSONResponse | None:
                 request.state.api_key_scopes = row.scopes
                 return None
 
+    _audit_bearer_failure(request, "invalid_bearer", token)
     return JSONResponse(
         {"error": "invalid bearer token"},
         status_code=403,

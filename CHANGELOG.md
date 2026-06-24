@@ -10,6 +10,16 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.67] (2026-06-24) — *Close audit blind spots: reads, auth, and KB access now leave a trace*
+
+Security/observability hardening — seven forensic gaps where an action left no audit row:
+
+- **Memory reads are now recorded.** Listing the memory store (`GET /api/v1/memories`) and reading a memory by key (`GET /api/v1/memories/by-key/{key}`) previously wrote nothing — full enumeration or arbitrary-key probing was invisible. They now emit `memory_listed` / `memory_read`.
+- **Knowledge-base access is now visible.** Listing or searching a KB (agent tool *or* the passive per-turn context injection) and reading a full KB doc now emit `kb_searched` / `kb_doc_read`. `kb_searched` carries a `mode` field (`active` = agent search, `passive` = automatic context injection, `list` = enumerate) so the two are distinguishable.
+- **API-key authentication has a forensic trail.** A successful key use (`api_key_used`), invalid/revoked-key probing (`api_key_auth_failed`), scope denials (`api_key_scope_denied`), credential-route denials (`api_key_credential_route_denied`), and direct-to-MCP bearer failures (`mcp_bearer_auth_failed`) are now all recorded. Only key *prefixes* are logged — never secret material.
+- **Password-change failure paths are recorded.** A failed credential write or a change-password attempt with a forged/expired session now leaves a `password_change_rejected` row (the success path was already audited). All authentication events (`password_changed_ui`, `login_success`, `login_failed`, `logout`, …) are now discoverable in the `/observability/events` filter chips.
+- **Claude Code CLI turns are now audited.** The `/api/chat/cli` path claimed to write an audit row but didn't; it now emits `chat_cli_turn` (start + end) so CLI turns appear in observability.
+
 ## [v0.2.66] (2026-06-24) — *Remove a custom connector from the marketplace*
 
 - **Uploaded connectors now appear in the Marketplace — and can be deleted there.** Previously a connector you uploaded was invisible on the Marketplace tab (only the five bundle connectors showed), so fully removing it meant a raw API call. The Marketplace tab now lists your uploaded connectors too, each with a **Custom** badge. Open one and its detail panel has a **Delete** button that permanently removes the connector's uploaded definition (with a confirmation step). Delete its instances first — Delete is refused while any instance exists and tells you so. Bundle connectors are unaffected: they have no Delete button and stay image-baked (use **Uninstall** to hide them).
