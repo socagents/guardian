@@ -11,6 +11,37 @@ import { NextResponse } from 'next/server';
 
 import { deriveMcpBaseUrl, getEffectiveRuntimeConfig } from '@/lib/runtime-config';
 
+// #XCUT-F2 — postAudit lives in auth-store, which imports resolveMcp from THIS
+// module. Importing it at top-level would form an ESM cycle; both functions are
+// only ever called at request time (never at module-eval), so the cycle would
+// resolve fine in practice — but we use a tiny lazy accessor to keep the import
+// graph acyclic and the failure-path emit dependency-free at load time.
+type PostAuditFn = (
+  action: string,
+  opts?: {
+    target?: string;
+    status?: string;
+    actor?: string;
+    metadata?: Record<string, unknown>;
+  },
+) => void;
+
+function emitProxyFailure(
+  action: string,
+  opts: {
+    target?: string;
+    status?: string;
+    actor?: string;
+    metadata?: Record<string, unknown>;
+  },
+): void {
+  void import('@/lib/auth-store')
+    .then((m) => (m.postAudit as PostAuditFn)(action, opts))
+    .catch(() => {
+      // best-effort: audit must never break the proxy response path.
+    });
+}
+
 export interface McpResolved {
   base: string;
   token: string;
@@ -125,6 +156,25 @@ export async function proxyToMcp(
       'X-Proxy-Duration-Ms': String(Date.now() - proxyStart),
     };
     if (requestId) outHeaders['X-Request-Id'] = requestId;
+    // #XCUT-F2 — proxy_request_admitted (middleware) records that a mutation
+    // entered the proxy; a 5xx coming BACK from the MCP left no failure trace.
+    // Audit an upstream 5xx so a backend-error storm is visible. Bounded +
+    // best-effort; reads (incl. high-rate polls) get audited only on failure
+    // here (success GETs stay uninstrumented, matching the admission policy).
+    if (resp.status >= 500) {
+      emitProxyFailure('proxy_request_failed', {
+        target: `mcp:${path}`,
+        status: 'failure',
+        actor: request.headers.get('x-guardian-actor') || undefined,
+        metadata: {
+          path,
+          method,
+          upstream_status: resp.status,
+          duration_ms: Date.now() - proxyStart,
+          request_id: requestId,
+        },
+      });
+    }
     return new NextResponse(text, {
       status: resp.status,
       headers: outHeaders,
@@ -134,6 +184,22 @@ export async function proxyToMcp(
       'X-Proxy-Duration-Ms': String(Date.now() - proxyStart),
     };
     if (requestId) errHeaders['X-Request-Id'] = requestId;
+    // #XCUT-F2 — a proxy-hop network failure / timeout returned a 502 with no
+    // audit trace. Record it so a down/unreachable MCP is visible in the audit
+    // log (proxy_request_admitted covered the admission, not the failure).
+    emitProxyFailure('proxy_request_failed', {
+      target: `mcp:${path}`,
+      status: 'failure',
+      actor: request.headers.get('x-guardian-actor') || undefined,
+      metadata: {
+        path,
+        method,
+        reason: 'fetch_failed',
+        error: err instanceof Error ? err.message : String(err),
+        duration_ms: Date.now() - proxyStart,
+        request_id: requestId,
+      },
+    });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'proxy fetch failed' },
       { status: 502, headers: errHeaders },

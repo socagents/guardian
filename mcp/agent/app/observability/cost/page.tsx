@@ -57,12 +57,21 @@ const GROUP_BY_LABELS: Record<GroupBy, string> = {
   job: "Job",
 };
 
+// #XCUT-F15 — the cost rollup fetches at most this many chat_turn_cost rows.
+// On a busy install a window can exceed it, in which case the totals shown
+// are an UNDERCOUNT. We surface that explicitly (banner below) rather than
+// silently presenting a truncated total as if it were complete.
+const COST_ROW_LIMIT = 5000;
+
 export default function CostRollupPage() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [windowChoice, setWindowChoice] = useState<WindowOption>("7d");
   const [groupBy, setGroupBy] = useState<GroupBy>("model");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // #XCUT-F15 — true when the fetch returned exactly COST_ROW_LIMIT rows, i.e.
+  // the window probably has more cost rows than we summed (totals = undercount).
+  const [overflow, setOverflow] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -71,7 +80,7 @@ export default function CostRollupPage() {
       const since = sinceFor(windowChoice);
       const sp = new URLSearchParams({
         action: "chat_turn_cost",
-        limit: "5000",
+        limit: String(COST_ROW_LIMIT),
       });
       if (since) sp.set("since", since);
       const r = await fetch(`/api/agent/audit?${sp.toString()}`, {
@@ -79,7 +88,9 @@ export default function CostRollupPage() {
       });
       if (!r.ok) throw new Error(`audit fetch ${r.status}`);
       const data = (await r.json()) as AuditResponse;
-      setRows(data.events ?? []);
+      const events = data.events ?? [];
+      setRows(events);
+      setOverflow(events.length >= COST_ROW_LIMIT);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -153,6 +164,20 @@ export default function CostRollupPage() {
         {error && (
           <div className="rounded-xl border border-error/30 bg-error/10 p-3 text-xs text-error">
             {error}
+          </div>
+        )}
+
+        {/* #XCUT-F15 — overflow banner: the fetch hit the row cap, so the
+            totals below are an undercount. Narrow the window for a complete
+            figure. Shown only when the cap was actually reached. */}
+        {overflow && (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-400 flex items-center gap-2">
+            <span className="material-symbols-outlined text-sm">warning</span>
+            <span>
+              Showing the most recent {COST_ROW_LIMIT.toLocaleString()} cost
+              rows for this window — there are likely more, so the totals below
+              are an undercount. Narrow the time window for a complete figure.
+            </span>
           </div>
         )}
 

@@ -148,21 +148,30 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
         rc = proc.returncode
         try:
             from usecase.audit_log import record_event
+            # #OBS-F16 — also capture the stdout tail (what pip installed /
+            # already-satisfied lines), not just stderr. On a failure the
+            # actionable resolver/build output often lands on stdout, and a
+            # success leaves the installed-package summary there; without it
+            # the audit row couldn't show WHAT changed, only that it ran.
+            _install_md = {
+                "spec": spec,
+                "return_code": rc,
+                "stderr_tail": err[-500:],
+                "stdout_tail": out[-500:],
+            }
+            # #PLAT-F10 — on FAILURE the HTTP body returns the fuller output
+            # (err[-1500:], out[-1500:]) but audit.db only kept the 500-char
+            # tails — a forensic investigator querying audit.db saw a truncated
+            # picture of WHY the install failed. Persist the fuller tails too
+            # (separate *_full keys, failure-only), so the short keys stay stable.
+            if rc != 0:
+                _install_md["stderr_full"] = err[-1500:]
+                _install_md["stdout_full"] = out[-1500:]
             record_event(
                 "plugin_install",
                 target=f"plugin:{spec[:120]}",
                 status="success" if rc == 0 else "failure",
-                # #OBS-F16 — also capture the stdout tail (what pip installed /
-                # already-satisfied lines), not just stderr. On a failure the
-                # actionable resolver/build output often lands on stdout, and a
-                # success leaves the installed-package summary there; without it
-                # the audit row couldn't show WHAT changed, only that it ran.
-                metadata={
-                    "spec": spec,
-                    "return_code": rc,
-                    "stderr_tail": err[-500:],
-                    "stdout_tail": out[-500:],
-                },
+                metadata=_install_md,
             )
         except Exception:
             pass
@@ -240,14 +249,23 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
         rc = proc.returncode
         try:
             from usecase.audit_log import record_event
+            # #PLAT-F10 — the uninstall row only kept stderr_tail[-500]; the
+            # HTTP body returns err[-1500:]+out[-1500:] on failure. Add a
+            # stdout tail (pip prints the removed-files summary there) plus the
+            # fuller failure-only tails so audit.db carries the full picture.
+            _uninstall_md = {
+                "dist_name": dist_name, "return_code": rc,
+                "stderr_tail": err[-500:],
+                "stdout_tail": out[-500:],
+            }
+            if rc != 0:
+                _uninstall_md["stderr_full"] = err[-1500:]
+                _uninstall_md["stdout_full"] = out[-1500:]
             record_event(
                 "plugin_uninstall",
                 target=f"plugin:{dist_name}",
                 status="success" if rc == 0 else "failure",
-                metadata={
-                    "dist_name": dist_name, "return_code": rc,
-                    "stderr_tail": err[-500:],
-                },
+                metadata=_uninstall_md,
             )
         except Exception:
             pass

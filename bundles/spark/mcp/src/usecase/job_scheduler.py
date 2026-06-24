@@ -136,6 +136,25 @@ CHAT_ACTION_TIMEOUT_S = 1200
 ToolDispatcher = Callable[[str, dict[str, Any]], Awaitable[Any]]
 
 
+def _emit_job_runtime_event(
+    event_name: str, payload: dict[str, Any]
+) -> None:
+    """#OBS-F2 / #XSIAM-F9 — mirror a job lifecycle transition into the
+    runtime event_log (the high-signal feed dashboards + alert wiring
+    consume), in addition to the forensic audit record_event the caller
+    already writes. Best-effort: the event_log's own record() swallows,
+    but we also guard the lookup so a missing singleton never breaks a run.
+    The event_name must be declared in manifest.observability.events
+    (rt.job.fired / rt.job.completed / rt.job.failed)."""
+    try:
+        from usecase.event_log import event_log
+        el = event_log()
+        if el is not None:
+            el.record(event_name, payload=payload, actor="system")
+    except Exception as exc:  # pragma: no cover — must never break a run
+        logger.debug("rt.job event emit suppressed: %s", exc)
+
+
 # Cheap shape probe for the resolve_ident path. We don't actually parse
 # the string into a UUID — `uuid.UUID(s)` would raise on non-UUID input
 # and we'd swallow the exception, which costs more than a regex on the
@@ -761,6 +780,19 @@ class CroniterJobScheduler:
                 "action_name": str(row.action.get("name", "")),
             },
         )
+        # #OBS-F2 / #XSIAM-F9 — also surface the fire in the runtime-events
+        # feed (audit row above is the forensic record; this is the live
+        # telemetry signal the /observability/events stream reads).
+        _emit_job_runtime_event(
+            "rt.job.fired",
+            {
+                "job": row.name,
+                "run_id": run_id,
+                "trigger": trigger,
+                "action_type": str(row.action.get("type", "")),
+                "action_name": str(row.action.get("name", "")),
+            },
+        )
 
         # Insert the run row up-front in pending state so the audit
         # endpoint can show "currently running" jobs.
@@ -844,6 +876,27 @@ class CroniterJobScheduler:
                             "falling back to plain prompt without binding",
                             row.name, skill_name,
                         )
+                        # #SKILL-F13 — the configured skill was silently dropped
+                        # and the run will still complete status=success. Was
+                        # logger.warning only; emit an audit row (actor=system)
+                        # so the operator can tell from /observability/events
+                        # that the skill binding didn't take effect. Best-effort.
+                        try:
+                            from usecase.audit_log import record_event as _rec
+                            _rec(
+                                "job_skill_skipped",
+                                target=f"job:{row.name}",
+                                status="failure",
+                                actor="system",
+                                metadata={
+                                    "job_name": row.name,
+                                    "skill_name": skill_name,
+                                    "reason": "skill_body_not_found",
+                                    "trigger": trigger,
+                                },
+                            )
+                        except Exception:  # noqa: BLE001 — audit must not break _fire
+                            pass
                     else:
                         # Wrap so the agent sees the skill body as a
                         # distinct, attributable section rather than
@@ -1096,6 +1149,23 @@ class CroniterJobScheduler:
                 **({"skill_binding": skill_binding} if skill_binding else {}),
             },
         )
+        # #OBS-F2 / #XSIAM-F9 — mirror completion into the runtime-events feed.
+        # success → rt.job.completed; failure → rt.job.failed. A `skipped` run
+        # (cron-cap squelch) is left out of the runtime feed the same way it's
+        # left out of the notification — it's expected noise, not a signal.
+        if status != "skipped":
+            _emit_job_runtime_event(
+                "rt.job.completed" if status == "success" else "rt.job.failed",
+                {
+                    "job": row.name,
+                    "run_id": run_id,
+                    "trigger": trigger,
+                    "action_name": action_name,
+                    "duration_ms": duration_ms,
+                    "status": status,
+                    "error": error,
+                },
+            )
 
         # v0.1.33+ Phase 5: surface every scheduled job run as a
         # notification so the operator gets feedback without having

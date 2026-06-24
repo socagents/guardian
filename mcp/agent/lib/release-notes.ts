@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.77",
+    date: "2026-06-24",
+    title: "Observability granularity, part 2: job runtime events, quieter-failure signals, proxy failure traces.",
+    highlights: [
+      "Scheduled-job fire/complete/fail now mirror into the runtime event log (with counters) so the events view isn't near-empty on a healthy install.",
+      "The high-volume secret_read success row is tunable via GUARDIAN_AUDIT_SECRET_READ (default on); failed reads always audit.",
+      "Quieter failures now leave a signal: job skill-skip, unavailable skills block, subagent task-uncreated, proxy_request_failed (fetch error / 5xx); plugin install/uninstall persist fuller stdout/stderr.",
+      "Subagent reasoning streams separately (kept out of the stored transcript), matching the main loop.",
+      "The /cost page warns when it hits its row cap (totals are a floor); chat_turn_cost carries finish reason; repeated compaction-checkpoint failures back off instead of re-paying every turn.",
+    ],
+  },
+  {
     version: "0.2.76",
     date: "2026-06-24",
     title: "Finer-grained observability: per-phase research, honest turn status, size guards, embedding accounting.",

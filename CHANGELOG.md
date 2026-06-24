@@ -10,6 +10,14 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.77] (2026-06-24) — *Observability granularity, part 2: job runtime events, quieter-failure signals, proxy failure traces*
+
+- **The runtime-events page reflects job activity.** Scheduled-job fire / complete / fail now mirror into the runtime event log (with per-event counters), so a healthy install's events view is no longer near-empty.
+- **High-volume secret reads are tunable.** The per-tool-call `secret_read` success row (which can dominate the audit log) is now gated behind `GUARDIAN_AUDIT_SECRET_READ` (default on); *failed* reads are always audited.
+- **Quieter failures get a voice.** A job that couldn't load its bound skill, an unavailable `<available_skills>` block in chat, a subagent task that failed to create, and a proxy request that errored or got a 5xx now each leave a signal; plugin install/uninstall failures persist fuller stdout/stderr for diagnosis.
+- **Subagent reasoning streams.** A subagent's thinking is now streamed separately (and kept out of its stored transcript), matching the main loop.
+- **Honest cost + turn signals.** The `/cost` page warns when it hits its row cap (totals are a floor); `chat_turn_cost` carries the finish reason, and a repeated compaction-checkpoint-save failure now backs off instead of re-paying for the same compaction every turn.
+
 ## [v0.2.76] (2026-06-24) — *Finer-grained observability: per-phase research, honest turn status, size guards, embedding accounting*
 
 - **Deep-research shows its work.** A `deep_research` call previously collapsed its many searches + fetches + gap-checks into one event; the result now carries a per-phase breakdown (plan / search / fetch / gap-check / synthesize, with counts and timings) and any warnings, so partial-coverage failures are visible.

@@ -115,6 +115,25 @@ KEK_BYTE_LEN = 32  # AES-256
 
 KEK_ENV_VAR = "GUARDIAN_SECRET_KEK"
 
+# #OBS-F9 — every connector tool call resolves its instance secrets via
+# read(), and each read() unconditionally writes a `secret_read` audit row.
+# On a busy install (tool calls at high frequency) those rows dominate
+# audit.db while carrying little forensic value (the tool_call row already
+# attributes WHO did WHAT; the secret path is constant per instance). Set
+# GUARDIAN_AUDIT_SECRET_READ=0 (or false/no/off) to suppress the SUCCESS
+# secret_read rows. Failed reads (status=failure: deleted/unresolvable
+# secret) are ALWAYS audited regardless — those are the forensically
+# interesting ones (a tool tried to use a credential that no longer exists).
+_AUDIT_SECRET_READ_ENV = "GUARDIAN_AUDIT_SECRET_READ"
+_FALSEY = {"0", "false", "False", "no", "NO", "off", "OFF"}
+
+
+def _audit_secret_reads_enabled() -> bool:
+    """True unless the operator opted out via GUARDIAN_AUDIT_SECRET_READ.
+    Read at call time (not import time) so it's togglable without a code
+    change and testable via monkeypatched os.environ."""
+    return os.environ.get(_AUDIT_SECRET_READ_ENV, "").strip() not in _FALSEY
+
 
 class SecretStoreError(RuntimeError):
     """Raised when a path is malformed or a read targets a missing secret."""
@@ -540,13 +559,16 @@ class SecretStore:
         # env-var bootstrap vs. the file backend.
         overlay = self._env_overlay_value(path)
         if overlay is not None:
-            from usecase.audit_log import record_event, ACTION_SECRET_READ
-            record_event(
-                ACTION_SECRET_READ,
-                target=f"secret:{path}",
-                status="success",
-                metadata={"path": path, "source": "env"},
-            )
+            # #OBS-F9 — suppress the high-frequency success row when the
+            # operator opted out; the failure path below is always audited.
+            if _audit_secret_reads_enabled():
+                from usecase.audit_log import record_event, ACTION_SECRET_READ
+                record_event(
+                    ACTION_SECRET_READ,
+                    target=f"secret:{path}",
+                    status="success",
+                    metadata={"path": path, "source": "env"},
+                )
             return overlay
 
         target = self._resolve_file(path)
@@ -613,17 +635,21 @@ class SecretStore:
         # Issue #16: include `source` so SOC can distinguish file-
         # backed vs. env-var-overlay reads (the env-var path returns
         # earlier in this method).
-        from usecase.audit_log import record_event, ACTION_SECRET_READ
-        record_event(
-            ACTION_SECRET_READ,
-            target=f"secret:{path}",
-            status="success",
-            metadata={
-                "path": path,
-                "source": "file",
-                "migrated_to_encrypted": decrypted_via_migration,
-            },
-        )
+        # #OBS-F9 — gate the success row on the opt-out env var. A
+        # migration re-write (decrypted_via_migration) is rare + worth
+        # keeping regardless, so it always audits.
+        if _audit_secret_reads_enabled() or decrypted_via_migration:
+            from usecase.audit_log import record_event, ACTION_SECRET_READ
+            record_event(
+                ACTION_SECRET_READ,
+                target=f"secret:{path}",
+                status="success",
+                metadata={
+                    "path": path,
+                    "source": "file",
+                    "migrated_to_encrypted": decrypted_via_migration,
+                },
+            )
         return value
 
     def has(self, path: str) -> bool:

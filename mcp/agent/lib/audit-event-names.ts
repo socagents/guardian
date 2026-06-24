@@ -107,6 +107,14 @@ export const AUDIT_EVENT_NAME_ALIASES: Record<string, string> = {
   memory_inject_skipped: "agent.memory.inject.skipped", // #MEM-F10
   hook_invalid: "agent.hook.invalid", // #HOOK-F2
   issue_diagram_rejected: "agent.investigation.diagram.rejected", // #INV-F9
+
+  // v0.2.77 audit batch — observability-granularity (B). New TS-emitted names.
+  skills_unavailable: "agent.skills.unavailable", // #SKILL-F2
+  chat_subagent_task_uncreated: "agent.subagent.task.uncreated", // #SUB-F13
+  proxy_request_failed: "agent.proxy.request.failed", // #XCUT-F2
+  chat_turn_finish_reason: "agent.chat.turn.finish_reason", // #XCUT-F20
+  // Python-emitted (no TS emit site) but listed for downstream consumers.
+  job_skill_skipped: "agent.job.skill.skipped", // #SKILL-F13
 };
 
 /** Inverse mapping: standard name → guardian action. Used by

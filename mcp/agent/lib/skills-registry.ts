@@ -17,6 +17,7 @@
 
 import { GuardianMCPClient } from '@/lib/mcp-client';
 import { getEffectiveRuntimeConfig } from '@/lib/runtime-config';
+import { postAudit } from '@/lib/auth-store';
 import type { SkillSummary } from '@/lib/system-prompt';
 
 interface SkillsListResponse {
@@ -81,6 +82,18 @@ export async function fetchSkillsForPrompt(): Promise<SkillSummary[]> {
         err instanceof Error ? err.message : err,
       );
     }
+    // #SKILL-F2 — the console.warn above only reaches `docker logs`; from the
+    // product UI an operator had NO way to know the <available_skills> block
+    // was silently dropped for this turn (the model just never saw the skills).
+    // Emit a best-effort audit row so /observability/events surfaces it. Still
+    // returns [] — a turn without the skills block is degraded, not fatal.
+    postAudit('skills_unavailable', {
+      target: 'skills:registry',
+      status: 'failure',
+      metadata: {
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
     return [];
   }
 }

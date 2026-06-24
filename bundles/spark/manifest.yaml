@@ -870,6 +870,30 @@ audit:
     # updates; without this the UI poll could only show a generic timeout.
     # metadata.code distinguishes svg_too_large from other rejections.
     - "issue_diagram_rejected"
+    # ── v0.2.77 audit batch — observability granularity (B) ──
+    # #SKILL-F13 — a scheduled prompt job declared action.skill=X but the skill
+    # body wasn't found on disk; the run silently fell through to the plain
+    # prompt and still completed status=success. Was logger.warning only; now
+    # audited (actor=system) so the silently-dropped skill binding is visible.
+    - "job_skill_skipped"
+    # #SKILL-F2 — the chat system-prompt builder failed to fetch the live skills
+    # registry (MCP hiccup), so the <available_skills> block was silently
+    # dropped for that turn. Emitted by the agent (postAudit) so operators can
+    # tell from the product UI that skills were unavailable for a chat turn.
+    - "skills_unavailable"
+    # #SUB-F13 — subagent task-row creation failed; the run proceeds but is
+    # undiscoverable in /tasks. Emitted by the chat route so the orphaned
+    # subagent run leaves a trace despite the missing task entry.
+    - "chat_subagent_task_uncreated"
+    # #XCUT-F2 — a proxy hop to the embedded MCP failed (network error / 502 or
+    # an upstream 5xx). proxy_request_admitted records the admission; this
+    # records the FAILURE so a down MCP / 5xx storm is visible in the audit log.
+    - "proxy_request_failed"
+    # #XCUT-F20 — a model turn ended on a non-STOP finish reason (SAFETY /
+    # RECITATION / MAX_TOKENS) that was surfaced only in the assistant text.
+    # Recorded as a distinct action so the observability filter can count
+    # truncated/blocked turns. metadata.finish_reason carries which.
+    - "chat_turn_finish_reason"
 
 notifications:
   topics:
@@ -909,6 +933,18 @@ observability:
     # used by alert wiring. Payload: {tool, error, duration_ms,
     # approval_id?}. Emitted by usecase/connector_loader.py wrappers.
     - "rt.tool.failed"
+    # ── v0.2.77 #OBS-F2 / #XSIAM-F9 — job lifecycle in the runtime-events feed ──
+    # Until now the only event_log event was rt.tool.failed, so on a healthy
+    # install the /observability/events stream was near-empty. The job
+    # scheduler already records job_fired / job_completed / job_failed to the
+    # FORENSIC audit log; these mirror the same lifecycle into the RUNTIME
+    # event_log (the high-signal feed dashboards + alert wiring consume) so a
+    # scheduled-job cadence is visible there too. Payload:
+    # {job, trigger, action_name, run_id?, duration_ms?, error?}. Emitted by
+    # usecase/job_scheduler.py alongside the audit record_event calls.
+    - "rt.job.fired"
+    - "rt.job.completed"
+    - "rt.job.failed"
   logs:
     defaultLevel: "info"
   traces:

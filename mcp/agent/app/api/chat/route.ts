@@ -235,6 +235,16 @@ function extractAndRecordCost(
   if (!usage) {
     return { usd: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
   }
+  // #XCUT-F20 — the per-call cost row had no finish_reason, so a turn
+  // truncated by MAX_TOKENS (or blocked by SAFETY/RECITATION) looked
+  // identical in /observability/cost to a clean STOP. Hoist it off the
+  // candidate (self-contained — no caller change needed) so every cost row
+  // carries WHY the call ended.
+  const callFinishReason =
+    (
+      (response as { candidates?: Array<{ finishReason?: string }> })
+        .candidates?.[0]?.finishReason
+    ) ?? undefined;
   const inputTokens =
     (usage['promptTokenCount'] as number | undefined) ?? 0;
   const cachedTokens =
@@ -276,6 +286,9 @@ function extractAndRecordCost(
         ),
       },
       model: args.model,
+      // #XCUT-F20 — finish reason for this Gemini call (STOP/MAX_TOKENS/
+      // SAFETY/RECITATION/…). Omitted when the candidate didn't carry one.
+      ...(callFinishReason ? { finish_reason: callFinishReason } : {}),
     },
     trigger: args.trigger,
   });
@@ -609,6 +622,7 @@ async function runSubagent(args: {
   // The /tasks UI shows it under kind='subagent' with parent
   // session linkage. Failure to create the task is non-fatal.
   let taskId: string | undefined;
+  let taskCreateThrew = false;
   try {
     const taskResp = await callMcpServer<{
       task?: { id?: string };
@@ -630,8 +644,43 @@ async function runSubagent(args: {
         : undefined,
     });
     taskId = taskResp?.task?.id;
-  } catch {
-    // best-effort
+  } catch (taskErr) {
+    // #SUB-F13 — task-row creation failed. The run continues, but without a
+    // task entry it's undiscoverable in /tasks. The empty `// best-effort`
+    // catch made that silent; emit a best-effort audit row so the orphaned
+    // subagent run leaves a trace operators can find.
+    taskCreateThrew = true;
+    void safeAudit('chat_subagent_task_uncreated', {
+      target: `session:${subagentSessionId}`,
+      status: 'failure',
+      trigger: args.trigger,
+      metadata: {
+        agent_name: args.agentName,
+        agent_id: agentDef.id,
+        parent_session_id: args.parentSessionId,
+        subagent_session_id: subagentSessionId,
+        reason: 'create_threw',
+        error: taskErr instanceof Error ? taskErr.message : String(taskErr),
+      },
+    });
+  }
+  if (!taskId && !taskCreateThrew) {
+    // #SUB-F13 — the POST succeeded (no throw) but returned no task id, so the
+    // run is still undiscoverable in /tasks. Treat it the same as a thrown
+    // failure for observability (the create_threw path already covered the
+    // exception case, so this only fires on a silent empty response).
+    void safeAudit('chat_subagent_task_uncreated', {
+      target: `session:${subagentSessionId}`,
+      status: 'failure',
+      trigger: args.trigger,
+      metadata: {
+        agent_name: args.agentName,
+        agent_id: agentDef.id,
+        parent_session_id: args.parentSessionId,
+        subagent_session_id: subagentSessionId,
+        reason: 'no_task_id_returned',
+      },
+    });
   }
 
   // Persist the subagent's user-message (the prompt the parent gave it).
@@ -721,7 +770,22 @@ async function runSubagent(args: {
       const functionCalls: GeminiFunctionCall[] = [];
       for (const part of parts) {
         if (part.text) {
-          finalText.push(part.text);
+          // #SUB-F14 — the main chat loop routes Gemini reasoning parts
+          // (part.thought === true) to a `thinking` SSE event and EXCLUDES
+          // them from the saved transcript; the subagent loop pushed ALL
+          // text (reasoning included) into finalText, polluting the stored
+          // sidechain transcript. Mirror the main loop: stream thought parts
+          // as `subagent_thinking` (parallel to the other subagent_* events)
+          // and keep them out of finalText.
+          if (part.thought === true) {
+            args.sendEvent('subagent_thinking', {
+              agent_name: args.agentName,
+              subagent_session_id: subagentSessionId,
+              text: part.text,
+            });
+          } else {
+            finalText.push(part.text);
+          }
         }
         if (part.functionCall) {
           functionCalls.push(part.functionCall);
@@ -1628,6 +1692,45 @@ interface AutoCompactionHooks {
  *  summarizing 2-3 messages costs more than it saves. */
 const AUTO_COMPACT_MIN_DROPPED = 5;
 
+// #XCUT-F22 — in-memory cooldown guard against re-compaction churn. When an
+// auto-compaction checkpoint persist FAILS (CHAT-F17), the next turn re-reads
+// from the DB, finds no checkpoint, and recomputes the SAME paid summarizer
+// call — which will likely fail to persist again, looping every turn. This
+// map records the last failed-persist time per session so the next turn can
+// skip the (futile, paid) auto-compaction attempt during a short cooldown and
+// fall through to free hard-truncation instead. Cleared on a successful
+// persist. Best-effort + process-local (a restart resets it, which is fine —
+// the worst case is one extra compaction attempt after a restart).
+const COMPACTION_PERSIST_FAIL_COOLDOWN_MS = 5 * 60 * 1000;
+const _compactionPersistFailures = new Map<
+  string,
+  { failedAt: number; count: number }
+>();
+
+function recordCompactionPersistFailure(sessionId: string): number {
+  const prior = _compactionPersistFailures.get(sessionId);
+  const count = (prior?.count ?? 0) + 1;
+  _compactionPersistFailures.set(sessionId, { failedAt: Date.now(), count });
+  return count;
+}
+
+function clearCompactionPersistFailure(sessionId: string): void {
+  _compactionPersistFailures.delete(sessionId);
+}
+
+/** True when this session had a recent checkpoint-persist failure and is
+ *  still within the cooldown window — the caller should skip the paid
+ *  auto-compaction attempt and hard-truncate instead. */
+function inCompactionPersistCooldown(sessionId: string): boolean {
+  const rec = _compactionPersistFailures.get(sessionId);
+  if (!rec) return false;
+  if (Date.now() - rec.failedAt > COMPACTION_PERSIST_FAIL_COOLDOWN_MS) {
+    _compactionPersistFailures.delete(sessionId);
+    return false;
+  }
+  return true;
+}
+
 async function loadSessionHistory(
   sessionId: string,
   trigger: string | undefined,
@@ -1716,7 +1819,20 @@ async function loadSessionHistory(
     }
 
     const droppedCount = firstKeptIdx;
+    // #XCUT-F22 — if a recent checkpoint persist failed for this session, the
+    // re-computed compaction would just fail to persist again, so skip the
+    // paid summarizer call during the cooldown and let the budget walk's
+    // hard-truncation handle it (free). The audit row from the original
+    // failure already flagged the churn; this stops it from repeating.
     if (
+      droppedCount >= AUTO_COMPACT_MIN_DROPPED &&
+      hooks?.summarize !== undefined &&
+      inCompactionPersistCooldown(sessionId)
+    ) {
+      hooks?.onCompactionEvent?.('failed', {
+        error: 'skipped: recent checkpoint-persist failure (cooldown)',
+      });
+    } else if (
       droppedCount >= AUTO_COMPACT_MIN_DROPPED &&
       hooks?.summarize !== undefined
     ) {
@@ -1761,7 +1877,14 @@ async function loadSessionHistory(
               result.coversUntil,
               result.messagesSummarized,
             );
+            // #XCUT-F22 — persist succeeded; clear any prior failure cooldown
+            // so the next turn doesn't needlessly skip a future compaction.
+            clearCompactionPersistFailure(sessionId);
           } catch (persistErr) {
+            // #XCUT-F22 — record the failure so the NEXT turn's compaction
+            // decision can back off during the cooldown window instead of
+            // recomputing the same paid summary that can't be persisted.
+            const failCount = recordCompactionPersistFailure(sessionId);
             console.warn(
               `chat: auto-compaction checkpoint persist failed:`,
               persistErr instanceof Error ? persistErr.message : persistErr,
@@ -1779,6 +1902,9 @@ async function loadSessionHistory(
               metadata: {
                 summary_chars: result.summary.length,
                 messages_summarized: result.messagesSummarized,
+                // #XCUT-F22 — consecutive-failure count so a chronic
+                // persist outage is distinguishable from a one-off blip.
+                consecutive_failures: failCount,
                 error:
                   persistErr instanceof Error
                     ? persistErr.message
@@ -4279,7 +4405,16 @@ export async function POST(request: NextRequest) {
         // crashed turn still leaves a record of what was asked.
         // We persist the EFFECTIVE message (post-hook-replace) so
         // the transcript matches what the model sees.
-        await safePersist(sessionId, { role: 'user', content: effectiveMessage }, trigger);
+        // #OBS-F20 — stamp the chip-vs-typed origin onto the persisted user
+        // message's meta. Previously turnOrigin lived only in the live SSE
+        // meta + the chat_turn_started audit row, so on reload a chip turn
+        // was indistinguishable from a typed one. meta is already round-
+        // tripped by the session store, so this needs no schema change.
+        await safePersist(
+          sessionId,
+          { role: 'user', content: effectiveMessage, meta: { origin: turnOrigin } },
+          trigger,
+        );
 
         // Stash hook-injected context for the model loop to append
         // to the system instruction on this turn. Empty string when
@@ -6004,6 +6139,38 @@ export async function POST(request: NextRequest) {
           runStatusReason = 'max_output_truncation';
         } else {
           runStatusReason = 'completed';
+        }
+
+        // #XCUT-F20 — a turn ending on a non-STOP finish reason (MAX_TOKENS
+        // truncation, or a SAFETY/RECITATION block that still produced text)
+        // was surfaced only in the assistant UI text — no dedicated audit
+        // action existed for the truncation case, so /observability/events
+        // couldn't count truncated turns. Emit chat_turn_finish_reason for
+        // the notable reasons. The empty-text SAFETY/RECITATION case already
+        // emits chat_response_blocked above; skip it here to avoid a duplicate
+        // (that path leaves finalResponse synthesized-but-flagged, so we gate
+        // SAFETY/RECITATION on NOT having used the synthesized fallback).
+        const notableFinish =
+          modelFinishReason === 'MAX_TOKENS' ||
+          ((modelFinishReason === 'SAFETY' ||
+            modelFinishReason === 'RECITATION') &&
+            !usedSynthesizedFallback);
+        if (notableFinish) {
+          void safeAudit('chat_turn_finish_reason', {
+            target: `session:${sessionId}`,
+            status:
+              modelFinishReason === 'MAX_TOKENS' ? 'success' : 'failure',
+            metadata: {
+              session_id: sessionId,
+              finish_reason: modelFinishReason,
+              run_status_reason: runStatusReason,
+              tool_calls: toolCalls.length,
+              response_chars: finalResponse.length,
+              model: effectiveModel,
+            },
+            trigger,
+            actor,
+          });
         }
 
         sendEvent('done', {
