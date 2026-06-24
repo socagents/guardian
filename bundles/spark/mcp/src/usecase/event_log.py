@@ -23,7 +23,7 @@ call writes `tool_call` (status=failure) to audit (forensic) AND
       id            TEXT PRIMARY KEY,    -- uuid4
       event_name    TEXT NOT NULL,        -- one of manifest.observability.events
       ts            TEXT NOT NULL,        -- ISO8601 UTC, microseconds
-      actor         TEXT,                 -- principal id (mcp_token / api_key:<id>)
+      actor         TEXT,                 -- principal id (mcp_token / apikey:<id>)
       payload_json  TEXT NOT NULL DEFAULT '{}'
     );
     CREATE INDEX idx_runtime_events_name_ts ON runtime_events(event_name, ts);

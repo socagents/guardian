@@ -141,6 +141,36 @@ def reset_current_actor(token: Any) -> None:
     _current_actor.reset(token)
 
 
+def resolve_tool_actor() -> str:
+    """Resolve the actor to attribute to a tool_call row.
+
+    #F-actor-hardcode — the connector-loader wrappers and `_wrap_builtin`
+    used to hardcode ``actor="agent"`` for every tool_call, which defeated
+    the X-Guardian-Actor forwarding (v0.2.73 XSOAR-F9/INV-F15): a `^tool`
+    direct dispatch or an API-key-driven call carries a REAL forwarded
+    principal in the actor contextvar, but the hardcode overwrote it with
+    "agent" at the last hop.
+
+    The v0.2.57 nuance: ``get_current_actor()`` returns the ambient
+    ``"system"`` default when no X-Guardian-Actor header was set (NOT
+    None), so we cannot just trust whatever is in the contextvar. We
+    distinguish a genuine forwarded principal (``user:operator``,
+    ``apikey:<id>``, ``mcp_token``, …) from the ambient defaults:
+
+      * ``"system"`` — no actor header (boot, migrations, ambient).
+      * ``"agent"``  — already the agent's own attribution.
+
+    Either default → ``"agent"`` (a model-internal / ambient tool call).
+    Anything else is a real forwarded principal and is recorded as-is, so
+    operator / ``^tool`` / API-key-driven calls attribute to the true
+    principal while model-driven calls stay ``agent``.
+    """
+    resolved = get_current_actor()
+    if resolved and resolved not in ("system", "agent"):
+        return resolved
+    return "agent"
+
+
 # Contextvar for trigger attribution. Set by the api/trigger_context
 # middleware whenever an inbound HTTP request carries the
 # `X-Guardian-Trigger` header. Audit rows pick it up through

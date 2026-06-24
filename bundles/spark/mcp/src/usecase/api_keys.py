@@ -189,7 +189,7 @@ class SqliteApiKeyStore:
             id=key_id, label=label, scopes=scope_list, created_at=ts,
             created_by=actor, last_used_at=None, revoked_at=None,
         )
-        self._audit_event("api_key_created", actor=actor, target=f"api_key:{key_id}",
+        self._audit_event("api_key_created", actor=actor, target=f"apikey:{key_id}",
                           metadata={"label": label, "scopes": scope_list})
         return CreatedApiKey(record=record, plaintext=plaintext)
 
@@ -230,8 +230,8 @@ class SqliteApiKeyStore:
         # leaves a per-use forensic trace.
         self._audit_event(
             "api_key_used",
-            actor=f"api_key:{key_id}",
-            target=f"api_key:{key_id}",
+            actor=f"apikey:{key_id}",
+            target=f"apikey:{key_id}",
             metadata={"label": label, "last_used_at": ts},
         )
         return ApiKey(
@@ -273,7 +273,7 @@ class SqliteApiKeyStore:
         if updated:
             self._audit_event(
                 "api_key_revoked", actor=actor,
-                target=f"api_key:{key_id}", metadata={"revoked_at": ts},
+                target=f"apikey:{key_id}", metadata={"revoked_at": ts},
             )
         return updated
 

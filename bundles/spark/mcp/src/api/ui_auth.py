@@ -354,7 +354,7 @@ def register_ui_auth_routes(mcp: FastMCP) -> None:
             # not authenticate).
             record_event(
                 ACTION_API_KEY_AUTH_FAILED,
-                target=f"api_key:{api_key[:20]}",
+                target=f"apikey:{api_key[:20]}",
                 status="failure",
                 actor="anonymous",
                 metadata={"reason": "unknown_or_revoked"},

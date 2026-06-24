@@ -72,7 +72,7 @@ def register_secret_routes(
         if (resp := require_bearer(request)) is not None:
             return resp
         # MCP_TOKEN principal ONLY — secret resolution must never be reachable
-        # with an operator API key (require_bearer also admits api_key:<id>);
+        # with an operator API key (require_bearer also admits apikey:<id>);
         # otherwise a leaked key could exfiltrate secret values. Mirrors the
         # plugin-install credential-route invariant (PLAT-F11).
         if getattr(request.state, "auth_principal", "") != "mcp_token":

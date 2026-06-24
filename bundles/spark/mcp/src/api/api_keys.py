@@ -59,7 +59,7 @@ def register_api_key_routes(mcp: FastMCP, store: SqliteApiKeyStore) -> None:
         # GET /api/v1/api_keys leaves a forensic row. Never logs key material.
         record_event(
             ACTION_API_KEY_LISTED,
-            target="api_key:*",
+            target="apikey:*",
             status="success",
             actor="user:operator",
             metadata={

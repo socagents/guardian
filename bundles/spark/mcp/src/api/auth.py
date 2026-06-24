@@ -95,7 +95,13 @@ def require_bearer(request: Request) -> JSONResponse | None:
         if store is not None:
             row = store.verify(token)
             if row is not None:
-                request.state.auth_principal = f"api_key:{row.id}"
+                # Actor/principal form is `apikey:<id>` (no underscore) across
+                # every tier — the agent middleware stamps `apikey:<id>`, the
+                # hook-store operator-ownership check matches on `apikey:`, and
+                # the forensic `?actor=` filter relies on a single form. Keep
+                # the underscore-free shape so a forwarded API-key principal is
+                # not split across two spellings in audit.db.
+                request.state.auth_principal = f"apikey:{row.id}"
                 request.state.api_key_scopes = row.scopes
                 return None
 

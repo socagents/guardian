@@ -217,7 +217,13 @@ def knowledge_search(
     if kb is None:
         return {"error": "knowledge base not initialized on this MCP runtime"}
     try:
-        hits = kb.search(query, kb_name=kb_name, category=category, tags=tags, limit=limit)
+        # #F-kb-double-search — this tool emits its OWN richer kb_searched row
+        # (mode=active + query_preview) below, so suppress kb_store.search()'s
+        # inner emission to avoid a duplicate mode=None row.
+        hits = kb.search(
+            query, kb_name=kb_name, category=category, tags=tags,
+            limit=limit, _emit_audit=False,
+        )
     except Exception as exc:
         return {"error": _friendly_embed_error(exc, "knowledge_search")}
     # #KB-F6/#KB-F7 — emit a dedicated kb_searched row (mode=active) so an
@@ -236,6 +242,10 @@ def knowledge_search(
             "tags": tags,
             "limit": limit,
             "query_chars": len(query),
+            # #F-kb-active-preview — bounded preview (≤200 chars) for parity
+            # with the passive ContextAssembler path (KB-F8). Never log the
+            # full query; it's an agent/operator turn fragment, not a secret.
+            "query_preview": query[:200],
             "hits_returned": len(hits),
         },
     )

@@ -18,7 +18,7 @@ def _req(principal):
 
 
 def test_require_mcp_token_refuses_api_key():
-    resp = mod._require_mcp_token(_req("api_key:abc123"))
+    resp = mod._require_mcp_token(_req("apikey:abc123"))
     assert resp is not None and resp.status_code == 403
 
 

@@ -873,6 +873,7 @@ def _wrap_with_instance(
         get_current_approval_bypass,
         get_current_trigger,
         record_event,
+        resolve_tool_actor,
         set_current_actor,
         reset_current_actor,
     )
@@ -1095,7 +1096,14 @@ def _wrap_with_instance(
                 target.config.get("trusted", False)
             )
             token = set_current_instance(_overrides_for(target))
-            actor_token = set_current_actor("agent")
+            # #F-actor-hardcode — attribute the tool_call to the REAL forwarded
+            # principal (operator / ^tool / API-key) when one is present, only
+            # falling back to "agent" for ambient/model-internal calls. Setting
+            # the contextvar to the resolved value (not a blanket "agent")
+            # avoids clobbering a forwarded principal for nested record_event
+            # calls inside fn.
+            tool_actor = resolve_tool_actor()
+            actor_token = set_current_actor(tool_actor)
             approval_id: str | None = None
             start = _time.perf_counter()
             status = "success"
@@ -1126,7 +1134,7 @@ def _wrap_with_instance(
                     ACTION_TOOL_CALL,
                     target=f"tool:{namespaced}",
                     status=status,
-                    actor="agent",
+                    actor=tool_actor,
                     duration_ms=duration_ms,
                     metadata=meta,
                 )
@@ -1150,7 +1158,10 @@ def _wrap_with_instance(
             target.config.get("trusted", False)
         )
         token = set_current_instance(_overrides_for(target))
-        actor_token = set_current_actor("agent")
+        # #F-actor-hardcode — see async_wrapper above: record the real
+        # forwarded principal when present, fall back to "agent" otherwise.
+        tool_actor = resolve_tool_actor()
+        actor_token = set_current_actor(tool_actor)
         approval_id: str | None = None
         start = _time.perf_counter()
         status = "success"
@@ -1180,7 +1191,7 @@ def _wrap_with_instance(
                 ACTION_TOOL_CALL,
                 target=f"tool:{namespaced}",
                 status=status,
-                actor="agent",
+                actor=tool_actor,
                 duration_ms=duration_ms,
                 metadata=meta,
             )
@@ -1220,7 +1231,11 @@ def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
     """
     import time as _time
 
-    from usecase.audit_log import set_current_actor, reset_current_actor
+    from usecase.audit_log import (
+        resolve_tool_actor,
+        set_current_actor,
+        reset_current_actor,
+    )
 
     def _keys(args: tuple, kwargs: dict[str, Any]) -> list[str]:
         keys = list(kwargs.keys())
@@ -1229,7 +1244,7 @@ def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
         return keys
 
     def _emit(args: tuple, kwargs: dict[str, Any], status: str,
-              error: str | None, start: float) -> None:
+              error: str | None, start: float, actor: str) -> None:
         try:
             from usecase.audit_log import ACTION_TOOL_CALL, record_event
             duration_ms = int((_time.perf_counter() - start) * 1000)
@@ -1249,7 +1264,9 @@ def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
                 ACTION_TOOL_CALL,
                 target=f"tool:{tool_name}",
                 status=status,
-                actor="agent",
+                # #F-actor-hardcode — attribute to the real forwarded principal
+                # (operator / ^tool / API-key) when present, else "agent".
+                actor=actor,
                 duration_ms=duration_ms,
                 metadata=meta,
             )
@@ -1262,7 +1279,11 @@ def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
     if inspect.iscoroutinefunction(fn):
         @functools.wraps(fn)
         async def async_builtin(*args: Any, **kwargs: Any) -> Any:
-            actor_token = set_current_actor("agent")
+            # #F-actor-hardcode — resolve the real forwarded principal once,
+            # bind it (not a blanket "agent") so nested record_event calls and
+            # the tool_call row both attribute correctly.
+            tool_actor = resolve_tool_actor()
+            actor_token = set_current_actor(tool_actor)
             start = _time.perf_counter()
             status = "success"
             error: str | None = None
@@ -1277,14 +1298,16 @@ def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
                 error = f"{type(exc).__name__}: {exc}"
                 raise
             finally:
-                _emit(args, kwargs, status, error, start)
+                _emit(args, kwargs, status, error, start, tool_actor)
                 reset_current_actor(actor_token)
 
         return async_builtin
 
     @functools.wraps(fn)
     def sync_builtin(*args: Any, **kwargs: Any) -> Any:
-        actor_token = set_current_actor("agent")
+        # #F-actor-hardcode — see async_builtin above.
+        tool_actor = resolve_tool_actor()
+        actor_token = set_current_actor(tool_actor)
         start = _time.perf_counter()
         status = "success"
         error: str | None = None
@@ -1299,7 +1322,7 @@ def _wrap_builtin(tool_name: str, fn: Callable) -> Callable:
             error = f"{type(exc).__name__}: {exc}"
             raise
         finally:
-            _emit(args, kwargs, status, error, start)
+            _emit(args, kwargs, status, error, start, tool_actor)
             reset_current_actor(actor_token)
 
     return sync_builtin

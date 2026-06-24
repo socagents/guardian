@@ -18,10 +18,10 @@ mutation gap.
 # Approval gates
 
 NONE of these tools are gated. They're pure reads: no audit-worthy
-state change, no destructive risk. Auditing happens at the underlying
-store layer where appropriate (e.g. kb.get_doc emits a
-`kb_doc_read` event; instances_get does NOT — connector configs are
-read-mostly already).
+state change, no destructive risk. Auditing happens at whichever layer
+is the OUTERMOST for that surface (e.g. the REST GET
+/api/v1/kbs/{name}/docs/{doc_id} handler emits a `kb_doc_read` event;
+instances_get does NOT — connector configs are read-mostly already).
 
 # Singleton lookup pattern
 

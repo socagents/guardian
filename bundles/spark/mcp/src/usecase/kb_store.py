@@ -530,13 +530,11 @@ class SqliteKnowledgeBase:
             ).fetchone()
         if row is None:
             return None
-        from usecase.audit_log import ACTION_KB_DOC_READ, record_event
-        record_event(
-            ACTION_KB_DOC_READ,
-            target=f"kb:{kb_name}:doc:{doc_id}",
-            status="success",
-            metadata={"kb_name": kb_name, "doc_id": doc_id},
-        )
+        # #F-kb-double-docread — the ONLY caller of get_doc() is the REST
+        # handler GET /api/v1/kbs/{name}/docs/{doc_id} (api/kb.py:get_kb_doc),
+        # which already emits a RICHER ACTION_KB_DOC_READ row (it has the doc
+        # title in scope). Emitting here too double-counted every doc read.
+        # The audit row now lives exactly once, at the REST layer.
         return self._row_to_doc(row)
 
     def list_docs(
@@ -623,13 +621,23 @@ class SqliteKnowledgeBase:
         limit: int = 5,
         offset: int = 0,
         min_score: float = 0.0,
+        _emit_audit: bool = True,
     ) -> list[tuple[KbDocument, float]]:
         """Cosine similarity search across one or all KBs.
 
-        Audit: every search records ACTION_KB_SEARCHED with the
-        kb_name + result count + top score, like memory_searched.
-        For SOC forensics, "what did the agent look up in the KB?"
-        is one of the most useful questions.
+        Audit: by default every search records ACTION_KB_SEARCHED with the
+        kb_name + result count + top score, like memory_searched. For SOC
+        forensics, "what did the agent look up in the KB?" is one of the
+        most useful questions.
+
+        #F-kb-double-search — callers that emit their OWN richer kb_searched
+        row at the outer layer (the active knowledge_search / xql_examples_
+        search agent tools, which add mode + query_preview) pass
+        `_emit_audit=False` so the search is recorded EXACTLY once — at the
+        outermost layer — instead of producing a second, mode=None inner row
+        that ~2x-inflated the count. The REST search handlers and the passive
+        ContextAssembler path leave the default (`True`): for them this IS the
+        outermost layer, so the inner emission is the only one.
         """
         if not isinstance(query, str) or not query.strip():
             return []
@@ -641,20 +649,25 @@ class SqliteKnowledgeBase:
         try:
             query_vec = self._embedder.embed(query)
         except Exception as exc:
-            from usecase.audit_log import ACTION_KB_SEARCHED, record_event
-            record_event(
-                ACTION_KB_SEARCHED,
-                target=f"kb:{kb_name or '_all_'}",
-                status="failure",
-                metadata={
-                    "kb_name": kb_name,
-                    "category": category,
-                    "query_chars": len(query),
-                    "limit": limit,
-                    "reason": "embed_failed",
-                    "error": f"{type(exc).__name__}: {exc}",
-                },
-            )
+            if _emit_audit:
+                from usecase.audit_log import ACTION_KB_SEARCHED, record_event
+                record_event(
+                    ACTION_KB_SEARCHED,
+                    target=f"kb:{kb_name or '_all_'}",
+                    status="failure",
+                    metadata={
+                        "kb_name": kb_name,
+                        "category": category,
+                        "query_chars": len(query),
+                        # #F-kb-active-preview — bounded preview (≤200 chars)
+                        # for parity with the active/passive paths. Never the
+                        # full query.
+                        "query_preview": query[:200],
+                        "limit": limit,
+                        "reason": "embed_failed",
+                        "error": f"{type(exc).__name__}: {exc}",
+                    },
+                )
             raise
         clauses, params = [], []
         if kb_name:
@@ -689,20 +702,24 @@ class SqliteKnowledgeBase:
         _start = max(0, offset)
         scored = scored[_start : _start + max(1, min(limit, 100))]
 
-        from usecase.audit_log import ACTION_KB_SEARCHED, record_event
-        record_event(
-            ACTION_KB_SEARCHED,
-            target=f"kb:{kb_name or '_all_'}",
-            status="success",
-            metadata={
-                "kb_name": kb_name,
-                "category": category,
-                "query_chars": len(query),
-                "limit": limit,
-                "result_count": len(scored),
-                "top_score": scored[0][1] if scored else None,
-            },
-        )
+        if _emit_audit:
+            from usecase.audit_log import ACTION_KB_SEARCHED, record_event
+            record_event(
+                ACTION_KB_SEARCHED,
+                target=f"kb:{kb_name or '_all_'}",
+                status="success",
+                metadata={
+                    "kb_name": kb_name,
+                    "category": category,
+                    "query_chars": len(query),
+                    # #F-kb-active-preview — bounded preview (≤200 chars) for
+                    # parity with the active/passive paths. Never the full query.
+                    "query_preview": query[:200],
+                    "limit": limit,
+                    "result_count": len(scored),
+                    "top_score": scored[0][1] if scored else None,
+                },
+            )
         return scored
 
     # ─── Mappers ───────────────────────────────────────────────

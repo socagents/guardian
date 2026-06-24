@@ -33,11 +33,10 @@ That's exactly the same pattern actor attribution already uses
 from __future__ import annotations
 
 import logging
-from typing import Awaitable, Callable
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.datastructures import Headers
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from usecase.audit_log import (
     reset_current_actor,
@@ -107,19 +106,43 @@ CHAIN_ID_HEADER_NAME = "X-Guardian-Chain-Id"
 MAX_CHAIN_ID_LEN = 128
 
 
-class TriggerContextMiddleware(BaseHTTPMiddleware):
-    """Read X-Guardian-Trigger + X-Guardian-Approval-Bypass from the
-    request, set the contextvars for the request lifetime, reset on
-    exit. Pairs with audit_log's record() (trigger) and
+class TriggerContextMiddleware:
+    """Read X-Guardian-Trigger / -Actor / -Chain-Id / -Approval-Bypass from
+    the request, set the contextvars for the request lifetime, reset on exit.
+    Pairs with audit_log's record() (trigger/actor/chain_id) and
     _approval_gate.gate_and_execute (bypass).
+
+    #F-ctxvar — this is a PURE ASGI middleware (``async def __call__(scope,
+    receive, send)``), deliberately NOT a ``BaseHTTPMiddleware``. The old
+    BaseHTTPMiddleware ran its ``dispatch`` in a SEPARATE anyio task from the
+    endpoint, so contextvars it set were invisible to the endpoint task — and
+    in particular to FastMCP's streamable-HTTP tool dispatcher, which captures
+    the current context when it spawns the tool-execution task. On the
+    ``/api/agent/tool/call`` (``^tool``) path that meant ``trigger`` and
+    ``chain_id`` intermittently dropped to NULL on the tool_call rows (the
+    normal chat path was unaffected). A pure ASGI middleware sets the
+    contextvars in the SAME task that then ``await``s the downstream app, so
+    the context FastMCP captures already carries them and they survive to
+    ``record_event``. (Documented empirically in api/skills.py's module
+    docstring; this fixes the propagation at the source instead of working
+    around it per-route.)
     """
 
-    async def dispatch(
-        self,
-        request: Request,
-        call_next: Callable[[Request], Awaitable[Response]],
-    ) -> Response:
-        raw = request.headers.get(HEADER_NAME)
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
+        # Only HTTP requests carry these headers; pass lifespan/websocket
+        # scopes straight through untouched.
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = Headers(scope=scope)
+
+        raw = headers.get(HEADER_NAME)
         token = None
         if raw:
             trigger = raw.strip()[:MAX_TRIGGER_LEN] or None
@@ -128,7 +151,7 @@ class TriggerContextMiddleware(BaseHTTPMiddleware):
 
         # Principal attribution (set by the Next.js middleware post-auth).
         actor_token = None
-        actor_raw = request.headers.get(ACTOR_HEADER_NAME)
+        actor_raw = headers.get(ACTOR_HEADER_NAME)
         if actor_raw:
             actor = actor_raw.strip()[:MAX_ACTOR_LEN] or None
             if actor:
@@ -138,7 +161,7 @@ class TriggerContextMiddleware(BaseHTTPMiddleware):
         # mints one per turn and forwards it on each tool dispatch; we
         # stamp it so the turn's tool_call audit rows share the id.
         chain_token = None
-        chain_raw = request.headers.get(CHAIN_ID_HEADER_NAME)
+        chain_raw = headers.get(CHAIN_ID_HEADER_NAME)
         if chain_raw:
             chain_id = chain_raw.strip()[:MAX_CHAIN_ID_LEN] or None
             if chain_id:
@@ -148,7 +171,7 @@ class TriggerContextMiddleware(BaseHTTPMiddleware):
         # Logged at INFO when active so operators can see post-hoc that
         # an approval was skipped due to bypass policy.
         bypass_token = None
-        bypass_raw = request.headers.get(BYPASS_HEADER_NAME, "")
+        bypass_raw = headers.get(BYPASS_HEADER_NAME, "")
         if bypass_raw and bypass_raw.strip().lower() in _BYPASS_TRUTHY:
             bypass_token = set_current_approval_bypass(True)
             logger.info(
@@ -157,7 +180,7 @@ class TriggerContextMiddleware(BaseHTTPMiddleware):
             )
 
         try:
-            return await call_next(request)
+            await self.app(scope, receive, send)
         finally:
             if token is not None:
                 reset_current_trigger(token)

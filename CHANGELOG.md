@@ -10,6 +10,16 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.82] (2026-06-25) — *Audit attribution + correlation reliability (from the live interface-coverage pass)*
+
+- **Tool calls attribute to the real principal.** An operator `^tool` dispatch or API-key-driven tool call previously recorded its audit row as `agent`, discarding the forwarded identity. The audit now records the true principal when one was forwarded, and falls back to `agent` only for genuinely model-internal calls — so "who ran this tool" is answerable.
+- **Trigger + chain correlation no longer drop on the `^tool` path.** The request-context middleware was the kind that runs in a separate task, so the operator-direct trigger and the turn `chain_id` intermittently vanished from `^tool` tool-call audit rows. It's now a same-task (ASGI) middleware, so those survive end-to-end on every dispatch path.
+- **Consistent principal format.** The API-key principal was recorded two ways (`apikey:<id>` vs `api_key:<id>`) across tiers, so a forensic filter missed half the rows — and the mismatched form actually broke the hook-delete owner check for API-key operators. Normalized to one form everywhere.
+- **Knowledge-base audit hygiene.** A single KB doc read emitted two `kb_doc_read` rows and a search emitted two `kb_searched` rows (double-counting); each now emits once, and the active/REST search rows carry the same bounded query preview as the passive path.
+- **Hook loopback fix.** A loopback hook fire whose payload omitted the inner event field was silently dropped; it now defaults to the dispatched event and matches.
+
+*Verification: the live #57–72 interface-coverage run (16 sections, 517 stories) passed 289/289 executed with zero hard failures; these are the residual refinements it surfaced (false-positives excluded after re-checking against shipped code).*
+
 ## [v0.2.81] (2026-06-24) — *Hook hardening + audit chain correlation (final harness-coverage features)*
 
 - **Hook deletes are origin-guarded.** Hooks now record who created them; a plugin- or system-contributed hook can no longer be deleted (or content-edited) by an operator — only its enabled toggle stays open. Operator-created and pre-existing hooks are unaffected.

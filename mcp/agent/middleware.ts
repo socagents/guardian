@@ -162,7 +162,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       // #API-F7 — invalid/revoked key probing now leaves a trace. Key did
       // not authenticate → actor anonymous. Log only the prefix.
       postAudit("api_key_auth_failed", {
-        target: `api_key:${apiKey.slice(0, 20)}`,
+        target: `apikey:${apiKey.slice(0, 20)}`,
         actor: "anonymous",
         metadata: { reason: keyResult.reason, path: pathname, method: request.method },
       });

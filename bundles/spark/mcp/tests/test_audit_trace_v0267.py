@@ -29,7 +29,11 @@ class _StubKb:
         # the test lists ("cortex-docs") so validation passes.
         return {"cortex-docs": {"doc_count": len(self._docs)}}
 
-    def search(self, query, kb_name=None, category=None, tags=None, limit=5):
+    def search(self, query, kb_name=None, category=None, tags=None, limit=5,
+               _emit_audit=True):
+        # #F-kb-double-search — the active knowledge_search tool now passes
+        # _emit_audit=False so the inner store emission is suppressed (the tool
+        # emits its own richer mode=active row). Accept + ignore the flag.
         return [(d, 0.9) for d in self._docs]
 
 
@@ -66,11 +70,17 @@ def test_knowledge_search_emits_kb_searched_active(monkeypatch):
     assert out["count"] == 1
 
     rows = [kw for action, kw in calls if action == audit_mod.ACTION_KB_SEARCHED]
+    # #F-kb-double-search — exactly ONE kb_searched row: the active tool emits
+    # its own (the inner store emission is suppressed via _emit_audit=False),
+    # so no duplicate mode=None inner row.
     assert len(rows) == 1
     assert rows[0]["metadata"]["mode"] == "active"
-    # query content is never logged — only its length
     assert rows[0]["metadata"]["query_chars"] == len("phishing iocs")
-    assert "phishing" not in str(rows[0])
+    # #F-kb-active-preview — a BOUNDED preview (≤200 chars) is now logged for
+    # parity with the passive ContextAssembler path; the full query is never
+    # logged unbounded.
+    assert rows[0]["metadata"]["query_preview"] == "phishing iocs"
+    assert len(rows[0]["metadata"]["query_preview"]) <= 200
 
 
 def test_knowledge_list_uninitialized_emits_nothing(monkeypatch):
@@ -101,7 +111,7 @@ def test_api_key_used_audit(tmp_path):
 
     used = [kw for action, kw in captured if action == "api_key_used"]
     assert len(used) == 1
-    assert used[0]["target"].startswith("api_key:")
+    assert used[0]["target"].startswith("apikey:")
     assert used[0]["metadata"]["label"] == "smoke"
 
 

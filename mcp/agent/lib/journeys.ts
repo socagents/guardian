@@ -491,7 +491,7 @@ export const JOURNEYS: Journey[] = [
     expectedResult:
       "The API-key bearer authenticates /api/chat + /api/agent/* per its scope; credential routes (providers/instances/api-keys) 403 even with agent:*; revocation takes effect within the 30s cache TTL.",
     verifyVia: [
-      "GET /api/agent/audit?limit=5 — actor shows api_key:<id>, not a user session.",
+      "GET /api/agent/audit?limit=5 — actor shows apikey:<id>, not a user session.",
       "/api-keys table shows the key's last_used_at bumping on each call.",
     ],
     related: ["get-oriented"],

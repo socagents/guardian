@@ -120,7 +120,7 @@ def test_audit_records_create_and_revoke(tmp_path) -> None:
     actions = [e["action"] for e in spy.events]
     assert actions == ["api_key_created", "api_key_revoked"]
     targets = [e["target"] for e in spy.events]
-    assert all(t and t.startswith("api_key:") for t in targets)
+    assert all(t and t.startswith("apikey:") for t in targets)
     assert spy.events[0]["metadata"]["scopes"] == ["audit:read"]
 
 

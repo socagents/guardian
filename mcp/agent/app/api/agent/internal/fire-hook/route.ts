@@ -64,6 +64,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // #F-hook-event — matchesHook() discriminates on `payload.event`
+  // (hooks.ts: `hook.event !== payload.event`). MCP-side loopback callers
+  // dispatch with the event as the TOP-LEVEL field and don't always echo it
+  // inside `payload`, so a payload missing the inner `event` made
+  // `payload.event` undefined → EVERY hook silently failed to match and the
+  // fire was dropped with no trace. Default the inner event to the validated
+  // top-level one so a payload without an explicit `event` still matches the
+  // dispatched event. (An explicit inner `event` is left untouched.)
+  if (
+    (payload as Partial<HookPayload>).event === undefined ||
+    (payload as Partial<HookPayload>).event === null
+  ) {
+    (payload as { event: HookEvent }).event = event as HookEvent;
+  }
+
   let result: HookAggregateResult;
   try {
     result = await dispatchHooks(event as HookEvent, payload);
