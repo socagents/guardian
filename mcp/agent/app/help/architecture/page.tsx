@@ -5085,6 +5085,43 @@ Cookie: guardian_session=<32B random>; HttpOnly; Secure; SameSite=Strict;
  </p>
  </SubSection>
 
+ <SubSection icon="fingerprint" title="Actor stamp + proxy admission trail">
+ <p>
+ Once a request is admitted, the middleware stamps two headers
+ onto the forwarded request before it reaches any route or the
+ MCP proxy:
+ </p>
+ <ul className="list-disc pl-6 space-y-1.5">
+ <li>
+ <Code>x-guardian-actor</Code> — the resolved caller
+ (<Code>user:operator</Code> for a session, or{" "}
+ <Code>apikey:&lt;keyId&gt;</Code> for an API key). MCP-side
+ audit rows attribute the action to this actor.
+ </li>
+ <li>
+ <Code>x-request-id</Code> — a correlation id (Web Crypto{" "}
+ <Code>randomUUID</Code>, Edge-safe) generated when the caller
+ didn&apos;t supply one, so a proxy request can be tied to the
+ MCP-side actions it triggered.
+ </li>
+ </ul>
+ <p>
+ For state-changing requests only (<Code>POST</Code>,{" "}
+ <Code>PUT</Code>, <Code>PATCH</Code>, <Code>DELETE</Code>), the
+ middleware also fires a fire-and-forget{" "}
+ <Code>proxy_request_admitted</Code> audit event
+ (method + path + actor + request id) via{" "}
+ <Code>postAudit()</Code> → MCP <Code>POST /api/v1/audit</Code>{" "}
+ (loopback, <Code>MCP_TOKEN</Code> bearer, never blocks the
+ request). This gives the proxy tier its own mutation trail
+ independent of whatever per-action audit the downstream MCP
+ tool records. <Code>GET</Code>/<Code>HEAD</Code> and the
+ internal-<Code>MCP_TOKEN</Code> service path are excluded so
+ high-rate polling (e.g. the 250&nbsp;ms approval-card poll)
+ doesn&apos;t flood the forensic log.
+ </p>
+ </SubSection>
+
  <SubSection icon="login" title="Login flow">
  <p>
  First boot: container starts, entrypoint calls{" "}

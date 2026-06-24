@@ -740,6 +740,16 @@ audit:
     # AUDIT_RETENTION_DAYS; off by default). Emitted so deletion of forensic
     # history is itself traced.
     - "audit_reaped"
+    # #KB-F10 — embedding-model drift: a KB entry's pre-baked vector was
+    # produced by a different model than the live query path, forcing a
+    # re-embed at query time. Emitted ONCE per process (the counter
+    # guardian_kb_embed_mismatch_total carries the full per-query volume).
+    - "kb_embed_mismatch"
+    # #API-F8 — proxy-tier mutation trail: every admitted state-changing
+    # request (POST/PUT/PATCH/DELETE) through the Next.js middleware leaves a
+    # coarse trace (method + path + actor + request_id). GETs are excluded to
+    # keep high-rate polling out of the log.
+    - "proxy_request_admitted"
 
 notifications:
   topics:

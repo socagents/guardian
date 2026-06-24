@@ -10,6 +10,13 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.72] (2026-06-24) — *Honest verdict push-back, observable embedding drift, reliable approval cards, proxy audit trail*
+
+- **Pushing a verdict to XSOAR now tells you the truth when part of it fails.** `push_verdict_to_xsoar` always reported success even when the war-room entry landed but the evidence tag or the timeline log failed. It now returns a per-step breakdown and reports overall failure — with `partial: true` when the verdict itself reached XSOAR but a secondary step didn't — so the operator knows exactly what landed.
+- **A misbaked knowledge-base embedding model is now visible.** When a KB's pre-computed vectors were produced by a different embedding model than the running one, Guardian silently re-embedded every document live on every boot — a recurring, invisible cost buried in hundreds of log lines. That drift now increments a metric (`guardian_kb_embed_mismatch_total`) and emits a single audit event (`kb_embed_mismatch`) per process, pointing at the re-bake needed to stop it.
+- **The inline approval card no longer occasionally fails to appear.** A gated tool whose approval resolved unusually fast — or a little slower than the old six-second watch window — could leave the chat without a card. Detection is now status-agnostic and watches for thirty seconds, and an already-resolved approval renders in its final state instead of a stuck "pending" card.
+- **Every state-changing request through the agent now leaves an audit trace.** Writes (POST/PUT/PATCH/DELETE) admitted by the proxy tier previously had no record of their own; they now emit a `proxy_request_admitted` audit event (method, path, actor) and carry a correlation `x-request-id` header so a proxy request can be tied to the MCP-side actions it triggered. High-rate reads are excluded so the log stays useful.
+
 ## [v0.2.71] (2026-06-24) — *Skills: creatable categories, plugin skills in jobs, edits survive upgrades*
 
 - **Creating/importing a skill in any of the four categories works.** The Create and Import dialogs offered foundation/scenarios/validation/workflows, but the backend only accepted foundation/workflows — so importing a plain Markdown file (which defaults to *scenarios*) or creating a scenarios/validation skill always failed with an "invalid category" error. The backend now accepts all four.

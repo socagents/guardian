@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.72",
+    date: "2026-06-24",
+    title: "Honest verdict push-back, observable embedding drift, reliable approval cards, proxy audit trail.",
+    highlights: [
+      "Pushing a verdict to XSOAR now reports the truth on partial failure. push_verdict_to_xsoar always returned ok even when the war-room entry landed but the evidence tag or timeline log failed; it now returns a per-step breakdown and reports overall failure (partial: true when the verdict reached XSOAR but a secondary step didn't).",
+      "A misbaked knowledge-base embedding model is now observable. When a KB's pre-computed vectors didn't match the running embedder, Guardian silently re-embedded every doc on every boot (recurring cost). That drift now increments guardian_kb_embed_mismatch_total and emits one kb_embed_mismatch audit event per process.",
+      "The inline approval card no longer occasionally fails to appear. Detection is now status-agnostic and watches for 30s (was 6s); an approval that resolved before the first poll renders in its final state instead of a stuck 'pending' card.",
+      "Every state-changing request through the agent now leaves an audit trace. Writes (POST/PUT/PATCH/DELETE) admitted by the proxy emit a proxy_request_admitted audit event and carry a correlation x-request-id; high-rate reads are excluded.",
+    ],
+  },
+  {
     version: "0.2.71",
     date: "2026-06-24",
     title: "Skills: creatable categories, plugin skills in jobs, edits survive upgrades.",

@@ -201,3 +201,49 @@ def test_kb_embed_author_then_load_zero_calls(tmp_path: Path) -> None:
     )
     assert counts["gen"]["insert"] == 1
     assert spy.calls == 0
+
+
+# ── #KB-F10 — embedding-model drift is observable ─────────────────────────
+
+
+def test_embed_mismatch_increments_counter_and_audits_once(tmp_path: Path) -> None:
+    """A baked-model/runtime-model mismatch forces a live re-embed on EVERY
+    doc and EVERY boot (recurring Vertex cost). KB-F10 makes that drift
+    observable: a cumulative counter (per re-embed) + ONE audit row per
+    process (guarded — a per-doc row would flood audit.db with ~700 lines)."""
+    from usecase.metrics_registry import MetricsRegistry, metrics_registry, set_metrics_registry
+    from usecase import audit_log as audit_mod
+
+    captured: list[tuple[str, dict]] = []
+
+    class _Audit:
+        def record(self, action, **kw):
+            captured.append((action, kw))
+
+    prev_reg = metrics_registry()
+    prev_audit = audit_mod._audit  # noqa: SLF001 — test swaps the singleton
+    set_metrics_registry(MetricsRegistry())
+    audit_mod.set_audit_log(_Audit())
+    try:
+        spy = SpyEmbedder(dims=4, model_id="m1")
+        kb = SqliteKnowledgeBase(data_root=tmp_path, embedder=spy)
+        # Two docs whose baked vectors declare the WRONG model → both re-embed.
+        for doc_id in ("d1", "d2"):
+            kb.upsert(
+                kb_name="k", doc_id=doc_id, content=f"body {doc_id}", source_hash=doc_id,
+                precomputed_embedding=[0.1, 0.2, 0.3, 0.4], precomputed_model="OTHER-MODEL",
+            )
+        assert spy.calls == 2, "both wrong-model vectors must re-embed live"
+
+        counter = metrics_registry().get("guardian_kb_embed_mismatch_total")
+        assert counter is not None
+        # No labels → the counter's value lives under the empty-tuple key.
+        assert counter._values.get((), 0.0) == 2.0  # noqa: SLF001
+
+        rows = [kw for action, kw in captured if action == "kb_embed_mismatch"]
+        assert len(rows) == 1, "audit row must fire ONCE per process, not per doc"
+        assert rows[0]["metadata"]["doc_model"] == "OTHER-MODEL"
+        assert rows[0]["metadata"]["runtime_model"] == "m1"
+    finally:
+        set_metrics_registry(prev_reg)
+        audit_mod.set_audit_log(prev_audit)

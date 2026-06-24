@@ -291,6 +291,46 @@ class SqliteKnowledgeBase:
                 where, precomputed_model, runtime_model,
                 len(precomputed), self._embedder.dims,
             )
+            # #KB-F10 — a baked-model vs runtime-model mismatch re-embeds every
+            # doc on EVERY boot (recurring Vertex bill), and the per-doc
+            # warning above is easy to miss in ~700 log lines. Count every
+            # live re-embed (cumulative metric), and emit ONE loud audit row
+            # per process (guarded — not per-doc, which would flood audit.db).
+            try:
+                from usecase.metrics_registry import metrics_registry
+                _reg = metrics_registry()
+                if _reg is not None:
+                    _reg.counter(
+                        "guardian_kb_embed_mismatch_total",
+                        "KB docs re-embedded live because the baked embedding "
+                        "model/dims didn't match the runtime embedder (KB-F10).",
+                    ).inc()
+            except Exception:  # pragma: no cover - metric best-effort
+                pass
+            if not getattr(self, "_embed_mismatch_audited", False):
+                self._embed_mismatch_audited = True
+                try:
+                    from usecase.audit_log import record_event
+                    record_event(
+                        "kb_embed_mismatch",
+                        target="kb:embed",
+                        status="warning",
+                        actor="system",
+                        metadata={
+                            "first_seen": where,
+                            "doc_model": precomputed_model,
+                            "runtime_model": runtime_model,
+                            "precomputed_dims": len(precomputed),
+                            "runtime_dims": self._embedder.dims,
+                            "note": (
+                                "pre-computed KB vectors not trusted; re-embedding "
+                                "live on every boot (recurring cost). Re-bake the KB "
+                                "for this model or align the Vertex model_id/dims."
+                            ),
+                        },
+                    )
+                except Exception:  # pragma: no cover - audit best-effort
+                    pass
         embedding = self._embedder.embed(content)
         if len(embedding) != self._embedder.dims:
             raise RuntimeError(

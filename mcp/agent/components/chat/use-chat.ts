@@ -1139,8 +1139,25 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
               risk_tier?: "soft" | "destructive" | "credential" | "unknown";
               created_at?: string;
               tool_call_id?: string;
+              // #CHAT-F12 — the chat route now forwards the bus row's real
+              // status (the listing is status-agnostic, so a row that resolved
+              // before the first poll tick is still surfaced). Undefined from
+              // older routes → treat as pending (prior behavior).
+              status?: string;
             } = JSON.parse(event.data);
             if (!data.approval_id || !data.tool) break;
+            // #CHAT-F12 — normalize the bus status (pending/approved/denied/
+            // timeout/expired) into the card's tri-state. Anything terminal &
+            // non-approved (denied/timeout/expired) renders as "denied"; only
+            // an explicit "approved" shows approved; everything else pending.
+            const cardStatus: "pending" | "approved" | "denied" =
+              data.status === "approved"
+                ? "approved"
+                : data.status === "denied" ||
+                    data.status === "timeout" ||
+                    data.status === "expired"
+                  ? "denied"
+                  : "pending";
             setPendingApprovals((prev) => {
               // Defensive: don't double-add if the chat-route polled
               // the same row twice (e.g. transient network blip).
@@ -1152,7 +1169,7 @@ export function useChat(options?: UseChatOptions): UseChatReturn {
                   tool: data.tool!,
                   description: "",
                   arguments: data.args ?? {},
-                  status: "pending",
+                  status: cardStatus,
                   riskTier:
                     data.risk_tier === "soft" ||
                     data.risk_tier === "destructive" ||

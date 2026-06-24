@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import os
 import re
 import urllib.request
@@ -31,6 +32,8 @@ from usecase.investigation_store import (
     investigation_store,
 )
 from usecase.tool_dispatcher import get_tool_dispatcher
+
+logger = logging.getLogger("Guardian MCP")
 
 _SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
@@ -655,7 +658,13 @@ async def push_verdict_to_xsoar(issue_id: str, instance: str | None = None) -> d
     if not isinstance(entry, dict) or not entry.get("ok"):
         return {"error": f"xsoar_add_entry did not succeed for incident {issue.source_ref}", "raw": entry}
 
+    # #INV-F3 — track each sub-step so a partial failure (entry landed but
+    # evidence/timeline failed) is surfaced as ok:False + partial:True with a
+    # per-step breakdown, instead of silently returning ok:True. The war-room
+    # entry IS the verdict landing in XSOAR; the evidence tag + timeline are
+    # secondary, so we report them honestly rather than swallow their failure.
     entry_id = entry.get("entry_id")
+    steps: dict[str, bool] = {"add_entry": True}
     evidence = None
     if entry_id:
         try:
@@ -666,20 +675,36 @@ async def push_verdict_to_xsoar(issue_id: str, instance: str | None = None) -> d
             )
         except Exception as e:
             evidence = {"ok": False, "error": str(e)}
+        steps["save_evidence"] = bool(isinstance(evidence, dict) and evidence.get("ok"))
 
-    # Record the pushback on the Issue timeline (best-effort — the write already
-    # landed; a timeline-log failure must not fail the tool).
+    # Record the pushback on the Issue timeline (the war-room write already
+    # landed; a timeline-log failure is reported in steps, not swallowed).
     try:
         issue_add_event(
             issue_id, type="pushback",
             content=(f"Pushed structured verdict ({issue.verdict}) to XSOAR incident "
                      f"{issue.source_ref} as war-room evidence (entry {entry_id})."),
         )
-    except Exception:
-        pass
+        steps["timeline_event"] = True
+    except Exception as e:
+        logger.warning(
+            "push_verdict_to_xsoar: timeline event failed for issue %s: %s",
+            issue_id, e,
+        )
+        steps["timeline_event"] = False
 
-    return {"ok": True, "issue_id": issue_id, "incident_id": issue.source_ref,
-            "entry_id": entry_id, "evidence": evidence}
+    all_ok = all(steps.values())
+    return {
+        "ok": all_ok,
+        # partial = the verdict reached XSOAR (add_entry ok) but a secondary
+        # step failed; the caller should surface "landed, with caveats".
+        "partial": (not all_ok) and steps.get("add_entry", False),
+        "steps": steps,
+        "issue_id": issue_id,
+        "incident_id": issue.source_ref,
+        "entry_id": entry_id,
+        "evidence": evidence,
+    }
 
 
 def issue_get(issue_id: str) -> dict[str, Any]:

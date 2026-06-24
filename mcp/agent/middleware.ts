@@ -93,6 +93,29 @@ const EXEMPT_PATHS = new Set<string>([
 function nextWithActor(request: NextRequest, actor: string): NextResponse {
   const headers = new Headers(request.headers);
   headers.set("x-guardian-actor", actor);
+  // #API-F8 — stamp a trace id on every admitted request (free, Edge-safe via
+  // Web Crypto) so MCP-side logs/audit rows can be correlated to the proxy
+  // request that produced them. Respect an inbound id if the caller set one.
+  if (!headers.get("x-request-id")) {
+    headers.set("x-request-id", crypto.randomUUID());
+  }
+  // #API-F8 — record an admission trace for STATE-CHANGING requests only
+  // (POST/PUT/PATCH/DELETE). Fire-and-forget; GETs are excluded so high-rate
+  // polling (e.g. the 250ms approval poll) doesn't flood audit.db. This gives
+  // a per-mutation proxy-tier trail (method + path + actor) the tier lacked.
+  const method = request.method.toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+    postAudit("proxy_request_admitted", {
+      target: `route:${request.nextUrl.pathname}`,
+      status: "success",
+      actor,
+      metadata: {
+        method,
+        path: request.nextUrl.pathname,
+        request_id: headers.get("x-request-id"),
+      },
+    });
+  }
   return NextResponse.next({ request: { headers } });
 }
 

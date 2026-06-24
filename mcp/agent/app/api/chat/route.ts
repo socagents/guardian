@@ -2133,10 +2133,16 @@ async function fetchPendingApprovalIds(
   sessionId?: string,
 ): Promise<Set<string>> {
   try {
-    const params = new URLSearchParams({ status: 'pending' });
+    // #CHAT-F12 — snapshot ALL of this chat's approval ids (not just
+    // status=pending). The poll below matches rows NOT in this snapshot, so
+    // an approval that's resolved between the snapshot and the first poll
+    // tick is still detected (it's still absent from the snapshot). Scoping
+    // by origin=chat:<sessionId> keeps the listing bounded to this session.
+    const params = new URLSearchParams();
     if (sessionId) params.set('origin', `chat:${sessionId}`);
+    const qs = params.toString();
     const resp = await callMcpServer<{ approvals?: ApprovalRow[] }>(
-      `/api/v1/approvals?${params.toString()}`,
+      `/api/v1/approvals${qs ? `?${qs}` : ''}`,
       { method: 'GET', timeoutMs: 5000 },
     );
     return new Set((resp.approvals ?? []).map((a) => a.id));
@@ -2169,16 +2175,23 @@ async function pollForNewApproval({
    *  in the wrong chat thread. */
   sessionId?: string;
 }): Promise<void> {
-  const MAX_POLL_MS = 6_000; // ~24 polls. The MCP gate would fire by then.
+  // #CHAT-F12 — was 6s, too tight: a row that stayed pending a little longer
+  // (or the gate firing slightly late) could exceed the window and the card
+  // never rendered. 30s gives ample headroom; the loop still exits the instant
+  // the tool call resolves (signal.aborted) so this isn't wasted time.
+  const MAX_POLL_MS = 30_000;
   const POLL_INTERVAL_MS = 250;
   const deadline = Date.now() + MAX_POLL_MS;
   let found = false;
-  // v0.1.26: server-side origin filter when sessionId is known.
-  // Falls back to unfiltered ?status=pending for backwards-compat
-  // (older callers that don't have a session in scope).
-  const params = new URLSearchParams({ status: 'pending' });
+  // #CHAT-F12 — status-agnostic listing scoped to this chat's origin. The
+  // snapshot diff (rows NOT seen before this turn) identifies the new row
+  // regardless of whether it's still pending or already resolved, closing the
+  // resolve-before-first-poll race. onFound forwards the row's status so an
+  // already-resolved card renders in its terminal state.
+  const params = new URLSearchParams();
   if (sessionId) params.set('origin', `chat:${sessionId}`);
-  const url = `/api/v1/approvals?${params.toString()}`;
+  const qs = params.toString();
+  const url = `/api/v1/approvals${qs ? `?${qs}` : ''}`;
   while (!signal.aborted && Date.now() < deadline && !found) {
     try {
       const resp = await callMcpServer<{ approvals?: ApprovalRow[] }>(
@@ -5121,6 +5134,12 @@ export async function POST(request: NextRequest) {
                     args: toolArgs,
                     risk_tier: row.risk_tier ?? classifyRiskTier(toolName),
                     created_at: row.created_at,
+                    // #CHAT-F12 — the listing is now status-agnostic, so a row
+                    // that resolved before the first poll tick is still found.
+                    // Forward its real status so the client renders a resolved
+                    // card in its terminal state instead of a stuck "pending"
+                    // one (the trailing tool_result still reconciles it).
+                    status: row.status,
                   });
                 },
               });

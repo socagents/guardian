@@ -124,3 +124,59 @@ def test_push_connector_error_surfaces(store, monkeypatch):
     out = asyncio.run(it.push_verdict_to_xsoar(iss.id))
     assert "error" in out
     assert "INC-42" in out["error"]
+
+
+# ── #INV-F3 — partial failures are surfaced, not swallowed ────────────────
+
+
+def test_push_partial_when_save_evidence_returns_not_ok(store, monkeypatch):
+    """The war-room entry landed but the evidence tag failed. Before INV-F3
+    the tool returned ok:True regardless; now it must report ok:False +
+    partial:True with a per-step breakdown so the operator knows the verdict
+    reached XSOAR but the evidence pin didn't."""
+    class EvidenceFails:
+        def __init__(self):
+            self.calls = []
+        async def __call__(self, name, kwargs):
+            self.calls.append((name, kwargs))
+            if name == "xsoar_add_entry":
+                return {"ok": True, "entry_id": "ENTRY-1", "incident_id": kwargs["incident_id"]}
+            if name == "xsoar_save_evidence":
+                return {"ok": False, "error": "evidence API 500"}
+            raise KeyError(name)
+
+    fake = EvidenceFails()
+    monkeypatch.setattr(it, "get_tool_dispatcher", lambda: fake)
+    iss = _resolved_issue(store)
+
+    out = asyncio.run(it.push_verdict_to_xsoar(iss.id))
+
+    assert out["ok"] is False, "a failed secondary step must NOT report overall ok"
+    assert out["partial"] is True, "add_entry landed → partial, not a hard error"
+    assert out["steps"]["add_entry"] is True
+    assert out["steps"]["save_evidence"] is False
+    # the verdict still reached XSOAR — incident + entry are reported
+    assert out["incident_id"] == "INC-42"
+    assert out["entry_id"] == "ENTRY-1"
+
+
+def test_push_partial_when_save_evidence_raises(store, monkeypatch):
+    """A raising evidence call is caught and reported in steps (not swallowed,
+    not fatal — the entry already landed)."""
+    class EvidenceRaises:
+        async def __call__(self, name, kwargs):
+            if name == "xsoar_add_entry":
+                return {"ok": True, "entry_id": "ENTRY-7", "incident_id": kwargs["incident_id"]}
+            if name == "xsoar_save_evidence":
+                raise RuntimeError("connector socket reset")
+            raise KeyError(name)
+
+    monkeypatch.setattr(it, "get_tool_dispatcher", lambda: EvidenceRaises())
+    iss = _resolved_issue(store)
+
+    out = asyncio.run(it.push_verdict_to_xsoar(iss.id))
+
+    assert out["ok"] is False
+    assert out["partial"] is True
+    assert out["steps"]["save_evidence"] is False
+    assert isinstance(out["evidence"], dict) and out["evidence"]["ok"] is False
