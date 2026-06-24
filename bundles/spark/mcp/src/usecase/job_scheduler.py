@@ -1601,6 +1601,20 @@ class CroniterJobScheduler:
                     return candidate.read_text(encoding="utf-8")
                 except OSError:
                     return None
+        # #SKILL-F14 — plugin skills have the canonical name "<vendor>.<stem>"
+        # and live at plugins/<vendor>/<stem>.md (vendor names use hyphens, so
+        # the first dot is the vendor/stem delimiter). Without this, a job
+        # bound to a plugin skill fell through and ran UNBOUND — the "/" glob
+        # fallback below never matched a dotted name.
+        if "." in clean:
+            vendor, _, stem = clean.partition(".")
+            if vendor and stem:
+                candidate = skills_dir / "plugins" / vendor / f"{stem}.md"
+                if candidate.is_file():
+                    try:
+                        return candidate.read_text(encoding="utf-8")
+                    except OSError:
+                        return None
         # Fallback: glob in case the name was already category-qualified
         # (e.g. "scenarios/ransomware_double_extortion") or a different
         # naming pattern.

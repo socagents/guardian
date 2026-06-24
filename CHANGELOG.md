@@ -10,6 +10,12 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.71] (2026-06-24) — *Skills: creatable categories, plugin skills in jobs, edits survive upgrades*
+
+- **Creating/importing a skill in any of the four categories works.** The Create and Import dialogs offered foundation/scenarios/validation/workflows, but the backend only accepted foundation/workflows — so importing a plain Markdown file (which defaults to *scenarios*) or creating a scenarios/validation skill always failed with an "invalid category" error. The backend now accepts all four.
+- **A scheduled job bound to a plugin skill now actually uses it.** The job runner couldn't resolve plugin-contributed skills (their `vendor.skill` name didn't map to the plugin's folder), so the job silently ran without the skill attached. Plugin skills now resolve correctly.
+- **Your edits to built-in skills survive upgrades.** The startup skill sync overwrote bundled skills with the image defaults on every upgrade, silently discarding operator edits. It now snapshots an edited skill into the skill history before overwriting, so the change is recoverable.
+
 ## [v0.2.70] (2026-06-24) — *Bound database growth: memory TTL + audit retention*
 
 - **Expired memories now disappear immediately.** The memory TTL cleanup only ran at startup, so an expired memory could still be returned by reads (and surface in search) until the next restart. Reads now exclude expired entries the moment they expire, a cleanup sweep runs hourly (not just at boot), and the cleanup leaves an audit row + a metric. (Also fixed a timezone bug in the expiry calculation.)

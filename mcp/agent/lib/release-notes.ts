@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.71",
+    date: "2026-06-24",
+    title: "Skills: creatable categories, plugin skills in jobs, edits survive upgrades.",
+    highlights: [
+      "Create/Import a skill in any of the four categories now works. The dialogs offered foundation/scenarios/validation/workflows but the backend accepted only foundation/workflows, so importing a plain .md (defaults to scenarios) or creating a scenarios/validation skill always 400'd. create_skill now accepts all four.",
+      "A scheduled job bound to a plugin skill now uses it. The job runner's _load_skill_body couldn't resolve a plugin's vendor.skill canonical name (it searched only category dirs), so the job ran unbound; it now resolves plugins/<vendor>/<stem>.md.",
+      "Operator edits to built-in skills survive upgrades. The boot skill-sync overwrote bundled skills with image defaults on every upgrade, silently discarding edits; it now snapshots an edited file into .history before overwriting.",
+    ],
+  },
+  {
     version: "0.2.70",
     date: "2026-06-24",
     title: "Bound database growth: memory TTL + audit retention.",

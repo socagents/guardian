@@ -86,6 +86,27 @@ skills_seed() {
   # be re-removed). The operator's `.deleted/` directory thus becomes
   # a stable denylist that survives release upgrades — which is what
   # the operator's mental model of "I deleted this" implies.
+  #
+  # #SKILL-F16: the merge above overwrites image-default skills the operator
+  # may have EDITED in place — losing their changes silently on every upgrade.
+  # Before the cp, back up any operator-edited image-default to .history/
+  # (mirrors skills_crud.update_skill's .history snapshot), so the edit is
+  # recoverable rather than gone. O(num image skills) — a handful of files.
+  local _hist="$SKILLS_DIR/.history"
+  local _ts
+  _ts="$(date -u '+%Y%m%dT%H%M%SZ' 2>/dev/null || echo unknown)"
+  mkdir -p "$_hist" 2>/dev/null || true
+  find "$SKILLS_DEFAULT" -name '*.md' 2>/dev/null | while IFS= read -r _src; do
+    _rel="${_src#"$SKILLS_DEFAULT"/}"
+    _dst="$SKILLS_DIR/$_rel"
+    # Existing destination that DIFFERS from the incoming image default =
+    # an operator edit about to be clobbered. Snapshot it first.
+    if [ -f "$_dst" ] && ! cmp -s "$_src" "$_dst" 2>/dev/null; then
+      _hname="$(printf '%s' "$_rel" | tr '/' '__')"
+      cp "$_dst" "$_hist/${_hname}.${_ts}.md" 2>/dev/null || true
+    fi
+  done
+
   cp -r "$SKILLS_DEFAULT"/* "$SKILLS_DIR"/ 2>/dev/null || true
 
   local DENYLIST

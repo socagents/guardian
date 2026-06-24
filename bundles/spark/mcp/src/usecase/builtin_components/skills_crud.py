@@ -302,7 +302,7 @@ def create_skill(category: str, filename: str, content: str) -> Dict[str, Any]:
     Create a new skill file.
 
     Args:
-        category: Skill category (foundation, workflows)
+        category: Skill category (foundation, scenarios, validation, workflows)
         filename: Filename (must end with .md)
         content: Markdown content of the skill
 
@@ -312,8 +312,19 @@ def create_skill(category: str, filename: str, content: str) -> Dict[str, Any]:
     if not filename.endswith(".md"):
         return {"success": False, "error": "Filename must end with .md"}
 
-    if category not in ["foundation", "workflows"]:
-        return {"success": False, "error": f"Invalid category: {category}. Must be one of: foundation, workflows"}
+    # #SKILL-F5 — accept the full category set the UI Create + Import flows
+    # offer (and that get_all_skills discovers dynamically + _load_skill_body
+    # already searches). Previously only foundation/workflows were allowed, so
+    # importing any plain .md (which defaults to 'scenarios') or creating a
+    # scenarios/validation skill always 400'd.
+    if category not in ("foundation", "scenarios", "validation", "workflows"):
+        return {
+            "success": False,
+            "error": (
+                f"Invalid category: {category}. Must be one of: "
+                "foundation, scenarios, validation, workflows"
+            ),
+        }
 
     category_dir = SKILLS_DIR / category
     category_dir.mkdir(parents=True, exist_ok=True)
@@ -608,7 +619,7 @@ def get_tools() -> List[mcp_types.Tool]:
                 "properties": {
                     "category": {
                         "type": "string",
-                        "enum": ["foundation", "workflows"],
+                        "enum": ["foundation", "scenarios", "validation", "workflows"],
                         "description": "Skill category"
                     },
                     "filename": {
