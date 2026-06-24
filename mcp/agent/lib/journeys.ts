@@ -4511,8 +4511,54 @@ export const JOURNEYS: Journey[] = [
       "ops-marketplace-browse",
       "ops-create-web-container-instance",
       "ops-agent-marketplace-install",
+      "ops-delete-user-connector",
     ],
     components: ["marketplace", "connectors", "audit"],
+  },
+
+  {
+    id: "ops-delete-user-connector",
+    category: "connectors",
+    title: "Delete a custom connector from the marketplace",
+    summary:
+      "Fully remove a user-uploaded connector from the product — not just uninstall it. The Marketplace tab shows uploaded connectors with a Custom badge; their detail panel has a Delete button that removes the connector's on-disk definition (after a confirmation). Bundle connectors have no Delete button.",
+    difficulty: "starter",
+    durationMin: 3,
+    icon: "delete_forever",
+    prompts: [],
+    toolsExercised: [],
+    apis: [
+      {
+        method: "DELETE",
+        path: "/api/agent/marketplace/{connectorId}",
+        description:
+          "What the Delete button calls. Proxies the MCP's DELETE /api/v1/marketplace/{id}, removing the install row + the on-disk YAML (user_connectors/<id>/). Returns 403 cannot_delete_bundle for bundle connectors, 409 has_instances when instances still exist.",
+      },
+      {
+        method: "GET",
+        path: "/api/marketplace/connectors",
+        description:
+          "Backs the Marketplace tab. Now returns user-uploaded connectors (origin: user) alongside the bundle connectors — that's what makes them deletable from the UI. After a successful delete the connector no longer appears.",
+      },
+    ],
+    howToTest: [
+      "PREREQ: a user-uploaded connector exists (see ops-upload-user-connector). If it has instances, delete them first from the Instances tab.",
+      "Open /connectors → Marketplace tab. Your uploaded connector shows a purple 'Custom' badge; bundle connectors don't.",
+      "Click the connector card to open its detail panel. A red 'Delete' button sits in the header next to Install/Uninstall. (Bundle connectors show no Delete button.)",
+      "Click Delete → confirm the dialog. The button shows 'Deleting…', then the panel closes and the connector disappears from the marketplace.",
+      "Negative: with an instance still present, Delete returns a toast 'Could not delete <id>' explaining instances must be removed first (the backend 409 has_instances message).",
+    ],
+    expectedResult:
+      "A custom connector can be fully removed from the product via the UI — no raw API call needed. After delete it's gone from the Marketplace tab and its on-disk definition is removed. Bundle connectors are protected: they show no Delete button and the backend 403s any delete attempt. Delete is blocked (with a clear message) while instances exist.",
+    verifyVia: [
+      "GET /api/marketplace/connectors before delete → your connector present with origin: user; after delete → absent.",
+      "DELETE /api/agent/marketplace/<your-id> → 200 {ok:true, deleted:<id>} (or 409 has_instances if instances remain).",
+      "ls /app/data/user_connectors/<your-id>/ inside guardian_agent → directory gone after delete.",
+      "A bundle connector's detail panel has no Delete button; DELETE /api/agent/marketplace/xsoar → 403 cannot_delete_bundle.",
+    ],
+    related: ["ops-upload-user-connector", "ops-marketplace-browse"],
+    prerequisites: ["ops-upload-user-connector"],
+    components: ["marketplace", "connectors"],
   },
 
   {

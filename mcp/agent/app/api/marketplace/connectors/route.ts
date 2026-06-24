@@ -15,6 +15,8 @@
 
 import { NextResponse } from "next/server";
 
+import { callMcpServer } from "@/lib/mcp-proxy";
+
 export const dynamic = "force-dynamic";
 
 interface Tool {
@@ -50,6 +52,11 @@ interface MarketplaceConnector {
   id: string;
   name: string;
   type: string;
+  // #CONN-F3 — "bundle" (image-baked, undeletable) vs "user" (uploaded,
+  // fully removable). Bundle entries below are stamped "bundle" in GET;
+  // user connectors are merged in from the MCP catalogue. Drives the
+  // "Custom" card badge + the origin-gated Delete button on /connectors.
+  origin?: "bundle" | "user";
   // v0.2.42 — "service" marks an emulated service (e.g. the Splunk
   // mimic) reached by external systems rather than the agent. Absent
   // (or "connector") = a normal tool-calling integration.
@@ -614,6 +621,13 @@ async function loadLiveMeta(connectorId: string): Promise<LiveMeta | null> {
   const path = await import("path");
   const yaml = await import("js-yaml");
 
+  // #CONN-F3 — user-uploaded connectors live in the runtime data dir
+  // (the MCP writes them to $DATA_ROOT/user_connectors/<id>/connector.yaml,
+  // default /app/data). The agent runs in the same container, so we can read
+  // them directly to give a user connector the same rich card (tools + config)
+  // a bundle connector gets. Bundle candidates come first; user candidates are
+  // a harmless miss for bundle ids and the resolution for user ids.
+  const dataRoot = process.env.DATA_ROOT || "/app/data";
   const candidates = [
     `/app/bundle/connectors/${connectorId}/connector.yaml`,
     path.resolve(
@@ -628,6 +642,9 @@ async function loadLiveMeta(connectorId: string): Promise<LiveMeta | null> {
     ),
     // Inside the build at agent's working dir (cwd=mcp/agent in dev)
     path.resolve(process.cwd(), "bundles", "spark", "connectors", connectorId, "connector.yaml"),
+    // User-uploaded connector (runtime data dir).
+    path.join(dataRoot, "user_connectors", connectorId, "connector.yaml"),
+    path.resolve(process.cwd(), "data", "user_connectors", connectorId, "connector.yaml"),
   ];
 
   for (const p of candidates) {
@@ -736,9 +753,88 @@ async function loadLiveMeta(connectorId: string): Promise<LiveMeta | null> {
   return null;
 }
 
+// #CONN-F3 — the authoritative catalogue (bundle + user) lives MCP-side at
+// GET /api/v1/marketplace. We only consult it for USER-uploaded connectors:
+// bundle cards keep their hand-curated rich data above; user connectors get a
+// card synthesized from the MCP summary + the on-disk YAML (via loadLiveMeta).
+interface McpCatalogueEntry {
+  id: string;
+  kind?: string;
+  version?: string;
+  display_name?: string;
+  description?: string;
+  tools_count?: number;
+  tags?: string[];
+  origin?: string;
+  installed?: boolean;
+}
+
+async function loadUserConnectorCards(): Promise<MarketplaceConnector[]> {
+  let payload: { connectors?: McpCatalogueEntry[] };
+  try {
+    payload = await callMcpServer<{ connectors?: McpCatalogueEntry[] }>(
+      "/api/v1/marketplace",
+      { timeoutMs: 5000 },
+    );
+  } catch {
+    // MCP unreachable → just serve the bundle connectors. The page stays
+    // functional; user connectors simply won't appear this render.
+    return [];
+  }
+
+  const userEntries = (payload.connectors ?? []).filter((e) => e.origin === "user");
+  return Promise.all(
+    userEntries.map(async (e): Promise<MarketplaceConnector> => {
+      const live = await loadLiveMeta(e.id);
+      const isService = e.kind === "service";
+      const description = e.description || e.display_name || e.id;
+      return {
+        id: e.id,
+        name: e.display_name || e.id,
+        type: isService ? "service" : "tool",
+        kind: e.kind || "connector",
+        version: live?.version || e.version || "0.0.0",
+        publisher: "Custom (uploaded)",
+        description,
+        longDescription: description,
+        category: "DevTools",
+        tags: e.tags ?? [],
+        icon: "extension",
+        iconColor: "#a78bfa",
+        iconBg: "rgba(167, 139, 250, 0.12)",
+        toolCount: live?.tools.length ?? e.tools_count ?? 0,
+        installs: "—",
+        installCount: 0,
+        status: e.installed ? "installed" : "not_installed",
+        reliability: "—",
+        authType: "Custom",
+        tools: live?.tools ?? [],
+        config: live?.config ?? [],
+        versions: [],
+        setupGuide: "",
+        dockerImage: "",
+        runtime: "",
+        sdkLanguage: "",
+        sdkPackage: "",
+        ingestion: { enabled: false, mode: "", description: "" },
+        topAgents: [],
+        origin: "user",
+      };
+    }),
+  );
+}
+
 export async function GET() {
-  // Build a deep copy so concurrent requests don't see each other's overlay
-  const out = GUARDIAN_CONNECTORS.map((c) => ({ ...c, tools: [...c.tools], config: [...c.config] }));
+  // Build a deep copy so concurrent requests don't see each other's overlay.
+  // Stamp origin:"bundle" — these are image-baked and undeletable (the MCP's
+  // DELETE returns 403 cannot_delete_bundle), which the UI uses to hide the
+  // Delete affordance.
+  const out: MarketplaceConnector[] = GUARDIAN_CONNECTORS.map((c) => ({
+    ...c,
+    tools: [...c.tools],
+    config: [...c.config],
+    origin: "bundle",
+  }));
   await Promise.all(
     out.map(async (c) => {
       const live = await loadLiveMeta(c.id);
@@ -759,5 +855,9 @@ export async function GET() {
       }
     }),
   );
-  return NextResponse.json(out);
+
+  // #CONN-F3 — append user-uploaded connectors so they're reachable (and
+  // deletable) from the marketplace tab, not just via a raw MCP_TOKEN call.
+  const userCards = await loadUserConnectorCards();
+  return NextResponse.json([...out, ...userCards]);
 }

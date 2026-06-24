@@ -3521,19 +3521,26 @@ probed          ── transient state during an in-flight probe`}</Pre>
                   <Code>curl -F connector_yaml=@your-connector.yaml https://&lt;host&gt;:8080/api/v1/marketplace/upload</Code>.)
                 </li>
                 <li>
-                  The connector appears in the marketplace with{" "}
-                  <Code>origin: user</Code>. Install it, then create
+                  The connector appears in the marketplace with a{" "}
+                  <Term>Custom</Term> badge. Install it, then create
                   an instance from the Instances tab. Same flow as
                   any bundle connector from there on.
                 </li>
               </ol>
               <p className="text-sm text-on-surface-variant">
-                User connectors are deletable via DELETE{" "}
-                <Code>/api/v1/marketplace/&lt;id&gt;</Code> (refuses if
-                instances exist). Bundle connectors are 403-rejected
-                on DELETE — they&apos;re image-baked and can&apos;t be
-                removed at runtime; use Uninstall to hide them from
-                instance creation.
+                <Term>Deleting a custom connector.</Term> Open the
+                connector&apos;s card on the Marketplace tab — a{" "}
+                <Term>Delete</Term> button appears for{" "}
+                <Term>Custom</Term> (user-uploaded) connectors. It
+                permanently removes the connector&apos;s uploaded
+                definition (a confirmation step guards it, since this
+                can&apos;t be undone). Delete its instances first from
+                the Instances tab — Delete refuses while any instance
+                still exists and tells you so. Bundle connectors have
+                no Delete button: they&apos;re image-baked and
+                can&apos;t be removed at runtime — use{" "}
+                <Term>Uninstall</Term> to hide them from instance
+                creation instead.
               </p>
             </SubSection>
 

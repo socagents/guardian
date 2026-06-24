@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.66] (2026-06-24) — *Remove a custom connector from the marketplace*
+
+- **Uploaded connectors now appear in the Marketplace — and can be deleted there.** Previously a connector you uploaded was invisible on the Marketplace tab (only the five bundle connectors showed), so fully removing it meant a raw API call. The Marketplace tab now lists your uploaded connectors too, each with a **Custom** badge. Open one and its detail panel has a **Delete** button that permanently removes the connector's uploaded definition (with a confirmation step). Delete its instances first — Delete is refused while any instance exists and tells you so. Bundle connectors are unaffected: they have no Delete button and stay image-baked (use **Uninstall** to hide them).
+
 ## [v0.2.65] (2026-06-24) — *Upgrade Guardian from inside the app*
 
 - **One-click stack upgrade in the About modal.** You no longer need to SSH in and run the installer for a routine update. Open **About** in the sidebar (or **Check for updates** in its menu): when a newer release exists you'll see an *Update available — v\<running\> → v\<latest\>* banner with an **Upgrade** button. Clicking it pulls the new images and swaps the containers in place, streaming live progress (fetching manifest → pulling images → swapping → healthcheck) into the modal. The agent restarts briefly during the swap — the page detects this, waits for it to come back, and reloads onto the new version automatically. The installer-binary path remains available for clean re-installs and pinning a specific version.

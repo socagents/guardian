@@ -8,6 +8,7 @@ import {
   listMarketplaceConnectors,
   installConnector,
   uninstallConnector,
+  deleteConnector,
   listInstalledConnectors,
   listInstances,
   createInstance,
@@ -186,6 +187,10 @@ interface ConnectorDefinition {
   sdkLanguage: string;
   ingestion: { enabled: boolean; mode: string; description: string };
   topAgents: { name: string; color: string }[];
+  // #CONN-F3 — "user" = uploaded connector (fully deletable); "bundle" =
+  // image-baked (undeletable). Drives the "Custom" card badge + the Delete
+  // button in the detail panel.
+  origin?: "bundle" | "user";
 }
 
 interface WsEntry {
@@ -238,6 +243,7 @@ function mapToConnectorDef(mc: MarketplaceConnector): ConnectorDefinition {
     sdkLanguage: mc.sdkLanguage ?? "",
     ingestion: mc.ingestion ?? { enabled: false, mode: "", description: "" },
     topAgents: mc.topAgents,
+    origin: mc.origin,
   };
 }
 
@@ -454,6 +460,16 @@ function ConnectorCard({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {connector.origin === "user" && (
+            <span
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-label uppercase tracking-wide"
+              style={{ color: "#c4b5fd", background: "rgba(167, 139, 250, 0.12)", border: "0.5px solid rgba(167, 139, 250, 0.25)" }}
+              title="User-uploaded connector — can be fully removed from this product"
+            >
+              <span className="material-symbols-outlined text-xs">extension</span>
+              Custom
+            </span>
+          )}
           {isService && (
             <span
               className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-label uppercase tracking-wide text-tertiary"
@@ -1407,18 +1423,23 @@ function ConnectorDetailPanel({
   onClose,
   onInstall,
   onUninstall,
+  onDelete,
   pendingAction,
 }: {
   connector: ConnectorDefinition;
   onClose: () => void;
   onInstall: (connectorId: string, version: string) => void;
   onUninstall: (connectorId: string) => void;
-  /** "install" or "uninstall" while the corresponding API call is in
-   *  flight; null otherwise. Drives the loading spinner + disabled
-   *  state on the install/uninstall button so the operator gets
-   *  immediate visual feedback that the click registered. Without it
-   *  the button looked unresponsive while the POST/DELETE completed. */
-  pendingAction: "install" | "uninstall" | null;
+  /** #CONN-F3 — fully remove a user-uploaded connector (deletes its on-disk
+   *  YAML). Only wired for origin:"user" connectors; the button is hidden for
+   *  bundle connectors (the backend returns 403 for those anyway). */
+  onDelete: (connectorId: string) => void;
+  /** "install" / "uninstall" / "delete" while the corresponding API call is
+   *  in flight; null otherwise. Drives the loading spinner + disabled state on
+   *  the action buttons so the operator gets immediate visual feedback that
+   *  the click registered. Without it the button looked unresponsive while the
+   *  POST/DELETE completed. */
+  pendingAction: "install" | "uninstall" | "delete" | null;
 }) {
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
   const [showAllTools, setShowAllTools] = useState(false);
@@ -1551,6 +1572,34 @@ function ConnectorDetailPanel({
               >
                 <span className="material-symbols-outlined text-[20px]">upgrade</span>
                 Update to {connector.latestVersion}
+              </button>
+            )}
+            {/* #CONN-F3 — fully remove a user-uploaded connector (its on-disk
+                YAML). Hidden for bundle connectors (image-baked, the backend
+                403s them). Available in any status: an uploaded connector can
+                be deleted whether or not it's currently installed, as long as
+                it has no live instances (the backend 409s otherwise and the
+                toast tells the operator to delete instances first). */}
+            {connector.origin === "user" && (
+              <button
+                type="button"
+                className="px-6 py-3 rounded-xl font-semibold flex items-center gap-2 text-error transition-all active:scale-95 hover:bg-error/10 disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ border: "0.5px solid rgba(244, 87, 87, 0.5)" }}
+                onClick={() => onDelete(connector.id)}
+                disabled={pendingAction !== null}
+                title="Permanently remove this uploaded connector and its definition"
+              >
+                {pendingAction === "delete" ? (
+                  <>
+                    <span className="material-symbols-outlined text-[20px] animate-spin">progress_activity</span>
+                    Deleting…
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[20px]">delete_forever</span>
+                    Delete
+                  </>
+                )}
               </button>
             )}
             <button
@@ -4638,7 +4687,7 @@ export default function ConnectorsPage() {
   // operator sees the click registered. Map keyed by connector_id so
   // future bulk actions (install multiple) just compose naturally.
   const [pendingActions, setPendingActions] = useState<
-    Record<string, "install" | "uninstall">
+    Record<string, "install" | "uninstall" | "delete">
   >({});
   const addToast = useNotificationsStore((s) => s.addToast);
 
@@ -4705,6 +4754,51 @@ export default function ConnectorsPage() {
           addToast({
             variant: "error",
             title: `Could not uninstall ${connectorId}`,
+            description: result.error.message,
+          });
+        }
+      } finally {
+        setPendingActions((prev) => {
+          const { [connectorId]: _, ...rest } = prev;
+          return rest;
+        });
+      }
+    },
+    [refreshData, addToast],
+  );
+
+  // #CONN-F3 — fully remove a user-uploaded connector (deletes its on-disk
+  // YAML, not just the install marker). Irreversible, so confirm first. The
+  // backend 403s bundle connectors and 409s when instances still exist; the
+  // Delete button is only rendered for origin:"user", and the 409 message
+  // ("delete N instances first") is surfaced as-is.
+  const handleDelete = useCallback(
+    async (connectorId: string) => {
+      if (
+        !window.confirm(
+          `Permanently delete the "${connectorId}" connector? This removes its ` +
+            `uploaded definition from Guardian and cannot be undone. (Instances ` +
+            `must be deleted first.)`,
+        )
+      ) {
+        return;
+      }
+      setPendingActions((prev) => ({ ...prev, [connectorId]: "delete" }));
+      try {
+        const result = await deleteConnector(connectorId);
+        if (result.ok) {
+          setConnectors((prev) => prev.filter((c) => c.id !== connectorId));
+          setSelectedConnector(null);
+          await refreshData();
+          addToast({
+            variant: "success",
+            title: `${connectorId} deleted`,
+            description: "The connector definition was removed.",
+          });
+        } else {
+          addToast({
+            variant: "error",
+            title: `Could not delete ${connectorId}`,
             description: result.error.message,
           });
         }
@@ -5096,6 +5190,7 @@ export default function ConnectorsPage() {
           onClose={() => setSelectedConnector(null)}
           onInstall={handleInstall}
           onUninstall={handleUninstall}
+          onDelete={handleDelete}
           pendingAction={pendingActions[selectedConnector.id] ?? null}
         />
       )}

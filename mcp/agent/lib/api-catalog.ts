@@ -2040,6 +2040,56 @@ const CONFIGURATION: ApiEndpoint[] = [
     tags: ["marketplace", "connectors", "catalog", "uninstall"],
   },
   {
+    id: "marketplace-by-connectorId-delete",
+    category: "configuration",
+    method: "DELETE",
+    path: "/api/agent/marketplace/{connectorId}",
+    summary: "Delete a user-uploaded connector entirely (#CONN-F3)",
+    description: "Fully removes a USER-uploaded connector — its install marker AND its on-disk definition (the connector.yaml under /app/data/user_connectors/<id>). The agent route forwards to the MCP's DELETE /api/v1/marketplace/{id}. Distinct from /uninstall (which only drops the install marker, leaving the connector listed): this is the irreversible 'remove it from the product' action behind the Delete button on the Marketplace tab's connector detail panel. Bundle connectors are image-baked and rejected with 403 (cannot_delete_bundle). Refused with 409 (has_instances) when any instance still exists — delete instances first. Catalog-side operation; touches no secret.",
+    pathParams: [
+      {
+        name: "connectorId",
+        type: "string",
+        description: "Connector id to delete. Must be a user-uploaded connector (origin=user).",
+        required: true,
+        example: "my-edr"
+      }
+    ],
+    responses: [
+      {
+        status: "200",
+        description: "Deleted. The MCP body { ok, deleted } is forwarded.",
+        example: { ok: true, deleted: "my-edr" }
+      },
+      {
+        status: "403",
+        description: "Connector is a bundle connector (image-baked); deletion refused. MCP body forwarded verbatim.",
+        example: { error: "cannot_delete_bundle", detail: "bundle connectors are image-baked and cannot be deleted at runtime" }
+      },
+      {
+        status: "409",
+        description: "Connector still has instances; deletion refused. MCP body (carrying the has_instances code + count) passed through verbatim.",
+        example: { error: "has_instances", detail: "connector 'my-edr' has 1 instance(s); delete instances before deleting the connector" }
+      },
+      {
+        status: "404",
+        description: "No such connector on disk; MCP body forwarded verbatim.",
+        example: { error: "not_found" }
+      },
+      {
+        status: "401",
+        description: "Caller not authenticated to the agent surface (middleware.ts on /api/agent/**)."
+      },
+      {
+        status: "503",
+        description: "MCP_TOKEN not configured (resolveMcp guard).",
+        example: { error: "MCP_TOKEN not configured" }
+      }
+    ],
+    riskTier: "destructive",
+    tags: ["marketplace", "connectors", "catalog", "delete", "user-connector"],
+  },
+  {
     id: "marketplace-connectors",
     category: "configuration",
     method: "GET",

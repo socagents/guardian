@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.66",
+    date: "2026-06-24",
+    title: "Remove a custom connector from the marketplace.",
+    highlights: [
+      "Uploaded connectors now appear on the Marketplace tab (with a 'Custom' badge) alongside the five bundle connectors — previously they were invisible there, so removing one needed a raw API call.",
+      "A connector's detail panel now has a Delete button for Custom (user-uploaded) connectors that permanently removes its uploaded definition, guarded by a confirmation. Delete its instances first — Delete is refused (with a clear message) while any instance exists.",
+      "Bundle connectors are unaffected: they show no Delete button and remain image-baked (use Uninstall to hide them from instance creation).",
+    ],
+  },
+  {
     version: "0.2.65",
     date: "2026-06-24",
     title: "Upgrade Guardian from inside the app.",
