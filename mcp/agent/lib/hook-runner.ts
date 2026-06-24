@@ -72,6 +72,62 @@ export interface HookAggregateResult {
   }>;
 }
 
+// #HOOK-F2 — dedupe set so a hook that's invalid-but-stored (e.g. a builtin
+// with an unknown name, written via direct PATCH) — which validateHook silently
+// drops on EVERY event firing — only emits one audit row per process per
+// (hookId, event) instead of flooding audit.db on every turn.
+const _invalidHookAudited = new Set<string>();
+
+/** #HOOK-F2 — best-effort identity of a stored-but-invalid hook so the dropped
+ *  hook is identifiable in the audit row. Pulls id/name/transport-type/builtin
+ *  name defensively (the object failed validation, so any field may be absent
+ *  or the wrong type). */
+function rawHookIdentity(raw: unknown): {
+  id: string;
+  name: string;
+  transportType: string;
+  builtinName?: string;
+} {
+  const h = (raw ?? {}) as Record<string, unknown>;
+  const t = (h.transport ?? {}) as Record<string, unknown>;
+  return {
+    id: typeof h.id === "string" ? h.id : "<unknown>",
+    name: typeof h.name === "string" ? h.name : "<unknown>",
+    transportType: typeof t.type === "string" ? t.type : "<unknown>",
+    builtinName: typeof t.name === "string" ? t.name : undefined,
+  };
+}
+
+/** #HOOK-F2 — emit a `hook_invalid` audit row (deduped) so an enabled-but-
+ *  never-firing hook is observable instead of silently dropped at fire-time. */
+function auditInvalidHook(event: HookEvent, raw: unknown): void {
+  const ident = rawHookIdentity(raw);
+  const dedupeKey = `${ident.id}::${event}`;
+  if (_invalidHookAudited.has(dedupeKey)) return;
+  _invalidHookAudited.add(dedupeKey);
+  void (async () => {
+    try {
+      await callMcpServer("/api/v1/audit", {
+        method: "POST",
+        body: {
+          action: "hook_invalid",
+          target: `hook:${ident.id}`,
+          status: "failure",
+          metadata: {
+            event,
+            name: ident.name,
+            transport_type: ident.transportType,
+            builtin_name: ident.builtinName,
+            note: "stored hook failed validation and is silently dropped at fire-time (it appears enabled but never fires)",
+          },
+        },
+      });
+    } catch {
+      // Best-effort; a dropped hook must not break dispatch.
+    }
+  })();
+}
+
 /** Fetch all hooks for one event from the MCP store. Returns
  *  empty array when no hooks are registered or the fetch fails. */
 async function loadHooks(event: HookEvent): Promise<Hook[]> {
@@ -84,7 +140,12 @@ async function loadHooks(event: HookEvent): Promise<Hook[]> {
     const validated: Hook[] = [];
     for (const raw of data.hooks) {
       const h = validateHook(raw);
-      if (h) validated.push(h);
+      if (h) {
+        validated.push(h);
+      } else {
+        // #HOOK-F2 — surface the dropped hook (deduped) instead of swallowing.
+        auditInvalidHook(event, raw);
+      }
     }
     // Sort by priority asc (low number runs first), tie-break by id.
     validated.sort(

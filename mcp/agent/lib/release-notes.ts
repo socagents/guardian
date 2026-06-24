@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.76",
+    date: "2026-06-24",
+    title: "Finer-grained observability: per-phase research, honest turn status, size guards, embedding accounting.",
+    highlights: [
+      "deep_research results now carry a per-phase breakdown (plan/search/fetch/gap-check/synthesize + counts + timings) and warnings, so partial coverage is visible instead of one opaque event.",
+      "Chat-turn status reports the true exit cause (safety block / tools-only / budget-exhausted) instead of mislabeling 'completed'; compaction-checkpoint save failures and /cost truncation (>1000 rows) are surfaced.",
+      "guardian_web_screenshot accepts a max_bytes cap (default 4 MiB) and returns a bounded rejection instead of a multi-MB image in context.",
+      "KB load records pre-baked vs live-embedded document counts — a zero-cost boot is distinguishable from one that paid for hundreds of Vertex embeds.",
+      "Memory-injection errors/zero-hits, invalid built-in hooks (now badged in the Hooks page), and SVG-too-large diagram rejections each leave a signal; the agent→MCP proxy stamps per-request latency + request-id.",
+    ],
+  },
+  {
     version: "0.2.75",
     date: "2026-06-24",
     title: "Forensic audit trail, part 3: chat-turn observability.",

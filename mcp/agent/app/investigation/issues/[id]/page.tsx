@@ -65,6 +65,52 @@ const EVENT_ICONS: Record<string, string> = {
   conversation: "forum",
 };
 
+/**
+ * #INV-F9 — look for a fresh `issue_diagram_rejected` audit row for this
+ * issue + diagram surface, emitted by the MCP when _clean_svg rejects the
+ * agent's SVG (e.g. >256 KB). Returns the rejection's code + size when found
+ * after `sinceMs`, so the regenerate poll can show the real reason instead of
+ * the generic "timed out — the agent run may have failed" message. Best-effort:
+ * any error returns null (fall through to the generic message).
+ */
+async function findRecentDiagramRejection(
+  issueId: string,
+  diagram: "attack_chain" | "relations",
+  sinceMs: number,
+): Promise<{ code?: string; bytes?: number } | null> {
+  try {
+    const r = await fetch(
+      `/api/agent/audit?action=issue_diagram_rejected&target=${encodeURIComponent(
+        `issue:${issueId}`,
+      )}&limit=10`,
+      { cache: "no-store" },
+    );
+    if (!r.ok) return null;
+    const data = (await r.json()) as {
+      events?: Array<{
+        ts?: string;
+        metadata?: Record<string, unknown>;
+        meta?: Record<string, unknown>;
+      }>;
+    };
+    for (const ev of data.events ?? []) {
+      const m = ev.metadata ?? ev.meta ?? {};
+      if (m["diagram"] !== diagram) continue;
+      // Only honor rejections at-or-after this regenerate run started, so a
+      // stale rejection from a prior attempt doesn't mask a fresh timeout.
+      const tsMs = ev.ts ? Date.parse(ev.ts) : NaN;
+      if (!Number.isNaN(tsMs) && tsMs + 1000 < sinceMs) continue;
+      return {
+        code: typeof m["code"] === "string" ? (m["code"] as string) : undefined,
+        bytes: typeof m["bytes"] === "number" ? (m["bytes"] as number) : undefined,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export default function IssueDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -169,7 +215,8 @@ export default function IssueDetailPage() {
         const detail = await resp.json().catch(() => ({}));
         throw new Error((detail as { error?: string })?.error ?? `regenerate failed (${resp.status})`);
       }
-      const deadline = Date.now() + 180_000;
+      const pollStartedMs = Date.now();
+      const deadline = pollStartedMs + 180_000;
       let updated = false;
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 5000));
@@ -189,7 +236,30 @@ export default function IssueDetailPage() {
       // rather than silently dropping the spinner.
       if (!updated) {
         try { setIssue(await getIssue(id)); } catch { /* ignore */ }
-        setError("Regenerate timed out — the diagram may not have updated (the agent run may have failed). Try again.");
+        // #INV-F9 — distinguish a too-large-SVG REJECTION from a generic
+        // agent-run failure/timeout. The MCP emits an `issue_diagram_rejected`
+        // audit row (target=issue:<id>) when _clean_svg rejects the agent's
+        // diagram (e.g. >256 KB). If we find a fresh one for this surface, tell
+        // the operator the actual reason instead of the vague timeout message.
+        const reject = await findRecentDiagramRejection(
+          id,
+          isChain ? "attack_chain" : "relations",
+          pollStartedMs,
+        );
+        if (reject?.code === "svg_too_large") {
+          const kb = reject.bytes ? ` (${Math.round(reject.bytes / 1024)} KB; cap 256 KB)` : "";
+          setError(
+            `The agent produced a diagram that was too large to store${kb}. ` +
+              "Ask it to simplify the diagram (fewer nodes/labels) and regenerate.",
+          );
+        } else if (reject) {
+          setError(
+            `The agent's diagram was rejected (${reject.code ?? "invalid svg"}). ` +
+              "Try regenerating.",
+          );
+        } else {
+          setError("Regenerate timed out — the diagram may not have updated (the agent run may have failed). Try again.");
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "regenerate failed");

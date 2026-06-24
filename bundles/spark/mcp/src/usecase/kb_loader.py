@@ -303,6 +303,14 @@ def load_bundled_knowledge(
             "insert": 0, "update": 0, "unchanged": 0,
             "removed": 0, "skipped": 0, "invalid": 0,
         }
+        # #KB-F9 — out-dict mutated in place by kb.upsert() per embedding so the
+        # kb_loaded row distinguishes a boot that reused trusted pre-baked
+        # vectors (precomputed_count) from one that paid for live Vertex calls
+        # (live_embedded_count, incl. live_mismatch re-embeds). The "unchanged"
+        # fast-path embeds nothing, so neither counter moves for those docs.
+        embedding_stats: dict[str, int] = {
+            "precomputed": 0, "live_embedded": 0, "live_mismatch": 0,
+        }
         seen_doc_ids: set[str] = set()
 
         for f in _iter_kb_files(kb_root):
@@ -365,6 +373,7 @@ def load_bundled_knowledge(
                     source_hash=_sha256(text),
                     precomputed_embedding=precomputed,
                     precomputed_model=precomputed_model,
+                    embedding_stats=embedding_stats,
                 )
                 counts[action] = counts.get(action, 0) + 1
                 seen_doc_ids.add(doc_id)
@@ -381,6 +390,12 @@ def load_bundled_knowledge(
             if kb.remove(name, stale):
                 counts["removed"] += 1
 
+        # #KB-F9 — fold the embedding-source split into the per-KB counts so it
+        # appears in both the returned summary and the kb_loaded audit row.
+        counts["precomputed_count"] = embedding_stats["precomputed"]
+        counts["live_embedded_count"] = embedding_stats["live_embedded"]
+        counts["live_mismatch_count"] = embedding_stats["live_mismatch"]
+
         summary[name] = counts
         record_event(
             ACTION_KB_LOADED,
@@ -394,9 +409,12 @@ def load_bundled_knowledge(
         )
         logger.info(
             "kb_loader: %s — insert=%d update=%d unchanged=%d "
-            "removed=%d skipped=%d invalid=%d",
+            "removed=%d skipped=%d invalid=%d "
+            "precomputed=%d live_embedded=%d (mismatch=%d)",
             name, counts["insert"], counts["update"], counts["unchanged"],
             counts["removed"], counts["skipped"], counts["invalid"],
+            counts["precomputed_count"], counts["live_embedded_count"],
+            counts["live_mismatch_count"],
         )
 
     return summary

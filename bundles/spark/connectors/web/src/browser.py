@@ -100,6 +100,13 @@ _SESSION_IDLE_TTL = 600.0  # seconds
 _TEXT_MAX_CHARS_DEFAULT = 50_000
 _HTML_MAX_CHARS_DEFAULT = 200_000
 _LINKS_MAX_DEFAULT = 200
+# #CDW-F9 — default size cap on raw screenshot bytes (pre-base64). A full-page
+# capture of a long page can be multi-MB; without a guard the base64 string
+# inflates LLM context unbounded. 4 MiB raw ≈ ~5.5 MB base64 — generous for a
+# legitimate viewport/full-page PNG/JPEG but bounded. Override per-call via the
+# `max_bytes` arg (0 / negative disables the cap explicitly for the rare case
+# an operator truly wants the whole thing).
+_SCREENSHOT_MAX_BYTES_DEFAULT = 4 * 1024 * 1024
 
 
 class _Session:
@@ -529,6 +536,7 @@ async def guardian_web_screenshot(
     full_page: bool = True,
     format: str = "png",  # noqa: A002 — name matches connector.yaml schema
     quality: int = 70,
+    max_bytes: int | None = None,
 ) -> dict[str, Any]:
     """Capture a screenshot. See connector.yaml."""
     if not session_id:
@@ -554,10 +562,45 @@ async def guardian_web_screenshot(
     except Exception as exc:  # noqa: BLE001
         return {"error": f"screenshot failed: {type(exc).__name__}: {exc}"}
 
+    # #CDW-F9 — size guard. A full-page capture of a long page can produce a
+    # multi-MB image whose base64 form silently inflates LLM context. When the
+    # raw bytes exceed the cap we DO NOT return the (huge) image_b64; instead we
+    # return a bounded rejection the caller can act on (re-take with
+    # full_page=false, switch to jpeg, raise max_bytes). A non-positive
+    # max_bytes disables the cap explicitly. The default applies otherwise.
+    cap = (
+        _SCREENSHOT_MAX_BYTES_DEFAULT
+        if max_bytes is None
+        else int(max_bytes)
+    )
+    nbytes = len(png_bytes)
+    if cap > 0 and nbytes > cap:
+        logger.warning(
+            "web_screenshot: capture %d bytes exceeds cap %d (session=%s, "
+            "full_page=%s, format=%s); omitting image_b64",
+            nbytes, cap, session_id, bool(full_page), format,
+        )
+        return {
+            "error": (
+                f"screenshot too large ({nbytes} bytes; cap {cap}). "
+                "Retake with full_page=false, format='jpeg', a lower "
+                "quality, or raise max_bytes."
+            ),
+            "truncated": True,
+            "bytes": nbytes,
+            "max_bytes": cap,
+            "format": format,
+            "full_page": bool(full_page),
+            "width": viewport.get("width"),
+            "height": viewport.get("height"),
+        }
+
     return {
         "image_b64": base64.b64encode(png_bytes).decode("ascii"),
         "format": format,
-        "bytes": len(png_bytes),
+        "bytes": nbytes,
+        "max_bytes": cap if cap > 0 else None,
+        "truncated": False,
         "width": viewport.get("width"),
         "height": viewport.get("height"),
     }

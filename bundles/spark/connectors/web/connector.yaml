@@ -225,7 +225,8 @@ spec:
         - { name: "full_page",  type: "boolean", description: "Capture the whole scrollable area (default true).",                  required: false }
         - { name: "format",     type: "string",  description: "'png' (default) or 'jpeg' (smaller). 'jpeg' takes a quality field.", required: false }
         - { name: "quality",    type: "integer", description: "JPEG quality 0-100. Ignored for png. Default 70.",                   required: false }
-      returns: { type: "object", description: "{ image_b64, format, bytes, width, height }." }
+        - { name: "max_bytes",  type: "integer", description: "Reject (without returning image_b64) when raw capture exceeds this many bytes. Default 4 MiB; pass 0 to disable the cap.", required: false }
+      returns: { type: "object", description: "On success { image_b64, format, bytes, max_bytes, truncated:false, width, height }. When over the cap { error, truncated:true, bytes, max_bytes, format, full_page, width, height } and NO image_b64 — retake smaller." }
 
     - name: "extract_links"
       method: "querySelectorAll a[href]"

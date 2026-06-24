@@ -101,6 +101,16 @@ export async function proxyToMcp(
   const fwdTrigger = request.headers.get('x-guardian-trigger');
   if (fwdTrigger) headers['X-Guardian-Trigger'] = fwdTrigger;
 
+  // #MEM-F12/#OBS-F19 — measure the proxy-hop round-trip and stamp it on the
+  // response as X-Proxy-Duration-Ms. A full Prometheus histogram in the Edge
+  // middleware is out of scope (the Edge runtime can't reach the Python-side
+  // metrics_registry, and per-route Prometheus series would need net-new
+  // infra), but the duration header is a free, honest, per-route latency
+  // signal at the Next.js→MCP hop that browser devtools, the request-id
+  // correlation, and any reverse-proxy log can pick up. The request_id stamped
+  // by middleware.ts is echoed back so a slow proxy hop is correlatable.
+  const proxyStart = Date.now();
+  const requestId = request.headers.get('x-request-id') ?? undefined;
   try {
     const resp = await fetch(upstreamUrl, {
       method,
@@ -109,17 +119,24 @@ export async function proxyToMcp(
       signal: AbortSignal.timeout(15000),
     });
     const text = await resp.text();
+    const outHeaders: Record<string, string> = {
+      'Content-Type':
+        resp.headers.get('content-type') ?? 'application/json',
+      'X-Proxy-Duration-Ms': String(Date.now() - proxyStart),
+    };
+    if (requestId) outHeaders['X-Request-Id'] = requestId;
     return new NextResponse(text, {
       status: resp.status,
-      headers: {
-        'Content-Type':
-          resp.headers.get('content-type') ?? 'application/json',
-      },
+      headers: outHeaders,
     });
   } catch (err) {
+    const errHeaders: Record<string, string> = {
+      'X-Proxy-Duration-Ms': String(Date.now() - proxyStart),
+    };
+    if (requestId) errHeaders['X-Request-Id'] = requestId;
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'proxy fetch failed' },
-      { status: 502 },
+      { status: 502, headers: errHeaders },
     );
   }
 }

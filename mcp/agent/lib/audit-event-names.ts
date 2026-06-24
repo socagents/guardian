@@ -101,6 +101,12 @@ export const AUDIT_EVENT_NAME_ALIASES: Record<string, string> = {
   chat_model_changed: "agent.chat.model.changed", // #CHAT-F10
   chat_slash_command: "agent.chat.slash_command", // #CHAT-F21
   chat_context_blocked: "agent.chat.context.blocked", // #CHAT-F19
+
+  // v0.2.76 audit batch — observability-granularity gaps.
+  chat_compaction_persist_failed: "agent.context.compaction.persist_failed", // #CHAT-F17
+  memory_inject_skipped: "agent.memory.inject.skipped", // #MEM-F10
+  hook_invalid: "agent.hook.invalid", // #HOOK-F2
+  issue_diagram_rejected: "agent.investigation.diagram.rejected", // #INV-F9
 };
 
 /** Inverse mapping: standard name → guardian action. Used by

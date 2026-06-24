@@ -55,13 +55,25 @@ def _clean_svg(svg: Any) -> tuple[str | None, dict | None]:
     never STORE executable markup.
     """
     if not isinstance(svg, str):
-        return None, {"error": "svg must be a string"}
+        return None, {"error": "svg must be a string", "code": "svg_not_string"}
     cleaned = svg.strip()
     low = cleaned.lower()
     if "<svg" not in low or "</svg>" not in low:
-        return None, {"error": "svg must be SVG markup containing <svg> … </svg>"}
+        return None, {
+            "error": "svg must be SVG markup containing <svg> … </svg>",
+            "code": "svg_not_markup",
+        }
     if len(cleaned) > 256_000:
-        return None, {"error": f"svg too large ({len(cleaned)} bytes; cap 256000)"}
+        # #INV-F9 — tag the rejection with a machine-readable code + the size so
+        # the diagram setters can emit a distinct audit signal and the
+        # Investigation UI poll can tell "diagram rejected (too large)" apart
+        # from "agent run failed / timed out".
+        return None, {
+            "error": f"svg too large ({len(cleaned)} bytes; cap 256000)",
+            "code": "svg_too_large",
+            "bytes": len(cleaned),
+            "cap": 256_000,
+        }
     cleaned = re.sub(r"<script\b[^>]*>.*?</script>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
     # <foreignObject> can embed arbitrary HTML — strip it (the skills forbid it).
     # The <img> data-URI render is already a no-script context, so this is
@@ -73,6 +85,37 @@ def _clean_svg(svg: Any) -> tuple[str | None, dict | None]:
     cleaned = re.sub(r"\son\w+\s*=\s*'[^']*'", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\son\w+\s*=\s*[^\s>]+", "", cleaned, flags=re.IGNORECASE)
     return cleaned, None
+
+
+def _audit_diagram_rejected(target: str, kind: str, verr: dict) -> None:
+    """#INV-F9 — emit a distinct audit signal when an agent-produced diagram is
+    REJECTED by _clean_svg (most importantly the too-large case), so the
+    Investigation UI poll can surface a specific reason instead of the generic
+    'regenerate timed out — the agent run may have failed' message after its
+    180s deadline. Best-effort; never raises into the tool path.
+
+    `target` is the investigation-object target string (e.g. "issue:<id>"),
+    `kind` the diagram surface ("attack_chain" | "relations"). The audit row's
+    metadata carries the rejection code + size so an operator (and the UI poll)
+    can act on it.
+    """
+    try:
+        from usecase.audit_log import record_event
+        record_event(
+            "issue_diagram_rejected",
+            target=target,
+            status="failure",
+            actor="agent",
+            metadata={
+                "diagram": kind,
+                "code": verr.get("code", "unknown"),
+                "bytes": verr.get("bytes"),
+                "cap": verr.get("cap"),
+                "error": verr.get("error"),
+            },
+        )
+    except Exception:  # noqa: BLE001 — audit is best-effort
+        pass
 
 
 def issue_create(
@@ -766,6 +809,7 @@ def issue_set_attack_chain(issue_id: str, svg: str) -> dict[str, Any]:
         return err
     cleaned, verr = _clean_svg(svg)
     if verr:
+        _audit_diagram_rejected(f"issue:{issue_id}", "attack_chain", verr)
         return verr
     if not s.set_attack_chain(issue_id, cleaned):
         return {"error": f"issue {issue_id!r} not found"}
@@ -796,6 +840,7 @@ def issue_set_relation_graph(issue_id: str, svg: str) -> dict[str, Any]:
         return err
     cleaned, verr = _clean_svg(svg)
     if verr:
+        _audit_diagram_rejected(f"issue:{issue_id}", "relations", verr)
         return verr
     if not s.set_relations_canvas(issue_id, cleaned):
         return {"error": f"issue {issue_id!r} not found"}
@@ -826,6 +871,7 @@ def case_set_attack_chain(case_id: str, svg: str) -> dict[str, Any]:
         return err
     cleaned, verr = _clean_svg(svg)
     if verr:
+        _audit_diagram_rejected(f"case:{case_id}", "attack_chain", verr)
         return verr
     if not s.set_case_attack_chain(case_id, cleaned):
         return {"error": f"case {case_id!r} not found"}
@@ -856,6 +902,7 @@ def case_set_relation_graph(case_id: str, svg: str) -> dict[str, Any]:
         return err
     cleaned, verr = _clean_svg(svg)
     if verr:
+        _audit_diagram_rejected(f"case:{case_id}", "relations", verr)
         return verr
     if not s.set_case_relations_canvas(case_id, cleaned):
         return {"error": f"case {case_id!r} not found"}

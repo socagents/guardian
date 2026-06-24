@@ -85,34 +85,56 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // hook actually fired. Best-effort — never fail the dispatch response on
   // an audit hiccup.
   if (result.decisions.length > 0) {
-    void callMcpServer("/api/v1/audit", {
-      method: "POST",
-      body: {
-        action: "hook_dispatched",
-        target: `hook-event:${event}`,
-        status: result.decision === "deny" ? "failure" : "success",
-        metadata: {
-          event,
-          decision: result.decision ?? "allow",
-          // #HOOK-F3 — record injected-context presence/size here too (this
-          // loopback route is the only fire-site for Notification +
-          // PermissionRequest hooks), so the audit row reflects what the hook
-          // added without re-running.
-          inject_context_present: Boolean(result.injectContext),
-          inject_context_chars: result.injectContext?.length ?? 0,
-          inject_context_preview: result.injectContext?.slice(0, 200),
-          hooks: result.decisions.map((d) => ({
-            id: d.hookId,
-            name: d.name,
-            decision: d.decision,
-            error: d.error,
-            duration_ms: d.durationMs,
-          })),
-        },
+    const auditBody = {
+      action: "hook_dispatched",
+      target: `hook-event:${event}`,
+      status: result.decision === "deny" ? "failure" : "success",
+      metadata: {
+        event,
+        decision: result.decision ?? "allow",
+        // #HOOK-F3 — record injected-context presence/size here too (this
+        // loopback route is the only fire-site for Notification +
+        // PermissionRequest hooks), so the audit row reflects what the hook
+        // added without re-running.
+        inject_context_present: Boolean(result.injectContext),
+        inject_context_chars: result.injectContext?.length ?? 0,
+        inject_context_preview: result.injectContext?.slice(0, 200),
+        hooks: result.decisions.map((d) => ({
+          id: d.hookId,
+          name: d.name,
+          decision: d.decision,
+          error: d.error,
+          duration_ms: d.durationMs,
+        })),
       },
-    }).catch(() => {
-      /* best-effort audit; loopback dispatch must not fail on it */
-    });
+    };
+    // #HOOK-F16 — this loopback is the ONLY fire-site for Notification +
+    // PermissionRequest hooks, so a dropped hook_dispatched row here means
+    // those dispatches are invisible in /observability/events with no other
+    // trace. The bare fire-and-forget swallowed a transient MCP blip; add a
+    // one-shot short-backoff retry (mirroring the chat route's safeAudit) so a
+    // momentary outage doesn't silently lose the row — without ever awaiting
+    // in a way that gates the loopback response.
+    void (async () => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          await callMcpServer("/api/v1/audit", {
+            method: "POST",
+            body: auditBody,
+          });
+          return;
+        } catch (err) {
+          if (attempt === 0) {
+            await new Promise((r) => setTimeout(r, 250));
+            continue;
+          }
+          console.warn(
+            "fire-hook: hook_dispatched audit write failed after retry:",
+            err instanceof Error ? err.message : err,
+          );
+        }
+      }
+    })();
   }
 
   // #HOOK-F6 — feed a PermissionRequest hook's verdict back into the

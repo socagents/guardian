@@ -1766,6 +1766,25 @@ async function loadSessionHistory(
               `chat: auto-compaction checkpoint persist failed:`,
               persistErr instanceof Error ? persistErr.message : persistErr,
             );
+            // #CHAT-F17 — the current turn still uses the in-memory summary so
+            // THIS turn is correct, but the checkpoint wasn't stored, so the
+            // NEXT turn finds none and recomputes the same (paid) compaction.
+            // console.warn alone made this silent, recurring waste invisible.
+            // Audit it (best-effort, through the retrying safeAudit) so the
+            // re-compaction churn is observable in /observability/events.
+            void safeAudit('chat_compaction_persist_failed', {
+              target: `session:${sessionId}`,
+              status: 'failure',
+              trigger,
+              metadata: {
+                summary_chars: result.summary.length,
+                messages_summarized: result.messagesSummarized,
+                error:
+                  persistErr instanceof Error
+                    ? persistErr.message
+                    : String(persistErr),
+              },
+            });
           }
         }
 
@@ -3528,12 +3547,18 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
     handler: async (ctx) => {
       const { sessionId, trigger, sendEvent, controller } = ctx;
       try {
+        // #CHAT-F22 — the audit query caps at COST_ROW_LIMIT rows. When a busy
+        // session or high-traffic day has MORE cost rows than this, sumCostRows
+        // only sees the first page and silently UNDERREPORTS. Detect the
+        // truncation (rows returned == the limit) and surface a warning so the
+        // operator knows the totals are a floor, not the full figure.
+        const COST_ROW_LIMIT = 1000;
         // Pull two windows: this session, and today (since
         // midnight UTC).
         const sessionRowsP = callMcpServer<{
           events?: Array<{ metadata?: Record<string, unknown> }>;
         }>(
-          `/api/v1/audit?action=chat_turn_cost&target=session:${encodeURIComponent(sessionId)}&limit=1000`,
+          `/api/v1/audit?action=chat_turn_cost&target=session:${encodeURIComponent(sessionId)}&limit=${COST_ROW_LIMIT}`,
           {
             method: 'GET',
             headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
@@ -3545,7 +3570,7 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
         const todayRowsP = callMcpServer<{
           events?: Array<{ metadata?: Record<string, unknown> }>;
         }>(
-          `/api/v1/audit?action=chat_turn_cost&since=${encodeURIComponent(todayIso)}&limit=1000`,
+          `/api/v1/audit?action=chat_turn_cost&since=${encodeURIComponent(todayIso)}&limit=${COST_ROW_LIMIT}`,
           {
             method: 'GET',
             headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
@@ -3555,8 +3580,12 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           sessionRowsP,
           todayRowsP,
         ]);
-        const sessionTotals = sumCostRows(sessionData?.events ?? []);
-        const todayTotals = sumCostRows(todayData?.events ?? []);
+        const sessionRows = sessionData?.events ?? [];
+        const todayRows = todayData?.events ?? [];
+        const sessionTruncated = sessionRows.length >= COST_ROW_LIMIT;
+        const todayTruncated = todayRows.length >= COST_ROW_LIMIT;
+        const sessionTotals = sumCostRows(sessionRows);
+        const todayTotals = sumCostRows(todayRows);
         const lines: string[] = [
           '**Cost summary**',
           '',
@@ -3577,6 +3606,21 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
           )) {
             lines.push(`  • \`${model}\`: ${formatUsd(m.usd)} (${m.calls} call${m.calls === 1 ? '' : 's'})`);
           }
+        }
+        // #CHAT-F22 — flag under-reporting when either window hit the row cap.
+        if (sessionTruncated || todayTruncated) {
+          const which = [
+            sessionTruncated ? 'this session' : null,
+            todayTruncated ? "today's total" : null,
+          ]
+            .filter(Boolean)
+            .join(' and ');
+          lines.push(
+            '',
+            `⚠️ **Totals are a floor, not exact.** ${which} ` +
+              `exceeded the ${COST_ROW_LIMIT.toLocaleString()}-row query cap, so ` +
+              'cost above is undercounted. See [/observability/cost](/observability/cost) for full rollups.',
+          );
         }
         lines.push(
           '',
@@ -5690,6 +5734,17 @@ export async function POST(request: NextRequest) {
         }
 
         let finalResponse = finalText.join('\n').trim();
+        // #CHAT-F7 — track the TRUE loop-exit cause so the run status reported
+        // on `done` reflects WHY the turn ended, not just whether text exists.
+        // `modelFinishReason` is the Gemini finishReason of the last candidate
+        // (SAFETY/RECITATION/MAX_TOKENS/STOP); `usedSynthesizedFallback` flags
+        // a tool-only run whose final text is a synthesized recap, not model
+        // prose. Both feed the classification below — without them a safety
+        // block, a budget exhaustion with partial text, and a tool-only recap
+        // all reported the misleading 'completed'.
+        const hadModelTextBeforeFallback = finalResponse.length > 0;
+        let modelFinishReason: string | undefined;
+        let usedSynthesizedFallback = false;
 
         // v0.1.25 — tool-budget exhaustion summary. If the loop ran
         // for 20 turns without producing any text, fire one more
@@ -5790,6 +5845,10 @@ export async function POST(request: NextRequest) {
             | { finishReason?: string }
             | undefined;
           const finishReason = lastCandidate?.finishReason;
+          // #CHAT-F7 — hoist the finish reason + mark that the final text is a
+          // synthesized recap (not model prose) for the run-status classifier.
+          modelFinishReason = finishReason;
+          usedSynthesizedFallback = true;
           finalResponse = synthesizeFallbackText(toolCalls, finishReason);
           sendEvent('text_delta', { text: finalResponse });
           // #CHAT-F5 — a SAFETY/RECITATION block was only surfaced inside the
@@ -5912,20 +5971,40 @@ export async function POST(request: NextRequest) {
           trigger,
         );
 
-        // Round-15 / Phase Y — surface the run status reason on
-        // done. Determined by inspecting how the tool loop exited:
-        //   - normal completion (model emitted final text)
-        //   - max_turns_exceeded (loop hit the 20-step cap)
-        //   - max_output_truncation (final response was synthesized
-        //     because Gemini truncated; chat-route's fallback
-        //     narration kicked in)
-        // The current chat-route doesn't expose the loop's actual
-        // exit cause, so we conservatively classify by the final
-        // response shape: empty/synthesized = max_output_truncation,
-        // present = completed.
-        const runStatusReason: RunStatusReason = !finalResponse
-          ? 'max_output_truncation'
-          : 'completed';
+        // Round-15 / Phase Y — surface the run status reason on done.
+        // #CHAT-F7 — classify by the TRUE loop-exit cause (tracked via
+        // modelFinishReason / usedSynthesizedFallback / exhaustedBudget /
+        // hadModelTextBeforeFallback) instead of the old shape-only heuristic
+        // that reported 'completed' for safety blocks, budget exhaustion, and
+        // tool-only recaps alike. Priority order, most-specific first:
+        //   1. SAFETY/RECITATION finishReason → safety_blocked
+        //   2. MAX_TOKENS finishReason        → max_output_truncation
+        //   3. budget cap + no model prose    → max_turns_exceeded (empty) or
+        //                                        tool_recap_only (synthesized)
+        //   4. synthesized recap (no cap)     → tool_recap_only
+        //   5. otherwise                      → completed
+        let runStatusReason: RunStatusReason;
+        if (
+          modelFinishReason === 'SAFETY' ||
+          modelFinishReason === 'RECITATION'
+        ) {
+          runStatusReason = 'safety_blocked';
+        } else if (modelFinishReason === 'MAX_TOKENS') {
+          runStatusReason = 'max_output_truncation';
+        } else if (exhaustedBudget && !hadModelTextBeforeFallback) {
+          // Loop ran the full tool budget without the model ever producing
+          // prose. If the budget-summary fallback synthesized a recap we have
+          // text but it isn't a genuine completion.
+          runStatusReason = usedSynthesizedFallback
+            ? 'tool_recap_only'
+            : 'max_turns_exceeded';
+        } else if (usedSynthesizedFallback) {
+          runStatusReason = 'tool_recap_only';
+        } else if (!finalResponse) {
+          runStatusReason = 'max_output_truncation';
+        } else {
+          runStatusReason = 'completed';
+        }
 
         sendEvent('done', {
           response: finalResponse,

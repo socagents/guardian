@@ -152,7 +152,17 @@ def register_plugin_entry_points_routes(mcp: FastMCP) -> None:
                 "plugin_install",
                 target=f"plugin:{spec[:120]}",
                 status="success" if rc == 0 else "failure",
-                metadata={"spec": spec, "return_code": rc, "stderr_tail": err[-500:]},
+                # #OBS-F16 — also capture the stdout tail (what pip installed /
+                # already-satisfied lines), not just stderr. On a failure the
+                # actionable resolver/build output often lands on stdout, and a
+                # success leaves the installed-package summary there; without it
+                # the audit row couldn't show WHAT changed, only that it ran.
+                metadata={
+                    "spec": spec,
+                    "return_code": rc,
+                    "stderr_tail": err[-500:],
+                    "stdout_tail": out[-500:],
+                },
             )
         except Exception:
             pass

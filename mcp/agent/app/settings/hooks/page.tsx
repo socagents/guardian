@@ -121,6 +121,31 @@ function transportKindLabel(t: HookRow["transport"]["type"]): string {
   return t === "http" ? "webhook" : t;
 }
 
+/**
+ * #HOOK-F2 — detect a stored-but-invalid hook so the list can badge it. A
+ * builtin-transport hook whose `name` isn't in the live builtin catalog is
+ * silently dropped at fire-time (validateHook returns null): it shows as
+ * enabled but never fires. We can only check the builtin case client-side (the
+ * catalog is fetchable); other invalid shapes are caught server-side and
+ * audited via `hook_invalid`. Returns a short reason string, or null if valid.
+ */
+function hookInvalidReason(
+  hook: HookRow,
+  builtinNames: Set<string>,
+  builtinsLoaded: boolean,
+): string | null {
+  const t = hook.transport;
+  if (t.type === "builtin") {
+    if (!t.name || !t.name.trim()) return "builtin transport has no name";
+    // Only flag unknown-builtin once the catalog actually loaded, so a failed
+    // catalog fetch doesn't false-positive every builtin hook.
+    if (builtinsLoaded && !builtinNames.has(t.name)) {
+      return `unknown builtin '${t.name}'`;
+    }
+  }
+  return null;
+}
+
 export default function HooksPage() {
   const [hooks, setHooks] = useState<HookRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,6 +154,10 @@ export default function HooksPage() {
   const [adding, setAdding] = useState(false);
   const [groupFilter, setGroupFilter] = useState<string>("all");
   const [nameFilter, setNameFilter] = useState("");
+  // #HOOK-F2 — builtin catalog (names only here) so the list can mark a hook
+  // that references an unknown builtin as invalid.
+  const [builtinNames, setBuiltinNames] = useState<Set<string>>(new Set());
+  const [builtinsLoaded, setBuiltinsLoaded] = useState(false);
 
   // Client-side filtering over the already-fetched hooks — no extra fetch.
   const filtered = useMemo(() => {
@@ -159,6 +188,30 @@ export default function HooksPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // #HOOK-F2 — load the builtin catalog once so the list can flag hooks that
+  // reference an unknown builtin name (silently dropped at fire-time).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/agent/hooks/builtins", { cache: "no-store" });
+        if (!r.ok) throw new Error(`builtins fetch ${r.status}`);
+        const data = (await r.json()) as { builtins?: BuiltinSpecMeta[] };
+        if (!cancelled) {
+          setBuiltinNames(new Set((data.builtins ?? []).map((b) => b.name)));
+          setBuiltinsLoaded(true);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("hooks: failed to load builtin catalog for validation:", err);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleToggle = useCallback(
     async (id: string, enabled: boolean) => {
@@ -334,6 +387,7 @@ export default function HooksPage() {
               <HookRowCard
                 key={h.id}
                 hook={h}
+                invalidReason={hookInvalidReason(h, builtinNames, builtinsLoaded)}
                 onToggle={handleToggle}
                 onEdit={() => {
                   setEditing(h);
@@ -370,11 +424,13 @@ export default function HooksPage() {
 
 function HookRowCard({
   hook,
+  invalidReason,
   onToggle,
   onEdit,
   onDelete,
 }: {
   hook: HookRow;
+  invalidReason?: string | null;
   onToggle: (id: string, enabled: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -435,7 +491,18 @@ function HookRowCard({
           {hook.failurePolicy === "block" && (
             <Badge tone="text-error border-error/40 bg-error/10">fail-closed</Badge>
           )}
+          {/* #HOOK-F2 — flag a stored hook that's silently dropped at fire-time
+              (e.g. an unknown builtin). It looks enabled but never fires. */}
+          {invalidReason && (
+            <Badge tone="text-error border-error/40 bg-error/10">invalid</Badge>
+          )}
         </div>
+        {invalidReason && (
+          <p className="text-xs text-error mb-1.5">
+            This hook is invalid ({invalidReason}) and will not fire even though
+            it appears enabled. Edit or delete it.
+          </p>
+        )}
         {hook.description && (
           <p className="text-xs text-on-surface-variant mb-1.5">
             {hook.description}

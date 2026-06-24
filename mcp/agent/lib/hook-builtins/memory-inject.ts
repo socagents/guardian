@@ -46,6 +46,41 @@
 import type { BuiltinHookSpec } from "./types";
 import { callMcpServer } from "@/lib/mcp-proxy";
 
+/**
+ * #MEM-F10 — emit a best-effort audit signal when memory injection is SKIPPED.
+ * Previously a search error or a zero-hit result both silently returned null
+ * (hook-runner treats result=null,error=undefined as a no-op), so the operator
+ * had no way to tell that the per-turn memory inject didn't fire. This records
+ * a `memory_inject_skipped` row (reason discriminates search_error vs
+ * zero_hits) without blocking the hook return — same fire-and-forget shape the
+ * notification-emitting builtins use.
+ */
+function auditMemoryInjectSkipped(
+  reason: "search_error" | "zero_hits",
+  meta: { sessionId: string; scope: string; topK: number; minScore: number },
+): void {
+  void (async () => {
+    try {
+      await callMcpServer("/api/v1/audit", {
+        method: "POST",
+        body: {
+          action: "memory_inject_skipped",
+          target: `session:${meta.sessionId}`,
+          status: "skipped",
+          metadata: {
+            reason,
+            scope: meta.scope || null,
+            top_k: meta.topK,
+            min_score: meta.minScore,
+          },
+        },
+      });
+    } catch {
+      // Signal is best-effort; never let it perturb the turn.
+    }
+  })();
+}
+
 interface MemoryHit {
   key: string;
   value: string;
@@ -197,6 +232,13 @@ export const memoryInjectBuiltin: BuiltinHookSpec = {
         "memory-inject: memory search failed:",
         err instanceof Error ? err.message : err,
       );
+      // #MEM-F10 — surface the failed inject so it's not silent.
+      auditMemoryInjectSkipped("search_error", {
+        sessionId: payload.sessionId,
+        scope: resolvedScope,
+        topK: config.top_k as number,
+        minScore: config.min_score as number,
+      });
       return null;
     }
 
@@ -204,7 +246,16 @@ export const memoryInjectBuiltin: BuiltinHookSpec = {
       (h) =>
         typeof h.value === "string" && h.value.trim().length > 0,
     );
-    if (hits.length === 0) return null;
+    if (hits.length === 0) {
+      // #MEM-F10 — a zero-hit inject is also a no-op the operator couldn't see.
+      auditMemoryInjectSkipped("zero_hits", {
+        sessionId: payload.sessionId,
+        scope: resolvedScope,
+        topK: config.top_k as number,
+        minScore: config.min_score as number,
+      });
+      return null;
+    }
 
     // Format the block. Each memory rendered as a bullet with key +
     // value + score (rounded). Capped at top_k by the search call.

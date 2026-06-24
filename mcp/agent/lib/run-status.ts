@@ -58,7 +58,17 @@ export type RunStatusReason =
    *  observability filters can split on this. */
   | "compaction_completed"
   /** /plan turn — no execution happened; just plan generation. */
-  | "plan_proposed";
+  | "plan_proposed"
+  /** #CHAT-F7 — the model's final response was blocked by a SAFETY or
+   *  RECITATION finishReason; the chat-route narrated a fallback. Distinct
+   *  from a clean completion (the old heuristic mislabeled these
+   *  'completed'). */
+  | "safety_blocked"
+  /** #CHAT-F7 — the loop hit the tool-budget cap and produced only a
+   *  synthesized recap of tool activity (no model prose). Distinct from
+   *  max_turns_exceeded (which is the empty-text cap-hit) and from a clean
+   *  completion. */
+  | "tool_recap_only";
 
 /** Operator-friendly label for a reason. */
 export function statusReasonLabel(r: RunStatusReason): string {
@@ -75,6 +85,8 @@ export function statusReasonLabel(r: RunStatusReason): string {
     slash_command_completed: "Slash command",
     compaction_completed: "Compaction",
     plan_proposed: "Plan proposed",
+    safety_blocked: "Blocked (safety)",
+    tool_recap_only: "Tool recap only",
   }[r];
 }
 
@@ -87,9 +99,11 @@ export function statusReasonTone(r: RunStatusReason): "ok" | "warn" | "err" | "n
     r === "aborted_by_operator" ||
     r === "max_output_truncation" ||
     r === "max_turns_exceeded" ||
+    r === "tool_recap_only" ||
     r === "stream_disconnected"
   ) {
     return "warn";
   }
+  // #CHAT-F7 — a safety block is an error-tier terminal state.
   return "err";
 }

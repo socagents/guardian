@@ -266,9 +266,17 @@ class SqliteKnowledgeBase:
         precomputed_model: str | None,
         *,
         where: str,
-    ) -> list[float]:
-        """Return the embedding for `content`, preferring a TRUSTWORTHY
+    ) -> tuple[list[float], str]:
+        """Return (embedding, source) for `content`, preferring a TRUSTWORTHY
         pre-computed vector over a live (slow, billed) `embed()` call.
+
+        `source` is one of:
+          - "precomputed"    — a trusted baked vector was reused, NO Vertex call
+          - "live"           — no baked vector; embedded live via Vertex
+          - "live_mismatch"  — a baked vector was supplied but not trusted
+                               (wrong model/dims) so it was re-embedded live
+        #KB-F9 — this distinction lets the loader differentiate a boot that
+        paid for N Vertex calls from one where all docs reused trusted vectors.
 
         A pre-computed vector is trusted only when its declared model matches
         the runtime embedder's `model_id` AND its length matches `dims`. Any
@@ -276,6 +284,7 @@ class SqliteKnowledgeBase:
         loudly when a vector was supplied but couldn't be trusted, so a
         wrong-model bundle never silently ships bad vectors.
         """
+        source = "live"
         if precomputed is not None:
             runtime_model = getattr(self._embedder, "model_id", None)
             if (
@@ -284,7 +293,8 @@ class SqliteKnowledgeBase:
                 and precomputed_model == runtime_model
                 and len(precomputed) == self._embedder.dims
             ):
-                return precomputed
+                return precomputed, "precomputed"
+            source = "live_mismatch"
             logger.warning(
                 "kb_store: %s pre-computed embedding NOT trusted "
                 "(doc_model=%r runtime_model=%r dims=%d/expected %d) — embedding live",
@@ -336,7 +346,7 @@ class SqliteKnowledgeBase:
             raise RuntimeError(
                 f"embedder returned {len(embedding)} dims; expected {self._embedder.dims}"
             )
-        return embedding
+        return embedding, source
 
     @staticmethod
     def _cosine(a: list[float], b: list[float]) -> float:
@@ -358,9 +368,16 @@ class SqliteKnowledgeBase:
         source_hash: str,
         precomputed_embedding: list[float] | None = None,
         precomputed_model: str | None = None,
+        embedding_stats: dict[str, int] | None = None,
     ) -> tuple[KbDocument, str]:
         """Insert or update a document. Returns (doc, action) where
         action is "insert" | "update" | "unchanged".
+
+        #KB-F9 — `embedding_stats`, when supplied, is an out-dict the caller
+        owns; this method increments the keys "precomputed" / "live_embedded"
+        on it (in place) per resolved embedding so the loader can tell a boot
+        that reused trusted baked vectors from one that paid for live Vertex
+        calls. The "unchanged" fast-path embeds nothing, so it touches neither.
 
         "unchanged" means the source_hash matched — we skipped the
         embed step entirely. That's the v1 change-detection win: most
@@ -391,12 +408,28 @@ class SqliteKnowledgeBase:
 
         # Re-embed only when content actually changed (or doc is new) —
         # unless the doc shipped a trustworthy pre-computed vector.
-        embedding = self._resolve_embedding(
+        embedding, embedding_source = self._resolve_embedding(
             content,
             precomputed_embedding,
             precomputed_model,
             where=f"{kb_name}:{doc_id}",
         )
+        # #KB-F9 — accumulate the precomputed-vs-live split into the caller's
+        # out-dict. "live_mismatch" counts as live_embedded (it DID pay a
+        # Vertex call) but is also surfaced separately for the loader.
+        if embedding_stats is not None:
+            if embedding_source == "precomputed":
+                embedding_stats["precomputed"] = (
+                    embedding_stats.get("precomputed", 0) + 1
+                )
+            else:
+                embedding_stats["live_embedded"] = (
+                    embedding_stats.get("live_embedded", 0) + 1
+                )
+                if embedding_source == "live_mismatch":
+                    embedding_stats["live_mismatch"] = (
+                        embedding_stats.get("live_mismatch", 0) + 1
+                    )
         embedding_blob = self._pack(embedding)
         now = self._now_iso()
 
@@ -438,6 +471,8 @@ class SqliteKnowledgeBase:
                 "action": action,
                 "content_chars": len(content),
                 "source_path": source_path,
+                # #KB-F9 — precomputed | live | live_mismatch.
+                "embedding_source": embedding_source,
             },
         )
         return KbDocument(

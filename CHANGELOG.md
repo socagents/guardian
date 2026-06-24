@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.76] (2026-06-24) — *Finer-grained observability: per-phase research, honest turn status, size guards, embedding accounting*
+
+- **Deep-research shows its work.** A `deep_research` call previously collapsed its many searches + fetches + gap-checks into one event; the result now carries a per-phase breakdown (plan / search / fetch / gap-check / synthesize, with counts and timings) and any warnings, so partial-coverage failures are visible.
+- **Chat turns report the true exit cause.** A turn that ended on a safety block, ran tools-only, or exhausted its budget is no longer mislabeled "completed"; the run status now reflects what actually happened. Auto-compaction checkpoint-save failures and `/cost` result truncation (when a session exceeds 1000 cost rows) are now surfaced instead of silent.
+- **Screenshot size guard.** `guardian_web_screenshot` now accepts a `max_bytes` cap (default 4 MiB) and returns a bounded rejection instead of injecting a multi-megabyte image into context.
+- **Embedding accounting.** A knowledge-base load now records how many documents used trusted pre-baked vectors vs were embedded live — so a normal zero-cost boot is distinguishable from one that paid for hundreds of Vertex calls.
+- **Quieter failures get a voice.** Memory injection that errored or found nothing, an invalid built-in hook that would silently never fire (now badged in the Hooks page), and an SVG-too-large diagram rejection (now a specific message, not a generic timeout) each leave a signal.
+- **Proxy latency.** The agent→MCP proxy now stamps a per-request duration + request-id header for latency triage.
+
 ## [v0.2.75] (2026-06-24) — *Forensic audit trail, part 3: chat-turn observability*
 
 - **Chat-turn decisions are now traceable.** A turn auto-retry (recovering a leaked tool call or an empty response), a safety/recitation block, a context-window hard block, a turn-cache hit that skipped the MCP, and a suppressed repeat-failing tool call now each leave a distinct audit row — previously these were only in debug logs or invisible.

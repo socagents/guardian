@@ -60,6 +60,15 @@ COVERAGE_ADEQUATE = 2
 # LLM helper — uses Anthropic Messages API via urllib (no external deps)
 # ---------------------------------------------------------------------------
 
+def _anthropic_key_configured() -> bool:
+    """#CDW-F16 — whether an ANTHROPIC_API_KEY is present in the connector
+    container env. Used to distinguish 'no key configured' (operator
+    mis-config — deep_research silently degrades to keyword planning) from a
+    transient LLM call failure, so the structured result can surface the
+    difference instead of it living only in container stderr."""
+    return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+
+
 def _call_llm(
     system_prompt: str,
     user_prompt: str,
@@ -286,13 +295,24 @@ def plan_research(request: str, max_sections: int, model: str) -> dict:
 
     response = _call_llm(PLAN_SYSTEM_PROMPT, prompt, model=model)
     if not response:
+        # #CDW-F16 — distinguish "no key configured" (operator mis-config:
+        # planning is degraded for every call) from a transient LLM error.
+        reason = (
+            "anthropic_api_key_unset"
+            if not _anthropic_key_configured()
+            else "llm_call_failed"
+        )
         print("LLM planning failed, using fallback keyword planner", file=sys.stderr)
-        return _fallback_plan(request, max_sections)
+        plan = _fallback_plan(request, max_sections)
+        plan["_planning_fallback"] = reason
+        return plan
 
     plan = _parse_json_from_llm(response)
     if not plan or "sections" not in plan:
         print("LLM returned invalid plan, using fallback", file=sys.stderr)
-        return _fallback_plan(request, max_sections)
+        plan = _fallback_plan(request, max_sections)
+        plan["_planning_fallback"] = "llm_invalid_plan"
+        return plan
 
     # Validate and cap sections
     plan["sections"] = plan["sections"][:max_sections]
@@ -621,14 +641,58 @@ def run_deep_search(
     total_content_chars = 0
     gap_retries = 0
 
+    # #CDW-F3 — per-phase progress summary. The connector runs in its own
+    # container and CANNOT write audit.db; instead it returns this structured
+    # `phases` list in the result envelope, which the agent-side connector_loader
+    # wrapper folds into the single tool_call audit row. Each entry:
+    #   {phase, name, status, ...counts}. status ∈ done|empty|skipped|partial.
+    # #CDW-F16 — `warnings` carries non-fatal degradations (e.g. the keyword-
+    # planner fallback when ANTHROPIC_API_KEY is unset) so the operator sees
+    # them in audit/result instead of only in container stderr.
+    phases: list[dict] = []
+    warnings: list[dict] = []
+
+    def _phase_started() -> float:
+        return time.time()
+
+    def _record_phase(name: str, started: float, status: str, **counts) -> None:
+        entry = {
+            "phase": len(phases) + 1,
+            "name": name,
+            "status": status,
+            "ms": int((time.time() - started) * 1000),
+        }
+        entry.update(counts)
+        phases.append(entry)
+
     # ── Phase 1: Plan ──────────────────────────────────────────────
     print("Phase 1: Planning research outline...", file=sys.stderr)
+    p_started = _phase_started()
     plan = plan_research(request, max_sections, model)
     sections = plan.get("sections", [])
+    fallback_reason = plan.pop("_planning_fallback", None)
+    if fallback_reason:
+        warnings.append({
+            "phase": "plan",
+            "code": fallback_reason,
+            "detail": (
+                "ANTHROPIC_API_KEY not set; deep_research degraded to the "
+                "keyword planner (no LLM outline/gap-check). Set the key on "
+                "the cortex-docs connector instance to enable LLM planning."
+                if fallback_reason == "anthropic_api_key_unset"
+                else "LLM planning unavailable; used the keyword fallback planner."
+            ),
+        })
     print(
         f"  → {len(sections)} sections planned "
         f"(type={plan.get('deliverable_type')}, audience={plan.get('audience')})",
         file=sys.stderr,
+    )
+    _record_phase(
+        "plan", p_started,
+        "done" if sections else "empty",
+        sections_planned=len(sections),
+        fallback=fallback_reason,
     )
 
     if not sections:
@@ -643,12 +707,16 @@ def run_deep_search(
             "gap_check_enabled": enable_gap_check,
             "gap_check_retries": 0,
             "execution_time_seconds": time.time() - start_time,
+            "phases": phases,
+            "warnings": warnings,
         })
 
     # ── Phase 2: Search per section ────────────────────────────────
     print("Phase 2: Searching per section...", file=sys.stderr)
+    p_started = _phase_started()
     global_seen: set[str] = set()
     section_hits: dict[int, list[dict]] = {}
+    sections_with_no_hits = 0
 
     for i, sec in enumerate(sections):
         queries = sec.get("queries", [])
@@ -663,12 +731,33 @@ def run_deep_search(
         total_search_hits += raw_count
         section_hits[i] = hits
         sec["_hit_count"] = raw_count
+        if not hits:
+            sections_with_no_hits += 1
 
         print(f"    → {len(hits)} unique hits (from {raw_count} raw)", file=sys.stderr)
 
+    if sections_with_no_hits:
+        warnings.append({
+            "phase": "search",
+            "code": "sections_no_hits",
+            "detail": (
+                f"{sections_with_no_hits}/{len(sections)} section(s) returned "
+                "zero search hits — those sections will have no evidence."
+            ),
+            "count": sections_with_no_hits,
+        })
+    _record_phase(
+        "search", p_started, "done",
+        queries=total_queries,
+        raw_hits=total_search_hits,
+        sections_no_hits=sections_with_no_hits,
+    )
+
     # ── Phase 3: Fetch evidence ────────────────────────────────────
     print("Phase 3: Fetching full topic content...", file=sys.stderr)
+    p_started = _phase_started()
     section_evidence: dict[int, list[dict]] = {}
+    partial_fetch_sections = 0
 
     for i, hits in section_hits.items():
         if not hits:
@@ -681,6 +770,8 @@ def run_deep_search(
         )
         evidence = fetch_evidence(hits, max_chars=max_chars_per_topic)
         section_evidence[i] = evidence
+        if len(evidence) < len(hits):
+            partial_fetch_sections += 1
         chars = sum(e.get("content_chars", 0) for e in evidence)
         total_content_chars += chars
         print(
@@ -688,9 +779,28 @@ def run_deep_search(
             file=sys.stderr,
         )
 
+    topics_fetched_p3 = sum(len(ev) for ev in section_evidence.values())
+    if partial_fetch_sections:
+        warnings.append({
+            "phase": "fetch",
+            "code": "partial_fetch",
+            "detail": (
+                f"{partial_fetch_sections} section(s) fetched fewer topics than "
+                "hits found (some topic fetches failed)."
+            ),
+            "count": partial_fetch_sections,
+        })
+    _record_phase(
+        "fetch", p_started, "done",
+        topics_fetched=topics_fetched_p3,
+        content_chars=total_content_chars,
+        partial_sections=partial_fetch_sections,
+    )
+
     # ── Phase 4: Gap check (optional) ─────────────────────────────
     if enable_gap_check:
         print("Phase 4: Checking coverage gaps...", file=sys.stderr)
+        p_started = _phase_started()
         retries = check_gaps(request, plan, section_evidence, model)
 
         if retries:
@@ -736,11 +846,22 @@ def run_deep_search(
                         f"    → {len(retry_evidence)} new topics, {chars:,} chars",
                         file=sys.stderr,
                     )
+            _record_phase(
+                "gap_check", p_started, "done",
+                sections_retried=len(retries),
+                retry_queries=gap_retries,
+            )
         else:
             print("  → All sections have adequate coverage", file=sys.stderr)
+            _record_phase(
+                "gap_check", p_started, "done",
+                sections_retried=0,
+                retry_queries=0,
+            )
 
     # ── Phase 5: Synthesize ────────────────────────────────────────
     print("Phase 5: Synthesizing research brief...", file=sys.stderr)
+    p_started = _phase_started()
 
     topics_fetched = sum(len(ev) for ev in section_evidence.values())
     sections_with_evidence = sum(
@@ -758,6 +879,33 @@ def run_deep_search(
         "gap_check_retries": gap_retries,
         "execution_time_seconds": round(time.time() - start_time, 1),
     }
+
+    if sections_with_evidence < len(sections):
+        warnings.append({
+            "phase": "synthesize",
+            "code": "incomplete_coverage",
+            "detail": (
+                f"{sections_with_evidence}/{len(sections)} sections have "
+                "evidence; the rest are uncovered — treat their claims as "
+                "unsupported and follow up with a targeted cortex_search."
+            ),
+            "covered": sections_with_evidence,
+            "planned": len(sections),
+        })
+    _record_phase(
+        "synthesize", p_started,
+        "done" if sections_with_evidence else "empty",
+        sections_with_evidence=sections_with_evidence,
+        topics=topics_fetched,
+    )
+
+    # #CDW-F3/#CDW-F16 — surface the per-phase summary + warnings on the stats
+    # envelope. synthesize_brief returns {..., "stats": stats}; the agent-side
+    # connector_loader wrapper reads brief.stats.phases / brief.stats.warnings
+    # into the tool_call audit row so the N-search/N-fetch/gap-check internal
+    # loop is visible in /observability/events, not collapsed into one opaque row.
+    stats["phases"] = phases
+    stats["warnings"] = warnings
 
     brief = synthesize_brief(request, plan, section_evidence, stats)
 

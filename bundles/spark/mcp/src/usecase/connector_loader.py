@@ -1035,6 +1035,25 @@ def _wrap_with_instance(
                 v = result.get(k)
                 if v:
                     meta[k] = v
+            # #CDW-F3/#CDW-F16 — a connector tool that runs an internal
+            # multi-phase pipeline (deep_research: plan→search→fetch→gap-check→
+            # synthesize) returns a per-phase summary + non-fatal warnings on
+            # its result envelope. The connector runs in its own container and
+            # CANNOT write audit.db, so we hoist those into THIS (single) tool_call
+            # row here so the phases/degradations are visible in
+            # /observability/events instead of only in container stderr. Key-name
+            # based (any tool returning brief.stats.phases benefits), mirroring
+            # the CDW-F5 convention above.
+            _brief = result.get("brief")
+            if isinstance(_brief, dict):
+                _bstats = _brief.get("stats")
+                if isinstance(_bstats, dict):
+                    _phases = _bstats.get("phases")
+                    if isinstance(_phases, list) and _phases:
+                        meta["research_phases"] = _phases
+                    _warnings = _bstats.get("warnings")
+                    if isinstance(_warnings, list) and _warnings:
+                        meta["research_warnings"] = _warnings
         # #XSOAR-F4/XSIAM-F5 — capture arg VALUES (redacted at capture) so the
         # audit row shows WHAT the agent did, not just which arg keys it used.
         arg_values = _sanitize_arg_values(namespaced, kwargs)

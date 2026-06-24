@@ -846,6 +846,30 @@ audit:
     # subagents-enabled toggle writes operator_state_set).
     - "operator_state_set"
     - "operator_state_delete"
+    # ── v0.2.76 audit batch — observability granularity ──
+    # #CHAT-F17 — auto-compaction summary was computed but the checkpoint
+    # FAILED to persist (this turn used the in-memory summary, but the next turn
+    # finds no checkpoint and recomputes the same paid compaction). Was
+    # console.warn only; now audited so the recurring re-compaction is visible.
+    - "chat_compaction_persist_failed"
+    # #MEM-F10 — the per-turn memory-inject builtin hook was SKIPPED (the MCP
+    # memory search errored, or returned zero hits). Both previously returned
+    # null silently (a hook-runner no-op); now they emit a signal so the
+    # operator can tell injection didn't fire. metadata.reason ∈
+    # {search_error, zero_hits}.
+    - "memory_inject_skipped"
+    # #HOOK-F2 — a stored hook that fails validation at fire-time (e.g. a
+    # builtin transport with an unknown builtin name, written via direct PATCH)
+    # is silently dropped — it appears enabled but never fires. Emitted (deduped
+    # per process per hook+event) by the agent hook-runner so the dead hook is
+    # observable; the /settings/hooks page also badges it.
+    - "hook_invalid"
+    # #INV-F9 — an agent-produced investigation diagram (attack-chain /
+    # relations SVG) was REJECTED by _clean_svg (most importantly the >256 KB
+    # too-large case). The tool returns an error dict and the SVG field never
+    # updates; without this the UI poll could only show a generic timeout.
+    # metadata.code distinguishes svg_too_large from other rejections.
+    - "issue_diagram_rejected"
 
 notifications:
   topics:
