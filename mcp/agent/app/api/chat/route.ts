@@ -341,8 +341,11 @@ const SUBAGENT_CREATE_TOOL_SPEC = {
       prompt: {
         type: 'string' as const,
         description:
-          'The task for the subagent. Self-contained — the subagent ' +
-          "won't see the parent's prior context.",
+          'The task for the subagent. Write it self-contained: most agents ' +
+          "run with fresh isolation and won't see the parent's prior " +
+          'context. (An agent defined with isolation="parent_session" is ' +
+          'hydrated with the parent conversation, but you should still ' +
+          'state the task explicitly.)',
       },
     },
     required: ['agent_name', 'prompt'],
@@ -711,6 +714,9 @@ async function runSubagent(args: {
       max_turns: agentDef.max_turns,
       tools_allowed_count: agentDef.tools_allowed.length,
       tools_denied_count: agentDef.tools_denied.length,
+      // #SUB-F12 — record the agent's isolation so the parent-context
+      // hydration path is auditable.
+      isolation: agentDef.isolation,
     },
     trigger: args.trigger,
   });
@@ -747,10 +753,54 @@ async function runSubagent(args: {
     role: 'system',
     parts: [{ text: agentDef.system_prompt }],
   };
-  const subagentContents: GeminiContent[] = [
-    { role: 'user', parts: [{ text: args.prompt }] },
-  ];
   const subagentModel = agentDef.model ?? args.parentModel;
+  // #SUB-F12 — honor isolation. agent_definitions declare one of:
+  //   • "fresh_session" (default) — the subagent starts clean and sees
+  //     only its task prompt (the prior behaviour).
+  //   • "parent_session" — the subagent should "see the parent's memory
+  //     scope." We hydrate the parent's prior conversation (budget-trimmed
+  //     by loadSessionHistory) ahead of the task prompt so the subagent has
+  //     the parent's context, then append the task as the final user turn.
+  // Before this, isolation was fetched but never read — parent_session was
+  // a no-op, contradicting the docstring.
+  const subagentContents: GeminiContent[] = [];
+  let parentHydrated = false;
+  if (agentDef.isolation === 'parent_session' && args.parentSessionId) {
+    try {
+      const parentHistory = await loadSessionHistory(
+        args.parentSessionId,
+        args.trigger,
+        subagentModel,
+      );
+      if (parentHistory.length > 0) {
+        subagentContents.push(...parentHistory);
+        parentHydrated = true;
+      }
+    } catch (err) {
+      // Best-effort: a failed parent-history load degrades to a fresh
+      // subagent rather than aborting the dispatch.
+      console.warn(
+        `chat: subagent parent_session hydration failed for ${args.agentName}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  subagentContents.push({ role: 'user', parts: [{ text: args.prompt }] });
+  if (agentDef.isolation === 'parent_session') {
+    // #SUB-F12 — trace whether parent-context hydration actually happened
+    // (it can no-op when the parent has no replayable history).
+    void safeAudit('chat_subagent_started', {
+      target: `session:${subagentSessionId}`,
+      status: parentHydrated ? 'success' : 'failure',
+      metadata: {
+        phase: 'parent_hydration',
+        parent_session_id: args.parentSessionId,
+        parent_hydrated: parentHydrated,
+        hydrated_turns: parentHydrated ? subagentContents.length - 1 : 0,
+      },
+      trigger: args.trigger,
+    });
+  }
   const finalText: string[] = [];
   const toolCallsMade: Array<{ tool: string; args: Record<string, unknown> }> = [];
   let turnsUsed = 0;
@@ -1713,6 +1763,70 @@ async function loadSessionApprovalMode(
   }
 }
 
+/**
+ * #CHAT-F23 — one-shot "plan approved" bypass.
+ *
+ * The /plan handler proposes a plan and the PlanCard's "Approve & run"
+ * button PATCHes the session with `plan_approved_pending: true` +
+ * `plan_source_prompt: <the original prompt>`, then re-sends that prompt.
+ * This consumes that flag: when the inbound message matches the approved
+ * source prompt, it returns true (bypass per-tool approvals for THIS
+ * turn only) AND clears the flag so the bypass is genuinely one-shot —
+ * the next unrelated turn re-gates normally. This is what makes the
+ * "approve once → run the whole plan without per-tool cards" promise
+ * real instead of documentation-only.
+ *
+ * Default-secure: any read/parse failure, a mismatched prompt, or a
+ * stale (>1h) approval returns false (require approvals).
+ */
+async function consumePlanApprovalBypass(
+  sessionId: string,
+  message: string,
+  trigger: string | undefined,
+): Promise<boolean> {
+  try {
+    const data = await callMcpServer<{
+      session?: { meta?: Record<string, unknown> };
+    }>(`/api/v1/sessions/${encodeURIComponent(sessionId)}`, {
+      method: 'GET',
+      headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
+    });
+    const meta = data?.session?.meta ?? {};
+    if (meta['plan_approved_pending'] !== true) return false;
+    const sourcePrompt =
+      typeof meta['plan_source_prompt'] === 'string'
+        ? meta['plan_source_prompt']
+        : '';
+    // The flag is single-use: clear it regardless of whether it matches,
+    // so a stale/forgotten approval can never silently bypass a later
+    // turn. We re-PATCH meta with the flag removed before deciding.
+    const approvedAt =
+      typeof meta['plan_approved_at'] === 'string'
+        ? Date.parse(meta['plan_approved_at'])
+        : NaN;
+    const fresh =
+      Number.isFinite(approvedAt) && Date.now() - approvedAt < 60 * 60 * 1000;
+    // Clear the one-shot flag (best-effort; don't fail the turn on it).
+    // The PATCH merges `metadata` over existing meta by default, so we
+    // only need to send the single cleared key.
+    void callMcpServer(`/api/v1/sessions/${encodeURIComponent(sessionId)}`, {
+      method: 'PATCH',
+      headers: trigger ? { 'X-Guardian-Trigger': trigger } : undefined,
+      body: { metadata: { plan_approved_pending: false } },
+    }).catch(() => {
+      /* best-effort clear */
+    });
+    const matches = sourcePrompt.trim() === message.trim();
+    return fresh && matches;
+  } catch (err) {
+    console.warn(
+      `chat: failed to read plan-approval flag for ${sessionId}:`,
+      err instanceof Error ? err.message : err,
+    );
+    return false;
+  }
+}
+
 /** Invalidate the preferred-model cache for a session. Called by the
  *  /model handler after a PATCH so the same turn (or the next one)
  *  reads the freshly-set value instead of the stale cached one. */
@@ -2285,7 +2399,7 @@ function formatToolPreamble(
 }
 
 function synthesizeFallbackText(
-  toolCalls: Array<{ tool: string; args: Record<string, unknown>; result: string; error?: string }>,
+  toolCalls: Array<{ tool: string; args: Record<string, unknown>; result: string; error?: string; durationMs?: number }>,
   finishReason: string | undefined,
 ): string {
   // Tool-flow specific: certain tool names map cleanly to "X happened"
@@ -3141,7 +3255,29 @@ async function fetchPersonalityForPrompt(): Promise<PersonalityForPrompt> {
       };
     }
     const md = blob['personalityMd'];
-    const personalityMd = typeof md === 'string' && md.trim() ? md : null;
+    let personalityMd = typeof md === 'string' && md.trim() ? md : null;
+    // #XCUT-F7 — wire `escalationThreshold` (0..100) into the prompt. It
+    // was stored + surfaced as a slider ("Escalate Often ↔ Handle
+    // Silently") but no code ever read it. Translate the value into a
+    // plain-language escalation directive the agent acts on. Below this
+    // there's no daily-summary subsystem, so `dailySummary`/`summaryTime`
+    // are NOT wired (they were removed from the UI in the same release).
+    const rawThreshold = blob['escalationThreshold'];
+    if (typeof rawThreshold === 'number' && Number.isFinite(rawThreshold)) {
+      const t = Math.max(0, Math.min(100, rawThreshold));
+      // Low threshold = escalate often (raise even borderline findings);
+      // high threshold = handle silently (only escalate clear, serious
+      // findings). Bucket into three tiers for a stable, cache-friendly
+      // directive rather than emitting the raw number.
+      const directive =
+        t <= 33
+          ? 'The operator set a LOW escalation threshold: surface and flag even borderline or uncertain findings to them rather than resolving silently.'
+          : t >= 67
+            ? 'The operator set a HIGH escalation threshold: handle routine findings autonomously and only escalate clear, serious, or high-confidence issues.'
+            : 'The operator set a MODERATE escalation threshold: escalate meaningful findings but resolve clearly low-risk routine items yourself.';
+      const block = `\n\n## Escalation preference\n${directive}`;
+      personalityMd = (personalityMd ?? '') + block;
+    }
     return { policy, personalityMd };
   } catch {
     return { policy: DEFAULT_ACTION_POLICY, personalityMd: null };
@@ -3958,10 +4094,13 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
   //
   // Implementation: this handler emits a `plan_proposed` SSE event
   // with the model's plan text. The chat UI renders an inline
-  // PlanCard that the operator can approve. Approval re-sends the
-  // ORIGINAL prompt with a session-flag that signals "skip
-  // per-tool approvals — the plan was approved." See
-  // `lib/system-prompt.ts` for the planning instructions appended
+  // PlanCard with an "Approve & run" button (#CHAT-F23). Clicking it
+  // PATCHes the session with a one-shot `plan_approved_pending` flag +
+  // the source prompt, then re-sends that prompt. The next turn's
+  // bypass resolver (consumePlanApprovalBypass) consumes the flag for
+  // the matching prompt — running the whole plan with per-tool
+  // approvals bypassed for that single turn, then clearing the flag.
+  // See `lib/system-prompt.ts` for the planning instructions appended
   // to the system prompt.
   {
     name: 'plan',
@@ -4029,11 +4168,13 @@ const SLASH_COMMANDS: readonly SlashCommand[] = [
         sendEvent('text_delta', {
           text:
             '\n\n---\n\n' +
-            '**To execute this plan**: send the original prompt without `/plan` ' +
+            '**To execute this plan**: click **Approve & run** on the plan card ' +
+            "above — I'll run the whole plan with a one-shot bypass so tier-2+ " +
+            'tools execute without a card per tool.\n\n' +
+            '**Or run it manually**: send the original prompt without `/plan` ' +
             '(e.g. `' +
             (prompt.length > 60 ? prompt.slice(0, 60) + '…' : prompt) +
-            '`). ' +
-            "I'll run the steps; tier-2+ tools may still surface individual approval cards.\n\n" +
+            '`) — that path still surfaces per-tool approval cards.\n\n' +
             '**To revise**: tell me what to change ("plan again but skip step 3").\n\n' +
             '**To cancel**: just send a different prompt; the plan goes away.',
         });
@@ -4593,7 +4734,24 @@ export async function POST(request: NextRequest) {
         const sessionApprovalMode = isNewSession
           ? 'manual'
           : await loadSessionApprovalMode(sessionId, trigger);
-        const approvalBypass = bypassFromInbound || sessionApprovalMode === 'bypass';
+        // #CHAT-F23 — a freshly approved plan grants a one-shot bypass for
+        // the matching prompt (consumed here so it can't leak to a later
+        // turn). New sessions can't have a pending plan approval.
+        const planApprovedBypass = isNewSession
+          ? false
+          : await consumePlanApprovalBypass(sessionId, message, trigger);
+        const approvalBypass =
+          bypassFromInbound ||
+          sessionApprovalMode === 'bypass' ||
+          planApprovedBypass;
+        if (planApprovedBypass) {
+          await safeAudit('chat_plan_executed', {
+            target: `session:${sessionId}`,
+            status: 'success',
+            metadata: { source_prompt_chars: message.length },
+            trigger,
+          });
+        }
         // v0.3.27 — derive the narration mode passed to the system
         // prompt. Mirrors `approvalBypass` exactly so the agent's
         // promised UX (card vs. immediate-execute) matches what the
@@ -4999,7 +5157,13 @@ export async function POST(request: NextRequest) {
         }
 
         let finalText: string[] = [];
-        let toolCalls: Array<{ tool: string; args: Record<string, unknown>; result: string; error?: string }> = [];
+        // #CHAT-F28 — accumulate the model's reasoning across the whole
+        // turn so it can be persisted alongside the assistant row. Live
+        // streaming still flows through the `thinking` SSE event; this
+        // copy lets a session loaded from history re-render the
+        // ThinkingSection instead of losing reasoning on reload.
+        const thinkingChunks: string[] = [];
+        let toolCalls: Array<{ tool: string; args: Record<string, unknown>; result: string; error?: string; durationMs?: number }> = [];
 
         // v0.1.25: track whether the loop exited because we ran out of
         // tool-call budget (vs. clean break with no further function
@@ -5100,6 +5264,9 @@ export async function POST(request: NextRequest) {
                 // above the answer. Excluded from finalText so the saved
                 // .content stays the clean answer-only transcript.
                 sendEvent('thinking', { text: part.text });
+                // #CHAT-F28 — keep a copy for persistence (live stream
+                // already handled by the SSE event above).
+                thinkingChunks.push(part.text);
                 if (!leakedToolCallInThought && /default_api/.test(part.text)) {
                   leakedToolCallInThought = true;
                 }
@@ -5427,6 +5594,10 @@ export async function POST(request: NextRequest) {
                 args: toolArgs as Record<string, unknown>,
                 result: resultText,
                 error: subResult.error,
+                durationMs:
+                  typeof subResult.duration_ms === 'number'
+                    ? subResult.duration_ms
+                    : undefined,
               });
               responseParts.push({
                 functionResponse: {
@@ -5803,6 +5974,7 @@ export async function POST(request: NextRequest) {
                 args: toolArgs as Record<string, unknown>,
                 result: '',
                 error: errMsg,
+                durationMs: Date.now() - toolStartedAt,
               });
               responseParts.push({
                 functionResponse: {
@@ -5862,6 +6034,7 @@ export async function POST(request: NextRequest) {
               tool: toolName,
               args: toolArgs as Record<string, unknown>,
               result: resultText,
+              durationMs: Date.now() - toolStartedAt,
             });
 
             responseParts.push({
@@ -6108,11 +6281,24 @@ export async function POST(request: NextRequest) {
         // reads top-to-bottom like the chat. Each call is best-effort
         // and isolated, so one failure doesn't drop the rest.
         for (const tc of toolCalls) {
+          // #CHAT-F27 — persist the original outcome so a reloaded
+          // session's telemetry panel reflects what actually happened.
+          // Before this, every replayed tool call defaulted to
+          // status=success / duration='—' (getSessionTelemetry reads
+          // meta.status / meta.duration_ms, which were never written),
+          // so a failed call looked like a successful one on reload.
           await safePersist(sessionId, {
             role: 'tool',
-            content: tc.result,
+            content: tc.error ? tc.error : tc.result,
             tool_call_id: tc.tool,
-            meta: { tool: tc.tool, args: tc.args },
+            meta: {
+              tool: tc.tool,
+              args: tc.args,
+              ...(tc.error ? { status: 'error', error: tc.error } : {}),
+              ...(typeof tc.durationMs === 'number'
+                ? { duration_ms: tc.durationMs }
+                : {}),
+            },
           }, trigger);
         }
         // Always persist an assistant row when there was anything to
@@ -6138,6 +6324,14 @@ export async function POST(request: NextRequest) {
                   ? 'session'
                   : 'none',
               provider: requestedProvider || 'auto',
+              // #CHAT-F28 — persist the turn's reasoning so a reloaded
+              // session can re-render the ThinkingSection. Kept in meta
+              // (not the message body) so .content stays the clean
+              // answer-only transcript. Bounded to avoid bloating the
+              // row on long extended-reasoning turns.
+              ...(thinkingChunks.length
+                ? { reasoning: thinkingChunks.join('').slice(0, 20000) }
+                : {}),
             },
           }, trigger);
         }

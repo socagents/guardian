@@ -532,6 +532,9 @@ export default function ChatPage() {
               content: msg.content,
               timestamp: msg.timestamp,
               mcpId: msg.mcpId,
+              // #CHAT-F28 — carry persisted reasoning onto the assistant
+              // bubble so its Thinking section re-renders on reload.
+              ...(msg.reasoning ? { reasoning: msg.reasoning } : {}),
             };
           });
           loadSession(id, history);
@@ -770,6 +773,34 @@ export default function ChatPage() {
     [sendMessage]
   );
 
+  // #CHAT-F23 — "Approve & run" a proposed plan. Sets a one-shot session
+  // flag (consumed server-side by the chat route for the matching prompt)
+  // that bypasses per-tool approval cards for that single execution, then
+  // re-sends the original prompt. This is what makes /plan's "approve once
+  // → run the whole plan" promise real instead of documentation-only.
+  const handleApprovePlan = useCallback(
+    (sourcePrompt: string) => {
+      const prompt = sourcePrompt.trim();
+      if (!prompt || !sessionId) return;
+      void (async () => {
+        try {
+          await patchSession(sessionId, {
+            metadata: {
+              plan_approved_pending: true,
+              plan_source_prompt: prompt,
+              plan_approved_at: new Date().toISOString(),
+            },
+          });
+        } catch {
+          // If the flag write fails the prompt still runs, just with the
+          // normal per-tool approval gate (safe degradation).
+        }
+        sendMessage(prompt, "plan-approve");
+      })();
+    },
+    [sessionId, sendMessage]
+  );
+
   const showEmptyState = messages.length === 0 && !isLoadingSession;
 
   return (
@@ -798,6 +829,10 @@ export default function ChatPage() {
           onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
           onExport={sessionId ? handleExportCurrent : undefined}
           onDeleteSession={sessionId ? handleDeleteCurrentSession : undefined}
+          // #CHAT-F29 — wire the inline title edit to the same PATCH the
+          // sidebar Rename uses, so the edit persists instead of being
+          // cosmetic-only.
+          onRenameSession={sessionId ? handleRenameSession : undefined}
           models={availableModels}
           selectedModel={currentModel}
           selectedProvider={currentProvider}
@@ -839,6 +874,9 @@ export default function ChatPage() {
               // an mcpId (loaded from MCP persistence). Click branches
               // a new session from that exact message.
               onForkFromMessage={handleForkFromMessage}
+              // #CHAT-F23 — Approve & run a proposed plan with a one-shot
+              // per-tool-approval bypass.
+              onApprovePlan={handleApprovePlan}
             />
           )}
         </div>

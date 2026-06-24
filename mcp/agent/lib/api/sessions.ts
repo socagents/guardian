@@ -154,6 +154,10 @@ export interface TranscriptMessage {
   timestamp: string;
   meta?: Record<string, unknown>;
   mcpId?: string;
+  /** #CHAT-F28 — the turn's reasoning, rehydrated from meta.reasoning
+   *  on an assistant row. Lets a reloaded session re-render the
+   *  collapsed ThinkingSection. */
+  reasoning?: string;
 }
 
 /** Tool call captured from a session's persisted messages. Shape matches
@@ -270,6 +274,12 @@ export async function getSessionTranscript(
       timestamp: m.ts ?? m.timestamp ?? "",
       meta: m.meta,
       mcpId: m.id,
+      // #CHAT-F28 — surface meta.reasoning (persisted on the assistant
+      // row by the chat route) so the loader can populate
+      // ChatMessage.reasoning and the ThinkingSection re-renders.
+      ...(m.meta && typeof m.meta["reasoning"] === "string"
+        ? { reasoning: m.meta["reasoning"] as string }
+        : {}),
     }));
   return { ok: true, data: { messages: mapped } };
 }

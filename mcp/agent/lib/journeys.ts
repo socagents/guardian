@@ -2297,8 +2297,8 @@ export const JOURNEYS: Journey[] = [
         newSession: true,
       },
       {
-        text: "investigate the most recent critical XSOAR case: pull the case, read its war room, search the related indicators, and summarize the affected assets",
-        note: "Same prompt without /plan. Now the agent executes the plan (subject to per-tool approval cards for tier-2+ destructive tools).",
+        text: "Click \"Approve & run\" on the plan card",
+        note: "Approve once and the whole plan runs with a one-shot bypass — tier-2+ tools execute without a card per tool. (Prefer step-through? Re-send the same prompt without /plan instead; that path still surfaces per-tool approval cards.)",
       },
     ],
     toolsExercised: ["xsoar_list_incidents", "xsoar_get_incident", "xsoar_get_war_room", "xsoar_search_indicators"],

@@ -169,9 +169,31 @@ export default function ApprovalsPage() {
     [],
   );
 
+  // #HOOK-F13 — credential-tier (api_keys_create/rotate/revoke) approvals
+  // require a typed CONFIRM before Approve activates, matching the inline
+  // chat approval-card ceremony. The /approvals page previously had no
+  // such gate, so credential-tier tools resolved here bypassed the
+  // promised confirmation. Keyed by approval id (several rows can show at
+  // once).
+  const [confirmInputs, setConfirmInputs] = useState<Record<string, string>>(
+    {},
+  );
+
   const handleApprove = useCallback(
-    (id: string) => handleResolve(id, "approved"),
-    [handleResolve],
+    (id: string) => {
+      const approval = approvals.find((a) => a.id === id);
+      const confirmRequired = approval?.riskTier === "credential";
+      if (
+        confirmRequired &&
+        (confirmInputs[id] ?? "").trim() !== "CONFIRM"
+      ) {
+        // Gate not satisfied — do nothing (the button is also disabled,
+        // this is the defense-in-depth guard).
+        return;
+      }
+      void handleResolve(id, "approved");
+    },
+    [approvals, confirmInputs, handleResolve],
   );
 
   const handleDeny = useCallback(
@@ -310,6 +332,11 @@ export default function ApprovalsPage() {
             const risk = getRiskLevel(approval);
             const colors = RISK_COLORS[risk];
             const isResolving = resolvingIds.has(approval.id);
+            // #HOOK-F13 — credential-tier confirm gate.
+            const confirmRequired = approval.riskTier === "credential";
+            const confirmValue = confirmInputs[approval.id] ?? "";
+            const canApprove =
+              !confirmRequired || confirmValue.trim() === "CONFIRM";
             return (
               <div
                 key={approval.id}
@@ -348,7 +375,32 @@ export default function ApprovalsPage() {
                     </div>
                     <p className="text-sm line-clamp-1">{approval.description}</p>
                   </div>
-                  <div className="flex justify-end items-center gap-3">
+                  <div className="flex flex-col justify-end items-end gap-2">
+                    {/* #HOOK-F13 — CONFIRM ceremony for credential-tier
+                        tools, mirroring the inline chat approval card. */}
+                    {confirmRequired && (
+                      <div className="w-full md:max-w-[220px]">
+                        <label className="block text-[10px] text-on-surface/50 mb-1">
+                          Type{" "}
+                          <code className="font-mono text-error">CONFIRM</code>{" "}
+                          to enable Approve
+                        </label>
+                        <input
+                          type="text"
+                          value={confirmValue}
+                          onChange={(e) =>
+                            setConfirmInputs((prev) => ({
+                              ...prev,
+                              [approval.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="CONFIRM"
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="w-full px-2 py-1.5 rounded-lg bg-white/5 border border-error/30 focus:border-error outline-none text-xs text-on-surface"
+                        />
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -362,8 +414,13 @@ export default function ApprovalsPage() {
                       <button
                         type="button"
                         onClick={() => handleApprove(approval.id)}
-                        disabled={isResolving}
-                        className="px-5 py-2 rounded-lg bg-[#56B55A] text-on-surface font-bold text-sm shadow-lg shadow-[#56B55A]/10 hover:brightness-110 transition-all disabled:opacity-50"
+                        disabled={isResolving || !canApprove}
+                        title={
+                          !canApprove
+                            ? "Type CONFIRM to approve a credential-tier tool"
+                            : undefined
+                        }
+                        className="px-5 py-2 rounded-lg bg-[#56B55A] text-on-surface font-bold text-sm shadow-lg shadow-[#56B55A]/10 hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         aria-label={`Approve ${approval.toolName}`}
                       >
                         {isResolving ? "…" : "Approve"}

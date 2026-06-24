@@ -35,9 +35,11 @@ export interface ChatMessage {
    *  model when generationConfig.thinkingConfig.includeThoughts is on.
    *  The chat route streams these as `thinking` SSE events; use-chat
    *  appends them here; message-list renders them via ThinkingSection
-   *  (collapsed by default) ABOVE the bubble's answer body. Live-only
-   *  for now — not persisted to MCP storage, so sessions loaded from
-   *  history don't show a Thinking section. */
+   *  (collapsed by default) ABOVE the bubble's answer body.
+   *  #CHAT-F28 (v0.2.79) — now also persisted: the chat route stores the
+   *  turn's accumulated reasoning on the assistant row's meta.reasoning,
+   *  and the transcript loader rehydrates it here, so a session loaded
+   *  from history re-renders its Thinking section. */
   reasoning?: string;
 }
 

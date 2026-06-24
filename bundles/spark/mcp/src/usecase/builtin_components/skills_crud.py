@@ -8,6 +8,7 @@ import hashlib
 import os
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from mcp import types as mcp_types
@@ -628,6 +629,104 @@ def delete_skill(file_path: str) -> Dict[str, Any]:
         return {"success": False, "error": f"Failed to delete skill: {str(e)}"}
 
 
+def list_deleted_skills() -> Dict[str, Any]:
+    """#SKILL-F15 — enumerate restorable (soft-deleted) skills.
+
+    delete_skill moves the markdown to SKILLS_DIR/.deleted/<name>.md. Before
+    this there was NO programmatic way to see or recover them — the UI's
+    delete dialog claimed recovery required `docker cp / docker exec`. This
+    lists what's recoverable so a real in-product restore can be offered.
+
+    Returns {"deleted": [{name, filename, size, deleted_at}], "count": N}.
+    """
+    backup_dir = SKILLS_DIR / ".deleted"
+    out: List[Dict[str, Any]] = []
+    if backup_dir.exists() and backup_dir.is_dir():
+        for f in sorted(backup_dir.glob("*.md")):
+            try:
+                st = f.stat()
+                out.append({
+                    "name": f.name,
+                    "filename": f.name,
+                    "size": st.st_size,
+                    # mtime is when the file was moved into .deleted/.
+                    "deleted_at": datetime.fromtimestamp(
+                        st.st_mtime, tz=timezone.utc
+                    ).isoformat().replace("+00:00", "Z"),
+                })
+            except OSError:
+                continue
+    return {"deleted": out, "count": len(out)}
+
+
+def restore_skill(backup_name: str, category: str = "restored") -> Dict[str, Any]:
+    """#SKILL-F15 — restore a soft-deleted skill from SKILLS_DIR/.deleted/.
+
+    Args:
+        backup_name: basename of the file under .deleted/ (e.g. "foo.md").
+        category: category dir to restore into. delete collapses the
+            original category to the basename, so the operator picks where
+            it lands; defaults to a "restored" category. The skills loader
+            discovers by walking category dirs, so the restored skill is
+            immediately live.
+
+    Returns a result dict with the restored relative path on success.
+    """
+    # Reject any path components in backup_name — it must be a bare basename
+    # inside .deleted/ (defense against traversal).
+    if not isinstance(backup_name, str) or not backup_name.strip():
+        return {"success": False, "error": "backup_name is required"}
+    if "/" in backup_name or "\\" in backup_name or backup_name.startswith("."):
+        return {"success": False, "error": f"Invalid backup name: {backup_name}"}
+    if not backup_name.endswith(".md"):
+        return {"success": False, "error": "backup_name must be a .md file"}
+
+    backup_dir = SKILLS_DIR / ".deleted"
+    src = (backup_dir / backup_name).resolve()
+    # Confirm the resolved source stays inside .deleted/.
+    if backup_dir.resolve() not in src.parents:
+        return {"success": False, "error": f"Invalid backup name: {backup_name}"}
+    if not src.exists():
+        return {"success": False, "error": f"Deleted skill not found: {backup_name}"}
+
+    # Validate the destination category as a normal skill path.
+    safe_category = (category or "restored").strip().strip("/")
+    if not safe_category or "/" in safe_category or safe_category.startswith("."):
+        return {"success": False, "error": f"Invalid category: {category}"}
+    rel = f"{safe_category}/{backup_name}"
+    dest, err = _resolve_skill_path(rel)
+    if err:
+        return {"success": False, "error": err}
+
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            return {
+                "success": False,
+                "error": f"A skill already exists at {rel}; rename or remove it first.",
+            }
+        src.rename(dest)
+        try:
+            from usecase.audit_log import audit_log
+            log = audit_log()
+            if log is not None:
+                log.record(
+                    action="skill_restored",
+                    target=f"skill:{rel}",
+                    status="success",
+                    metadata={"backup": backup_name, "restored_to": rel},
+                )
+        except Exception:
+            pass
+        return {
+            "success": True,
+            "message": f"Restored skill to {rel}",
+            "path": rel,
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Failed to restore skill: {str(e)}"}
+
+
 # MCP Tool Definitions
 
 def get_tools() -> List[mcp_types.Tool]:
@@ -806,3 +905,25 @@ def skills_set_enabled(file_path: str, enabled: bool) -> str:
     """
     result = set_skill_enabled(file_path, enabled)
     return json.dumps(result, indent=2)
+
+
+def skills_list_deleted() -> str:
+    """#SKILL-F15 — JSON list of restorable (soft-deleted) skills.
+
+    Returns:
+        JSON {"deleted": [...], "count": N}.
+    """
+    return json.dumps(list_deleted_skills(), indent=2)
+
+
+def skills_restore(backup_name: str, category: str = "restored") -> str:
+    """#SKILL-F15 — restore a soft-deleted skill from .deleted/.
+
+    Args:
+        backup_name: basename of the file under .deleted/.
+        category: category dir to restore into (default "restored").
+
+    Returns:
+        JSON with success status and the restored relative path.
+    """
+    return json.dumps(restore_skill(backup_name, category), indent=2)

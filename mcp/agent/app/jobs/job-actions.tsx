@@ -46,6 +46,10 @@ export function JobActions({
 }: JobActionsProps) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // #JOBS-F13 — destructive delete is two-click. The first Delete click
+  // arms `confirmDelete`; the menu then shows "Confirm delete" + "Cancel"
+  // instead of firing deleteJob immediately on the first click.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -59,6 +63,12 @@ export function JobActions({
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  // Re-arm the confirm step whenever the menu closes so a stale
+  // "Confirm delete" never greets the operator on the next open.
+  useEffect(() => {
+    if (!open) setConfirmDelete(false);
   }, [open]);
 
   const handleTrigger = useCallback(async () => {
@@ -122,8 +132,15 @@ export function JobActions({
   }, [jobName, router]);
 
   const handleDelete = useCallback(async () => {
+    // #JOBS-F13 — guard: the first click only arms the confirm step.
+    // The destructive deleteJob only fires once `confirmDelete` is set.
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
     setBusy(true);
     setOpen(false);
+    setConfirmDelete(false);
     await deleteJob(jobId);
     setBusy(false);
     // v0.3.7+: when called from the job-details view, navigate away
@@ -137,7 +154,36 @@ export function JobActions({
     } else {
       router.refresh();
     }
-  }, [jobId, router, redirectOnDeleteTo]);
+  }, [jobId, router, redirectOnDeleteTo, confirmDelete]);
+
+  // #JOBS-F6 — best-effort client → server audit beacon. A job export
+  // is a browser-local Blob download with no server round-trip, so
+  // without this the fact that a job's config / run history left the
+  // appliance leaves no trace. Fire-and-forget; never block the
+  // download on it. The thin /api/agent/audit/write route (UI-session
+  // gated) forwards to the MCP audit log under user:operator.
+  const auditExport = useCallback(
+    (kind: "definition" | "definition_with_runs" | "runs_csv", extra?: Record<string, unknown>) => {
+      try {
+        void fetch("/api/agent/audit/write", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "jobs_exported",
+            target: `job:${jobName}`,
+            status: "success",
+            metadata: { job: jobName, kind, ...(extra ?? {}) },
+          }),
+          keepalive: true,
+        }).catch(() => {
+          // Audit is best-effort; the export must never depend on it.
+        });
+      } catch {
+        // ignore — never let a beacon failure surface to the operator.
+      }
+    },
+    [jobName],
+  );
 
   // Trigger a client-side file download for the given Blob. Builds a
   // hidden <a download> rather than navigating because we want to keep
@@ -214,7 +260,8 @@ export function JobActions({
       type: "application/json",
     });
     downloadBlob(blob, `${jobName}.json`);
-  }, [buildDefinitionEnvelope, job, jobName]);
+    auditExport("definition");
+  }, [buildDefinitionEnvelope, job, jobName, auditExport]);
 
   /** Export definition + run history. Detail-page only — the list
    *  view doesn't load runs, so this menu item is hidden there. */
@@ -236,7 +283,8 @@ export function JobActions({
       type: "application/json",
     });
     downloadBlob(blob, `${jobName}-with-runs.json`);
-  }, [buildDefinitionEnvelope, job, runs, jobName]);
+    auditExport("definition_with_runs", { run_count: runs.length });
+  }, [buildDefinitionEnvelope, job, runs, jobName, auditExport]);
 
   const definitionExportEnabled = job !== undefined;
   const runsExportEnabled = job !== undefined && (runs?.length ?? 0) > 0;
@@ -327,12 +375,28 @@ export function JobActions({
             </>
           )}
           <div className="my-1 h-px bg-white/10" />
-          <MenuItem
-            icon="delete"
-            label="Delete"
-            onClick={handleDelete}
-            destructive
-          />
+          {confirmDelete ? (
+            <>
+              <MenuItem
+                icon="delete_forever"
+                label="Confirm delete"
+                onClick={handleDelete}
+                destructive
+              />
+              <MenuItem
+                icon="close"
+                label="Cancel"
+                onClick={() => setConfirmDelete(false)}
+              />
+            </>
+          ) : (
+            <MenuItem
+              icon="delete"
+              label="Delete"
+              onClick={handleDelete}
+              destructive
+            />
+          )}
         </div>
       )}
     </div>

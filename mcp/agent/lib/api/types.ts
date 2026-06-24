@@ -150,21 +150,12 @@ export interface ToolDescriptor {
   group: string;
 }
 
-/** Skill metadata with runtime eligibility details. */
-export interface SkillDescriptor {
-  name: string;
-  displayName: string;
-  description: string;
-  source: "bundled" | "managed" | "workspace";
-  precedence: number;
-  eligibility: {
-    eligible: boolean;
-    requiredEnv: string[];
-    requiredBins: string[];
-    requiredOs: string[];
-    reason?: string;
-  };
-}
+// #SKILL-F10 (v0.2.79) — removed the dead `SkillDescriptor` type and its
+// only consumers (lib/api/skills.ts + components/agents/agent-skills-tab.tsx).
+// That client surface called a non-existent /api/agent/skills route (404)
+// and declared an `eligibility` field the MCP never returns; the real
+// skills UI (app/skills/page.tsx) uses /api/skills via mcpClient. Nothing
+// in app/ imported the removed chain.
 
 /** Interaction pattern supported by a model. */
 export type InteractionPattern =

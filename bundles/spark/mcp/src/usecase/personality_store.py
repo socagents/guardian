@@ -88,7 +88,10 @@ DEFAULT_PERSONALITY: dict[str, Any] = {
     "defaultModel": "gemini-3.1-pro-preview",
     "fallbackModel": "gemini-2.5-flash",
     "maxConcurrentRuns": 3,
-    "dailySummary": True,
+    # #XCUT-F7 — `dailySummary` removed (no daily-summary subsystem read it;
+    # the UI toggle + Summary Time picker were retired in the same release).
+    # `escalationThreshold` is now wired into the agent's system prompt
+    # (low = escalate often, high = handle silently).
     "escalationThreshold": 80,
     "personalityMd": (
         "# Guardian Personality\n\n"

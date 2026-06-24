@@ -270,7 +270,10 @@ class ContextAssembler:
                     mode="passive",  # #MEM-F4 — discriminate per-turn injection
                     **rank_kwargs,
                 )
-                for mem, score in hits:
+                # #MEM-F5 — search() now yields (Memory, score, fts_promoted).
+                # The passive context-injection path doesn't surface the
+                # badge, so we drop the flag here.
+                for mem, score, _fts in hits:
                     if mem.id in seen:
                         continue
                     seen.add(mem.id)

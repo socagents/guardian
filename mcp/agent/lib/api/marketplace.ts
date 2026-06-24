@@ -267,6 +267,46 @@ export async function deleteInstance(id: string) {
   );
 }
 
+/**
+ * #CONN-F11 — restart a connector instance's container via the updater.
+ *
+ * Proxied through /api/agent/connectors/{id}/instances/{name}/restart →
+ * the updater's restart endpoint. Used when a container has wedged. The
+ * `connectorId` + `instanceName` identify the container; `instanceId` is
+ * forwarded when known (the updater can also resolve it from container
+ * labels).
+ */
+export async function restartInstance(
+  connectorId: string,
+  instanceName: string,
+  instanceId?: string,
+) {
+  return apiRequest<Record<string, unknown>>(
+    `/api/v1/connectors/${encodeURIComponent(connectorId)}/instances/${encodeURIComponent(
+      instanceName,
+    )}/restart`,
+    {
+      method: "POST",
+      body: instanceId ? { instance_id: instanceId } : {},
+    },
+  );
+}
+
+/**
+ * #CONN-F11 — reconcile all connector instance containers via the
+ * updater. Idempotent sweep that (re)starts any enabled instance whose
+ * container is missing or stale. Proxied through
+ * /api/agent/connectors/reconcile.
+ */
+export async function reconcileConnectors() {
+  return apiRequest<{
+    reconciled?: unknown[];
+    skipped?: unknown[];
+    failed?: unknown[];
+    total_instances?: number;
+  }>(`/api/v1/connectors/reconcile`, { method: "POST", body: {} });
+}
+
 /** Response from POST /api/v1/instances/{id}/test. */
 export interface InstanceTestResult {
   instance: ConnectorInstance;

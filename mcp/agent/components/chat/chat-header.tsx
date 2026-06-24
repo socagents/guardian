@@ -30,6 +30,11 @@ export interface ChatHeaderProps {
   onToggleSidebar: () => void;
   onExport?: (format: ExportFormat) => void;
   onDeleteSession?: () => void;
+  /** #CHAT-F29 — persist an inline title edit. Mirrors the sidebar
+   *  three-dot Rename, which PATCHes /api/v1/sessions/:id. Without this
+   *  the inline title edit was cosmetic-only (lost on reload). Omit when
+   *  there's no active session. */
+  onRenameSession?: (id: string, title: string) => void;
   models?: ModelOption[];
   selectedModel?: string;
   selectedProvider?: string;
@@ -233,7 +238,37 @@ function ExportDropdown({
   onExport: (format: ExportFormat) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // #CHAT-F30 — gate the YAML export on backend PyYAML availability so
+  // it's not a dead click that only fails (501) after the download is
+  // attempted. Default true (assume available) until the probe answers,
+  // so the common case never flickers a disabled state.
+  const [yamlAvailable, setYamlAvailable] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Probe capabilities the first time the menu is opened (lazy — no
+  // fetch on every header mount). Best-effort: any failure leaves the
+  // option enabled and falls back to the existing 501-alert behaviour.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/agent/capabilities", {
+          cache: "no-store",
+        });
+        if (!r.ok) return;
+        const data = (await r.json()) as { pyyaml_available?: boolean };
+        if (!cancelled && data.pyyaml_available === false) {
+          setYamlAvailable(false);
+        }
+      } catch {
+        // leave enabled — fall back to prior behaviour.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -287,22 +322,41 @@ function ExportDropdown({
                 label: "Markdown",
               },
             ] as const
-          ).map((item) => (
-            <button
-              key={item.format}
-              type="button"
-              onClick={() => {
-                onExport(item.format);
-                setOpen(false);
-              }}
-              className="w-full text-left px-3 py-2 text-xs text-on-surface-variant hover:bg-white/5 flex items-center gap-2 transition-colors"
-            >
-              <span className="material-symbols-outlined text-sm">
-                {item.icon}
-              </span>
-              {item.label}
-            </button>
-          ))}
+          ).map((item) => {
+            const disabled = item.format === "yaml" && !yamlAvailable;
+            return (
+              <button
+                key={item.format}
+                type="button"
+                disabled={disabled}
+                title={
+                  disabled
+                    ? "YAML export needs PyYAML on the server (not installed)"
+                    : undefined
+                }
+                onClick={() => {
+                  if (disabled) return;
+                  onExport(item.format);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors ${
+                  disabled
+                    ? "text-on-surface-variant/40 cursor-not-allowed"
+                    : "text-on-surface-variant hover:bg-white/5"
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">
+                  {item.icon}
+                </span>
+                {item.label}
+                {disabled && (
+                  <span className="ml-auto text-[9px] uppercase tracking-wider text-on-surface-variant/40">
+                    n/a
+                  </span>
+                )}
+              </button>
+            );
+          })}
           {/* Divider + trace export (v0.2.3+). Wire-event timeline
               derived from messages + their meta — operator-facing
               forensic view of the run, mirroring what the live
@@ -685,6 +739,7 @@ export function ChatHeader({
   onToggleSidebar,
   onExport,
   onDeleteSession,
+  onRenameSession,
   models,
   selectedModel,
   selectedProvider,
@@ -716,8 +771,20 @@ export function ChatHeader({
 
   const commitTitle = useCallback(() => {
     setEditingTitle(false);
-    // Title editing is cosmetic for now; the value is already set via state.
-  }, []);
+    // #CHAT-F29 — persist the rename. The local state already reflects
+    // the new value optimistically; this PATCHes it server-side (via the
+    // page-level handler that wraps patchSession) so the title survives
+    // reload — matching the sidebar three-dot Rename. No-op when nothing
+    // changed, the title is blank, or there's no active session.
+    const trimmed = titleValue.trim();
+    if (!sessionId || !onRenameSession) return;
+    if (!trimmed || trimmed === sessionTitle) {
+      // Revert any whitespace-only / unchanged edit back to canonical.
+      setTitleValue(sessionTitle);
+      return;
+    }
+    onRenameSession(sessionId, trimmed);
+  }, [titleValue, sessionId, sessionTitle, onRenameSession]);
 
   return (
     <header className="px-6 py-3 flex items-center justify-between border-b border-white/5 shrink-0">

@@ -65,8 +65,9 @@ interface AgentConfig {
   maxConcurrentRuns: number;
 
   // Notifications
-  dailySummary: boolean;
-  summaryTime: string; // HH:mm
+  // #XCUT-F7 — dailySummary + summaryTime removed (no daily-summary
+  // subsystem ever read them; they were UI-only theater). escalationThreshold
+  // is now wired into the agent's system prompt.
   escalationThreshold: number; // 0-100
 
   // Advanced
@@ -125,8 +126,6 @@ const DEFAULT_CONFIG: AgentConfig = {
   defaultModel: "gemini-3.1-pro-preview",
   fallbackModel: "gemini-2.5-flash",
   maxConcurrentRuns: 3,
-  dailySummary: true,
-  summaryTime: "09:00",
   escalationThreshold: 60,
   // Round-14 / Phase B defaults — match the existing chat-route +
   // memory-store defaults so loading a fresh AgentConfig changes
@@ -513,26 +512,16 @@ export default function PersonalityPage() {
           />
         </ConfigSection>
 
-        {/* 5. Notifications & Escalation */}
+        {/* 5. Escalation. #XCUT-F7 — the Daily Summary toggle + Summary
+            Time picker were removed: no daily-summary subsystem ever read
+            them. The Escalation Threshold is wired into the agent's system
+            prompt (low = escalate often, high = handle silently). */}
         <ConfigSection
-          title="Notifications"
+          title="Escalation"
           icon="notifications_active"
           borderColor="rgba(255, 180, 171, 0.3)"
           glowColor="rgba(255, 180, 171, 0.08)"
         >
-          <ToggleControl
-            label="Daily Summary"
-            description="Receive a daily digest of Spark activity"
-            enabled={config.dailySummary}
-            onChange={(v) => updateConfig("dailySummary", v)}
-          />
-          {config.dailySummary && (
-            <TimePickerControl
-              label="Summary Time"
-              value={config.summaryTime}
-              onChange={(v) => updateConfig("summaryTime", v)}
-            />
-          )}
           <SliderControl
             label="Escalation Threshold"
             value={config.escalationThreshold}
@@ -982,32 +971,8 @@ function ToggleControl({
 
 // ─── Time Picker Control ─────────────────────────────────────────────────────
 
-function TimePickerControl({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <label className="text-xs font-label text-on-surface-variant/80">{label}</label>
-      <input
-        type="time"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="px-3 py-2 rounded-xl text-sm font-mono text-on-surface bg-transparent outline-none"
-        style={{
-          background: "var(--m3-surface-container-low)",
-          border: "0.5px solid var(--glass-border)",
-        }}
-        aria-label={label}
-      />
-    </div>
-  );
-}
+// #XCUT-F7 — TimePickerControl removed alongside the Summary Time field
+// (its only consumer); no daily-summary subsystem ever read the value.
 
 // ─── Save Indicator ──────────────────────────────────────────────────────────
 

@@ -37,7 +37,8 @@ def test_temporal_decay_lambda_changes_ranking(tmp_path):
 
     # No decay → both score equally (tie); the param is inert here.
     flat = store.search("phishing campaign indicators", limit=2, temporal_decay_lambda=0.0)
-    flat_scores = {m.key: s for m, s in flat}
+    # #MEM-F5 — search() now yields (Memory, score, fts_promoted) 3-tuples.
+    flat_scores = {m.key: s for m, s, _fts in flat}
     assert set(flat_scores) == {"old_fact", "new_fact"}
     assert abs(flat_scores["old_fact"] - flat_scores["new_fact"]) < 1e-9
 
@@ -47,7 +48,7 @@ def test_temporal_decay_lambda_changes_ranking(tmp_path):
         "phishing campaign indicators", limit=2, temporal_decay_lambda=0.5
     )
     assert decayed[0][0].key == "new_fact"
-    decayed_scores = {m.key: s for m, s in decayed}
+    decayed_scores = {m.key: s for m, s, _fts in decayed}
     assert decayed_scores["new_fact"] > decayed_scores["old_fact"]
 
 

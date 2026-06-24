@@ -116,10 +116,12 @@ const NODES_DEF: Array<Omit<Node<NodeData>, "data"> & { data: NodeData }> = [
   { id: "sessions", type: "guardianStore", position: { x: 790, y: 220 }, data: { label: "sessions", sub: "sqlite", status: "checking" }, draggable: true },
   { id: "jobs", type: "guardianStore", position: { x: 980, y: 220 }, data: { label: "jobs", sub: "sqlite cron", status: "checking" }, draggable: true },
 
-  // Lane 3 — connectors (y=380) — 3 connectors centered under MCP
-  { id: "xsiam", type: "guardianNode", position: { x: 320, y: 380 }, data: { label: "xsiam", sub: "Cortex PAPI", status: "checking" }, draggable: true },
-  { id: "xdr", type: "guardianNode", position: { x: 580, y: 380 }, data: { label: "cortex-xdr", sub: "XDR Public API", status: "checking" }, draggable: true },
-  { id: "web", type: "guardianNode", position: { x: 840, y: 380 }, data: { label: "web", sub: "guardian-browser / CDP", status: "checking" }, draggable: true },
+  // Lane 3 — connectors (y=380) — DERIVED at runtime from
+  // /api/agent/connectors (#OBS-F15). The static list above is request +
+  // storage topology only; connector lanes are appended dynamically so
+  // the graph reflects whatever instances the operator configured
+  // (XSOAR v6/v8, cortex-docs, splunk-mimic, …) instead of a hardcoded
+  // xsiam/xdr/web trio.
 ];
 
 const EDGES_DEF: Edge[] = [
@@ -132,10 +134,68 @@ const EDGES_DEF: Edge[] = [
   { id: "mcp->settings", source: "mcp", target: "settings" },
   { id: "mcp->sessions", source: "mcp", target: "sessions" },
   { id: "mcp->jobs", source: "mcp", target: "jobs" },
-  { id: "mcp->xsiam", source: "mcp", target: "xsiam", label: "PAPI" },
-  { id: "mcp->xdr", source: "mcp", target: "xdr", label: "Public API" },
-  { id: "mcp->web", source: "mcp", target: "web", label: "CDP" },
+  // mcp->connector edges are derived at runtime (#OBS-F15).
 ];
+
+// #OBS-F15 — map a connector_state string to a pipeline Status.
+function connectorStateToStatus(state: string | undefined): Status {
+  switch (state) {
+    case "connected":
+      return "ok";
+    case "failed":
+      return "failed";
+    case "needs-auth":
+    case "disabled":
+      return "degraded";
+    case "pending":
+    default:
+      return "checking";
+  }
+}
+
+interface ConnectorRow {
+  connector_id: string;
+  state?: string;
+  configured?: boolean;
+  in_manifest?: boolean;
+}
+
+// #OBS-F15 — build the connector lane (nodes + mcp->connector edges)
+// from the live connector list. Positions fan out evenly under the MCP
+// node. Node ids are prefixed `conn:` so they never collide with the
+// static topology ids.
+function buildConnectorLane(connectors: ConnectorRow[]): {
+  nodes: Array<Node<NodeData>>;
+  edges: Edge[];
+} {
+  const visible = connectors.filter(
+    (c) => c.configured || c.in_manifest,
+  );
+  const nodes: Array<Node<NodeData>> = [];
+  const edges: Edge[] = [];
+  const startX = 60;
+  const stepX = 230;
+  visible.forEach((c, i) => {
+    const nodeId = `conn:${c.connector_id}`;
+    nodes.push({
+      id: nodeId,
+      type: "guardianNode",
+      position: { x: startX + i * stepX, y: 380 },
+      data: {
+        label: c.connector_id,
+        sub: c.configured ? "configured" : "in manifest",
+        status: connectorStateToStatus(c.state),
+      },
+      draggable: true,
+    } as Node<NodeData>);
+    edges.push({
+      id: `mcp->${nodeId}`,
+      source: "mcp",
+      target: nodeId,
+    });
+  });
+  return { nodes, edges };
+}
 
 const STATUS_LABEL: Record<Status, string> = {
   ok: "Healthy",
@@ -281,6 +341,30 @@ export default function PipelinePage() {
         else probeStatus.set(p.id, "checking");
       }
 
+      // #OBS-F15 — pull the live connector list so Lane 3 reflects the
+      // operator's actual configuration (not a hardcoded trio). Maps
+      // connector_id → live state.
+      const connStatus = new Map<string, Status>();
+      let connectors: ConnectorRow[] = [];
+      try {
+        const r = await fetch("/api/agent/connectors", { cache: "no-store" });
+        if (r.ok) {
+          const data = (await r.json()) as { connectors?: ConnectorRow[] };
+          connectors = (data.connectors ?? []).filter(
+            (c) => c.configured || c.in_manifest,
+          );
+          for (const c of connectors) {
+            connStatus.set(
+              `conn:${c.connector_id}`,
+              connectorStateToStatus(c.state),
+            );
+          }
+        }
+      } catch {
+        // empty — Lane 3 will just be absent until the fetch succeeds.
+      }
+      const connectorLane = buildConnectorLane(connectors);
+
       // Stores inherit MCP's status — same model as before.
       const mcpStatus = probeStatus.get("guardian-mcp") ?? "checking";
       const STORE_IDS = new Set(["audit", "memory", "secrets", "settings", "sessions", "jobs"]);
@@ -299,9 +383,17 @@ export default function PipelinePage() {
             const t = Date.parse(e.ts);
             if (!Number.isFinite(t) || t <= cutoff) continue;
             const target = String(e.target ?? "");
-            if (target.startsWith("tool:xsiam.")) active.add("mcp->xsiam");
-            if (target.startsWith("tool:xdr.")) active.add("mcp->xdr");
-            if (target.startsWith("tool:web.")) active.add("mcp->web");
+            // #OBS-F15 — derive the active connector edge from the tool
+            // target's connector prefix (tool:<connector>.<tool>), against
+            // the live connector lane, instead of the hardcoded trio.
+            if (target.startsWith("tool:")) {
+              const rest = target.slice("tool:".length);
+              const dot = rest.indexOf(".");
+              const cid = dot > 0 ? rest.slice(0, dot) : "";
+              if (cid && connStatus.has(`conn:${cid}`)) {
+                active.add(`mcp->conn:${cid}`);
+              }
+            }
             if (e.action === "tool_call") active.add("agent->mcp");
             if (e.action === "chat_append") active.add("agent->vertex");
             if (e.action === "memory_store" || e.action === "memory_search") active.add("mcp->memory");
@@ -315,20 +407,33 @@ export default function PipelinePage() {
 
       if (cancelled) return;
 
-      // Apply status updates to existing nodes (preserve any drag
-      // positions the operator may have introduced).
-      setNodes((curr) =>
-        curr.map((n) => {
-          let next: Status;
-          if (n.id === "browser") next = "ok";
-          else if (n.data.probeId && probeStatus.has(n.data.probeId))
-            next = probeStatus.get(n.data.probeId)!;
-          else if (STORE_IDS.has(n.id)) next = mcpStatus;
-          else next = "checking";
-          return { ...n, data: { ...n.data, status: next } };
-        }),
-      );
-      setEdges(decorateEdges(EDGES_DEF, active));
+      // Apply status updates. Static topology nodes (request + storage)
+      // keep their drag positions; the connector lane (#OBS-F15) is
+      // reconciled from the live list each tick — added when an instance
+      // appears, removed when it's gone. Preserve drag positions for
+      // connector nodes that persist across ticks.
+      setNodes((curr) => {
+        const prevById = new Map(curr.map((n) => [n.id, n]));
+        const staticNodes = curr
+          .filter((n) => !n.id.startsWith("conn:"))
+          .map((n) => {
+            let next: Status;
+            if (n.id === "browser") next = "ok";
+            else if (n.data.probeId && probeStatus.has(n.data.probeId))
+              next = probeStatus.get(n.data.probeId)!;
+            else if (STORE_IDS.has(n.id)) next = mcpStatus;
+            else next = "checking";
+            return { ...n, data: { ...n.data, status: next } };
+          });
+        const connNodes = connectorLane.nodes.map((n) => {
+          const prev = prevById.get(n.id);
+          // Keep the operator's dragged position if this node already
+          // existed; otherwise use the computed lane position.
+          return prev ? { ...n, position: prev.position } : n;
+        });
+        return [...staticNodes, ...connNodes];
+      });
+      setEdges(decorateEdges([...EDGES_DEF, ...connectorLane.edges], active));
       setProbes(probeArr);
       setActiveEdges(active);
       setRecentEvents(events.slice(0, 12));

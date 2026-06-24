@@ -141,7 +141,10 @@ def memory_search(
     except Exception as exc:
         return {"error": _friendly_embed_error(exc, "memory_search")}
     return {
-        "results": [m.to_dict(score=score) for m, score in hits],
+        # #MEM-F5 — search() returns (Memory, score, fts_promoted).
+        "results": [
+            m.to_dict(score=score, fts_promoted=fts) for m, score, fts in hits
+        ],
         "count": len(hits),
     }
 

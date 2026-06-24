@@ -79,6 +79,7 @@ const SECTIONS: SectionDef[] = [
   { id: "obs-metrics", label: "Metrics & Traces", group: "Observability", icon: "monitoring" },
   { id: "obs-logs", label: "Logs & Events", group: "Observability", icon: "terminal" },
   { id: "cost-ux", label: "Cost Rollup", group: "Observability", icon: "payments" },
+  { id: "telemetry-ux", label: "Telemetry", group: "Observability", icon: "insights" },
   { id: "obs-activity", label: "Live Activity", group: "Observability", icon: "history_toggle_off" },
 
   { id: "settings-services", label: "Services", group: "Settings", icon: "tune" },
@@ -1340,25 +1341,30 @@ sudo ./guardian-installer`}
 
             <SubSection icon="reviews" title="Reviewing the proposal">
               <p>
-                The agent renders an inline plan card with one row per
-                step: tool, target, rationale, and an estimated cost
-                (tokens + connector calls). Each step has a checkbox; un-tick
-                anything you want to skip. The card&apos;s footer has three
-                actions:
+                The agent renders an inline plan card showing the steps it
+                would take. You then choose how to proceed:
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm">
                 <li>
-                  <Term>Approve &amp; run</Term> — fires the remaining
-                  steps in order; subsequent tool cards stream into the
-                  thread as they execute.
+                  <Term>Approve &amp; run</Term> — the button on the plan
+                  card re-runs the original prompt and executes the whole
+                  plan with a <em>one-shot</em> approval bypass, so Tier-2/3
+                  tools run without a card per tool. The bypass applies only
+                  to that single execution; the next prompt re-gates
+                  normally.
                 </li>
                 <li>
-                  <Term>Revise</Term> — types a follow-up so you can ask
-                  for changes (&quot;swap step 3 for the staged variant&quot;,
-                  &quot;skip step 5&quot;).
+                  <Term>Run it step-by-step</Term> — re-send the original
+                  prompt yourself (without <Code>/plan</Code>). That path
+                  still surfaces per-tool approval cards for Tier-2/3 tools.
                 </li>
                 <li>
-                  <Term>Discard</Term> — drops the proposal entirely.
+                  <Term>Revise</Term> — type a follow-up to ask for changes
+                  (&quot;plan again but skip step 3&quot;).
+                </li>
+                <li>
+                  <Term>Discard</Term> — send a different prompt; the
+                  proposal goes away.
                 </li>
               </ul>
             </SubSection>
@@ -1367,22 +1373,26 @@ sudo ./guardian-installer`}
               <p>
                 Each proposal writes a <Code>chat_plan_proposed</Code>{" "}
                 audit row; failures (model couldn&apos;t produce a valid
-                plan) write <Code>chat_plan_failed</Code>. Filter on
+                plan) write <Code>chat_plan_failed</Code>. An{" "}
+                <Term>Approve &amp; run</Term> execution writes{" "}
+                <Code>chat_plan_executed</Code> so the one-shot bypass
+                leaves a forensic trace even though it skips the per-tool
+                approval rows. Filter on{" "}
                 <Code>action:chat_plan_*</Code> in{" "}
                 <Link href="/observability/events" className="link">
                   /observability/events
                 </Link>{" "}
-                to see proposals across sessions — useful for tracking
-                which workflows are commonly planned vs run direct.
+                to see proposals and runs across sessions.
               </p>
             </SubSection>
 
             <Callout tone="info">
-              Plans don&apos;t bypass the approval tier system — Tier-2/3
-              tools inside an approved plan still surface their own
-              approval cards as they execute. Plan mode only adds a
-              proposal-first layer; the existing safety rails remain in
-              place.
+              <Term>Approve &amp; run</Term> grants a deliberate one-shot
+              approval bypass for that single plan execution — that is the
+              point of approving once. If you want to step through Tier-2/3
+              tools individually, re-send the prompt yourself without{" "}
+              <Code>/plan</Code> instead; that path keeps every per-tool
+              approval card.
             </Callout>
           </Section>
 
@@ -4677,6 +4687,37 @@ session:s_4k21m
               negotiated discounts, free-tier credits, or rate-card
               updates that haven&apos;t propagated to the table.
             </Callout>
+          </Section>
+
+          <Section id="telemetry-ux" icon="insights" title="Telemetry">
+            <p>
+              Telemetry is opt-in, privacy-first usage counting — and it
+              ships <Term>off</Term>.{" "}
+              <Link href="/observability/telemetry" className="link">
+                /observability/telemetry
+              </Link>{" "}
+              shows the current posture, lets you flip it on or off, and
+              lists per-event counts.
+            </p>
+            <ul className="list-disc pl-5 space-y-1.5 text-sm">
+              <li>
+                <Term>Declared events only</Term> — only the event names
+                listed in the bundle manifest are ever recorded. Arbitrary
+                callers can&apos;t slip new event names through.
+              </li>
+              <li>
+                <Term>Counts, not content</Term> — the page reports how many
+                times each declared event fired. Event payloads are never
+                shown here, and recording a counter writes a{" "}
+                <Code>telemetry_recorded</Code> audit row (the event name
+                and count only).
+              </li>
+              <li>
+                <Term>Auditable posture</Term> — turning telemetry on or off
+                writes a <Code>telemetry_toggled</Code> audit row, so the
+                privacy posture itself has a trail.
+              </li>
+            </ul>
           </Section>
 
           <Section

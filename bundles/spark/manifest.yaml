@@ -600,6 +600,9 @@ audit:
     # operator UI/REST skill removal is visible + reversible).
     - "skill_updated"
     - "skill_deleted"
+    # #SKILL-F15 — soft-deleted skill recovered from .deleted/ via the
+    # in-product restore (was previously only possible with docker cp/exec).
+    - "skill_restored"
     # #SKILL-F7 — per-skill enable/disable (operator /skills toggle now
     # persists to frontmatter; a disabled skill is dropped from the prompt).
     - "skill_enabled"
@@ -651,6 +654,11 @@ audit:
     # command emits these per turn.
     - "chat_plan_proposed"
     - "chat_plan_failed"
+    # #CHAT-F23 — a previously proposed plan was approved-and-run: the
+    # operator hit "Approve & run" and the matching prompt executed with a
+    # one-shot per-tool-approval bypass for that turn. Recorded so the
+    # bypass leaves a forensic trace (it skips the per-tool approval rows).
+    - "chat_plan_executed"
     # Round-15 / Phase M — MCP connector state-machine
     # transitions. Every connected→failed / connected→needs-auth
     # transition lands here.
@@ -894,6 +902,17 @@ audit:
     # Recorded as a distinct action so the observability filter can count
     # truncated/blocked turns. metadata.finish_reason carries which.
     - "chat_turn_finish_reason"
+    # #JOBS-F6 — a client-side job export (definition JSON, definition+runs
+    # JSON, or runs CSV) leaves an audit trace. The download itself is
+    # browser-local; this best-effort beacon (UI → /api/agent/audit/write →
+    # POST /api/v1/audit) records that job config/run history left the
+    # appliance. metadata carries job name + export kind; no run payload.
+    - "jobs_exported"
+    # #OBS-F17 — telemetry record path. The on/off toggle already emits
+    # telemetry_toggled from the store layer; this records an accepted
+    # /telemetry/record write so the privacy-relevant counter increments
+    # are traceable. metadata carries the event name + count (no payload).
+    - "telemetry_recorded"
 
 notifications:
   topics:

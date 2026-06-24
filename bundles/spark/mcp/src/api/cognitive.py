@@ -605,8 +605,20 @@ def register_cognitive_routes(
         if (resp := require_bearer(request)) is not None:
             return resp
         q = request.query_params
+        req_scope = q.get("scope") or None
+        # #MEM-F13 — the UI's "session" tab asks for scope=session, but
+        # session-scoped rows are stored as scope=session:<uuid> (see
+        # context_assembler). Map the bare aggregate to a prefix query so the
+        # tab actually lists those rows. An explicit ?scope_prefix= also works.
+        explicit_prefix = q.get("scope_prefix") or None
+        scope_prefix = explicit_prefix
+        scope = req_scope
+        if scope_prefix is None and req_scope == "session":
+            scope_prefix = "session:"
+            scope = None
         rows = memories.list_all(
-            scope=q.get("scope") or None,
+            scope=scope,
+            scope_prefix=scope_prefix,
             limit=_int(q, "limit", 100),
             offset=_int(q, "offset", 0),
         )
@@ -702,7 +714,13 @@ def register_cognitive_routes(
         )
         return JSONResponse(
             {
-                "results": [m.to_dict(score=score) for m, score in hits],
+                # #MEM-F5 — search() now returns (Memory, score, fts_promoted);
+                # thread the flag into to_dict so the UI's "FTS hit" badge
+                # populates (the field was never sent before).
+                "results": [
+                    m.to_dict(score=score, fts_promoted=fts)
+                    for m, score, fts in hits
+                ],
                 "count": len(hits),
             }
         )

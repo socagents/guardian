@@ -174,6 +174,16 @@ class SqliteTelemetryStore:
                 "VALUES (?, ?, ?, ?)",
                 (event_name, int(count), ts, json.dumps(payload or {})),
             )
+        # #OBS-F17 — leave an audit trace for an accepted record write.
+        # The enable/disable toggle already audits via set_enabled; this
+        # closes the gap for the privacy-relevant counter increments. The
+        # event payload is NOT logged (it can carry caller-supplied data);
+        # only the declared event name + count.
+        self._audit_event(
+            "telemetry_recorded",
+            target=f"telemetry:event:{event_name}",
+            metadata={"event": event_name, "count": int(count)},
+        )
         return True
 
     def status(self) -> TelemetryStatus:

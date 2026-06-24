@@ -44,7 +44,8 @@ def test_expired_row_hidden_from_get_list_search(tmp_path):
     assert "ephemeral" not in keys and "durable" in keys
     # search excludes the expired one
     hits = s.search("firewall blocked", scope="agent", limit=10)
-    assert all(m.key != "ephemeral" for m, _score in hits)
+    # #MEM-F5 — search() now yields (Memory, score, fts_promoted) 3-tuples.
+    assert all(m.key != "ephemeral" for m, _score, _fts in hits)
 
 
 def test_reaper_deletes_and_audits(tmp_path):

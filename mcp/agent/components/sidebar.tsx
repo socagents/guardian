@@ -122,6 +122,7 @@ const navEntries: NavEntry[] = [
       { href: "/observability/connectors", label: "Connectors", icon: "settings_input_component" },
       { href: "/observability/pipeline", label: "Pipeline", icon: "account_tree" },
       { href: "/observability/cost", label: "Cost", icon: "payments" },
+      { href: "/observability/telemetry", label: "Telemetry", icon: "insights" },
       { href: "/observability/bench", label: "Bench", icon: "speed" },
       // v0.5.44+ entry-point distributable plugin catalog. v0.5.47
       // adds install/uninstall lifecycle, v0.5.48 wires plugin-hook

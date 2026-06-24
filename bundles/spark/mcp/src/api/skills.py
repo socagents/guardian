@@ -109,6 +109,58 @@ def register_skill_routes(mcp: FastMCP) -> None:
         result = _decode(skills_crud.skills_list_all())
         return JSONResponse({"skills": result, "count": len(result)})
 
+    # #SKILL-F15 — restorable soft-deleted skills. MUST be registered
+    # BEFORE the catch-all /skills/{file_path:path} GET below, or the path
+    # converter would swallow "deleted" as a file_path.
+    @mcp.custom_route(
+        "/api/v1/skills/deleted", methods=["GET"], include_in_schema=False
+    )
+    async def list_deleted_skills_route(request: Request) -> JSONResponse:
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        result = _decode(skills_crud.skills_list_deleted())
+        return JSONResponse(result)
+
+    # #SKILL-F15 — restore a soft-deleted skill. Body:
+    #   {"backup_name": "foo.md", "category": "restored"}
+    @mcp.custom_route(
+        "/api/v1/skills/restore", methods=["POST"], include_in_schema=False
+    )
+    async def restore_skill_route(request: Request) -> JSONResponse:
+        if (resp := require_bearer(request)) is not None:
+            return resp
+        # Attribute the mutation to the real principal (apikey:<id> |
+        # user:operator) the Next.js middleware stamped.
+        actor_token = set_current_actor(actor_from_request(request))
+        try:
+            try:
+                body = await request.json()
+            except Exception:
+                return JSONResponse(
+                    {"success": False, "error": "request body must be JSON"},
+                    status_code=400,
+                )
+            if not isinstance(body, dict):
+                return JSONResponse(
+                    {"success": False, "error": "body must be an object"},
+                    status_code=400,
+                )
+            backup_name = body.get("backup_name")
+            if not isinstance(backup_name, str) or not backup_name.strip():
+                return JSONResponse(
+                    {"success": False, "error": "backup_name is required"},
+                    status_code=400,
+                )
+            category = body.get("category") or "restored"
+            result = _decode(
+                skills_crud.skills_restore(backup_name, str(category))
+            )
+            return JSONResponse(
+                result, status_code=200 if result.get("success") else 400
+            )
+        finally:
+            reset_current_actor(actor_token)
+
     @mcp.custom_route(
         "/api/v1/skills/{file_path:path}",
         methods=["GET"],

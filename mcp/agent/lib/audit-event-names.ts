@@ -44,6 +44,7 @@ export const AUDIT_EVENT_NAME_ALIASES: Record<string, string> = {
   // Plan mode (Round-15 Phase P).
   chat_plan_proposed: "agent.plan.proposed",
   chat_plan_failed: "agent.plan.failed",
+  chat_plan_executed: "agent.plan.executed", // #CHAT-F23
 
   // Cost tracking (Round-15 Phase $).
   chat_turn_cost: "agent.model.cost",
@@ -115,6 +116,11 @@ export const AUDIT_EVENT_NAME_ALIASES: Record<string, string> = {
   chat_turn_finish_reason: "agent.chat.turn.finish_reason", // #XCUT-F20
   // Python-emitted (no TS emit site) but listed for downstream consumers.
   job_skill_skipped: "agent.job.skill.skipped", // #SKILL-F13
+
+  // v0.2.79 ui-dead-affordance batch.
+  jobs_exported: "agent.job.exported", // #JOBS-F6
+  telemetry_recorded: "agent.telemetry.recorded", // #OBS-F17
+  skill_restored: "agent.skill.restored", // #SKILL-F15
 };
 
 /** Inverse mapping: standard name → guardian action. Used by

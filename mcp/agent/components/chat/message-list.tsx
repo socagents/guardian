@@ -22,6 +22,10 @@ interface MessageListProps {
    *  the chat page POSTs to /api/agent/sessions/{id}/fork with
    *  {from_message_id: mcpId}. */
   onForkFromMessage?: (mcpMessageId: string) => void;
+  /** #CHAT-F23 — "Approve & run" a proposed plan. When provided, a
+   *  PlanCard with a source prompt renders an Approve button that
+   *  re-sends that prompt with a one-shot per-tool-approval bypass. */
+  onApprovePlan?: (sourcePrompt: string) => void;
 }
 
 /**
@@ -217,8 +221,15 @@ function SubagentCard({ activity }: { activity: SubagentActivity }) {
  * remember what triggered this plan ("oh right, I asked it to plan
  * a 4h FortiGate scenario").
  */
-function PlanCard({ message }: { message: ChatMessage }) {
+function PlanCard({
+  message,
+  onApprovePlan,
+}: {
+  message: ChatMessage;
+  onApprovePlan?: (sourcePrompt: string) => void;
+}) {
   const [collapsed, setCollapsed] = useState(false);
+  const [approved, setApproved] = useState(false);
   const meta = message.meta ?? {};
   const sourcePrompt =
     typeof meta["source_prompt"] === "string" ? meta["source_prompt"] : null;
@@ -268,6 +279,31 @@ function PlanCard({ message }: { message: ChatMessage }) {
         {!collapsed && (
           <div className="text-sm text-on-tertiary-container whitespace-pre-wrap leading-relaxed">
             {message.content}
+          </div>
+        )}
+        {/* #CHAT-F23 — Approve & run. Re-sends the original prompt with a
+            one-shot per-tool-approval bypass so the whole plan executes
+            without a card per tool — the promise /plan documents. Only
+            shown when a handler + source prompt are available. */}
+        {!collapsed && onApprovePlan && sourcePrompt && (
+          <div className="pt-1 flex items-center gap-2">
+            <button
+              type="button"
+              disabled={approved}
+              onClick={() => {
+                setApproved(true);
+                onApprovePlan(sourcePrompt);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-tertiary text-on-tertiary hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[14px]">
+                {approved ? "hourglass_top" : "play_arrow"}
+              </span>
+              {approved ? "Running plan…" : "Approve & run"}
+            </button>
+            <span className="text-[11px] text-on-tertiary-container/60">
+              Runs the plan without per-tool approval cards.
+            </span>
           </div>
         )}
       </div>
@@ -438,6 +474,7 @@ export function MessageList({
   isLoading = false,
   subagents = [],
   onForkFromMessage,
+  onApprovePlan,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -544,6 +581,7 @@ export function MessageList({
               <PlanCard
                 key={`system-${idx}-${msg.timestamp}`}
                 message={msg}
+                onApprovePlan={onApprovePlan}
               />
             );
           }

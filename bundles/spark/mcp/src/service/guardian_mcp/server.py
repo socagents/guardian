@@ -102,10 +102,16 @@ Always verify connectivity to the configured Cortex XSOAR tenant before starting
                            cheapest cross-coroutine read.
         """
         import os
+        import importlib.util
+        # #CHAT-F30 — surface whether PyYAML is importable so the UI can
+        # disable the YAML transcript-export option instead of offering a
+        # dead click that only fails (501) after the download is attempted.
+        pyyaml_available = importlib.util.find_spec("yaml") is not None
         return JSONResponse(
             {
                 "status": "ok",
                 "embedder_mode": os.environ.get("GUARDIAN_EMBEDDER_MODE", "unknown"),
+                "pyyaml_available": pyyaml_available,
             },
         )
 

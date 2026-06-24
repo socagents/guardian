@@ -16,6 +16,8 @@ import {
   updateInstance,
   assignWorkspace,
   testInstance,
+  restartInstance,
+  reconcileConnectors,
   type MarketplaceConnector,
   type ConnectorInstance,
 } from "@/lib/api/marketplace";
@@ -2296,6 +2298,96 @@ function InstancesTab({
     setConfirmDeleteId(null);
   }, [onRefreshData]);
 
+  // #CONN-F11: restart a wedged connector instance container via the
+  // updater. The amber "still starting" notice only ever appeared at
+  // CREATE time — once a container wedged there was no in-UI recovery.
+  const [restartingId, setRestartingId] = useState<string | null>(null);
+  const [restartFeedback, setRestartFeedback] = useState<{
+    id: string;
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  const handleRestart = useCallback(
+    async (inst: InstanceDef) => {
+      setRestartingId(inst.id);
+      setRestartFeedback(null);
+      try {
+        const result = await restartInstance(
+          inst.connectorId,
+          inst.name,
+          inst.id,
+        );
+        if (result.ok) {
+          setRestartFeedback({
+            id: inst.id,
+            type: "success",
+            message: "Container restart requested.",
+          });
+        } else {
+          setRestartFeedback({
+            id: inst.id,
+            type: "error",
+            message: result.error.message ?? "Restart failed.",
+          });
+        }
+      } catch (err) {
+        setRestartFeedback({
+          id: inst.id,
+          type: "error",
+          message: err instanceof Error ? err.message : "Restart failed.",
+        });
+      } finally {
+        setRestartingId(null);
+        setTimeout(() => setRestartFeedback(null), 6000);
+        onRefreshData();
+      }
+    },
+    [onRefreshData],
+  );
+
+  // #CONN-F11: reconcile all instance containers (idempotent sweep that
+  // (re)starts any enabled instance whose container is missing or stale).
+  const [reconciling, setReconciling] = useState(false);
+  const handleReconcile = useCallback(async () => {
+    setReconciling(true);
+    setRestartFeedback(null);
+    try {
+      const result = await reconcileConnectors();
+      if (result.ok) {
+        const r = result.data;
+        const reconciled = r.reconciled?.length ?? 0;
+        const failed = r.failed?.length ?? 0;
+        setRestartFeedback({
+          id: "__reconcile__",
+          type: failed > 0 ? "error" : "success",
+          message:
+            failed > 0
+              ? `Reconcile: ${reconciled} started, ${failed} failed.`
+              : reconciled > 0
+                ? `Reconcile: ${reconciled} container(s) started.`
+                : "Reconcile: all containers already running.",
+        });
+      } else {
+        setRestartFeedback({
+          id: "__reconcile__",
+          type: "error",
+          message: result.error.message ?? "Reconcile failed.",
+        });
+      }
+    } catch (err) {
+      setRestartFeedback({
+        id: "__reconcile__",
+        type: "error",
+        message: err instanceof Error ? err.message : "Reconcile failed.",
+      });
+    } finally {
+      setReconciling(false);
+      setTimeout(() => setRestartFeedback(null), 8000);
+      onRefreshData();
+    }
+  }, [onRefreshData]);
+
   // Toggle conflict feedback — when enabling fails because another
   // instance for the same connector is already active, the backend
   // returns 409 with an explanatory message. Surface it instead of
@@ -2424,15 +2516,37 @@ function InstancesTab({
       {/* Section header */}
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-xl font-headline font-semibold text-on-surface">Connector Instances</h3>
-        <button
-          type="button"
-          onClick={onCreateInstance}
-          className="text-white px-6 py-2.5 rounded-xl font-headline font-bold text-sm flex items-center gap-2 shadow-lg active:scale-95 transition-all"
-          style={{ background: "linear-gradient(135deg, #1963B3 0%, #2D8DF0 100%)" }}
-        >
-          <span className="material-symbols-outlined text-lg">add</span>
-          Create Instance
-        </button>
+        <div className="flex items-center gap-3">
+          {/* #CONN-F11: reconcile sweep — self-heals containers that
+              didn't start (e.g. partial create) without a direct
+              updater call. */}
+          <button
+            type="button"
+            onClick={handleReconcile}
+            disabled={reconciling}
+            title="Restart any enabled instance whose container is missing or stale"
+            className="px-4 py-2.5 rounded-xl font-headline font-semibold text-sm flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-on-surface-variant hover:text-on-surface"
+            style={{ border: "0.5px solid var(--glass-border)" }}
+          >
+            <span
+              className={`material-symbols-outlined text-lg ${
+                reconciling ? "animate-spin" : ""
+              }`}
+            >
+              {reconciling ? "progress_activity" : "sync"}
+            </span>
+            Reconcile
+          </button>
+          <button
+            type="button"
+            onClick={onCreateInstance}
+            className="text-white px-6 py-2.5 rounded-xl font-headline font-bold text-sm flex items-center gap-2 shadow-lg active:scale-95 transition-all"
+            style={{ background: "linear-gradient(135deg, #1963B3 0%, #2D8DF0 100%)" }}
+          >
+            <span className="material-symbols-outlined text-lg">add</span>
+            Create Instance
+          </button>
+        </div>
       </div>
 
       {/* Toggle conflict / error banner — auto-clears after 6s. */}
@@ -2447,6 +2561,31 @@ function InstancesTab({
         >
           <span className="material-symbols-outlined text-base mt-0.5">error</span>
           <span>{toggleError}</span>
+        </div>
+      )}
+
+      {/* #CONN-F11: restart / reconcile feedback — auto-clears. */}
+      {restartFeedback && (
+        <div
+          className="mb-4 rounded-xl px-4 py-3 text-sm flex items-start gap-2"
+          style={
+            restartFeedback.type === "success"
+              ? {
+                  background: "rgba(123, 220, 123, 0.12)",
+                  border: "0.5px solid rgba(123, 220, 123, 0.25)",
+                  color: "#7bdc7b",
+                }
+              : {
+                  background: "rgba(147, 0, 10, 0.12)",
+                  border: "0.5px solid rgba(255, 180, 171, 0.25)",
+                  color: "#ffb4ab",
+                }
+          }
+        >
+          <span className="material-symbols-outlined text-base mt-0.5">
+            {restartFeedback.type === "success" ? "check_circle" : "error"}
+          </span>
+          <span>{restartFeedback.message}</span>
         </div>
       )}
 
@@ -2745,6 +2884,25 @@ function InstancesTab({
                           onClick={() => handleExportInstance(inst)}
                         >
                           <span className="material-symbols-outlined text-xl">download</span>
+                        </button>
+
+                        {/* #CONN-F11: Restart container. Recovers a wedged
+                            connector instance without a direct updater call. */}
+                        <button
+                          type="button"
+                          className="p-2 hover:bg-surface-bright rounded-lg text-on-surface-variant hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          aria-label="Restart Container"
+                          title="Restart container"
+                          disabled={restartingId === inst.id}
+                          onClick={() => handleRestart(inst)}
+                        >
+                          <span
+                            className={`material-symbols-outlined text-xl ${
+                              restartingId === inst.id ? "animate-spin" : ""
+                            }`}
+                          >
+                            {restartingId === inst.id ? "progress_activity" : "restart_alt"}
+                          </span>
                         </button>
 
                         {/* Workspace assignment removed in v0.1.15 — guardian is

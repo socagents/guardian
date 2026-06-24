@@ -1424,6 +1424,31 @@ const CONFIGURATION: ApiEndpoint[] = [
     riskTier: "soft",
   },
   {
+    id: "personality-history",
+    category: "configuration",
+    method: "GET",
+    path: "/api/agent/personality/history",
+    summary: "List recent persona versions",
+    description:
+      "Returns recent personality versions newest-first as {versions, count} so the settings UI can show edit history / diffs. Each version carries the persona blob plus updated_at / updated_by / version. Proxies to the embedded MCP at GET /api/v1/personality/history.",
+    queryParams: [
+      {
+        name: "limit",
+        type: "integer",
+        description: "Max versions to return (default 10).",
+        example: "10",
+      },
+    ],
+    responses: [
+      { status: "200", description: "{versions, count} — versions newest-first." },
+      {
+        status: "401",
+        description:
+          "Caller not authenticated — Next.js middleware rejected the request.",
+      },
+    ],
+  },
+  {
     id: "instances-list",
     category: "configuration",
     method: "GET",
@@ -6571,6 +6596,64 @@ const INVESTIGATION: ApiEndpoint[] = [
       }
     ],
     tags: ["investigation", "cases", "relationships", "campaign", "read-only"],
+  },
+  {
+    id: "techniques-by-id-issues",
+    category: "investigation",
+    method: "GET",
+    path: "/api/agent/techniques/{techniqueId}/issues",
+    summary: "List issues mapped to an ATT&CK technique",
+    description: "Returns issues whose structured technique_mappings include the given ATT&CK technique id as {issues, count}. Drives cross-issue ATT&CK pivots (\"what else exhibits T1566?\"). Proxies to the embedded MCP at GET /api/v1/techniques/{technique_id}/issues.",
+    pathParams: [
+      {
+        name: "techniqueId",
+        type: "string",
+        description: "The ATT&CK technique id (e.g. T1566 or a sub-technique like T1566.001).",
+        required: true,
+        example: "T1566"
+      }
+    ],
+    responses: [
+      {
+        status: "200",
+        description: "{issues, count}. issues is an array of Issue dicts mapped to the technique.",
+        example: { issues: [], count: 0 }
+      },
+      {
+        status: "401",
+        description: "Agent middleware rejected the request: no/invalid guardian_session cookie and no valid guardian_ak_* bearer API key."
+      }
+    ],
+    tags: ["investigation", "issues", "attack", "read-only"],
+  },
+  {
+    id: "playbooks-by-doc-issues",
+    category: "investigation",
+    method: "GET",
+    path: "/api/agent/playbooks/{docId}/issues",
+    summary: "List issues matched to a playbook",
+    description: "Returns issues whose structured playbook_matches reference the given playbook doc id as {issues, count}. Surfaces which investigations a playbook has been matched against. Proxies to the embedded MCP at GET /api/v1/playbooks/{doc_id}/issues.",
+    pathParams: [
+      {
+        name: "docId",
+        type: "string",
+        description: "The playbook doc id (knowledge-base / playbook document identifier).",
+        required: true,
+        example: "soc-investigation/phishing-triage"
+      }
+    ],
+    responses: [
+      {
+        status: "200",
+        description: "{issues, count}. issues is an array of Issue dicts matched to the playbook.",
+        example: { issues: [], count: 0 }
+      },
+      {
+        status: "401",
+        description: "Agent middleware rejected the request: no/invalid guardian_session cookie and no valid guardian_ak_* bearer API key."
+      }
+    ],
+    tags: ["investigation", "issues", "playbooks", "read-only"],
   },
   {
     id: "issues-by-id-stix",

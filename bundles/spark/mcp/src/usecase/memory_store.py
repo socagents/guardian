@@ -177,7 +177,12 @@ class Memory:
     ttl_seconds: int | None
     meta: dict[str, Any]
 
-    def to_dict(self, *, score: float | None = None) -> dict[str, Any]:
+    def to_dict(
+        self,
+        *,
+        score: float | None = None,
+        fts_promoted: bool | None = None,
+    ) -> dict[str, Any]:
         out: dict[str, Any] = {
             "id": self.id,
             "key": self.key,
@@ -190,6 +195,11 @@ class Memory:
         }
         if score is not None:
             out["score"] = score
+        # #MEM-F5 — surface whether the FTS5 keyword index promoted this
+        # hit (vs pure embedding similarity) so the UI's "FTS hit" badge
+        # can render. Only emitted when True to keep list payloads lean.
+        if fts_promoted:
+            out["fts_promoted"] = True
         return out
 
 
@@ -520,11 +530,30 @@ class SqliteMemoryStore:
         return self._row_to_memory(row) if row else None
 
     def list_all(
-        self, *, scope: str | None = None, limit: int = 100, offset: int = 0
+        self,
+        *,
+        scope: str | None = None,
+        scope_prefix: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> list[Memory]:
         # #MEM-F3 — always exclude expired rows from listings.
+        # #MEM-F13 — `scope_prefix` matches scope LIKE '<prefix>%' so the UI's
+        # "session" tab can list the dynamic `session:<uuid>` rows (the literal
+        # scope "session" has no entries — context_assembler writes
+        # scope=f"session:{id}"). When both scope and scope_prefix are given,
+        # scope_prefix wins (the caller wants the family, not the literal).
         clauses, params = [_NOT_EXPIRED_SQL], []
-        if scope is not None:
+        if scope_prefix is not None:
+            clauses.append("scope LIKE ? ESCAPE '\\'")
+            # Escape LIKE wildcards in the caller-supplied prefix.
+            safe = (
+                scope_prefix.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+            params.append(f"{safe}%")
+        elif scope is not None:
             clauses.append("scope = ?")
             params.append(scope)
         where = "WHERE " + " AND ".join(clauses)
@@ -667,7 +696,10 @@ class SqliteMemoryStore:
         # Hold the embedding vector alongside score for the MMR pass
         # below. Stripped before return.
         now_epoch = time.time()
-        scored: list[tuple[Memory, float, list[float]]] = []
+        # 4-tuple: (Memory, adjusted_score, vec, is_fts_match). The vec is
+        # used by the MMR pass; is_fts_match (#MEM-F5) rides through to the
+        # returned tuples so the UI "FTS hit" badge can render.
+        scored: list[tuple[Memory, float, list[float], bool]] = []
         dims = self._embedder.dims
         for row in rows:
             try:
@@ -700,7 +732,7 @@ class SqliteMemoryStore:
                     # Bad timestamp — keep the default 1.0 factor.
                     pass
             adjusted_score = cosine * decay_factor
-            scored.append((mem, adjusted_score, vec))
+            scored.append((mem, adjusted_score, vec, is_fts_match))
 
         # Sort by adjusted score (relevance + recency) and trim to a
         # candidate pool larger than `limit` so MMR has room to pick
@@ -750,11 +782,11 @@ class SqliteMemoryStore:
 
     @staticmethod
     def _apply_mmr(
-        candidates: list[tuple[Memory, float, list[float]]],
+        candidates: list[tuple[Memory, float, list[float], bool]],
         *,
         limit: int,
         mmr_lambda: float = 0.7,
-    ) -> list[tuple[Memory, float]]:
+    ) -> list[tuple[Memory, float, bool]]:
         """Greedy MMR (Maximal Marginal Relevance) selection.
 
         At each step, pick the candidate that maximizes:
@@ -763,8 +795,9 @@ class SqliteMemoryStore:
         First pick is pure relevance (nothing to diversify against yet).
         Subsequent picks balance new-information vs already-known.
 
-        Returns (Memory, score) tuples — vectors stripped — in
-        selection order.
+        Returns (Memory, score, fts_promoted) tuples — vectors stripped —
+        in selection order. #MEM-F5 — the fts_promoted flag rides through
+        so the search() caller can surface it to the UI badge.
 
         Edge cases:
           - mmr_lambda >= 1.0 → degenerate to pure relevance (no
@@ -772,23 +805,23 @@ class SqliteMemoryStore:
           - <= 1 candidate → pass through unchanged.
         """
         if mmr_lambda >= 1.0 or len(candidates) <= 1:
-            return [(m, s) for m, s, _ in candidates[:limit]]
+            return [(m, s, fts) for m, s, _, fts in candidates[:limit]]
 
         remaining = list(candidates)
-        selected: list[tuple[Memory, float, list[float]]] = []
+        selected: list[tuple[Memory, float, list[float], bool]] = []
         target = max(1, min(limit, len(remaining)))
 
         while remaining and len(selected) < target:
             best_idx = 0
             best_mmr = float("-inf")
-            for i, (_mem, score, vec) in enumerate(remaining):
+            for i, (_mem, score, vec, _fts) in enumerate(remaining):
                 if not selected:
                     # First pick: pure relevance — diversity term is 0.
                     mmr_score = mmr_lambda * score
                 else:
                     max_sim_to_picked = max(
                         SqliteMemoryStore._cosine(vec, sel_vec)
-                        for _, _, sel_vec in selected
+                        for _, _, sel_vec, _ in selected
                     )
                     mmr_score = (
                         mmr_lambda * score
@@ -799,7 +832,7 @@ class SqliteMemoryStore:
                     best_idx = i
             selected.append(remaining.pop(best_idx))
 
-        return [(m, s) for m, s, _ in selected]
+        return [(m, s, fts) for m, s, _, fts in selected]
 
     # ─── TTL reaper ────────────────────────────────────────────
 

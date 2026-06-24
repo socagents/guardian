@@ -30,6 +30,22 @@ interface ListResponse {
   count: number;
 }
 
+// #KB-F3 — cross-KB search result shape (KbDoc subset returned by
+// /api/v1/kbs/search). Matches the per-KB page's KbDoc.
+interface KbHit {
+  id: string;
+  kb_name: string;
+  doc_id: string;
+  title: string | null;
+  category: string | null;
+  score?: number;
+}
+
+interface CrossSearchResponse {
+  results: KbHit[];
+  count: number;
+}
+
 const glassStyle = {
   background: "var(--glass-bg-strong)",
   backdropFilter: "blur(12px)",
@@ -58,6 +74,15 @@ export default function KnowledgePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // #KB-F3 — cross-KB semantic search. The cross-KB endpoint
+  // (/api/agent/knowledge/search) existed but no UI ever called it; the
+  // top knowledge page had no search input at all. This searches every
+  // loaded KB at once and links each hit to its per-KB page.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<KbHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -71,6 +96,34 @@ export default function KnowledgePage() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const runSearch = useCallback(async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const r = await fetch("/api/agent/knowledge/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q, limit: 20 }),
+      });
+      if (!r.ok) throw new Error(`search ${r.status}`);
+      const data = (await r.json()) as CrossSearchResponse;
+      setSearchResults(data.results ?? []);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : String(err));
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, [searchQuery]);
+
+  const clearSearch = useCallback(() => {
+    setSearchQuery("");
+    setSearchResults(null);
+    setSearchError(null);
   }, []);
 
   useEffect(() => {
@@ -112,6 +165,100 @@ export default function KnowledgePage() {
             {error}
           </div>
         ) : null}
+
+        {/* #KB-F3 — cross-KB semantic search */}
+        <div className="rounded-2xl p-4 space-y-3" style={glassStyle}>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg text-primary">
+              search
+            </span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void runSearch();
+              }}
+              placeholder="Search across every knowledge base…"
+              className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none"
+            />
+            {searchResults !== null && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="text-xs text-on-surface-variant hover:text-on-surface transition-colors px-2 py-1"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void runSearch()}
+              disabled={searching || !searchQuery.trim()}
+              className="px-4 py-1.5 rounded-lg text-xs font-medium text-white transition-all disabled:opacity-40"
+              style={{
+                background:
+                  "linear-gradient(135deg, #1963B3 0%, #2D8DF0 100%)",
+              }}
+            >
+              {searching ? "Searching…" : "Search"}
+            </button>
+          </div>
+
+          {searchError && (
+            <div className="text-xs text-error">{searchError}</div>
+          )}
+
+          {searchResults !== null && !searching && (
+            <div className="space-y-2">
+              {searchResults.length === 0 ? (
+                <div className="text-xs text-on-surface-variant/60 py-2">
+                  No matches across the loaded knowledge bases.
+                </div>
+              ) : (
+                <>
+                  <div className="text-[11px] text-on-surface-variant/60 font-mono">
+                    {searchResults.length} match
+                    {searchResults.length === 1 ? "" : "es"} across all KBs
+                  </div>
+                  <ul className="divide-y divide-outline-variant/10">
+                    {searchResults.map((hit) => (
+                      <li key={hit.id}>
+                        <Link
+                          href={`/knowledge/${encodeURIComponent(hit.kb_name)}`}
+                          className="flex items-center gap-3 py-2.5 group"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm text-on-surface truncate group-hover:text-primary transition-colors">
+                              {hit.title || hit.doc_id}
+                            </div>
+                            <div className="text-[11px] text-on-surface-variant/60 font-mono mt-0.5 flex items-center gap-2">
+                              <span className="text-primary/80">
+                                {hit.kb_name}
+                              </span>
+                              {hit.category && <span>· {hit.category}</span>}
+                            </div>
+                          </div>
+                          {typeof hit.score === "number" && (
+                            <span className="text-[11px] font-mono text-on-surface-variant/70 tabular-nums shrink-0">
+                              {hit.score.toFixed(3)}
+                            </span>
+                          )}
+                          <span
+                            className="material-symbols-outlined text-base text-on-surface-variant/40 group-hover:text-primary transition-colors shrink-0"
+                            aria-hidden
+                          >
+                            chevron_right
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <div className="text-center py-16 text-sm text-on-surface-variant/60">

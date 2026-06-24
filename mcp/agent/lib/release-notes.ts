@@ -37,6 +37,19 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.79",
+    date: "2026-06-24",
+    title: "No dead clicks: every operator affordance now wires to real backing or is retired.",
+    highlights: [
+      "Plan mode delivers on its promise — an \"Approve & run\" button on the plan card executes the whole plan with a one-shot per-tool-approval bypass; the inline chat title edit now persists like the sidebar rename.",
+      "Reloaded chats show the truth: failed tool calls render as errors (not silent successes), and a turn's reasoning re-renders in its Thinking section.",
+      "Connectors page gains per-instance Restart + a Reconcile sweep to self-heal wedged containers; the /approvals page now enforces the CONFIRM ceremony for credential-tier tools.",
+      "Knowledge gains a cross-KB search box; the pipeline graph renders your actual connectors; a new Telemetry page exposes the opt-in usage-counter posture; deleted skills are restorable in-product.",
+      "Memory: the session tab lists real session-scoped entries and FTS-promoted hits show their badge. Personality: the escalation threshold now shapes the agent's prompt; the unused daily-summary toggle was removed.",
+      "New proxy routes surface previously MCP-only endpoints (investigation report / related cases / technique + playbook issues, personality history, telemetry) to the UI and API catalog; job exports leave an audit trail.",
+    ],
+  },
+  {
     version: "0.2.78",
     date: "2026-06-24",
     title: "Input-validation hardening: path-traversal guard, deny-list enforcement, fail-closed rejections.",

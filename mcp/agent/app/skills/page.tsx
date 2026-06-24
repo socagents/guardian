@@ -1648,6 +1648,15 @@ export default function SkillsPage() {
   const [selectedSkill, setSelectedSkill] = useState<SkillDef | null>(null);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
 
+  // #SKILL-F15 — in-product restore of soft-deleted skills.
+  const [showDeletedPanel, setShowDeletedPanel] = useState(false);
+  const [deletedSkills, setDeletedSkills] = useState<
+    Array<{ name: string; size: number; deleted_at: string }>
+  >([]);
+  const [deletedLoading, setDeletedLoading] = useState(false);
+  const [restoringName, setRestoringName] = useState<string | null>(null);
+  const [deletedError, setDeletedError] = useState<string | null>(null);
+
   // v0.1.33+: skills are loaded live from /api/skills (which calls the
   // MCP's skills_list_all). The hardcoded `SKILLS` array above is now
   // a fallback for SSR / first-paint and for environments where the
@@ -1846,9 +1855,9 @@ export default function SkillsPage() {
       }
       const ok = window.confirm(
         `Delete skill "${skill.displayName}"?\n\n` +
-          `The MD file moves to /app/skills/.deleted/ on the server — recoverable via\n` +
-          `docker cp / docker exec, but it disappears from the agent's skill registry\n` +
-          `immediately.`,
+          `The MD file moves to /app/skills/.deleted/ and disappears from the\n` +
+          `agent's skill registry immediately. You can bring it back from the\n` +
+          `"Deleted" panel on this page (no shell access needed).`,
       );
       if (!ok) return;
       const filePath = `${skill.category}/${skill.name}.md`;
@@ -1873,6 +1882,62 @@ export default function SkillsPage() {
       }
     },
     [refetchSkills],
+  );
+
+  // #SKILL-F15 — load the restorable (soft-deleted) skills.
+  const loadDeletedSkills = useCallback(async () => {
+    setDeletedLoading(true);
+    setDeletedError(null);
+    try {
+      const res = await fetch("/api/skills/deleted", { cache: "no-store" });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const body = (await res.json()) as {
+        deleted?: Array<{ name: string; size: number; deleted_at: string }>;
+      };
+      setDeletedSkills(body.deleted ?? []);
+    } catch (err) {
+      setDeletedError(err instanceof Error ? err.message : String(err));
+      setDeletedSkills([]);
+    } finally {
+      setDeletedLoading(false);
+    }
+  }, []);
+
+  const openDeletedPanel = useCallback(() => {
+    setShowDeletedPanel(true);
+    void loadDeletedSkills();
+  }, [loadDeletedSkills]);
+
+  const handleRestoreSkill = useCallback(
+    async (backupName: string) => {
+      setRestoringName(backupName);
+      setDeletedError(null);
+      try {
+        const res = await fetch("/api/skills/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ backup_name: backupName }),
+        });
+        const body = (await res.json()) as {
+          success: boolean;
+          error?: string;
+          path?: string;
+        };
+        if (!res.ok || !body.success) {
+          setDeletedError(body.error || `Restore failed: ${res.status}`);
+          return;
+        }
+        // Refresh both lists — the restored skill rejoins the registry.
+        await Promise.all([loadDeletedSkills(), refetchSkills()]);
+      } catch (err) {
+        setDeletedError(
+          `Restore failed: ${err instanceof Error ? err.message : err}`,
+        );
+      } finally {
+        setRestoringName(null);
+      }
+    },
+    [loadDeletedSkills, refetchSkills],
   );
 
   const handleCreateSkill = useCallback(
@@ -1970,6 +2035,16 @@ export default function SkillsPage() {
               tenant model that doesn't exist). Header now carries
               just the operator-actionable affordances: Import + Create. */}
           <div className="flex items-center gap-4">
+            {/* #SKILL-F15 — restore soft-deleted skills in-product. */}
+            <button
+              onClick={openDeletedPanel}
+              className="px-4 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors"
+              style={{ border: "0.5px solid var(--glass-border)" }}
+              title="Restore soft-deleted skills"
+            >
+              <span className="material-symbols-outlined text-lg">restore_from_trash</span>
+              Deleted
+            </button>
             <ImportSkillButton onImported={refetchSkills} />
             <button
               onClick={() => setShowCreatePanel(true)}
@@ -1983,6 +2058,93 @@ export default function SkillsPage() {
             </button>
           </div>
         </header>
+
+        {/* #SKILL-F15 — Deleted skills panel (modal-ish overlay). */}
+        {showDeletedPanel && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setShowDeletedPanel(false)}
+          >
+            <div
+              className="w-full max-w-lg rounded-2xl p-6 max-h-[80vh] overflow-y-auto custom-scrollbar"
+              style={{
+                background: "var(--glass-bg-elev)",
+                backdropFilter: "blur(16px)",
+                border: "0.5px solid var(--glass-border)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-xl text-primary">
+                    restore_from_trash
+                  </span>
+                  <h2 className="font-headline text-lg font-bold text-on-surface">
+                    Deleted skills
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setShowDeletedPanel(false)}
+                  className="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5"
+                  aria-label="Close"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <p className="text-xs text-on-surface-variant mb-4">
+                Soft-deleted skills live in{" "}
+                <code className="font-mono">/app/skills/.deleted/</code>.
+                Restoring brings one back into a{" "}
+                <code className="font-mono">restored/</code> category and
+                re-registers it with the agent.
+              </p>
+              {deletedError && (
+                <div className="rounded-lg border border-error/30 bg-error/10 p-2 text-xs text-error mb-3">
+                  {deletedError}
+                </div>
+              )}
+              {deletedLoading ? (
+                <div className="text-center py-8 text-sm text-on-surface-variant/60">
+                  Loading…
+                </div>
+              ) : deletedSkills.length === 0 ? (
+                <div className="text-center py-8 text-sm text-on-surface-variant/60">
+                  No deleted skills to restore.
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {deletedSkills.map((d) => (
+                    <li
+                      key={d.name}
+                      className="flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+                      style={{ border: "0.5px solid var(--glass-border)" }}
+                    >
+                      <div className="min-w-0">
+                        <div className="font-mono text-sm text-on-surface truncate">
+                          {d.name}
+                        </div>
+                        <div className="text-[10px] text-on-surface-variant/60 font-mono">
+                          deleted {d.deleted_at}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => void handleRestoreSkill(d.name)}
+                        disabled={restoringName === d.name}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all disabled:opacity-50 shrink-0"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #1963b3 0%, #2d8df0 100%)",
+                        }}
+                      >
+                        {restoringName === d.name ? "Restoring…" : "Restore"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Summary Strip — horizontal layout (icon left, number+
             caption right). Replaces the vertical stacked layout

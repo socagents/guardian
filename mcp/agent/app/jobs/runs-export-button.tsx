@@ -65,6 +65,24 @@ export function RunsExportButton({ job, runs }: Props) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // #JOBS-F6 — best-effort beacon so a run-history export leaves an
+    // audit trace despite being a browser-local download. Fire-and-
+    // forget; the download never depends on it.
+    try {
+      void fetch("/api/agent/audit/write", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "jobs_exported",
+          target: `job:${job.name}`,
+          status: "success",
+          metadata: { job: job.name, kind: "runs_csv", run_count: runs.length },
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      // ignore
+    }
   }, [enabled, runs, job.name]);
 
   return (

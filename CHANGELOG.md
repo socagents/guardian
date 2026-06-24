@@ -10,6 +10,16 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.79] (2026-06-24) — *No dead clicks: every affordance wired to real backing (or removed)*
+
+- **Chat affordances are real.** A plan's "Approve & run" button now executes the reviewed plan in one informed step (single-use, prompt-matched bypass — not a standing setting); chat-session rename from the header works; reasoning and per-tool error state + durations now survive a reload; the export menu greys out YAML when the server lacks PyYAML.
+- **Connectors & instances are operable from the UI.** Per-instance Restart and a Reconcile sweep are wired to the updater; the observability pipeline's connector lane is now derived from live connector state instead of sample data.
+- **Knowledge, memory, skills.** Cross-KB search on the top Knowledge page; the memory "promoted" badge reflects real FTS promotion; the memory session tab lists real `session:` rows; deleted skills can be restored in-product; a dead skills-tab code path was removed.
+- **Observability & telemetry.** A new Telemetry page (opt-in usage metrics) replaces a dead control; personality history is now reachable; job export and other client-only actions leave an audit trace via an allow-listed beacon.
+- **Investigation & subagents.** Case-related / technique-issues / playbook-issues / issue-report links are backed by real routes; a `parent_session` subagent now actually inherits the parent's (trimmed) conversation; the escalation-threshold setting feeds the system prompt.
+- **Removed dead controls.** The personality daily-summary settings (no subsystem behind them) and the orphaned skills-tab module were removed.
+- Two items remain deferred as larger features: a credential-secret store for shell hooks (HOOK-F14) and origin-tracking for hook deletes (HOOK-F15).
+
 ## [v0.2.78] (2026-06-24) — *Input-validation hardening: path-traversal guard, deny-list enforcement, fail-closed rejections*
 
 - **Skill paths can't escape the skills directory.** The skills read/update/enable/delete routes now resolve the path and reject anything absolute or traversing outside the skills tree (`../../…`) with a clear error — closing a path-traversal vector.
