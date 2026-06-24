@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.81] (2026-06-24) — *Hook hardening + audit chain correlation (final harness-coverage features)*
+
+- **Hook deletes are origin-guarded.** Hooks now record who created them; a plugin- or system-contributed hook can no longer be deleted (or content-edited) by an operator — only its enabled toggle stays open. Operator-created and pre-existing hooks are unaffected.
+- **Shell-hook secrets resolve through the managed store.** A hook's `secret:` reference is now resolved via the Secret Store (an audited read) instead of read raw from the container environment, and fails closed (the value is dropped, not leaked from an unmanaged env var) if it can't be resolved. The same fix applies to the Slack-approval hook.
+- **Multi-step tool chains are correlatable.** Each chat turn now stamps a `chain_id` on the audit rows of the tool calls it makes, so a multi-step action chain (e.g. isolate → remediate → unisolate) can be followed end-to-end — and a partial-chain failure traced — in the audit log.
+- Internal: the new `POST /api/v1/secrets/resolve` MCP endpoint is MCP-token-only (an API key can never resolve a secret); the hooks and audit tables gained backward-compatible `created_by` / `chain_id` columns via idempotent migrations.
+
+This release closes the harness test-coverage Medium/Low tier (#84) at 195/195.
+
 ## [v0.2.80] (2026-06-24) — *Doc accuracy, version sync, honest tool status*
 
 - **OpenAPI spec reports the real version.** The downloaded API spec carried a hardcoded `0.2.0`; it now reflects the running stack version, and both its JSON and YAML paths fail gracefully.

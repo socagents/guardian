@@ -30,6 +30,7 @@ from api.jobs import register_job_routes
 from api.kb import register_kb_routes
 from api.playbooks import register_playbook_routes
 from api.providers import register_provider_routes
+from api.secrets import register_secret_routes
 from api.admin import register_admin_routes
 from api.api_keys import register_api_key_routes
 from api.media import register_media_routes
@@ -808,6 +809,11 @@ async def async_main(transport: str):
     # workspace marketplace + provider registry.
     register_instance_routes(mcp, store)
     register_provider_routes(mcp, provider_store)
+    # #HOOK-F14 — secret resolution endpoint (MCP_TOKEN bearer only).
+    # Backs the agent hook-runner's `secret:<ref>` resolution: it
+    # resolves a ref through SecretStore.read (audited) instead of the
+    # agent reading raw process.env. Fail-closed on a missing ref.
+    register_secret_routes(mcp, secret_store)
     # v0.4.0: register_setup_routes retired (see import comment above).
     # v1.2 Phase 6 — read-only audit query endpoints. Append-only at
     # the storage layer; this just exposes filter/summary read paths.

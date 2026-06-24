@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.81",
+    date: "2026-06-24",
+    title: "Hook hardening + audit chain correlation (final harness-coverage features).",
+    highlights: [
+      "Hooks record their creator; a plugin/system-contributed hook can't be deleted or content-edited by an operator (enabled toggle stays open). Operator-created + pre-existing hooks unaffected.",
+      "A shell hook's secret: reference resolves through the managed Secret Store (audited read) instead of raw container env, and fails closed if unresolvable (no env leak). Same fix for the Slack-approval hook.",
+      "Each chat turn stamps a chain_id on its tool-call audit rows so a multi-step action chain (isolate → remediate → unisolate) is followable end-to-end and partial failures are traceable.",
+      "Internal: POST /api/v1/secrets/resolve is MCP-token-only (an API key can never resolve a secret); hooks + audit tables gained backward-compatible created_by / chain_id columns via idempotent migrations.",
+    ],
+  },
+  {
     version: "0.2.80",
     date: "2026-06-24",
     title: "Doc accuracy, version sync, honest tool status.",

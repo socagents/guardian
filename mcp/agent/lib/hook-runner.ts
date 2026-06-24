@@ -448,8 +448,13 @@ async function runCommandHook(
   // Lazy import — `child_process` isn't available on the Edge
   // runtime. Guardian's chat route uses Node runtime (default).
   const { spawn } = await import("node:child_process");
+  // #HOOK-F14 — resolve `secret:<ref>` env values via the MCP
+  // SecretStore (audited) BEFORE entering the Promise executor (which
+  // is synchronous and can't await). Fail-closed: an unresolvable ref
+  // contributes nothing rather than leaking a raw env var.
+  const resolvedEnv = await resolveSecretEnv(transport.env ?? {});
   return new Promise((resolve, reject) => {
-    const env = { ...process.env, ...resolveSecretEnv(transport.env ?? {}) };
+    const env = { ...process.env, ...resolvedEnv };
     const proc = spawn(transport.command, {
       shell: true,
       cwd: transport.cwd,
@@ -518,9 +523,11 @@ async function runHttpHook(
   payload: HookPayload,
   timeoutMs: number,
 ): Promise<HookResult | null> {
+  // #HOOK-F14 — resolve `secret:<ref>` header values via the MCP
+  // SecretStore (audited), fail-closed on a miss.
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...resolveSecretEnv(transport.headers ?? {}),
+    ...(await resolveSecretEnv(transport.headers ?? {})),
   };
   const resp = await fetch(transport.url, {
     method: "POST",
@@ -702,29 +709,69 @@ async function runPluginHook(
 // ─── Secret resolution ──────────────────────────────────────────────
 
 /**
- * Resolve `secret:<path>` values in env / headers maps. Secrets
- * are looked up via Guardian's runtime config (which already proxies
- * to MCP secret store / setup.json). Values that don't start with
- * `secret:` are passed through verbatim.
+ * Resolve `secret:<ref>` values in env / headers maps. A `secret:<ref>`
+ * is resolved through the MCP SecretStore (an AUDITED read — see
+ * #HOOK-F14 / api/secrets.py) instead of the agent's raw process.env.
+ * Values that don't start with `secret:` are passed through verbatim.
  *
- * Stub for Phase H: pass-through. Phase X (plugins) ties secrets
- * into Spark's secret-store contract; until then, hook authors
- * embed plain env values or pull from container env at runtime.
+ * #HOOK-F14 — this previously read `secret:<X>` straight out of
+ * `process.env[X]`, an UNMANAGED env var that was never minted or
+ * tracked by the SecretStore and left no audit trail. That widened
+ * the trust boundary the SecretStore exists to enforce. We now POST
+ * the ref to `/api/v1/secrets/resolve` (MCP_TOKEN bearer; the same
+ * principal already trusted to read instance/provider secrets) and
+ * use the store's resolved value.
+ *
+ * Fail-closed: if the ref can't be resolved from the store (missing
+ * secret, malformed path, MCP unreachable), we contribute NOTHING for
+ * that key (drop it) and warn — rather than leaking an unmanaged env
+ * var. This matches the fail-closed posture of v0.2.52/59. A hook that
+ * genuinely needs a non-store value should use a literal, not a
+ * `secret:` ref.
  */
-function resolveSecretEnv(
+export async function resolveSecretEnv(
   raw: Record<string, string>,
-): Record<string, string> {
+): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(raw)) {
     if (typeof v === "string" && v.startsWith("secret:")) {
-      // TODO Phase X: resolve via secret store.
-      // For now, allow pass-through to env interpolation by the
-      // spawned shell.
-      const envKey = v.slice("secret:".length);
-      out[k] = process.env[envKey] ?? "";
+      const ref = v.slice("secret:".length);
+      const resolved = await resolveSecretRef(ref);
+      if (resolved === null) {
+        // Fail-closed: drop the key. The spawned shell / outbound
+        // request sees no value for it (better than a stale/unmanaged
+        // env var leaking through).
+        console.warn(
+          `[hook-runner] secret ref ${JSON.stringify(
+            ref,
+          )} did not resolve via the SecretStore; dropping (fail-closed)`,
+        );
+        continue;
+      }
+      out[k] = resolved;
     } else {
       out[k] = v;
     }
   }
   return out;
+}
+
+/**
+ * Resolve one `<ref>` (the part after `secret:`) via the MCP
+ * SecretStore. Returns the value on success, or null on any failure
+ * (missing secret, bad ref, MCP unreachable). NEVER throws — callers
+ * fail-closed on null. The value is never logged here.
+ */
+async function resolveSecretRef(ref: string): Promise<string | null> {
+  try {
+    const body = await callMcpServer<{ value?: string }>(
+      "/api/v1/secrets/resolve",
+      { method: "POST", body: { ref } },
+    );
+    return typeof body.value === "string" ? body.value : null;
+  } catch {
+    // callMcpServer throws on non-2xx (e.g. 404 not_found / 400 bad_ref)
+    // and on transport errors. All of those are fail-closed cases.
+    return null;
+  }
 }

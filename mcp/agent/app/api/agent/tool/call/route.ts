@@ -272,6 +272,12 @@ export async function POST(request: Request): Promise<NextResponse<ToolCallRespo
   // real operator/principal instead of falling back to "agent".
   const actor = request.headers.get('x-guardian-actor');
 
+  // #XSIAM-F13 — one chain id per ^tool direct dispatch (one dispatch =
+  // one chain). Forwarded on the tools/call so the MCP-side tool_call
+  // audit row shares it; TriggerContextMiddleware stamps the chain-id
+  // contextvar from this header.
+  const chainId = `ch_${crypto.randomUUID()}`;
+
   let sessionId: string;
   try {
     sessionId = await openMcpSession(base, token, actor);
@@ -317,6 +323,8 @@ export async function POST(request: Request): Promise<NextResponse<ToolCallRespo
       // #XSOAR-F9/INV-F15 — mcpHeaders also forwards X-Guardian-Actor so the
       // row attributes to the real principal, not the "agent" fallback.
       'X-Guardian-Trigger': 'operator:direct',
+      // #XSIAM-F13 — turn-correlation chain id for this direct dispatch.
+      'X-Guardian-Chain-Id': chainId,
     }),
     body: JSON.stringify({
       jsonrpc: '2.0',

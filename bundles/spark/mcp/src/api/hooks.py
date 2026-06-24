@@ -35,6 +35,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
 from usecase.hook_store import SqliteHookStore
 from usecase.audit_log import SqliteAuditLog, set_current_actor, reset_current_actor
 
@@ -114,7 +115,14 @@ def register_hook_routes(
     async def create_or_upsert_hook(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #HOOK-F15 — attribute the create to the real principal (the
+        # X-Guardian-Actor header the Next.js middleware stamps post-auth:
+        # apikey:<id> | user:operator) instead of the hardcoded
+        # "user:operator". This actor is ALSO stamped as the hook's
+        # creation origin (created_by) so a later DELETE can tell an
+        # operator-created hook from a plugin/seed-created one.
+        actor = actor_from_request(request)
+        actor_token = set_current_actor(actor)
         try:
             try:
                 body = await request.json()
@@ -139,7 +147,10 @@ def register_hook_routes(
             body.setdefault("createdAt", now)
             body["updatedAt"] = now
             try:
-                created = hooks.upsert(body)
+                # #HOOK-F15 — stamp the creation origin from the actor.
+                # upsert() applies it ONLY on insert; updating an existing
+                # hook preserves its stored origin.
+                created = hooks.upsert(body, created_by=actor)
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
             audit.record(
@@ -154,6 +165,7 @@ def register_hook_routes(
                     "transport_type": (
                         body.get("transport", {}).get("type")
                     ),
+                    "created_by": created.created_by,
                 },
             )
             return JSONResponse(
@@ -170,7 +182,7 @@ def register_hook_routes(
     async def patch_hook(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             hook_id = request.path_params["hook_id"]
             existing = hooks.get(hook_id)
@@ -216,6 +228,35 @@ def register_hook_routes(
                     metadata={"event": updated.event},
                 )
                 return JSONResponse({"hook": updated.to_dict()})
+            # #HOOK-F15 — content edits are operator-only. A plugin/builtin/
+            # seed-created hook is owned by its source (the loader rewrites
+            # it on reload); mutating its body via API/UI is spec-violating
+            # and silently lost on the next reload. The enabled-only toggle
+            # above is allowed for ANY origin (operators can disable a
+            # plugin hook); only the full-content merge is gated here.
+            # Mirrors agent_definitions.py #SUB-F3.
+            if not existing.is_operator_owned():
+                audit.record(
+                    action="hook_modify_blocked",
+                    target=f"hook:{hook_id}",
+                    status="failure",
+                    metadata={
+                        "event": existing.event,
+                        "created_by": existing.created_by,
+                        "reason": "non_operator_origin",
+                    },
+                )
+                return JSONResponse(
+                    {
+                        "error": (
+                            f"cannot modify a {existing.created_by!r} hook; "
+                            "only operator-created hooks are editable (you "
+                            "may still enable/disable it)"
+                        ),
+                        "code": "hook_origin_protected",
+                    },
+                    status_code=403,
+                )
             # Full upsert path: merge body onto existing payload +
             # validate the result.
             merged = {
@@ -253,10 +294,42 @@ def register_hook_routes(
     async def delete_hook(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             hook_id = request.path_params["hook_id"]
             existing = hooks.get(hook_id)
+            if existing is None:
+                return JSONResponse(
+                    {"error": "not found"}, status_code=404
+                )
+            # #HOOK-F15 — origin guard. A plugin/builtin/seed-created hook
+            # is owned by its source and would reappear on the next loader
+            # reload anyway; deleting it via API/UI is spec-violating, so
+            # reject it with 403 + a clear code. Operator-created and
+            # legacy-NULL hooks (pre-migration) stay deletable so we never
+            # lock operators out of their own hooks. Mirrors the
+            # agent_definitions #SUB-F3 origin guard.
+            if not existing.is_operator_owned():
+                audit.record(
+                    action="hook_delete_blocked",
+                    target=f"hook:{hook_id}",
+                    status="failure",
+                    metadata={
+                        "event": existing.event,
+                        "created_by": existing.created_by,
+                        "reason": "non_operator_origin",
+                    },
+                )
+                return JSONResponse(
+                    {
+                        "error": (
+                            f"cannot delete a {existing.created_by!r} hook; "
+                            "only operator-created hooks can be deleted"
+                        ),
+                        "code": "hook_origin_protected",
+                    },
+                    status_code=403,
+                )
             ok = hooks.delete(hook_id)
             if not ok:
                 return JSONResponse(
@@ -268,6 +341,7 @@ def register_hook_routes(
                 status="success",
                 metadata={
                     "event": existing.event if existing else None,
+                    "created_by": existing.created_by if existing else None,
                 },
             )
             return JSONResponse({"deleted": True, "id": hook_id})

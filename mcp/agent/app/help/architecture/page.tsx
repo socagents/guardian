@@ -2272,6 +2272,20 @@ function AuditPersistence() {
  queryable history rather than transient stream output. Three
  pieces work together:
  </p>
+ <SubSection icon="link" title="Chain correlation (chain_id)">
+ <p>
+ Each chat turn mints a <Code>chain_id</Code> and forwards it as{" "}
+ <Code>X-Guardian-Chain-Id</Code> on every tool dispatch;{" "}
+ <Code>TriggerContextMiddleware</Code> reads it into a contextvar
+ and <Code>record()</Code> stamps it on each audit row, so the
+ tool calls of one turn — a multi-step action chain like{" "}
+ <Code>isolate → remediate → unisolate</Code> — share a key and a
+ partial-chain failure is traceable end-to-end.{" "}
+ <Code>GET /api/v1/audit?chain_id=…</Code> filters by it. The
+ column is added by a backward-compatible idempotent migration
+ (existing rows stay <Code>NULL</Code>).
+ </p>
+ </SubSection>
  <SubSection icon="api" title="POST /api/v1/audit endpoint">
  <p>
  <Code>bundles/spark/mcp/src/api/audit.py</Code> exposes a

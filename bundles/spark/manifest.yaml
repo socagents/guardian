@@ -636,6 +636,12 @@ audit:
     - "hook_enabled"
     - "hook_disabled"
     - "hook_deleted"
+    # #HOOK-F15 — origin guard. A non-operator hook (created_by =
+    # plugin:<name> / builtin / seed:<name>) is owned by its source and
+    # is NOT deletable/editable via the REST/UI path. The rejected
+    # attempt is audited so the blocked mutation leaves a forensic trace.
+    - "hook_delete_blocked"
+    - "hook_modify_blocked"
     # Round-15 / Phase H — chat-route hook dispatches. One row
     # per event firing summarizing the per-hook decisions.
     - "hook_dispatched"

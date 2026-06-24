@@ -79,6 +79,8 @@ def register_audit_routes(mcp: FastMCP, audit: SqliteAuditLog) -> None:
             until=q.get("until") or None,
             trigger=q.get("trigger") or None,
             trigger_prefix=q.get("trigger_prefix") or None,
+            # #XSIAM-F13 — filter to one turn's correlated tool chain.
+            chain_id=q.get("chain_id") or None,
         )
         # v0.6.10 — pass None when ?limit= absent to get every event;
         # pre-v0.6.10 the route defaulted to 100, which silently

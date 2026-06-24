@@ -31,14 +31,20 @@ adapter over the same interface.
                                           --   "instance:<uuid>"
       status        TEXT,                 -- "success" | "failure" | "skipped"
       duration_ms   INTEGER,              -- nullable; populated for tool_call
-      metadata_json TEXT NOT NULL          -- JSON blob with action-specific
+      metadata_json TEXT NOT NULL,         -- JSON blob with action-specific
                                           -- detail (NEVER secret VALUES,
                                           -- only paths/identifiers)
+      trigger       TEXT,                  -- activity source tag (job:/operator:)
+      chain_id      TEXT                   -- #XSIAM-F13 — turn-scoped correlation
+                                          -- id; links the N tool_call rows of
+                                          -- one investigation turn. NULL for
+                                          -- rows outside a turn (boot, REST).
     );
-    CREATE INDEX idx_audit_ts     ON audit_events(ts);
-    CREATE INDEX idx_audit_actor  ON audit_events(actor);
-    CREATE INDEX idx_audit_action ON audit_events(action);
-    CREATE INDEX idx_audit_target ON audit_events(target);
+    CREATE INDEX idx_audit_ts       ON audit_events(ts);
+    CREATE INDEX idx_audit_actor    ON audit_events(actor);
+    CREATE INDEX idx_audit_action   ON audit_events(action);
+    CREATE INDEX idx_audit_target   ON audit_events(target);
+    CREATE INDEX idx_audit_chain_id ON audit_events(chain_id);
 
 # Append-only contract
 
@@ -166,6 +172,40 @@ def set_current_trigger(trigger: str | None) -> Any:
 
 def reset_current_trigger(token: Any) -> None:
     _current_trigger.reset(token)
+
+
+# #XSIAM-F13 — chain-id (turn correlation) contextvar. Set by the
+# trigger_context middleware whenever an inbound HTTP request carries
+# the `X-Guardian-Chain-Id` header. The agent's chat route generates
+# ONE chain id per turn and forwards it on every downstream MCP tool
+# dispatch, so the N tool_call rows of one investigation turn share
+# the same chain_id. Audit rows pick it up through `record()` (the
+# same contextvar pattern as actor/trigger), letting an operator
+# reconstruct a multi-step tool chain from /observability/events with
+# `chain_id=<id>` instead of guessing from timestamps.
+#
+# Scope is intentionally per-TURN, not cross-request: the chat route
+# mints the id once per turn (Web Crypto randomUUID) and it flows
+# "turn starts" → "MCP tool dispatch" → "audit row". Rows outside a
+# turn (boot reconciliation, direct REST mutations) carry NULL.
+_current_chain_id: ContextVar[str | None] = ContextVar(
+    "_current_chain_id", default=None,
+)
+
+
+def get_current_chain_id() -> str | None:
+    """Return the active chain id if set; None otherwise (unchained)."""
+    return _current_chain_id.get()
+
+
+def set_current_chain_id(chain_id: str | None) -> Any:
+    """Set the chain id for the current async/thread context. Returns a
+    token for `reset_current_chain_id` (paired with try/finally)."""
+    return _current_chain_id.set(chain_id)
+
+
+def reset_current_chain_id(token: Any) -> None:
+    _current_chain_id.reset(token)
 
 
 # v0.1.27: approval-bypass contextvar. Set by the trigger_context
@@ -507,11 +547,17 @@ class SqliteAuditLog:
             }
             if "trigger" not in cols:
                 c.execute("ALTER TABLE audit_events ADD COLUMN trigger TEXT")
+            # #XSIAM-F13 — backward-compatible migration for the chain_id
+            # correlation column. Same PRAGMA-probe + ADD COLUMN pattern as
+            # `trigger`; idempotent. Existing rows get NULL (unchained).
+            if "chain_id" not in cols:
+                c.execute("ALTER TABLE audit_events ADD COLUMN chain_id TEXT")
             c.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(ts)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_events(actor)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_events(action)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_events(target)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_audit_trigger ON audit_events(trigger)")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_audit_chain_id ON audit_events(chain_id)")
 
     # ─── Recording ────────────────────────────────────────────
 
@@ -525,6 +571,7 @@ class SqliteAuditLog:
         duration_ms: int | None = None,
         metadata: dict[str, Any] | None = None,
         trigger: str | None = None,
+        chain_id: str | None = None,
     ) -> str:
         """Append one audit event. Returns the row id.
 
@@ -538,6 +585,11 @@ class SqliteAuditLog:
         passing the keyword explicitly — useful for record-after-the-
         fact paths (boot reconciliation etc.) that aren't inside an
         HTTP request.
+
+        #XSIAM-F13 — `chain_id` likewise defaults to the chain-id
+        contextvar (set by the middleware from the inbound
+        X-Guardian-Chain-Id header). It links the N tool_call rows of
+        one investigation turn. NULL when no turn is in scope.
         """
         row_id = str(uuid.uuid4())
         ts = time.strftime("%Y-%m-%dT%H:%M:%S.", time.gmtime()) + (
@@ -545,17 +597,20 @@ class SqliteAuditLog:
         )
         actor_val = actor or get_current_actor()
         trigger_val = trigger if trigger is not None else get_current_trigger()
+        chain_val = (
+            chain_id if chain_id is not None else get_current_chain_id()
+        )
         meta_json = json.dumps(self._sanitize(metadata or {}))
         try:
             with self._lock, self._conn() as c:
                 c.execute(
                     "INSERT INTO audit_events "
                     "(id, ts, actor, action, target, status, duration_ms, "
-                    "metadata_json, trigger) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "metadata_json, trigger, chain_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         row_id, ts, actor_val, action, target, status,
-                        duration_ms, meta_json, trigger_val,
+                        duration_ms, meta_json, trigger_val, chain_val,
                     ),
                 )
         except Exception as exc:
@@ -620,6 +675,7 @@ class SqliteAuditLog:
         until: str | None = None,
         trigger: str | None = None,
         trigger_prefix: str | None = None,
+        chain_id: str | None = None,
         limit: int | None = None,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -664,11 +720,15 @@ class SqliteAuditLog:
         if trigger_prefix:
             clauses.append("trigger LIKE ?")
             params.append(trigger_prefix + "%")
+        if chain_id:
+            # #XSIAM-F13 — exact match; reconstruct one turn's tool chain.
+            clauses.append("chain_id = ?")
+            params.append(chain_id)
 
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         query = (
             "SELECT id, ts, actor, action, target, status, duration_ms, "
-            "metadata_json, trigger "
+            "metadata_json, trigger, chain_id "
             f"FROM audit_events {where} "
             "ORDER BY ts DESC LIMIT ? OFFSET ?"
         )
@@ -691,6 +751,7 @@ class SqliteAuditLog:
         until: str | None = None,
         trigger: str | None = None,
         trigger_prefix: str | None = None,
+        chain_id: str | None = None,
     ) -> int:
         """Count rows matching the filter set.
 
@@ -725,6 +786,9 @@ class SqliteAuditLog:
         if trigger_prefix:
             clauses.append("trigger LIKE ?")
             params.append(f"{trigger_prefix}%")
+        if chain_id:
+            clauses.append("chain_id = ?")
+            params.append(chain_id)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         with self._lock, self._conn() as c:
             row = c.execute(
@@ -765,6 +829,9 @@ class SqliteAuditLog:
             "duration_ms": row["duration_ms"],
             "metadata": json.loads(row["metadata_json"]),
             "trigger": row["trigger"] if "trigger" in keys else None,
+            # #XSIAM-F13 — tolerate rows read before the chain_id migration
+            # ran (same defensive guard as `trigger`).
+            "chain_id": row["chain_id"] if "chain_id" in keys else None,
         }
 
 
@@ -801,14 +868,15 @@ def record_event(
     duration_ms: int | None = None,
     metadata: dict[str, Any] | None = None,
     trigger: str | None = None,
+    chain_id: str | None = None,
 ) -> None:
     """Convenience: record on the singleton if wired, else no-op.
 
     Used by the SecretStore + tool wrapper which can't reasonably take
     the audit log as a constructor parameter (they're wired before main
-    completes). When `trigger` is None (the common case), `record()`
-    pulls from the trigger contextvar set by the trigger_context
-    middleware.
+    completes). When `trigger`/`chain_id` are None (the common case),
+    `record()` pulls them from the contextvars set by the
+    trigger_context middleware.
     """
     log = _audit
     if log is None:
@@ -821,4 +889,5 @@ def record_event(
         duration_ms=duration_ms,
         metadata=metadata,
         trigger=trigger,
+        chain_id=chain_id,
     )

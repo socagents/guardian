@@ -42,9 +42,11 @@ from starlette.responses import Response
 from usecase.audit_log import (
     reset_current_actor,
     reset_current_approval_bypass,
+    reset_current_chain_id,
     reset_current_trigger,
     set_current_actor,
     set_current_approval_bypass,
+    set_current_chain_id,
     set_current_trigger,
 )
 
@@ -95,6 +97,15 @@ _BYPASS_TRUTHY = frozenset({"1", "true", "yes", "on"})
 # is 22 chars; the cap is 5x that to leave headroom.
 MAX_TRIGGER_LEN = 128
 
+# #XSIAM-F13 — turn-correlation chain id, generated once per turn by the
+# agent chat route and forwarded on every downstream MCP tool dispatch.
+# The middleware stamps it on the chain-id contextvar so audit rows for
+# that turn's tool calls share it. Same per-request contextvar lifetime
+# as the trigger/actor headers. A real value is a UUID-ish token
+# ("ch_<uuid4>"), well under the cap.
+CHAIN_ID_HEADER_NAME = "X-Guardian-Chain-Id"
+MAX_CHAIN_ID_LEN = 128
+
 
 class TriggerContextMiddleware(BaseHTTPMiddleware):
     """Read X-Guardian-Trigger + X-Guardian-Approval-Bypass from the
@@ -123,6 +134,16 @@ class TriggerContextMiddleware(BaseHTTPMiddleware):
             if actor:
                 actor_token = set_current_actor(actor)
 
+        # #XSIAM-F13 — turn-correlation chain id. The agent chat route
+        # mints one per turn and forwards it on each tool dispatch; we
+        # stamp it so the turn's tool_call audit rows share the id.
+        chain_token = None
+        chain_raw = request.headers.get(CHAIN_ID_HEADER_NAME)
+        if chain_raw:
+            chain_id = chain_raw.strip()[:MAX_CHAIN_ID_LEN] or None
+            if chain_id:
+                chain_token = set_current_chain_id(chain_id)
+
         # Bypass header: any of the truthy strings activates it.
         # Logged at INFO when active so operators can see post-hoc that
         # an approval was skipped due to bypass policy.
@@ -142,6 +163,8 @@ class TriggerContextMiddleware(BaseHTTPMiddleware):
                 reset_current_trigger(token)
             if actor_token is not None:
                 reset_current_actor(actor_token)
+            if chain_token is not None:
+                reset_current_chain_id(chain_token)
             if bypass_token is not None:
                 reset_current_approval_bypass(bypass_token)
 

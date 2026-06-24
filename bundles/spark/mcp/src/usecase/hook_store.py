@@ -30,7 +30,14 @@ Why a dedicated store (vs. SettingsStore):
       enabled       INTEGER NOT NULL DEFAULT 1,
       priority      INTEGER NOT NULL DEFAULT 100,
       created_at    TEXT NOT NULL,
-      updated_at    TEXT NOT NULL
+      updated_at    TEXT NOT NULL,
+      created_by    TEXT                 -- #HOOK-F15 — creation origin:
+                                         --   "operator" / "apikey:<id>" /
+                                         --   "user:operator" via the REST path,
+                                         --   "plugin:<name>" / "builtin" /
+                                         --   "seed:<name>" via a loader.
+                                         -- NULL = legacy row (pre-migration),
+                                         -- treated as operator-owned/deletable.
     );
     CREATE INDEX idx_hooks_event   ON hooks(event);
     CREATE INDEX idx_hooks_enabled ON hooks(enabled);
@@ -79,6 +86,9 @@ class Hook:
     priority: int
     created_at: str
     updated_at: str
+    # #HOOK-F15 — creation origin. None for legacy rows (pre-migration),
+    # treated as operator-owned/deletable by the DELETE guard.
+    created_by: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         # Return the full agent-shape payload (not the row shape).
@@ -91,7 +101,32 @@ class Hook:
             "priority": self.priority,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
+            # #HOOK-F15 — surface the origin so the /settings/hooks UI can
+            # badge plugin/builtin/seed hooks as non-deletable. None = legacy.
+            "createdBy": self.created_by,
         }
+
+    def is_operator_owned(self) -> bool:
+        """#HOOK-F15 — True iff this hook may be deleted/edited by an
+        operator. A hook is operator-owned when its origin is NULL
+        (legacy row, pre-migration) or starts with an operator actor
+        prefix ("operator", "user:", "apikey:"). Anything else
+        (plugin:<name> / builtin / seed:<name>) is owned by its source
+        and must NOT be deletable via the REST/UI path — the loader
+        would re-create it on the next reload anyway, so deleting it
+        is spec-violating and silently lost.
+        """
+        cb = (self.created_by or "").strip()
+        if not cb:
+            # Legacy/NULL — pre-migration rows are operator-owned so we
+            # never lock operators out of hooks they created before the
+            # origin column existed.
+            return True
+        return (
+            cb == "operator"
+            or cb.startswith("user:")
+            or cb.startswith("apikey:")
+        )
 
 
 class SqliteHookStore:
@@ -133,10 +168,25 @@ class SqliteHookStore:
                     enabled      INTEGER NOT NULL DEFAULT 1,
                     priority     INTEGER NOT NULL DEFAULT 100,
                     created_at   TEXT NOT NULL,
-                    updated_at   TEXT NOT NULL
+                    updated_at   TEXT NOT NULL,
+                    created_by   TEXT
                 )
                 """
             )
+            # #HOOK-F15 — backward-compatible migration for hooks.db's that
+            # predate the `created_by` origin column. SQLite has no
+            # `ADD COLUMN IF NOT EXISTS`, so probe PRAGMA table_info first;
+            # idempotent — re-running is a no-op. Existing rows get NULL,
+            # which the DELETE guard treats as legacy/operator-owned
+            # (deletable) so we never lock operators out of their own hooks.
+            # Mirrors the pattern in audit_log.py (trigger col) and
+            # job_scheduler.py (source col).
+            cols = {
+                r[1]
+                for r in c.execute("PRAGMA table_info(hooks)").fetchall()
+            }
+            if "created_by" not in cols:
+                c.execute("ALTER TABLE hooks ADD COLUMN created_by TEXT")
             c.execute(
                 "CREATE INDEX IF NOT EXISTS idx_hooks_event "
                 "ON hooks(event)"
@@ -161,7 +211,7 @@ class SqliteHookStore:
         """List hooks, optionally filtered by event + enabled bit.
         Returns priority-ascending (low priority runs first)."""
         sql = "SELECT id, event, payload_json, enabled, priority, " \
-              "created_at, updated_at FROM hooks"
+              "created_at, updated_at, created_by FROM hooks"
         clauses: list[str] = []
         params: list[Any] = []
         if event is not None:
@@ -180,18 +230,31 @@ class SqliteHookStore:
         with self._conn() as c:
             r = c.execute(
                 "SELECT id, event, payload_json, enabled, priority, "
-                "created_at, updated_at FROM hooks WHERE id = ?",
+                "created_at, updated_at, created_by FROM hooks WHERE id = ?",
                 (hook_id,),
             ).fetchone()
         if r is None:
             return None
         return self._row_to_hook(r)
 
-    def upsert(self, payload: dict[str, Any]) -> Hook:
+    def upsert(
+        self, payload: dict[str, Any], *, created_by: str | None = None
+    ) -> Hook:
         """Insert or update a hook. Caller MUST have validated the
         shape on the agent side (lib/hooks.ts:validateHook). We do
         a minimal set of MCP-side checks (id present, event known)
-        but trust the structured fields are well-formed."""
+        but trust the structured fields are well-formed.
+
+        #HOOK-F15 — `created_by` records the creation origin. It is
+        applied ONLY on insert; on update of an existing row the
+        stored origin is preserved (origin is immutable — an operator
+        editing a hook can't relabel its provenance, and a plugin
+        re-registering its own hook on reload keeps its origin). The
+        REST create handler passes the actor (operator id / api key);
+        a plugin/seed loader passes its own origin like
+        "plugin:<name>" or "seed:<name>". None falls through to NULL
+        (legacy / treated as operator-owned by the DELETE guard).
+        """
         hook_id = str(payload.get("id") or "").strip()
         event = str(payload.get("event") or "").strip()
         if not hook_id:
@@ -206,6 +269,11 @@ class SqliteHookStore:
             existing.created_at if existing else
             str(payload.get("createdAt") or now)
         )
+        # Origin is set once, at insert. Updating an existing row keeps
+        # its stored origin regardless of what the caller passes.
+        effective_created_by = (
+            existing.created_by if existing else created_by
+        )
         # Normalize the stored payload — strip top-level metadata
         # we'll re-derive at read time so the JSON blob is a clean
         # snapshot (no stale createdAt / updatedAt).
@@ -215,10 +283,12 @@ class SqliteHookStore:
                          "createdAt", "updatedAt"}
         }
         with self._lock, self._conn() as c:
+            # #HOOK-F15 — created_by is deliberately omitted from the
+            # ON CONFLICT UPDATE set: origin is immutable after insert.
             c.execute(
                 "INSERT INTO hooks (id, event, payload_json, enabled, "
-                "priority, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "priority, created_at, updated_at, created_by) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(id) DO UPDATE SET "
                 "event=excluded.event, "
                 "payload_json=excluded.payload_json, "
@@ -228,7 +298,7 @@ class SqliteHookStore:
                 (
                     hook_id, event, json.dumps(stored),
                     1 if enabled else 0, priority,
-                    created_at, now,
+                    created_at, now, effective_created_by,
                 ),
             )
         return Hook(
@@ -239,6 +309,7 @@ class SqliteHookStore:
             priority=priority,
             created_at=created_at,
             updated_at=now,
+            created_by=effective_created_by,
         )
 
     def delete(self, hook_id: str) -> bool:
@@ -262,7 +333,7 @@ class SqliteHookStore:
     @staticmethod
     def _row_to_hook(row: tuple[Any, ...]) -> Hook:
         (id_, event, payload_json, enabled, priority,
-         created_at, updated_at) = row
+         created_at, updated_at, created_by) = row
         try:
             payload = json.loads(payload_json) if payload_json else {}
         except json.JSONDecodeError:
@@ -279,4 +350,5 @@ class SqliteHookStore:
             priority=int(priority),
             created_at=created_at,
             updated_at=updated_at,
+            created_by=created_by,
         )

@@ -4770,15 +4770,25 @@ export async function POST(request: NextRequest) {
         const mcpExtraHeaders: Record<string, string> = {};
         if (trigger) mcpExtraHeaders['X-Guardian-Trigger'] = trigger;
         if (approvalBypass) mcpExtraHeaders['X-Guardian-Approval-Bypass'] = '1';
+        // #XSIAM-F13 — mint ONE chain id per turn and forward it on every
+        // MCP tool dispatch (including subagent tool calls, which reuse this
+        // same GuardianMCPClient instance). The MCP's trigger_context
+        // middleware stamps it on the chain-id contextvar so the N tool_call
+        // audit rows of this investigation turn share the chain_id, letting
+        // an operator reconstruct the chain from /observability/events.
+        // Unconditional (unlike trigger) — a chain id is always meaningful
+        // for a turn. crypto.randomUUID is already used elsewhere in scope.
+        const turnChainId = `ch_${crypto.randomUUID()}`;
+        mcpExtraHeaders['X-Guardian-Chain-Id'] = turnChainId;
         const mcpClient = new GuardianMCPClient(
           runtimeConfig.MCP_URL,
           runtimeConfig.MCP_TOKEN,
           // Forward X-Guardian-Trigger + (when active)
-          // X-Guardian-Approval-Bypass to every MCP tool dispatch so
-          // audit rows for tools called during this chat inherit the
-          // trigger tag AND so the MCP-side gate_and_execute reads the
-          // bypass contextvar. The MCP's trigger_context middleware
-          // sets both contextvars.
+          // X-Guardian-Approval-Bypass + X-Guardian-Chain-Id to every MCP
+          // tool dispatch so audit rows for tools called during this chat
+          // inherit the trigger tag + turn chain id AND so the MCP-side
+          // gate_and_execute reads the bypass contextvar. The MCP's
+          // trigger_context middleware sets all three contextvars.
           Object.keys(mcpExtraHeaders).length > 0 ? mcpExtraHeaders : undefined,
         );
         if (approvalBypass) {

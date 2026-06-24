@@ -121,6 +121,10 @@ export const AUDIT_EVENT_NAME_ALIASES: Record<string, string> = {
   jobs_exported: "agent.job.exported", // #JOBS-F6
   telemetry_recorded: "agent.telemetry.recorded", // #OBS-F17
   skill_restored: "agent.skill.restored", // #SKILL-F15
+
+  // v0.2.81 feature batch — hook origin guard + audit chain id.
+  hook_delete_blocked: "agent.hook.delete_blocked", // #HOOK-F15
+  hook_modify_blocked: "agent.hook.modify_blocked", // #HOOK-F15
 };
 
 /** Inverse mapping: standard name → guardian action. Used by

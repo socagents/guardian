@@ -18,6 +18,7 @@
  */
 
 import type { BuiltinHookSpec } from "./types";
+import { callMcpServer } from "@/lib/mcp-proxy";
 
 export const slackApprovalBuiltin: BuiltinHookSpec = {
   name: "slack-approval",
@@ -114,7 +115,17 @@ export const slackApprovalBuiltin: BuiltinHookSpec = {
       "Content-Type": "application/json",
     };
     if (authHeaderName && authHeaderValue) {
-      headers[authHeaderName] = resolveSecretRef(authHeaderValue);
+      // #HOOK-F14 — resolve `secret:<ref>` via the MCP SecretStore
+      // (audited), fail-closed: drop the auth header if the ref doesn't
+      // resolve rather than leaking a raw env var.
+      const resolved = await resolveSecretRef(authHeaderValue);
+      if (resolved !== null) {
+        headers[authHeaderName] = resolved;
+      } else {
+        console.warn(
+          `[slack-approval] auth header secret ref did not resolve via the SecretStore; omitting header (fail-closed)`,
+        );
+      }
     }
     const resp = await fetch(webhookUrl, {
       method: "POST",
@@ -142,11 +153,22 @@ export const slackApprovalBuiltin: BuiltinHookSpec = {
   },
 };
 
-/** Resolve a `secret:<envvar>` ref against process.env. Plain values pass
- *  through unchanged. Matches the same resolution pattern as
- *  `resolveSecretEnv` in `lib/hook-runner.ts`. */
-function resolveSecretRef(value: string): string {
+/** #HOOK-F14 — resolve a `secret:<ref>` against the MCP SecretStore
+ *  (an audited read via POST /api/v1/secrets/resolve). Plain values
+ *  (no `secret:` prefix) pass through unchanged. Returns null when a
+ *  `secret:` ref can't be resolved (missing secret / bad ref / MCP
+ *  unreachable) so the caller can fail-closed — NEVER falls back to
+ *  raw process.env. Mirrors `resolveSecretEnv` in `lib/hook-runner.ts`. */
+async function resolveSecretRef(value: string): Promise<string | null> {
   if (!value.startsWith("secret:")) return value;
-  const envKey = value.slice("secret:".length);
-  return process.env[envKey] ?? "";
+  const ref = value.slice("secret:".length);
+  try {
+    const body = await callMcpServer<{ value?: string }>(
+      "/api/v1/secrets/resolve",
+      { method: "POST", body: { ref } },
+    );
+    return typeof body.value === "string" ? body.value : null;
+  } catch {
+    return null;
+  }
 }
