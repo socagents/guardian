@@ -33,6 +33,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
 from usecase.audit_log import (
     audit_log,
     record_event,
@@ -417,11 +418,12 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
     async def create_instance(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        # Phase 6: tag the actor for audit attribution. Anyone hitting
-        # an admin endpoint with a valid MCP_TOKEN is a human operator,
-        # so the cascading audit events from store.create (instance_created
-        # + secret_write) all attribute to "user:operator".
-        actor_token = set_current_actor("user:operator")
+        # Phase 6: tag the actor for audit attribution. #CONN-F-actor —
+        # prefer the real principal the middleware stamped on
+        # X-Guardian-Actor (apikey:<id> | user:operator) over a hardcoded
+        # "user:operator" so the cascading audit events from store.create
+        # (instance_created + secret_write) attribute to the actual operator.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             try:
                 body = await request.json()
@@ -570,7 +572,8 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
     async def delete_instance(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             instance_id = request.path_params["instance_id"]
             # v0.1.31 (Phase 2): for style: container connectors, stop
@@ -616,7 +619,8 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
         """
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             instance_id = request.path_params["instance_id"]
             instance = store.get(instance_id)
@@ -914,7 +918,8 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
         """
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             instance_id = request.path_params["instance_id"]
             instance = store.get(instance_id)

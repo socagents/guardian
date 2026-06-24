@@ -518,9 +518,35 @@ class InvestigationStore:
         return self.get_issue(issue_id)
 
     def delete_issue(self, issue_id: str) -> bool:
+        # #INV-F14 — a hard delete cascades issue_events via ON DELETE CASCADE,
+        # destroying the only forensic record of what existed. Capture the
+        # issue's identifying fields and emit an `issue_deleted` audit row
+        # BEFORE the DELETE so /observability/events records what was removed.
+        existing = self.get_issue(issue_id)
         with self._lock, self._conn() as c:
             cur = c.execute("DELETE FROM issues WHERE id = ?", (issue_id,))
-        return cur.rowcount > 0
+        deleted = cur.rowcount > 0
+        if deleted:
+            try:
+                from usecase.audit_log import record_event
+                meta = {"issue_id": issue_id}
+                if existing is not None:
+                    meta.update({
+                        "title": getattr(existing, "title", None),
+                        "kind": getattr(existing, "kind", None),
+                        "status": getattr(existing, "status", None),
+                        "severity": getattr(existing, "severity", None),
+                        "case_id": getattr(existing, "case_id", None),
+                    })
+                record_event(
+                    "issue_deleted",
+                    target=f"issue:{issue_id}",
+                    status="success",
+                    metadata=meta,
+                )
+            except Exception:  # noqa: BLE001 — audit is best-effort
+                pass
+        return deleted
 
     # ─── Technique mappings (issue <-> ATT&CK) ──────────────────────
 
@@ -801,9 +827,30 @@ class InvestigationStore:
 
     def delete_case(self, case_id: str) -> bool:
         # issues.case_id → ON DELETE SET NULL (issues survive, ungrouped).
+        # #INV-F14 — capture the case identity and emit `case_deleted` before
+        # the DELETE so the destruction of a case grouping is traceable.
+        existing = self.get_case(case_id)
         with self._lock, self._conn() as c:
             cur = c.execute("DELETE FROM cases WHERE id = ?", (case_id,))
-        return cur.rowcount > 0
+        deleted = cur.rowcount > 0
+        if deleted:
+            try:
+                from usecase.audit_log import record_event
+                meta = {"case_id": case_id}
+                if existing is not None:
+                    meta.update({
+                        "title": getattr(existing, "title", None),
+                        "status": getattr(existing, "status", None),
+                    })
+                record_event(
+                    "case_deleted",
+                    target=f"case:{case_id}",
+                    status="success",
+                    metadata=meta,
+                )
+            except Exception:  # noqa: BLE001 — audit is best-effort
+                pass
+        return deleted
 
     # ─── Membership ────────────────────────────────────────────────
 

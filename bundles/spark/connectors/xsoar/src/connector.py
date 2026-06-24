@@ -885,6 +885,15 @@ async def xsoar_add_note(
 
     fetcher = _get_fetcher()
 
+    # #XSOAR-F6 — this tool runs 2 API calls (POST /entry then POST
+    # /entry/note). The connector runs in its own container and cannot write
+    # the agent's audit.db, so per-step visibility is surfaced in the RESULT
+    # envelope (mirrors the INV-F3 pattern): a `steps` dict the agent-side
+    # wrapper captures. A partial failure (entry created, note-pin failed) is
+    # then visible as note:False with the failing step's error, instead of the
+    # whole call raising and masking that the entry already landed.
+    steps: dict = {"add_entry": False, "pin_note": False}
+
     # Step 1 — create the entry.
     created = await fetcher.post(
         "/entry",
@@ -902,24 +911,38 @@ async def xsoar_add_note(
             "could not determine entry id after creating war-room entry",
             incident_id=incident_id,
             raw_response=created,
+            steps=steps,
         )
+    steps["add_entry"] = True
 
-    # Step 2 — pin it as a note.
-    await fetcher.post(
-        "/entry/note",
-        {
-            "investigationId": str(incident_id),
-            "id": str(entry_id),
-            "version": entry_version,
-            "note": True,
-        },
-    )
+    # Step 2 — pin it as a note. A failure here leaves the entry in place
+    # (un-pinned); report it honestly rather than raising past the successful
+    # step-1 write.
+    pin_error: Optional[str] = None
+    try:
+        await fetcher.post(
+            "/entry/note",
+            {
+                "investigationId": str(incident_id),
+                "id": str(entry_id),
+                "version": entry_version,
+                "note": True,
+            },
+        )
+        steps["pin_note"] = True
+    except Exception as exc:  # noqa: BLE001 — surfaced via steps, not raised
+        pin_error = f"{type(exc).__name__}: {exc}"
 
-    return {
+    result = {
         "entry_id": entry_id,
         "incident_id": incident_id,
-        "note": True,
+        "note": steps["pin_note"],
+        "steps": steps,
     }
+    if pin_error is not None:
+        result["partial"] = True
+        result["pin_note_error"] = pin_error
+    return result
 
 
 # ─── xsoar_update_incident ───────────────────────────────────────────
@@ -971,6 +994,15 @@ async def xsoar_update_incident(
 
     fetcher = _get_fetcher()
 
+    # #XSOAR-F6 — this tool runs ≥2 API calls (search to read the full record,
+    # then POST /incident to write, with optimistic-lock retries inside
+    # _post_incident_resolving_version). The connector runs in its own
+    # container and cannot write the agent's audit.db, so per-step visibility
+    # is surfaced in the result envelope (mirrors INV-F3): a `steps` dict the
+    # agent-side wrapper captures, so a partial failure (read OK, write failed)
+    # is distinguishable in the returned data.
+    steps: dict = {"search": False, "update": False}
+
     # Cortex 8's POST /incident is a full-object upsert: posting a PARTIAL
     # incident ({id, version, labels}) is treated as a CREATE and fails
     # (playbook-lock / create errors). So read the current full record,
@@ -980,7 +1012,8 @@ async def xsoar_update_incident(
     search = await fetcher.post("/incidents/search", {"filter": {"id": [str(incident_id)]}})
     data = search.get("data") if isinstance(search, dict) else None
     if not data:
-        return _err(f"incident {incident_id} not found")
+        return _err(f"incident {incident_id} not found", steps=steps)
+    steps["search"] = True
     inc: dict[str, Any] = dict(data[0])
 
     if severity is not None:
@@ -1003,11 +1036,13 @@ async def xsoar_update_incident(
         inc["version"] = _norm_int(version, inc.get("version", 0))
 
     response = await _post_incident_resolving_version(fetcher, inc)
+    steps["update"] = True
 
     return {
         "incident_id": incident_id,
         "updated": True,
         "version": inc.get("version"),
+        "steps": steps,
         "raw_response": {"id": response.get("id"), "version": response.get("version")}
         if isinstance(response, dict) else response,
     }
@@ -2349,13 +2384,27 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
         raise ValueError("playbook_id is required")
 
     fetcher = _get_fetcher()
+    # #XSOAR-F6 — this tool runs up to 4 API calls (open war room, resolve
+    # playbook name, !setPlaybook). The connector runs in its own container and
+    # cannot write the agent's audit.db, so per-step visibility is surfaced in
+    # the result envelope (mirrors INV-F3): a `steps` dict the agent-side
+    # wrapper captures, so a partial failure (war room opened, setPlaybook
+    # failed) is distinguishable in the returned data.
+    steps: dict = {
+        "open_investigation": False,
+        "resolve_playbook_name": False,
+        "set_playbook": False,
+    }
+
     # Open the war room first — a fetched/pending incident has none, and
     # !setPlaybook can't target an incident without an investigation.
     opened = await _ensure_investigation(fetcher, str(incident_id))
+    steps["open_investigation"] = True
 
     # setPlaybook matches by playbook NAME; resolve an id → its name so callers
     # can pass either (import_playbook returns the id).
     playbook_name = await _resolve_playbook_name(fetcher, str(playbook_id))
+    steps["resolve_playbook_name"] = True
 
     # Run in the incident's OWN investigation (not the playground).
     result = await _execute_command(
@@ -2369,12 +2418,15 @@ async def xsoar_run_playbook(incident_id: str, playbook_id: str) -> dict:
             playbook_id=playbook_id,
             playbook_name=playbook_name,
             opened_investigation=opened,
+            steps=steps,
         )
+    steps["set_playbook"] = True
     return {
         "incident_id": incident_id,
         "playbook_id": playbook_id,
         "playbook_name": playbook_name,
         "opened_investigation": opened,
+        "steps": steps,
         "output": output,
     }
 

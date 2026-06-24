@@ -34,6 +34,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from usecase.audit_log import record_event
 from usecase.investigation_store import InvestigationStore
 
 logger = logging.getLogger("Guardian MCP")
@@ -217,15 +218,41 @@ def register_investigation_routes(mcp: FastMCP, store: InvestigationStore) -> No
         body, err = await _json(request)
         if err:
             return err
-        updated = store.update_issue(request.path_params["id"], **body)
+        issue_id = request.path_params["id"]
+        updated = store.update_issue(issue_id, **body)
         if updated is None:
             return JSONResponse({"error": "issue not found"}, status_code=404)
+        # #INV-F2 — the Activity tab reads issue_events only; an operator
+        # REST patch left no timeline entry. Append one naming the fields
+        # touched (values omitted — they may be large free-text).
+        changed_fields = sorted(
+            k for k in body if isinstance(body.get(k), (str, int, float, bool, list, dict))
+        )
+        if changed_fields:
+            store.add_event(
+                issue_id, "issue_patched",
+                "Issue fields updated: " + ", ".join(changed_fields),
+            )
+        # #INV-F15 — emit an investigation-domain audit event (not just the
+        # coarse proxy_request_admitted row) so operator REST mutations are
+        # attributable in /observability/events with the changed field set.
+        try:
+            record_event(
+                "issue_updated",
+                target=f"issue:{issue_id}",
+                status="success",
+                metadata={"issue_id": issue_id, "fields_changed": changed_fields},
+            )
+        except Exception:  # noqa: BLE001 — audit is best-effort
+            pass
         return JSONResponse(_issue_dict(updated))
 
     @mcp.custom_route("/api/v1/issues/{id}", methods=["DELETE"], include_in_schema=False)
     async def delete_issue(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
+        # #INV-F14 — store.delete_issue emits the `issue_deleted` audit row
+        # (with the destroyed issue's title/kind) before the cascade delete.
         deleted = store.delete_issue(request.path_params["id"])
         return JSONResponse({"deleted": deleted})
 

@@ -29,6 +29,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
 from usecase.connector_state import (
     SqliteConnectorStateStore,
 )
@@ -146,7 +147,8 @@ def register_connector_routes(
     async def disable_connector(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             cid = request.path_params["connector_id"]
             s = state_store.set_disabled(cid, disabled=True)
@@ -154,10 +156,13 @@ def register_connector_routes(
                 return JSONResponse(
                     {"error": "not found"}, status_code=404
                 )
+            # #CONN-F7 — the connector WAS disabled; status is "success",
+            # not "skipped" (the enable path already uses "success"). A
+            # status IN ('success','failure') filter must catch this row.
             audit.record(
                 action="connector_disabled",
                 target=f"connector:{cid}",
-                status="skipped",
+                status="success",
                 metadata={"connector_id": cid},
             )
             return JSONResponse({"connector": s.to_dict()})
@@ -172,7 +177,8 @@ def register_connector_routes(
     async def enable_connector(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             cid = request.path_params["connector_id"]
             s = state_store.set_disabled(cid, disabled=False)
@@ -221,7 +227,8 @@ def register_connector_routes(
         the reauth chip); other errors transition to `failed`."""
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             cid = request.path_params["connector_id"]
             try:
@@ -284,7 +291,8 @@ def register_connector_routes(
         """
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             cid = request.path_params["connector_id"]
             existing = state_store.get(cid)
@@ -336,11 +344,21 @@ def register_connector_routes(
             # fixing the upstream issue still surface the failure count.
             if existing is not None:
                 state_store.set_disabled(cid, disabled=False)
+            # #CONN-F8 — this fallback verified NOTHING (no real probe for
+            # this connector); it merely reset state to pending. Record it
+            # as "skipped" with probe_implemented:false (mirrors the
+            # instance-level CONN-F9 fix in api/instances.py) rather than
+            # the misleading "success" that implied a credential check passed.
             audit.record(
                 action="connector_probed",
                 target=f"connector:{cid}",
-                status="success",
-                metadata={"connector_id": cid, "probe_kind": "reset-to-pending"},
+                status="skipped",
+                metadata={
+                    "connector_id": cid,
+                    "probe_implemented": False,
+                    "probe_kind": "reset-to-pending",
+                    "reason": "no_probe_implemented",
+                },
             )
             current = state_store.get(cid)
             return JSONResponse(

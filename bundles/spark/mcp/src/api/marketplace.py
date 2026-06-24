@@ -57,6 +57,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
 from usecase.audit_log import (
     record_event,
     reset_current_actor,
@@ -435,7 +436,8 @@ def register_marketplace_routes(
                 status_code=500,
             )
 
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             record_event(
                 action="connector_downloaded",
@@ -491,7 +493,8 @@ def register_marketplace_routes(
             )
         origin = summary["origin"]
 
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             row = marketplace_store.install(
                 connector_id,
@@ -547,7 +550,8 @@ def register_marketplace_routes(
                 status_code=409,
             )
 
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             removed = marketplace_store.uninstall(connector_id)
             record_event(
@@ -745,7 +749,8 @@ def register_marketplace_routes(
                 status_code=500,
             )
 
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             record_event(
                 action="connector_uploaded",
@@ -841,7 +846,8 @@ def register_marketplace_routes(
                 status_code=409,
             )
 
-        actor_token = set_current_actor("user:operator")
+        # #CONN-F-actor — use the real principal from X-Guardian-Actor.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             # Remove the install marker if present.
             marketplace_store.uninstall(connector_id)

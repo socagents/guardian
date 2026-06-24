@@ -750,6 +750,34 @@ audit:
     # coarse trace (method + path + actor + request_id). GETs are excluded to
     # keep high-rate polling out of the log.
     - "proxy_request_admitted"
+    # ── v0.2.73 audit batch — investigation/connector/xsoar/jobs ──
+    # #JOBS-F4 — scheduler auto-disable (run-once completion, unknown-tool,
+    # consecutive-failure backoff) now emits this from _fire (previously the
+    # enabled bit was flipped via a direct DB write with no audit row). The
+    # operator-driven enable/disable toggle in set_enabled() already used it.
+    - "job_disabled"
+    - "job_enabled"
+    # #JOBS-F7 — an autonomous-loop chat turn whose session was interrupted
+    # (turn timeout / abort). _mark_interrupted_session leaves a trace beyond
+    # the chat transcript.
+    - "job_session_interrupted"
+    # #INV-F11 — a typed edge created between two cases (case_relate). No
+    # case-level activity table exists; this audit row is the trace.
+    - "case_related"
+    # #INV-F14 — hard-delete of an issue / case (cascades issue_events via
+    # ON DELETE CASCADE). Recorded BEFORE the delete with the destroyed
+    # object's identifying fields (title/kind/status) so what was removed is
+    # forensically recoverable.
+    - "issue_deleted"
+    - "case_deleted"
+    # #INV-F15 — investigation-domain mutation events from the MCP REST
+    # surface (patch_issue), beyond the coarse proxy_request_admitted row.
+    - "issue_updated"
+    # #CONN-F5/F6 — instance config/secret/enabled edits (names of changed
+    # config keys + secret slots + the enabled delta). Emitted by
+    # InstanceStore.update; declared here so the observability filter chip
+    # surfaces it.
+    - "instance_updated"
 
 notifications:
   topics:

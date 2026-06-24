@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.73",
+    date: "2026-06-24",
+    title: "Forensic audit trail: true actor attribution + missing-event coverage.",
+    highlights: [
+      "Operator mutations now attribute to the real principal. Connector/instance/marketplace/job mutation routes hardcoded the audit actor to user:operator, overwriting the authenticated identity; they now record the actual apikey:<id> or user:operator from the request.",
+      "instance_updated rows now name the changed config keys + secret slots (names only, never values) and record the enabled delta, so an enable/disable toggle is no longer invisible.",
+      "Investigation mutations (verdict, technique, patch, case-relate, delete) now write timeline + audit events instead of vanishing into a coarse proxy row.",
+      "Scheduler auto-disable + interrupted-session events are now audited with their reason; connector_disabled is recorded as success and a reset-to-pending probe as skipped (probe_implemented:false).",
+      "Multi-step XSOAR tools (add_note / update_incident / run_playbook) return a per-step breakdown; ^tool direct dispatch now forwards the principal so its rows attribute to the operator.",
+    ],
+  },
+  {
     version: "0.2.72",
     date: "2026-06-24",
     title: "Honest verdict push-back, observable embedding drift, reliable approval cards, proxy audit trail.",

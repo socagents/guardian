@@ -10,6 +10,16 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.73] (2026-06-24) — *Forensic audit trail: true actor attribution + missing-event coverage (investigation / connectors / XSOAR / jobs)*
+
+- **Operator mutations now attribute to the real principal.** Connector, instance, marketplace and job mutation endpoints hardcoded the audit actor to `user:operator`, overwriting the authenticated identity — so an API-key admin's actions were indistinguishable from the console operator's. They now record the actual principal (`apikey:<id>` or `user:operator`) from the request.
+- **Instance edits say *what* changed.** An `instance_updated` audit row previously recorded only counts; it now lists the *names* of the config keys and secret slots that changed (never the values) and whether the enabled bit flipped and in which direction — so a pure enable/disable toggle is no longer an invisible no-op in the log.
+- **Investigation mutations leave a trail.** Setting a verdict, mapping an ATT&CK technique, patching an issue, relating cases, and deleting an issue/case now write timeline + audit events (including the title/kind of a deleted issue) instead of vanishing into a coarse proxy row.
+- **Job auto-disable and interrupted sessions are audited.** When the scheduler auto-disables a job (run-once, unknown tool, or repeated failures) or marks a session interrupted, it now emits an audit row with the reason.
+- **Connector audit accuracy.** `connector_disabled` is recorded as a success (not "skipped" — it really disabled), and a probe that only reset a connector to pending is recorded as "skipped" with `probe_implemented:false` rather than a misleading "success".
+- **Multi-step XSOAR tools report partial steps.** `xsoar_add_note`, `xsoar_update_incident`, and `xsoar_run_playbook` now return a per-step breakdown so a partial failure (e.g. entry created but note-pin failed) is visible in the result.
+- **`^tool` direct dispatch attributes correctly.** Operator `^tool` invocations now forward the principal to the MCP, so those audit rows show the operator instead of falling back to a generic `agent`.
+
 ## [v0.2.72] (2026-06-24) — *Honest verdict push-back, observable embedding drift, reliable approval cards, proxy audit trail*
 
 - **Pushing a verdict to XSOAR now tells you the truth when part of it fails.** `push_verdict_to_xsoar` always reported success even when the war-room entry landed but the evidence tag or the timeline log failed. It now returns a per-step breakdown and reports overall failure — with `partial: true` when the verdict itself reached XSOAR but a secondary step didn't — so the operator knows exactly what landed.

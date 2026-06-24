@@ -30,6 +30,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
 from usecase.audit_log import reset_current_actor, set_current_actor
 from usecase.job_scheduler import CroniterJobScheduler
 
@@ -137,7 +138,9 @@ def register_job_routes(mcp: FastMCP, sched: CroniterJobScheduler) -> None:
     async def trigger_run(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #JOBS-F12 — use the real principal from X-Guardian-Actor
+        # instead of clobbering it with a hardcoded "user:operator".
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             ident = request.path_params["name"]
             canonical = _ident_to_name(ident)
@@ -177,7 +180,9 @@ def register_job_routes(mcp: FastMCP, sched: CroniterJobScheduler) -> None:
     async def enable_job(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #JOBS-F12 — use the real principal from X-Guardian-Actor
+        # instead of clobbering it with a hardcoded "user:operator".
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             ident = request.path_params["name"]
             canonical = _ident_to_name(ident)
@@ -198,7 +203,9 @@ def register_job_routes(mcp: FastMCP, sched: CroniterJobScheduler) -> None:
     async def disable_job(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #JOBS-F12 — use the real principal from X-Guardian-Actor
+        # instead of clobbering it with a hardcoded "user:operator".
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             ident = request.path_params["name"]
             canonical = _ident_to_name(ident)
@@ -224,7 +231,9 @@ def register_job_routes(mcp: FastMCP, sched: CroniterJobScheduler) -> None:
     async def create_job(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #JOBS-F12 — use the real principal from X-Guardian-Actor
+        # instead of clobbering it with a hardcoded "user:operator".
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             try:
                 body = await request.json()
@@ -272,7 +281,9 @@ def register_job_routes(mcp: FastMCP, sched: CroniterJobScheduler) -> None:
     async def patch_job(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #JOBS-F12 — use the real principal from X-Guardian-Actor
+        # instead of clobbering it with a hardcoded "user:operator".
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             ident = request.path_params["name"]
             canonical = _ident_to_name(ident)
@@ -324,7 +335,9 @@ def register_job_routes(mcp: FastMCP, sched: CroniterJobScheduler) -> None:
     async def delete_job(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #JOBS-F12 — use the real principal from X-Guardian-Actor
+        # instead of clobbering it with a hardcoded "user:operator".
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             ident = request.path_params["name"]
             canonical = _ident_to_name(ident)

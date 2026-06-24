@@ -498,11 +498,17 @@ class InstanceStore:
         # Secret merge with "***" sentinel handling.
         new_secret_refs: dict[str, Any] = dict(existing.secret_refs)
         secrets_to_write: list[tuple[str, str]] = []  # (slot, plaintext)
+        # #CONN-F5 — track the NAMES of the secret slots that actually
+        # changed (sentinel "***" slots are skipped) so the audit row can
+        # distinguish "operator rotated api_key" from "operator rotated
+        # auth_token". Slot NAMES only — never the secret values.
+        changed_secret_slots: list[str] = []
         if secrets is not None:
             for slot, value in secrets.items():
                 if value == "***":
                     # Sentinel: keep the existing ref untouched.
                     continue
+                changed_secret_slots.append(slot)
                 if not isinstance(value, str):
                     new_secret_refs[slot] = value
                     continue
@@ -542,6 +548,18 @@ class InstanceStore:
             instance_id, new_name, new_enabled, len(new_config),
             len(new_secret_refs), len(secrets_to_write),
         )
+        # #CONN-F5 — which config keys changed (added / removed / value-
+        # changed), by NAME, so a forensic query can tell "operator changed
+        # base_url" from "operator changed auth_method". Config values are
+        # not secret-bearing here (secrets live in secret_refs), but we
+        # record only the KEY names to stay conservative.
+        changed_config_keys: list[str] = []
+        if config is not None:
+            all_keys = set(existing.config) | set(new_config)
+            for k in sorted(all_keys):
+                if existing.config.get(k) != new_config.get(k):
+                    changed_config_keys.append(k)
+
         from usecase.audit_log import record_event
         record_event(
             "instance_updated",
@@ -551,7 +569,17 @@ class InstanceStore:
                 "instance_id": instance_id,
                 "name_changed": name is not None and name != existing.name,
                 "config_changed": config is not None,
+                # #CONN-F5 — names of changed config keys + rotated secret slots.
+                "config_keys_changed": changed_config_keys,
                 "secrets_rotated": len(secrets_to_write),
+                "secret_slots_changed": sorted(changed_secret_slots),
+                # #CONN-F6 — the enabled delta + the value it flipped to, so a
+                # pure enable/disable toggle is no longer invisible (all the
+                # *_changed flags would otherwise read false).
+                "enabled_changed": (
+                    enabled is not None and enabled != existing.enabled
+                ),
+                "enabled_value": new_enabled,
             },
         )
         return self.get(instance_id)

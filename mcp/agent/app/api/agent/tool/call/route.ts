@@ -57,9 +57,34 @@ interface ToolCallResponse {
   duration_ms: number;
 }
 
+/** Build the common MCP headers, conditionally forwarding the
+ *  X-Guardian-Actor the Next.js middleware stamped on the inbound request.
+ *  #XSOAR-F9/INV-F15 — without forwarding the actor header, the MCP's
+ *  TriggerContextMiddleware has nothing to set the actor contextvar from, so
+ *  connector_loader falls back to "agent" and ^tool direct-dispatch rows are
+ *  indistinguishable from a model-driven call at the actor dimension. */
+function mcpHeaders(
+  token: string,
+  actor: string | null,
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/event-stream',
+    ...extra,
+  };
+  if (actor) headers['X-Guardian-Actor'] = actor;
+  return headers;
+}
+
 /** Open a JSON-RPC session against the embedded MCP. Returns the session
  *  ID needed for subsequent tools/call etc. */
-async function openMcpSession(base: string, token: string): Promise<string> {
+async function openMcpSession(
+  base: string,
+  token: string,
+  actor: string | null,
+): Promise<string> {
   const initBody = JSON.stringify({
     jsonrpc: '2.0',
     id: 1,
@@ -72,11 +97,7 @@ async function openMcpSession(base: string, token: string): Promise<string> {
   });
   const resp = await fetch(`${base}/api/v1/stream/mcp`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-    },
+    headers: mcpHeaders(token, actor),
     body: initBody,
     signal: AbortSignal.timeout(10_000),
   });
@@ -100,12 +121,7 @@ async function openMcpSession(base: string, token: string): Promise<string> {
   // Send the initialized notification (no response expected).
   await fetch(`${base}/api/v1/stream/mcp`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-      'mcp-session-id': sessionId,
-    },
+    headers: mcpHeaders(token, actor, { 'mcp-session-id': sessionId }),
     body: JSON.stringify({
       jsonrpc: '2.0',
       method: 'notifications/initialized',
@@ -161,15 +177,11 @@ async function resolveBareName(
   token: string,
   sessionId: string,
   bareName: string,
+  actor: string | null,
 ): Promise<{ resolved?: string; error?: string }> {
   const resp = await fetch(`${base}/api/v1/stream/mcp`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-      'mcp-session-id': sessionId,
-    },
+    headers: mcpHeaders(token, actor, { 'mcp-session-id': sessionId }),
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 99,
@@ -254,9 +266,15 @@ export async function POST(request: Request): Promise<NextResponse<ToolCallRespo
   }
   const { base, token } = r;
 
+  // #XSOAR-F9/INV-F15 — the Next.js middleware stamps the authenticated
+  // principal on x-guardian-actor before this route runs. Forward it to the
+  // MCP on every fetch so the direct-dispatch tool_call rows attribute to the
+  // real operator/principal instead of falling back to "agent".
+  const actor = request.headers.get('x-guardian-actor');
+
   let sessionId: string;
   try {
-    sessionId = await openMcpSession(base, token);
+    sessionId = await openMcpSession(base, token, actor);
   } catch (err) {
     return NextResponse.json(
       {
@@ -273,7 +291,7 @@ export async function POST(request: Request): Promise<NextResponse<ToolCallRespo
   // name (contains "." or "_" prefix that matches), exact match works
   // first try in resolveBareName.
   let resolvedName = body.name;
-  const resolution = await resolveBareName(base, token, sessionId, body.name);
+  const resolution = await resolveBareName(base, token, sessionId, body.name, actor);
   if (resolution.error) {
     return NextResponse.json(
       {
@@ -290,17 +308,16 @@ export async function POST(request: Request): Promise<NextResponse<ToolCallRespo
   // Issue the actual tools/call.
   const callResp = await fetch(`${base}/api/v1/stream/mcp`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
+    headers: mcpHeaders(token, actor, {
       'mcp-session-id': sessionId,
       // #CHAT-F24/OBS-F3/API-F12 — mark this as an operator-typed ^tool
       // direct dispatch so the MCP-side tool_call audit row is
       // distinguishable from a model-driven call (which carries the
       // chat/job trigger). TriggerContextMiddleware reads this header.
+      // #XSOAR-F9/INV-F15 — mcpHeaders also forwards X-Guardian-Actor so the
+      // row attributes to the real principal, not the "agent" fallback.
       'X-Guardian-Trigger': 'operator:direct',
-    },
+    }),
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 100,

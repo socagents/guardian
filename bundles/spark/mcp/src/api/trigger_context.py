@@ -60,6 +60,30 @@ HEADER_NAME = "X-Guardian-Trigger"
 ACTOR_HEADER_NAME = "X-Guardian-Actor"
 MAX_ACTOR_LEN = 128
 
+
+def actor_from_request(request: Request) -> str:
+    """#CONN-F-actor/JOBS-F12 — resolve the audit actor for a mutating REST
+    handler from the request, preferring the X-Guardian-Actor header that the
+    Next.js middleware stamps post-auth (apikey:<id> | user:operator) over the
+    legacy hardcoded "user:operator" default.
+
+    Mutating route handlers must call `set_current_actor(actor_from_request(
+    request))` instead of `set_current_actor("user:operator")` — the latter
+    clobbers the real principal that TriggerContextMiddleware already placed in
+    the contextvar from the header, collapsing every API-key operator mutation
+    to a generic "user:operator" in the audit trail.
+
+    Reads the HEADER directly (not get_current_actor(), which would pick up the
+    MCP's ambient "system" default) so the absent-header case preserves the
+    prior "user:operator" default. Mirrors api/audit.py's record_event handler.
+    """
+    raw = request.headers.get(ACTOR_HEADER_NAME)
+    if raw:
+        actor = raw.strip()[:MAX_ACTOR_LEN]
+        if actor:
+            return actor
+    return "user:operator"
+
 # v0.1.27: optional bypass header. Same lifetime as the trigger header
 # (per-request contextvar). Truthy values activate bypass; anything
 # else (or absent) leaves the default of False in place.

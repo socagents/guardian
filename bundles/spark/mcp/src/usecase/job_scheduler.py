@@ -740,6 +740,7 @@ class CroniterJobScheduler:
         """Execute one job's action. Records run + audit. Returns JobRun."""
         from usecase.audit_log import (
             ACTION_JOB_COMPLETED,
+            ACTION_JOB_DISABLED,
             ACTION_JOB_FAILED,
             ACTION_JOB_FIRED,
             ACTION_JOB_SKIPPED,
@@ -957,6 +958,12 @@ class CroniterJobScheduler:
         # jobs from the tick loop already (see _read_due_jobs WHERE
         # enabled = 1) so this is the only mutation needed.
         new_enabled = 0 if row.run_once else (1 if row.enabled else 0)
+        # #JOBS-F4 — track WHY the enabled bit flips to 0 in _fire so the
+        # auto-disable is auditable (the direct DB write below otherwise
+        # leaves no ACTION_JOB_DISABLED row, unlike set_enabled()).
+        disable_reason: str | None = None
+        if row.run_once and new_enabled == 0 and row.enabled:
+            disable_reason = "run_once"
 
         # v0.1.26: auto-disable jobs whose target tool isn't registered.
         # KeyError text from _build_dispatch is "job action references
@@ -973,6 +980,7 @@ class CroniterJobScheduler:
             and not row.run_once
         ):
             new_enabled = 0
+            disable_reason = "unknown_tool"
             logger.warning(
                 "JobScheduler auto-disabled %s — target tool not registered "
                 "(error: %s). Re-enable via PATCH after the tool is shipped.",
@@ -987,6 +995,7 @@ class CroniterJobScheduler:
             consecutive = self._trailing_failure_count(row.name, run_id) + 1
             if consecutive >= MAX_CONSECUTIVE_FAILURES:
                 new_enabled = 0
+                disable_reason = "consecutive_failures"
                 error = (error or "scheduled job failed") + (
                     f" [auto-disabled after {consecutive} consecutive "
                     f"failures — re-enable via PATCH once the cause is fixed]"
@@ -1018,6 +1027,28 @@ class CroniterJobScheduler:
                 "JobScheduler disabled run-once job %s after first fire "
                 "(status=%s)", row.name, status,
             )
+
+        # #JOBS-F4 — the enabled bit was flipped to 0 by _fire (run-once
+        # completion, unknown-tool, or consecutive-failure backoff). set_enabled()
+        # is never called on this path, so emit ACTION_JOB_DISABLED here so the
+        # auto-disable is visible in the audit log (actor=system: this is the
+        # scheduler acting on its own, not an operator). Best-effort.
+        if disable_reason is not None:
+            try:
+                record_event(
+                    ACTION_JOB_DISABLED,
+                    target=f"job:{row.name}",
+                    status="success",
+                    actor="system",
+                    metadata={
+                        "job_name": row.name,
+                        "auto": True,
+                        "reason": disable_reason,
+                        "trigger": trigger,
+                    },
+                )
+            except Exception:  # noqa: BLE001 — audit must never break _fire
+                pass
 
         if duration_ms > WARN_AFTER_SECONDS * 1000:
             logger.warning(
@@ -1387,6 +1418,21 @@ class CroniterJobScheduler:
                 "JobScheduler: marked session %s interrupted (%s)",
                 session_id, reason,
             )
+            # #JOBS-F7 — leave a forensic audit row for the interruption.
+            # Previously the only signal was the job_failed/job_completed row
+            # from _fire; the session-interruption reason lived only in the
+            # chat transcript. Best-effort, actor=system (scheduler-driven).
+            try:
+                from usecase.audit_log import record_event  # noqa: PLC0415
+                record_event(
+                    "job_session_interrupted",
+                    target=f"session:{session_id}",
+                    status="failure",
+                    actor="system",
+                    metadata={"session_id": session_id, "reason": reason},
+                )
+            except Exception:  # noqa: BLE001 — audit is best-effort
+                pass
         except Exception as exc:  # noqa: BLE001 - best-effort cleanup
             logger.warning(
                 "JobScheduler: failed to mark interrupted session %s: %s",

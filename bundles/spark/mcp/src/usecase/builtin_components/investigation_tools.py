@@ -229,6 +229,13 @@ def issue_set_verdict(
     )
     if updated is None:
         return {"error": f"issue {issue_id!r} not found"}
+    # #INV-F2 — the Activity tab is driven by the issue_events table only;
+    # a structured verdict write left zero timeline trace. Append one so the
+    # verdict change shows up in the issue's activity history.
+    conf_txt = (
+        f" (confidence {float(confidence):.2f})" if confidence is not None else ""
+    )
+    s.add_event(issue_id, "verdict_set", f"Verdict set to {verdict}{conf_txt}")
     return {"issue": dataclasses.asdict(updated)}
 
 
@@ -267,6 +274,14 @@ def issue_add_technique(
     tm = s.add_technique_mapping(
         issue_id, technique_id, tactic=tactic, manifestation=manifestation,
         evidence_ref=evidence_ref, confidence=confidence,
+    )
+    # #INV-F2 — mirror the verdict change into the issue timeline so the
+    # Activity tab reflects technique mappings (issue_events is the sole
+    # source for that tab).
+    tactic_txt = f" [{tactic}]" if tactic else ""
+    s.add_event(
+        issue_id, "technique_mapped",
+        f"ATT&CK technique {technique_id}{tactic_txt} mapped",
     )
     return {"technique": dataclasses.asdict(tm)}
 
@@ -1064,6 +1079,24 @@ def case_relate(source_case_id: str, target_case_id: str, relationship_type: str
     if s.get_case(target_case_id) is None:
         return {"error": f"case {target_case_id!r} not found"}
     r = s.add_case_relationship(source_case_id, target_case_id, relationship_type, note=note)
+    # #INV-F11 — a relate has no case-level activity timeline (there's no
+    # case_events table; that's out of scope). Leave a forensic audit row so
+    # "case X linked to case Y as same-campaign" is traceable in
+    # /observability/events even though it isn't an issue-timeline entry.
+    try:
+        from usecase.audit_log import record_event
+        record_event(
+            "case_related",
+            target=f"case:{source_case_id}",
+            status="success",
+            metadata={
+                "source_case_id": source_case_id,
+                "target_case_id": target_case_id,
+                "relationship_type": relationship_type,
+            },
+        )
+    except Exception:  # noqa: BLE001 — audit is best-effort
+        pass
     return {"relationship": dataclasses.asdict(r)}
 
 
