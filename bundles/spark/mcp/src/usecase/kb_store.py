@@ -598,7 +598,29 @@ class SqliteKnowledgeBase:
         """
         if not isinstance(query, str) or not query.strip():
             return []
-        query_vec = self._embedder.embed(query)
+        # #KB-F11 — an embed failure (Vertex outage) used to propagate out of
+        # search() before the success record_event below, leaving zero trace in
+        # audit.db. Emit a failure kb_searched row, then re-raise so callers'
+        # own error handling (the agent tool's _friendly_embed_error, the REST
+        # 500) is unchanged.
+        try:
+            query_vec = self._embedder.embed(query)
+        except Exception as exc:
+            from usecase.audit_log import ACTION_KB_SEARCHED, record_event
+            record_event(
+                ACTION_KB_SEARCHED,
+                target=f"kb:{kb_name or '_all_'}",
+                status="failure",
+                metadata={
+                    "kb_name": kb_name,
+                    "category": category,
+                    "query_chars": len(query),
+                    "limit": limit,
+                    "reason": "embed_failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                },
+            )
+            raise
         clauses, params = [], []
         if kb_name:
             clauses.append("kb_name = ?")

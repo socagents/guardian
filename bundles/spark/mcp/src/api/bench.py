@@ -22,6 +22,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
+from usecase.audit_log import ACTION_BENCH_RUN_STARTED, record_event
 from usecase.benchmark import BenchRunStore
 
 logger = logging.getLogger("Guardian MCP")
@@ -98,6 +100,17 @@ def register_bench_routes(mcp: FastMCP, store: BenchRunStore) -> None:
             )
         thinking_enabled = bool(body.get("thinking_enabled", False))
 
+        # #OBS-F13 — the /observability/bench UI button hits this REST endpoint
+        # directly (not the chat bench_run tool), so previously a UI-triggered
+        # run left NO audit row. Record who invoked it + the run parameters.
+        actor = actor_from_request(request)
+        bench_meta = {
+            "manifest": manifest,
+            "router_preset_model": router_preset,
+            "thinking_enabled": thinking_enabled,
+            "via": "rest",
+        }
+
         from usecase.benchmark_runner import run_manifest
         try:
             summary = await run_manifest(
@@ -107,12 +120,33 @@ def register_bench_routes(mcp: FastMCP, store: BenchRunStore) -> None:
                 record=True,
             )
         except ValueError as exc:
+            record_event(
+                ACTION_BENCH_RUN_STARTED,
+                target=f"bench:{manifest}",
+                status="failure",
+                actor=actor,
+                metadata={**bench_meta, "error": str(exc)},
+            )
             return JSONResponse({"error": str(exc)}, status_code=400)
         except Exception as exc:  # noqa: BLE001
             logger.exception("bench run failed for manifest %s", manifest)
+            record_event(
+                ACTION_BENCH_RUN_STARTED,
+                target=f"bench:{manifest}",
+                status="failure",
+                actor=actor,
+                metadata={**bench_meta, "error": f"{type(exc).__name__}: {exc}"},
+            )
             return JSONResponse(
                 {"error": f"run failed: {exc}"}, status_code=500,
             )
+        record_event(
+            ACTION_BENCH_RUN_STARTED,
+            target=f"bench:{summary.run_id}",
+            status="success",
+            actor=actor,
+            metadata={**bench_meta, "run_id": summary.run_id},
+        )
         return JSONResponse(
             {"run_id": summary.run_id, "summary": summary.to_dict()},
             status_code=201,

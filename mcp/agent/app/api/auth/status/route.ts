@@ -29,7 +29,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/lib/auth-defaults";
-import { validateSession } from "@/lib/auth-store";
+import { postAudit, validateSession } from "@/lib/auth-store";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +38,20 @@ export async function GET() {
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? "";
 
   const validation = await validateSession(token);
+
+  // #API-F4 — AuthGate polls this constantly, so we deliberately do NOT audit
+  // every successful poll (high-rate noise) nor the missing-token case (a
+  // normal unauthenticated visitor). We DO audit the anomaly: a request that
+  // PRESENTED a session cookie which failed validation as expired/revoked —
+  // the signature of a stolen or stale cookie being probed. mcp_unreachable is
+  // skipped too (an outage, not an attack). Best-effort; never blocks the poll.
+  if (token && !validation.valid && validation.reason === "expired_or_revoked") {
+    postAudit("login_failed", {
+      target: "auth-status",
+      status: "failure",
+      metadata: { reason: "stale_session_probe", source: "auth_status_poll" },
+    });
+  }
 
   const response = NextResponse.json(
     validation.valid

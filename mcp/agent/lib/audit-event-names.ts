@@ -87,6 +87,11 @@ export const AUDIT_EVENT_NAME_ALIASES: Record<string, string> = {
   tool_call: "agent.tool.call",
   approval_requested: "agent.approval.requested",
   approval_resolved: "agent.approval.resolved",
+
+  // v0.2.74 audit batch — new TS-emitted action names.
+  provider_probed: "agent.provider.probed", // #API-F17/#PLAT-F6
+  login_lockout: "agent.auth.login.lockout", // #API-F3
+  approval_self_resolve_blocked: "agent.approval.self_resolve_blocked", // #HOOK-F10
 };
 
 /** Inverse mapping: standard name → guardian action. Used by

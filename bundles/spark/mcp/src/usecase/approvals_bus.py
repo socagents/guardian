@@ -326,6 +326,25 @@ class InProcessApprovalsBus:
                 "InProcessApprovalsBus: reaped %d orphaned pending row(s) at boot",
                 cur.rowcount,
             )
+            # #HOOK-F11 — emit an audit trace beyond the logger line so the
+            # boot-time reaping of live pending state is visible in
+            # /observability/events. main.py wires the audit singleton (line
+            # ~177) BEFORE constructing this bus (~225), so record_event is
+            # live by the time __init__ calls us. Best-effort.
+            try:
+                from usecase.audit_log import (
+                    ACTION_APPROVAL_ORPHANS_REAPED,
+                    record_event,
+                )
+                record_event(
+                    ACTION_APPROVAL_ORPHANS_REAPED,
+                    target="approvals.db",
+                    status="success",
+                    actor="system",
+                    metadata={"rows_reaped": cur.rowcount, "at": now},
+                )
+            except Exception:  # pragma: no cover - best-effort
+                pass
 
     @staticmethod
     def _now_iso() -> str:

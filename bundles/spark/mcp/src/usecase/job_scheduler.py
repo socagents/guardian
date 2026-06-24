@@ -776,6 +776,11 @@ class CroniterJobScheduler:
         status = "success"
         error: str | None = None
         result: Any = None
+        # #SKILL-F12 — capture skill-binding + frontmatter-derived overrides so
+        # the completion audit row records that a skill ran (operators couldn't
+        # distinguish a skill-bound run from a plain prompt). Populated inside
+        # the prompt branch; stays None for tool_call jobs / unbound prompts.
+        skill_binding: dict[str, Any] | None = None
 
         action_type = str(row.action.get("type") or "")
         action_name = str(row.action.get("name") or "")
@@ -856,6 +861,12 @@ class CroniterJobScheduler:
                             "JobScheduler %s: bound to skill %r (+%d chars)",
                             row.name, skill_name, len(skill_body),
                         )
+                        # #SKILL-F12 — mark the binding for the completion audit
+                        # row; effective_* overrides are filled in below.
+                        skill_binding = {
+                            "skill_name": skill_name,
+                            "bytes_added": len(skill_body),
+                        }
                 # v0.5.34 / Issues #22+#23 skill-side overrides.
                 # When a job is bound to a skill (action.skill = X)
                 # AND the skill's MD frontmatter declares model: /
@@ -883,6 +894,12 @@ class CroniterJobScheduler:
                         # Normalize to the same shape the chat-route
                         # validator expects.
                         effective_policy = fm["permissions"]
+                # #SKILL-F12 — fold the effective (job ∪ skill-frontmatter)
+                # overrides into the binding record so the audit row shows what
+                # the skill actually changed about the run.
+                if skill_binding is not None:
+                    skill_binding["effective_model_id"] = effective_model_id
+                    skill_binding["effective_thinking"] = effective_thinking
                 logger.info(
                     "JobScheduler firing %s → prompt: %.80s [trigger=%s]",
                     row.name, message, trigger,
@@ -1074,6 +1091,9 @@ class CroniterJobScheduler:
                 "action_name": action_name,
                 "next_due_at": next_due_iso,
                 "error": error,
+                # #SKILL-F12 — present iff a skill was bound to this prompt run;
+                # carries skill_name + bytes_added + effective model/thinking.
+                **({"skill_binding": skill_binding} if skill_binding else {}),
             },
         )
 

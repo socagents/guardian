@@ -28,6 +28,7 @@ from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
 from usecase.api_keys import SqliteApiKeyStore
+from usecase.audit_log import ACTION_API_KEY_LISTED, record_event
 
 logger = logging.getLogger("Guardian MCP")
 
@@ -52,6 +53,20 @@ def register_api_key_routes(mcp: FastMCP, store: SqliteApiKeyStore) -> None:
                 status_code=403,
             )
         keys = [k.to_dict() for k in store.list()]
+        # #API-F9 — enumerating the full api-key roster (id/label/scopes for
+        # every key, active + revoked) is a privileged read; emit a trace here
+        # at the REST handler (not store.list(), which also runs at boot) so
+        # GET /api/v1/api_keys leaves a forensic row. Never logs key material.
+        record_event(
+            ACTION_API_KEY_LISTED,
+            target="api_key:*",
+            status="success",
+            actor="user:operator",
+            metadata={
+                "count": len(keys),
+                "active_count": sum(1 for k in keys if not k.get("revoked_at")),
+            },
+        )
         return JSONResponse({"keys": keys, "count": len(keys)})
 
     @mcp.custom_route("/api/v1/api_keys", methods=["POST"], include_in_schema=False)

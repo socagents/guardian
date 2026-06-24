@@ -43,6 +43,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
 from usecase.audit_log import (
     ACTION_MEMORY_LISTED,
     ACTION_MEMORY_READ,
@@ -611,11 +612,13 @@ def register_cognitive_routes(
         )
         # #MEM-F9 — enumerate-the-store reads were previously silent. Record
         # who listed memory + the scope/window so probing leaves a trace.
+        # #MEM-F11 — attribute to the real principal (apikey:<id>) when the
+        # X-Guardian-Actor header is present, not the hardcoded user:operator.
         record_event(
             ACTION_MEMORY_LISTED,
             target="memory:list",
             status="success",
-            actor="user:operator",
+            actor=actor_from_request(request),
             metadata={
                 "scope": q.get("scope") or None,
                 "limit": _int(q, "limit", 100),
@@ -631,7 +634,9 @@ def register_cognitive_routes(
     async def store_memory(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #MEM-F11 — preserve the per-principal actor the middleware set from
+        # X-Guardian-Actor instead of clobbering it with user:operator.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             try:
                 body = await request.json()
@@ -722,7 +727,7 @@ def register_cognitive_routes(
             ACTION_MEMORY_READ,
             target=f"memory:{key}",
             status="success",
-            actor="user:operator",
+            actor=actor_from_request(request),  # #MEM-F11
             metadata={"scope": scope, "key": key},
         )
         return JSONResponse({"memory": m.to_dict()})
@@ -735,7 +740,8 @@ def register_cognitive_routes(
     async def delete_memory(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #MEM-F11 — attribute the delete to the real principal.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             key = request.path_params["key"]
             scope = request.query_params.get("scope") or "agent"

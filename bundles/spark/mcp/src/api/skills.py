@@ -68,6 +68,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
 from usecase.audit_log import reset_current_actor, set_current_actor
 from usecase.builtin_components import skills_crud
 
@@ -128,7 +129,10 @@ def register_skill_routes(mcp: FastMCP) -> None:
     async def create_skill(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #SKILL-F9 — attribute the mutation to the real principal from the
+        # X-Guardian-Actor header (apikey:<id>) instead of clobbering it with a
+        # hardcoded user:operator. Falls back to user:operator when absent.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             body = await request.json()
             category = (body or {}).get("category")
@@ -160,7 +164,10 @@ def register_skill_routes(mcp: FastMCP) -> None:
     async def update_skill(request: Request) -> JSONResponse:
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #SKILL-F9 — attribute the mutation to the real principal from the
+        # X-Guardian-Actor header (apikey:<id>) instead of clobbering it with a
+        # hardcoded user:operator. Falls back to user:operator when absent.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             file_path = request.path_params["file_path"]
             body = await request.json()
@@ -192,7 +199,10 @@ def register_skill_routes(mcp: FastMCP) -> None:
         """
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #SKILL-F9 — attribute the mutation to the real principal from the
+        # X-Guardian-Actor header (apikey:<id>) instead of clobbering it with a
+        # hardcoded user:operator. Falls back to user:operator when absent.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             file_path = request.path_params["file_path"]
             body = await request.json()
@@ -223,7 +233,10 @@ def register_skill_routes(mcp: FastMCP) -> None:
         """
         if (resp := require_bearer(request)) is not None:
             return resp
-        actor_token = set_current_actor("user:operator")
+        # #SKILL-F9 — attribute the mutation to the real principal from the
+        # X-Guardian-Actor header (apikey:<id>) instead of clobbering it with a
+        # hardcoded user:operator. Falls back to user:operator when absent.
+        actor_token = set_current_actor(actor_from_request(request))
         try:
             file_path = request.path_params["file_path"]
             result = _decode(skills_crud.skills_delete(file_path))

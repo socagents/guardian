@@ -31,6 +31,8 @@ from usecase.agent_definition_store import (
     VALID_ISOLATION,
 )
 from usecase.audit_log import (
+    ACTION_AGENT_DEFINITION_LISTED,
+    ACTION_AGENT_DEFINITION_READ,
     SqliteAuditLog,
     set_current_actor,
     reset_current_actor,
@@ -58,6 +60,18 @@ def register_agent_definition_routes(
         origin = q.get("origin") or None
         enabled_only = q.get("enabled_only") in ("1", "true", "yes")
         rows = defs.list(origin=origin, enabled_only=enabled_only)
+        # #SUB-F8 — enumerating agent system prompts was unobservable; record
+        # the list read (filters + count, not the prompt bodies).
+        audit.record(
+            action=ACTION_AGENT_DEFINITION_LISTED,
+            target="agent:*",
+            status="success",
+            metadata={
+                "origin": origin,
+                "enabled_only": enabled_only,
+                "count": len(rows),
+            },
+        )
         return JSONResponse(
             {
                 "agent_definitions": [r.to_dict() for r in rows],
@@ -76,6 +90,14 @@ def register_agent_definition_routes(
         d = defs.get(request.path_params["agent_id"])
         if d is None:
             return JSONResponse({"error": "not found"}, status_code=404)
+        # #SUB-F8 — point-read of one agent's system prompt; record successful
+        # reads only (a 404 miss reveals nothing).
+        audit.record(
+            action=ACTION_AGENT_DEFINITION_READ,
+            target=f"agent:{d.id}",
+            status="success",
+            metadata={"name": d.name, "by": "id"},
+        )
         return JSONResponse({"agent_definition": d.to_dict()})
 
     @mcp.custom_route(
@@ -89,6 +111,13 @@ def register_agent_definition_routes(
         d = defs.get_by_name(request.path_params["name"])
         if d is None:
             return JSONResponse({"error": "not found"}, status_code=404)
+        # #SUB-F8 — resolve-by-name read of an agent's system prompt.
+        audit.record(
+            action=ACTION_AGENT_DEFINITION_READ,
+            target=f"agent:{d.id}",
+            status="success",
+            metadata={"name": d.name, "by": "name"},
+        )
         return JSONResponse({"agent_definition": d.to_dict()})
 
     @mcp.custom_route(

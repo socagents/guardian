@@ -42,7 +42,7 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_TTL_SECONDS,
 } from "@/lib/auth-defaults";
-import { login } from "@/lib/auth-store";
+import { login, postAudit } from "@/lib/auth-store";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +113,15 @@ export async function POST(request: NextRequest) {
   const ip = getSourceIp(request);
   const gate = rateCheck(ip);
   if (!gate.allowed) {
+    // #API-F3 — the in-memory rate-limit lockout previously returned 429 with
+    // no audit row, so a brute-force attempt being throttled left no durable
+    // trace (the window resets on restart). Emit a login_lockout row. Never
+    // logs credentials; ip is the source identifier the limiter keyed on.
+    postAudit("login_lockout", {
+      target: `login-ip:${ip}`,
+      status: "failure",
+      metadata: { ip, retry_after_s: gate.retryAfter },
+    });
     return NextResponse.json(
       {
         error: `Too many failed attempts. Try again in ${gate.retryAfter}s.`,
@@ -147,6 +156,16 @@ export async function POST(request: NextRequest) {
   // attackers can't enumerate.
   if (username !== ADMIN_USERNAME) {
     recordFailure(ip);
+    // #API-F2 — a wrong-USERNAME attempt short-circuits here before the MCP
+    // login() call, so the MCP-side login_failed row (emitted inside
+    // /api/v1/ui/auth/login) never fires. Emit an equivalent from the Next
+    // route so username-probing leaves an audit trace. Never logs the password;
+    // the attempted username is recorded so enumeration patterns are visible.
+    postAudit("login_failed", {
+      target: `login-ip:${ip}`,
+      status: "failure",
+      metadata: { ip, reason: "unknown_username", attempted_username: username },
+    });
     return NextResponse.json(
       { error: "Invalid credentials" },
       { status: 401 },

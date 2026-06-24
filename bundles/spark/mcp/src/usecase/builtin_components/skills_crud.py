@@ -4,6 +4,7 @@ Skills CRUD MCP Tools
 Provides tools for managing agent skills: Create, Read, Update, Delete
 """
 
+import hashlib
 import os
 import re
 import time
@@ -448,6 +449,17 @@ def update_skill(file_path: str, content: str) -> Dict[str, Any]:
                         "file_path": file_path,
                         "bytes_before": len(original),
                         "bytes_after": len(content),
+                        # #SKILL-F6 — content hashes pin the audit row to the
+                        # exact on-disk before/after bytes. A body rewrite is now
+                        # verifiable from audit.db alone (operator can confirm a
+                        # backup/.history file IS the recorded version) without
+                        # logging full content into the forensic DB.
+                        "sha256_before": hashlib.sha256(
+                            original.encode("utf-8")
+                        ).hexdigest(),
+                        "sha256_after": hashlib.sha256(
+                            content.encode("utf-8")
+                        ).hexdigest(),
                         "backup": str(backup_path.relative_to(SKILLS_DIR)),
                         "history": history_rel,
                     },

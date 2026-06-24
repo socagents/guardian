@@ -27,6 +27,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
+from api.trigger_context import actor_from_request
+from usecase.audit_log import ACTION_NOTIFICATION_ACKED, record_event
 from usecase.notifications import SqliteNotificationStore
 
 logger = logging.getLogger("Guardian MCP")
@@ -158,6 +160,16 @@ def register_notification_routes(
         if not notif_id:
             return JSONResponse({"error": "id required"}, status_code=400)
         ok = store.ack(notif_id)
+        # #PLAT-F8 — acknowledgment is a read-state change; record it (with the
+        # acking principal) so silently-dismissed notifications leave a trail. A
+        # miss (404) is recorded as a no-op so probing is still visible.
+        record_event(
+            ACTION_NOTIFICATION_ACKED,
+            target=f"notification:{notif_id}",
+            status="success" if ok else "noop",
+            actor=actor_from_request(request),
+            metadata={"notification_id": notif_id, "found": ok},
+        )
         return JSONResponse(
             {"acked": ok, "id": notif_id},
             status_code=200 if ok else 404,

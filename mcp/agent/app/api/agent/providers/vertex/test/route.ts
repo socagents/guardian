@@ -41,6 +41,7 @@
 import { NextResponse } from "next/server";
 import { GoogleAuth } from "google-auth-library";
 
+import { postAudit } from "@/lib/auth-store";
 import { resolveVertexCredentialsFromStore } from "@/lib/vertex-credentials";
 import { parseCredentialsInput } from "@/lib/vertex-validate";
 
@@ -156,6 +157,21 @@ export async function POST(request: Request) {
       typeof credentials.project_id === "string"
         ? credentials.project_id
         : "(unknown)";
+    // #API-F17/#PLAT-F6 — record the credential-probe OUTCOME. The middleware
+    // logs route admission (proxy_request_admitted) but not whether the probe
+    // succeeded, against which SA/project. Names only — NEVER the private key.
+    postAudit("provider_probed", {
+      target: "provider:vertex",
+      status: "success",
+      metadata: {
+        provider: "vertex",
+        client_email:
+          typeof credentials.client_email === "string"
+            ? credentials.client_email
+            : undefined,
+        project_id: jsonProject,
+      },
+    });
     return NextResponse.json(
       {
         status: "success",
@@ -167,6 +183,28 @@ export async function POST(request: Request) {
     );
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
+
+    // #API-F17/#PLAT-F6 — record the FAILED credential probe (Google rejection
+    // or local PEM-decode failure). The credential client_email/project are
+    // names, not secrets; the error reason is a coarse class, not the raw key.
+    postAudit("provider_probed", {
+      target: "provider:vertex",
+      status: "failure",
+      metadata: {
+        provider: "vertex",
+        client_email:
+          typeof credentials.client_email === "string"
+            ? credentials.client_email
+            : undefined,
+        project_id:
+          typeof credentials.project_id === "string"
+            ? credentials.project_id
+            : undefined,
+        reason: isLocalPemDecodeError(detail)
+          ? "local_pem_decode_error"
+          : "exchange_failed",
+      },
+    });
 
     // Special-case ONLY local PEM/DECODER failures. These mean Node's
     // OpenSSL couldn't even sign the JWT because the private_key in the

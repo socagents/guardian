@@ -778,6 +778,38 @@ audit:
     # InstanceStore.update; declared here so the observability filter chip
     # surfaces it.
     - "instance_updated"
+    # ── v0.2.74 audit batch — KB/MEM/SKILL/SUB/HOOK/PLAT/OBS/API ──
+    # #KB-F1 — KB enumeration surfaces (list-all-KBs + list-a-KB's-tags) now
+    # leave a trace, like docs-list (kb_searched mode=list) + doc-read already do.
+    - "kb_listed"
+    # #HOOK-F10 — a blocked approval self-resolve (actor == requester). Both the
+    # REST resolve handler + the agent-tool resolve path record this.
+    - "approval_self_resolve_blocked"
+    # #HOOK-F11 — boot-time orphan reaping of pending approval rows from a prior
+    # process (marked timeout). Emitted by _reap_orphaned_pending.
+    - "approval_orphans_reaped"
+    # #PLAT-F5 — provider_updated was emitted by provider_store as a bare string
+    # literal (no manifest declaration); declared so the filter chip surfaces it.
+    - "provider_updated"
+    # #API-F17/#PLAT-F6 — a Vertex/provider credential probe (the /providers Test
+    # button). Posted from the Next.js route; records SA email/project, not the key.
+    - "provider_probed"
+    # #API-F9 — listing the api-key roster (privileged enumeration) leaves a trace.
+    - "api_key_listed"
+    # #API-F3 — login rate-limit lockout tripped by the Next.js login route.
+    - "login_lockout"
+    # #OBS-F13 — a benchmark run started from the /observability/bench UI button
+    # (REST POST, bypassing the chat tool_call path).
+    - "bench_run_started"
+    # #PLAT-F8 — notification acknowledgment (read-state change).
+    - "notification_acked"
+    # #PLAT-F12 — operator-state enumeration / point-read (GET surfaces).
+    - "operator_state_listed"
+    - "operator_state_read"
+    # #SUB-F8 — agent-definition enumeration / point-read (reading agent system
+    # prompts). Only mutations were audited before.
+    - "agent_definition_listed"
+    - "agent_definition_read"
 
 notifications:
   topics:

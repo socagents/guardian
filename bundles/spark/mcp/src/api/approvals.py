@@ -34,13 +34,19 @@ from starlette.responses import JSONResponse
 
 from api.auth import require_bearer
 from usecase.approvals_bus import (
+    ApprovalSelfResolveError,
     InProcessApprovalsBus,
     STATUS_APPROVED,
     STATUS_DENIED,
     STATUS_PENDING,
     STATUS_TIMEOUT,
 )
-from usecase.audit_log import reset_current_actor, set_current_actor
+from usecase.audit_log import (
+    ACTION_APPROVAL_SELF_RESOLVE_BLOCKED,
+    record_event,
+    reset_current_actor,
+    set_current_actor,
+)
 
 logger = logging.getLogger("Guardian MCP")
 
@@ -151,6 +157,23 @@ def register_approval_routes(mcp: FastMCP, bus: InProcessApprovalsBus) -> None:
                 )
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
+            except ApprovalSelfResolveError as exc:
+                # #HOOK-F10 — the defense-in-depth self-resolve block (a
+                # PermissionError) previously bubbled to a 500 with no audit.
+                # Record the blocked attempt + return a clean 403 so the
+                # forensic trail shows who tried to approve their own request.
+                record_event(
+                    ACTION_APPROVAL_SELF_RESOLVE_BLOCKED,
+                    target=f"approval:{approval_id}",
+                    status="failure",
+                    metadata={
+                        "approval_id": approval_id,
+                        "resolver": "user:operator",
+                        "decision": decision,
+                        "via": "rest",
+                    },
+                )
+                return JSONResponse({"error": str(exc)}, status_code=403)
 
             if approval is None:
                 return JSONResponse({"error": "not found"}, status_code=404)

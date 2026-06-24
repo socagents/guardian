@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.74] (2026-06-24) — *Forensic audit trail, part 2: knowledge / memory / skills / subagents / hooks / providers / auth probes*
+
+- **Knowledge & memory access leaves a trace.** Listing knowledge bases and their tags, and searches that fail to embed, now record audit rows; memory and KB search rows now carry a bounded query preview (and the active/passive mode + session) so "what was searched, by whom" is answerable.
+- **Skill edits are verifiable.** Updating a skill records the body's before/after SHA-256, and a job that ran with a skill bound records which skill (and the effective model) it used.
+- **Subagent & provider visibility.** Listing/reading agent definitions and operator-state is now audited; testing a Vertex credential records a `provider_probed` row (service-account email + project — never the private key); a provider config change uses a dedicated action.
+- **Auth probing is visible.** A wrong-*username* login attempt and a rate-limit lockout now leave audit rows (attempted username + source IP, never the password), and a request presenting a stale/revoked session cookie to `/api/auth/status` is recorded — while ordinary successful polls are intentionally not, to keep the log signal-rich.
+- **Hook & approval edge cases.** A self-resolve attempt on an approval is rejected and audited; the orphaned-approval reaper records what it swept; `hook_dispatched` rows now note whether the hook injected context. Fire-and-forget audit calls now retry once so a transient MCP blip no longer silently drops a row.
+- **Attribution + accuracy.** Memory, skill, and notification mutation routes now attribute to the real principal (not a hardcoded `user:operator`); notification acknowledgement and benchmark-run starts are audited.
+
 ## [v0.2.73] (2026-06-24) — *Forensic audit trail: true actor attribution + missing-event coverage (investigation / connectors / XSOAR / jobs)*
 
 - **Operator mutations now attribute to the real principal.** Connector, instance, marketplace and job mutation endpoints hardcoded the audit actor to `user:operator`, overwriting the authenticated identity — so an API-key admin's actions were indistinguishable from the console operator's. They now record the actual principal (`apikey:<id>` or `user:operator`) from the request.

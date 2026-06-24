@@ -117,26 +117,39 @@ async function safeAudit(
     actor?: string;
   } = {},
 ): Promise<void> {
-  try {
-    const headers: Record<string, string> = {};
-    if (args.trigger) headers['X-Guardian-Trigger'] = args.trigger;
-    if (args.actor) headers['X-Guardian-Actor'] = args.actor;
-    await callMcpServer('/api/v1/audit', {
-      method: 'POST',
-      body: {
-        action,
-        target: args.target,
-        status: args.status,
-        duration_ms: args.durationMs,
-        metadata: args.metadata ?? {},
-      },
-      headers: Object.keys(headers).length ? headers : undefined,
-    });
-  } catch (err) {
-    console.warn(
-      `chat: audit write for action=${action} failed:`,
-      err instanceof Error ? err.message : err,
-    );
+  const headers: Record<string, string> = {};
+  if (args.trigger) headers['X-Guardian-Trigger'] = args.trigger;
+  if (args.actor) headers['X-Guardian-Actor'] = args.actor;
+  const body = {
+    action,
+    target: args.target,
+    status: args.status,
+    duration_ms: args.durationMs,
+    metadata: args.metadata ?? {},
+  };
+  // #OBS-F7 — most call sites fire-and-forget (`void safeAudit(...)`), so a
+  // transient MCP blip used to drop the row silently with only a console.warn.
+  // One short-backoff retry recovers from a momentary outage without making
+  // any caller await; a genuinely-down MCP still degrades to a warn (audit is
+  // best-effort and must never break a turn).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await callMcpServer('/api/v1/audit', {
+        method: 'POST',
+        body,
+        headers: Object.keys(headers).length ? headers : undefined,
+      });
+      return;
+    } catch (err) {
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 250));
+        continue;
+      }
+      console.warn(
+        `chat: audit write for action=${action} failed after retry:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 }
 
@@ -1200,6 +1213,13 @@ async function fireHookEvent(
           hooks_fired: result.decisions.length,
           decision: result.decision ?? 'no-op',
           reason: result.reason,
+          // #HOOK-F3 — record whether/how much context the hooks injected so an
+          // operator can reconstruct what was added to the turn from the audit
+          // row alone. Length + preview only (a hook could inject a large
+          // block); the full text lives in the turn transcript.
+          inject_context_present: Boolean(result.injectContext),
+          inject_context_chars: result.injectContext?.length ?? 0,
+          inject_context_preview: result.injectContext?.slice(0, 200),
           per_hook: result.decisions.map((d) => ({
             id: d.hookId,
             name: d.name,

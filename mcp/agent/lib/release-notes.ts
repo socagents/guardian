@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.74",
+    date: "2026-06-24",
+    title: "Forensic audit trail, part 2: knowledge / memory / skills / subagents / hooks / providers / auth probes.",
+    highlights: [
+      "Knowledge-base list/tag reads, embed-failed searches, and memory/KB search query previews (+ active/passive mode) are now audited — 'what was searched, by whom' is answerable.",
+      "Skill updates record the body's before/after SHA-256; a job records which skill it ran with. Agent-definition + operator-state reads are audited.",
+      "Testing a Vertex credential records provider_probed (SA email + project — never the private key); provider config changes use a dedicated action.",
+      "Wrong-username logins and rate-limit lockouts now leave audit rows (username + IP, never the password); a stale/revoked cookie hitting /api/auth/status is recorded while ordinary polls are not.",
+      "Approval self-resolve is rejected + audited; the orphan-approval reaper records its sweep; hook_dispatched notes injected context; fire-and-forget audit retries once so a transient MCP blip doesn't drop a row. Memory/skill/notification routes now attribute to the real principal.",
+    ],
+  },
+  {
     version: "0.2.73",
     date: "2026-06-24",
     title: "Forensic audit trail: true actor attribution + missing-event coverage.",

@@ -223,6 +223,14 @@ ACTION_INSTANCE_CREATED = "instance_created"
 ACTION_INSTANCE_DELETED = "instance_deleted"
 ACTION_PROVIDER_CREATED = "provider_created"
 ACTION_PROVIDER_DELETED = "provider_deleted"
+# #PLAT-F5 — provider_updated was emitted by provider_store as a bare string
+# literal with no named constant; declared here so a typo is catchable.
+ACTION_PROVIDER_UPDATED = "provider_updated"
+# #API-F17/#PLAT-F6 — a Vertex/provider credential PROBE (the /providers Test
+# button's JWT→OAuth2 exchange) emits this from the Next.js route via POST
+# /api/v1/audit. Parallels connector_probed. Records the SA email/project
+# (names), never the private key.
+ACTION_PROVIDER_PROBED = "provider_probed"
 ACTION_SECRET_READ = "secret_read"
 ACTION_SECRET_WRITE = "secret_write"
 ACTION_SECRET_DELETED = "secret_deleted"
@@ -230,6 +238,15 @@ ACTION_SECRET_DELETED = "secret_deleted"
 # Phase 7 — approvals capability (spec §6.10 row "approvals").
 ACTION_APPROVAL_REQUESTED = "approval_requested"
 ACTION_APPROVAL_RESOLVED = "approval_resolved"
+# #HOOK-F10 — a blocked self-resolve attempt (actor == original requester).
+# resolve() raises ApprovalSelfResolveError; both the REST resolve handler and
+# the agent-tool resolve path now record this instead of letting the defense-
+# in-depth block bubble out untraced (500 / opaque {error}).
+ACTION_APPROVAL_SELF_RESOLVE_BLOCKED = "approval_self_resolve_blocked"
+# #HOOK-F11 — boot-time orphan reaping (pending rows from a prior process
+# marked timeout). Emitted by _reap_orphaned_pending so deletion-of-live-state
+# at restart leaves a trace beyond the logger.info line.
+ACTION_APPROVAL_ORPHANS_REAPED = "approval_orphans_reaped"
 
 # Phase 8 — sessions + memory + context (spec §6.10 rows for these).
 ACTION_SESSION_CREATED = "session_created"
@@ -262,6 +279,9 @@ ACTION_KB_DOC_INDEXED = "kb_doc_indexed"
 ACTION_KB_DOC_REMOVED = "kb_doc_removed"
 ACTION_KB_SEARCHED = "kb_searched"
 ACTION_KB_DOC_READ = "kb_doc_read"
+# #KB-F1 — KB enumeration surfaces (list-all-KBs + list-a-KB's-tags) now leave
+# a trace, like the docs-list/doc-read surfaces already do.
+ACTION_KB_LISTED = "kb_listed"
 
 # Phase 11 — agent self-modification.
 # personality_changed: every put() to SqlitePersonalityStore.
@@ -282,11 +302,35 @@ ACTION_API_KEY_AUTH_FAILED = "api_key_auth_failed"
 ACTION_API_KEY_SCOPE_DENIED = "api_key_scope_denied"
 ACTION_API_KEY_CREDENTIAL_ROUTE_DENIED = "api_key_credential_route_denied"
 ACTION_MCP_BEARER_AUTH_FAILED = "mcp_bearer_auth_failed"
+# #API-F9 — listing the api-key roster (id/label/scopes for every key) is a
+# privileged enumeration; emit a trace at the REST handler so it isn't silent.
+ACTION_API_KEY_LISTED = "api_key_listed"
+# #API-F3 — login rate-limit lockout (5 failures / 60s) tripped by the Next.js
+# login route. The window is in-memory; the audit row is the durable trace of a
+# brute-force attempt being throttled.
+ACTION_LOGIN_LOCKOUT = "login_lockout"
 
 # #OBS-F10 — the audit log's own retention sweep (opt-in, default off). The
 # reap writes one of these rows so deletion of forensic history is itself
 # audited (and the row, being newer than the cutoff, survives the sweep).
 ACTION_AUDIT_REAPED = "audit_reaped"
+
+# ── v0.2.74 audit batch — KB/MEM/SKILL/SUB/HOOK/PLAT/OBS/API reads + mutations
+# #OBS-F13 — a benchmark run started from the /observability/bench UI button
+# (REST POST /api/v1/bench/runs, bypassing the chat tool_call path).
+ACTION_BENCH_RUN_STARTED = "bench_run_started"
+# #PLAT-F8 — notification acknowledgment (read-state change). Was completely
+# unaudited; an operator silently dismissing a notification left no trail.
+ACTION_NOTIFICATION_ACKED = "notification_acked"
+# #PLAT-F12 — operator-state enumeration / point-read (GET surfaces). Only the
+# PUT/DELETE mutations were audited; silent key enumeration left no trace.
+ACTION_OPERATOR_STATE_LISTED = "operator_state_listed"
+ACTION_OPERATOR_STATE_READ = "operator_state_read"
+# #SUB-F8 — agent-definition enumeration / point-read. Reading agent system
+# prompts (list / by-id / by-name) was unobservable; only mutations were
+# audited. Mirrors the v0.2.67 memory/kb/api-key read-audit work.
+ACTION_AGENT_DEFINITION_LISTED = "agent_definition_listed"
+ACTION_AGENT_DEFINITION_READ = "agent_definition_read"
 
 
 class SqliteAuditLog:

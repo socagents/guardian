@@ -333,9 +333,11 @@ class ProviderStore:
             instance_id, new_name, len(new_config),
             len(new_secret_refs), len(secrets_to_write),
         )
-        from usecase.audit_log import record_event
+        # #PLAT-F5 — use the named constant (added to audit_log.py) instead of a
+        # bare string literal so a typo is caught at import time.
+        from usecase.audit_log import ACTION_PROVIDER_UPDATED, record_event
         record_event(
-            "provider_updated",
+            ACTION_PROVIDER_UPDATED,
             target=f"provider_instance:{instance_id}",
             status="success",
             metadata={

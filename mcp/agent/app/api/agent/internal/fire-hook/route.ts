@@ -94,6 +94,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         metadata: {
           event,
           decision: result.decision ?? "allow",
+          // #HOOK-F3 — record injected-context presence/size here too (this
+          // loopback route is the only fire-site for Notification +
+          // PermissionRequest hooks), so the audit row reflects what the hook
+          // added without re-running.
+          inject_context_present: Boolean(result.injectContext),
+          inject_context_chars: result.injectContext?.length ?? 0,
+          inject_context_preview: result.injectContext?.slice(0, 200),
           hooks: result.decisions.map((d) => ({
             id: d.hookId,
             name: d.name,

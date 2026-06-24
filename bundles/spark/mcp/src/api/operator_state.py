@@ -53,6 +53,8 @@ from starlette.responses import JSONResponse, Response
 
 from api.auth import require_bearer
 from usecase.audit_log import (
+    ACTION_OPERATOR_STATE_LISTED,
+    ACTION_OPERATOR_STATE_READ,
     record_event,
     reset_current_actor,
     set_current_actor,
@@ -63,6 +65,16 @@ from usecase.operator_state_store import (
 )
 
 logger = logging.getLogger("Guardian MCP")
+
+
+def _preview(value: Any, *, limit: int = 200) -> str | None:
+    """#SUB-F10 — bounded string preview of an operator-state value for the
+    audit row. None passes through; everything else is str()-ified and trimmed
+    so a large workflow blob can't bloat audit.db."""
+    if value is None:
+        return None
+    s = value if isinstance(value, str) else str(value)
+    return s if len(s) <= limit else s[:limit] + "…"
 
 
 def _row_to_dict(row: OperatorState | None) -> dict[str, Any] | None:
@@ -88,6 +100,14 @@ def register_operator_state_routes(
         if (resp := require_bearer(request)) is not None:
             return resp
         rows = store.list_all()
+        # #PLAT-F12 — key enumeration was silent; record it (count only, not
+        # values) so probing GET /operator-state leaves a forensic trace.
+        record_event(
+            ACTION_OPERATOR_STATE_LISTED,
+            target="operator-state:*",
+            status="success",
+            metadata={"count": len(rows)},
+        )
         return JSONResponse(
             {"entries": [_row_to_dict(r) for r in rows], "count": len(rows)},
         )
@@ -107,6 +127,14 @@ def register_operator_state_routes(
                 {"error": f"operator-state key {key!r} not set"},
                 status_code=404,
             )
+        # #PLAT-F12 — point-read was silent; record successful reads only (a 404
+        # miss reveals nothing and would let probing bloat the log).
+        record_event(
+            ACTION_OPERATOR_STATE_READ,
+            target=f"operator-state:{key}",
+            status="success",
+            metadata={"key": key},
+        )
         return JSONResponse(_row_to_dict(row))
 
     @mcp.custom_route(
@@ -137,6 +165,12 @@ def register_operator_state_routes(
 
         actor_token = set_current_actor("user:operator")
         try:
+            # #SUB-F10 — capture the prior value BEFORE the write so the audit
+            # row records WHAT changed (old → new), not just that a write
+            # happened. Bounded previews keep audit.db from bloating on large
+            # workflow blobs; operator-state is non-secret workflow markers.
+            prior = store.get(key)
+            old_value = prior.value if prior is not None else None
             try:
                 row = store.put(key, body["value"])
             except ValueError as err:
@@ -151,7 +185,12 @@ def register_operator_state_routes(
                 action="operator_state_set",
                 target=f"operator-state:{key}",
                 status="success",
-                metadata={"updated_at": row.updated_at},
+                metadata={
+                    "updated_at": row.updated_at,
+                    "created": prior is None,
+                    "old_value_preview": _preview(old_value),
+                    "new_value_preview": _preview(row.value),
+                },
             )
             return JSONResponse(_row_to_dict(row))
         finally:

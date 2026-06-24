@@ -569,6 +569,7 @@ class SqliteMemoryStore:
         min_score: float = 0.0,
         mmr_lambda: float = 0.7,
         temporal_decay_lambda: float = 0.01,
+        mode: str | None = None,
     ) -> list[tuple[Memory, float]]:
         """Top-K hybrid-relevance memory search.
 
@@ -600,6 +601,10 @@ class SqliteMemoryStore:
             0.7 default (relevance-favoring).
           temporal_decay_lambda: Recency weighting per day of age.
             0.01 default (half-life ~70 days), 0.0 disables.
+          mode: #MEM-F4 — discriminator for the memory_searched audit row,
+            mirroring kb_searched's mode field: "active" (agent memory_search
+            tool / operator REST search) vs "passive" (per-turn ContextAssembler
+            injection). None → recorded as "active" (the default caller).
 
         Notes:
           - When `scope` is None, search ALL scopes (useful for the
@@ -710,13 +715,30 @@ class SqliteMemoryStore:
         )
 
         from usecase.audit_log import ACTION_MEMORY_SEARCHED, record_event
+        # #MEM-F2 — when scope is "session:<id>" derive the session_id so the
+        # memory_searched row is linkable to a conversation; cross-session
+        # searches (scope=None) leave it None. turn_id isn't available at the
+        # store layer (no turn context propagates here) — the caller's tool_call
+        # row carries the turn linkage for the active path.
+        session_id = (
+            scope.split(":", 1)[1]
+            if isinstance(scope, str) and scope.startswith("session:")
+            else None
+        )
         record_event(
             ACTION_MEMORY_SEARCHED,
             target="memory:_search_",
             status="success",
             metadata={
                 "query_chars": len(query),
+                # #MEM-F2 — bounded query preview so "what was searched?" is
+                # answerable for the passive path too (no tool_call row there).
+                "query_preview": query[:200],
                 "scope": scope,
+                "session_id": session_id,
+                # #MEM-F4 — active (agent tool / REST) vs passive (per-turn
+                # ContextAssembler) discriminator, like kb_searched's mode.
+                "mode": mode or "active",
                 "limit": limit,
                 "result_count": len(final),
                 "top_score": final[0][1] if final else None,

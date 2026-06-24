@@ -26,6 +26,7 @@ from starlette.responses import JSONResponse
 from api.auth import require_bearer
 from usecase.audit_log import (
     ACTION_KB_DOC_READ,
+    ACTION_KB_LISTED,
     ACTION_KB_SEARCHED,
     record_event,
 )
@@ -63,6 +64,14 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
         if (resp := require_bearer(request)) is not None:
             return resp
         summary = kb.kb_summary()
+        # #KB-F1 — the all-KBs enumeration surface now leaves a trace, mirroring
+        # the docs-list (kb_searched mode=list) + doc-read surfaces.
+        record_event(
+            ACTION_KB_LISTED,
+            target="kb:*",
+            status="success",
+            metadata={"scope": "all_kbs", "count": len(summary)},
+        )
         return JSONResponse(
             {
                 "kbs": [
@@ -142,7 +151,15 @@ def register_kb_routes(mcp: FastMCP, kb: SqliteKnowledgeBase) -> None:
         name = request.path_params["name"]
         if (resp := _kb_exists_or_404(name)) is not None:
             return resp
-        return JSONResponse({"tags": kb.kb_tags(name)})
+        tags = kb.kb_tags(name)
+        # #KB-F1 — the per-KB tag enumeration surface now leaves a trace too.
+        record_event(
+            ACTION_KB_LISTED,
+            target=f"kb:{name}",
+            status="success",
+            metadata={"scope": "tags", "kb_name": name, "count": len(tags)},
+        )
+        return JSONResponse({"tags": tags})
 
     @mcp.custom_route(
         "/api/v1/kbs/{name}/docs/{doc_id}",

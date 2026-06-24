@@ -1338,7 +1338,7 @@ async def approvals_resolve(
 
     Returns the resolved approval row.
     """
-    from usecase.approvals_bus import approvals_bus
+    from usecase.approvals_bus import ApprovalSelfResolveError, approvals_bus
     from usecase.builtin_components._approval_gate import gate_and_execute
     bus = approvals_bus()
     if bus is None:
@@ -1365,6 +1365,28 @@ async def approvals_resolve(
             risk_tier="soft",
             executor=_exec,
         )
+    except ApprovalSelfResolveError as exc:
+        # #HOOK-F10 — the agent attempting to approve its OWN request. The bare
+        # except below would have swallowed this into an opaque {error} with no
+        # trace; record the blocked attempt so the self-resolve guard is visible
+        # in /observability/events.
+        from usecase.audit_log import (
+            ACTION_APPROVAL_SELF_RESOLVE_BLOCKED,
+            record_event,
+        )
+        record_event(
+            ACTION_APPROVAL_SELF_RESOLVE_BLOCKED,
+            target=f"approval:{approval_id}",
+            status="failure",
+            actor="agent",
+            metadata={
+                "approval_id": approval_id,
+                "resolver": "agent",
+                "decision": decision,
+                "via": "tool",
+            },
+        )
+        return {"error": str(exc), "tool": "approvals_resolve"}
     except Exception as exc:  # noqa: BLE001
         return {"error": str(exc), "tool": "approvals_resolve"}
 

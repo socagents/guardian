@@ -406,10 +406,20 @@ class SqlitePersonalityStore:
             )
 
         # Audit event (best-effort; don't let audit failure block the write).
+        # #PLAT-F20 — record_event is itself best-effort (it swallows + warns on
+        # a sqlite failure), so this outer guard catches only the rare case
+        # where the import / _diff_keys raises. When it does, log at ERROR with
+        # the version + actor + changed keys so an untraced personality change
+        # is a high-severity, actionable line (a disk-full audit.db otherwise
+        # left the change completely invisible).
         try:
             from usecase.audit_log import (
                 ACTION_PERSONALITY_CHANGED,
                 record_event,
+            )
+            keys_changed = _diff_keys(
+                json.loads(existing["blob_json"]) if existing else {},
+                blob,
             )
             record_event(
                 ACTION_PERSONALITY_CHANGED,
@@ -418,14 +428,20 @@ class SqlitePersonalityStore:
                 actor=actor,
                 metadata={
                     "version": new_version,
-                    "keys_changed": _diff_keys(
-                        json.loads(existing["blob_json"]) if existing else {},
-                        blob,
-                    ),
+                    "keys_changed": keys_changed,
                 },
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("personality audit failed: %s", exc)
+            logger.error(
+                "personality audit FAILED — change to version %s by %s "
+                "(keys touched: %s) is NOT in the audit log: %s",
+                new_version, actor or "(unknown)",
+                ", ".join(_diff_keys(
+                    json.loads(existing["blob_json"]) if existing else {},
+                    blob,
+                )) or "(none)",
+                exc,
+            )
 
         return Personality(
             blob=blob, updated_at=now, updated_by=actor, version=new_version,

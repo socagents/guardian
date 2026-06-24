@@ -228,6 +228,7 @@ class ContextAssembler:
                     limit=self._memory_k,
                     scope=sc,
                     min_score=self._memory_min_score,
+                    mode="passive",  # #MEM-F4 — discriminate per-turn injection
                 )
                 for mem, score in hits:
                     if mem.id in seen:
@@ -310,6 +311,12 @@ class ContextAssembler:
                     "mode": "passive",
                     "session_id": session_id,
                     "query_chars": len(query),
+                    # #KB-F8 — the passive path produces no tool_call row, so
+                    # without this the query text was unrecoverable from audit
+                    # ("what was searched?" unanswerable). Bounded preview only
+                    # (first 200 chars) so a long turn can't bloat audit.db; the
+                    # query is an operator/agent turn fragment, not a secret.
+                    "query_preview": query[:200],
                     "hits_returned": len(kb_results),
                     "ecosystems_excluded": sorted(self._kb_passive_exclude),
                     **({"reason": "search_failed"} if kb_search_failed else {}),
