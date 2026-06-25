@@ -79,12 +79,26 @@ function mcpHeaders(
 }
 
 /** Open a JSON-RPC session against the embedded MCP. Returns the session
- *  ID needed for subsequent tools/call etc. */
+ *  ID needed for subsequent tools/call etc.
+ *
+ *  #86 — the streamable-HTTP MCP runs a tool inside the session task that
+ *  FastMCP spawns while handling THIS `initialize` request, not the later
+ *  `tools/call` POST. So the trigger/actor/chain-id contextvars must be set
+ *  (via the X-Guardian-* headers + the pure-ASGI TriggerContextMiddleware,
+ *  v0.2.82) on `initialize` — setting them only on `tools/call` is too late
+ *  (the session task already exists). We therefore forward trigger + chain id
+ *  on the session-creating requests too, so the tool_call audit row the tool
+ *  emits carries operator:direct + the chain id (previously it dropped to
+ *  trigger=None/chain=None on the ^tool path). */
 async function openMcpSession(
   base: string,
   token: string,
   actor: string | null,
+  ctx: { trigger?: string; chainId?: string } = {},
 ): Promise<string> {
+  const ctxHeaders: Record<string, string> = {};
+  if (ctx.trigger) ctxHeaders['X-Guardian-Trigger'] = ctx.trigger;
+  if (ctx.chainId) ctxHeaders['X-Guardian-Chain-Id'] = ctx.chainId;
   const initBody = JSON.stringify({
     jsonrpc: '2.0',
     id: 1,
@@ -97,7 +111,7 @@ async function openMcpSession(
   });
   const resp = await fetch(`${base}/api/v1/stream/mcp`, {
     method: 'POST',
-    headers: mcpHeaders(token, actor),
+    headers: mcpHeaders(token, actor, ctxHeaders),
     body: initBody,
     signal: AbortSignal.timeout(10_000),
   });
@@ -280,7 +294,14 @@ export async function POST(request: Request): Promise<NextResponse<ToolCallRespo
 
   let sessionId: string;
   try {
-    sessionId = await openMcpSession(base, token, actor);
+    // #86 — forward the operator:direct trigger + chain id on the
+    // session-creating `initialize` request (not just the later tools/call),
+    // so FastMCP's streamable-HTTP session task — which is where the tool
+    // actually runs — captures them and the tool_call audit row carries them.
+    sessionId = await openMcpSession(base, token, actor, {
+      trigger: 'operator:direct',
+      chainId,
+    });
   } catch (err) {
     return NextResponse.json(
       {

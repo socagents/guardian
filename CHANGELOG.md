@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.83] (2026-06-25) — *`^tool` dispatch correlation: complete the trigger/chain fix (#86)*
+
+- **An operator `^tool` direct dispatch is now correctly correlated in the audit log.** Its `tool_call` row records the operator-direct trigger and the dispatch's `chain_id` (and the real principal) instead of dropping to none. The fix forwards those markers on the session-creating `initialize` request — the embedded MCP runs the tool inside the session task it spawns there, so markers attached only to the later `tools/call` arrived too late. This completes the v0.2.82 same-task-middleware work for the one path it didn't reach; the chat and scheduled-job tool calls were already correlated.
+
 ## [v0.2.82] (2026-06-25) — *Audit attribution + correlation reliability (from the live interface-coverage pass)*
 
 - **Tool calls attribute to the real principal.** An operator `^tool` dispatch or API-key-driven tool call previously recorded its audit row as `agent`, discarding the forwarded identity. The audit now records the true principal when one was forwarded, and falls back to `agent` only for genuinely model-internal calls — so "who ran this tool" is answerable.

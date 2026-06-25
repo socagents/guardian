@@ -37,6 +37,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.83",
+    date: "2026-06-25",
+    title: "^tool dispatch correlation: complete the trigger/chain fix (#86).",
+    highlights: [
+      "An operator ^tool direct dispatch now records the operator:direct trigger + the dispatch chain_id (and real principal) on its tool_call audit row, instead of dropping to none.",
+      "Root cause: the embedded MCP runs the tool inside the streamable-HTTP session task spawned at `initialize`, so the markers had to be forwarded on that request — not only on the later tools/call. Completes the v0.2.82 same-task-middleware work for the path it didn't reach.",
+    ],
+  },
+  {
     version: "0.2.82",
     date: "2026-06-25",
     title: "Audit attribution + correlation reliability (from the live interface-coverage pass).",
