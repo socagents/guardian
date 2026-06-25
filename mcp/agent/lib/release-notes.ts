@@ -42,7 +42,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     title: "Audit attribution + correlation reliability (from the live interface-coverage pass).",
     highlights: [
       "Tool-call audit rows now attribute to the real principal for ^tool/API-key dispatches (was always 'agent', discarding the forwarded identity); model-internal calls still record 'agent'.",
-      "The request-context middleware is now same-task (pure ASGI, not BaseHTTPMiddleware), so the operator-direct trigger + turn chain_id no longer intermittently drop on the ^tool dispatch path.",
+      "The request-context middleware (trigger/actor/chain_id) is now pure-ASGI (same-task), reliable for per-request handlers. (The ^tool direct-dispatch path uses a decoupled streamable-HTTP session and can still miss trigger/chain_id — tracked; chat + scheduled-job tool calls are correctly correlated.)",
       "Normalized the API-key principal to one format (apikey:<id>) across tiers — a forensic ?actor= filter no longer misses half the rows, and the hook-delete owner check works for API-key operators.",
       "KB audit hygiene: a doc read / search no longer double-emits kb_doc_read / kb_searched, and active+REST searches carry the same bounded query preview as the passive path.",
       "A loopback hook fire missing the inner event field now defaults to the dispatched event and matches instead of being silently dropped.",
