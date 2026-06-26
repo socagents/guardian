@@ -219,13 +219,21 @@ jobs:
             # image (not FROM the runtime base); pinned here so guardian-
             # updater pulls a digest, not a tag.
             ["DIGEST_GUARDIAN_CONNECTOR_SPLUNK_MIMIC"]="guardian-connector-splunk-mimic"
+            # v0.2.27 — Cortex XSIAM connector. Was added to the marketplace +
+            # updater KNOWN_CONNECTORS but NOT to this digest roster, so its
+            # instance container could never start: with no
+            # DIGEST_GUARDIAN_CONNECTOR_XSIAM pin, guardian-updater fell back to
+            # :dev-<sha> (only published when build-connectors fired) → 404 →
+            # container never came up. Pinning its digest here fixes it (#89).
+            ["DIGEST_GUARDIAN_CONNECTOR_XSIAM"]="guardian-connector-xsiam"
           )
           for KEY in \
             DIGEST_GUARDIAN_CONNECTOR_RUNTIME \
             DIGEST_GUARDIAN_CONNECTOR_XSOAR \
             DIGEST_GUARDIAN_CONNECTOR_WEB \
             DIGEST_GUARDIAN_CONNECTOR_CORTEX_DOCS \
-            DIGEST_GUARDIAN_CONNECTOR_SPLUNK_MIMIC; do
+            DIGEST_GUARDIAN_CONNECTOR_SPLUNK_MIMIC \
+            DIGEST_GUARDIAN_CONNECTOR_XSIAM; do
             SVC="${CONN_IMGS[$KEY]}"
             IMG="$REGISTRY/$OWNER/$SVC"
             DIGEST=""
