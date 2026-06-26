@@ -31,6 +31,7 @@ currently surface a restart prompt from it.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Any
@@ -52,6 +53,11 @@ from usecase.connector_state import get_connector_state_store
 from usecase.instance_store import Instance, InstanceStore
 
 logger = logging.getLogger("Guardian MCP")
+
+# Hold references to fire-and-forget background tasks (per-instance container
+# starts) so the event loop doesn't garbage-collect them mid-flight. Each task
+# discards itself from the set on completion (#88).
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
 
 
 def _instance_to_dict(
@@ -515,9 +521,36 @@ def register_instance_routes(mcp: FastMCP, store: InstanceStore) -> None:
             container_start: dict[str, Any] | None = None
             style = _connector_runtime_style(connector_id)
             if style == "container":
-                container_start = await _updater_start(
-                    connector_id, name, instance.id,
-                )
+                # Start the per-instance container OUT OF BAND so this create
+                # responds immediately. _updater_start can block up to ~60s
+                # (image pull / updater busy), but the agent->MCP proxy aborts
+                # at 15s — and a timed-out create used to be retried by the
+                # client and rejected as a duplicate "already exists" (#88)
+                # even though the row was already committed. guardian-updater
+                # self-heals a missing container via its boot + periodic
+                # reconcile, so a best-effort background start is sufficient;
+                # the UI shows a "starting" notice on the pending result.
+                async def _bg_start(
+                    cid: str = connector_id,
+                    iname: str = name,
+                    iid: str = instance.id,
+                ) -> None:
+                    try:
+                        await _updater_start(cid, iname, iid)
+                    except Exception as exc:  # noqa: BLE001 — best-effort
+                        logger.warning(
+                            "background container start failed for %s/%s: %s",
+                            cid, iname, exc,
+                        )
+
+                # create_task copies the CURRENT context, so the actor/trigger
+                # contextvars set for this request are preserved for the
+                # start's audit rows even though the handler's `finally` resets
+                # them right after this line.
+                bg_task = asyncio.create_task(_bg_start())
+                _BACKGROUND_TASKS.add(bg_task)
+                bg_task.add_done_callback(_BACKGROUND_TASKS.discard)
+                container_start = {"started": None, "pending": True}
 
             return JSONResponse(
                 {

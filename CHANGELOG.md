@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.85] (2026-06-26) — *Create-instance reliability: no phantom "already exists" (#88)*
+
+- **Creating a connector instance no longer shows a false "this instance already exists" error.** The error came from the UI's API client auto-retrying the create request: a container-style connector (XSIAM, XSOAR, Web) starts its per-instance container as part of the create, which can take up to a minute, but the agent→MCP proxy gives up at 15 seconds — so the client re-sent the create, the row already existed, and the retry was rejected even though the instance had been created. Two fixes: the API client now **never auto-retries a state-changing request** (only safe, idempotent reads are retried), and the container start now runs **in the background** so the create returns immediately with a "still starting" notice instead of hanging. A genuinely duplicate name still returns a clear "already exists." This affected every create/update action, not just instances.
+
 ## [v0.2.84] (2026-06-25) — *Playbook Builder: standard object-page + recorded build history*
 
 - **The Playbook Builder is now a standard object-list page.** `/playbooks/build` matches the same structure as the Skills page — a header with four stat cards (Total / Deployed / Validated / Failed), status tabs (Drafted / Validated / Deployed / Tested / Failed), a search box, and a grid of every playbook you've built. A **New playbook** button opens the builder panel; clicking any build card opens a detail panel.

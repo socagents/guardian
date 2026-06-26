@@ -162,18 +162,21 @@ export interface ConnectorInstance {
 
 /**
  * The POST /api/v1/instances 201 envelope. The instance row is always
- * created; `container_start` reports whether the per-instance connector
- * container came up immediately (issue #42). It is null for non-container
- * connectors. When `started` is false the instance still exists — guardian-
- * updater's boot + periodic reconcile self-heals the missing container, so
- * the UI shows a "starting…" notice rather than treating it as a failure.
+ * created; `container_start` reports the per-instance connector container
+ * outcome (issue #42). It is null for non-container connectors. For container
+ * connectors the start now runs in the BACKGROUND (#88) so the create responds
+ * immediately — `started: null` + `pending: true` means "row created, container
+ * coming up out-of-band". guardian-updater's boot + periodic reconcile
+ * self-heals it, so the UI shows a "starting…" notice rather than a failure.
+ * (`started: false` from a legacy/synchronous path is treated the same way.)
  */
 export interface CreateInstanceResponse {
   instance: ConnectorInstance;
   requires_mcp_restart?: boolean;
   runtime_style?: string | null;
   container_start?: {
-    started: boolean;
+    started: boolean | null;
+    pending?: boolean;
     container_url?: string | null;
     error?: string | null;
   } | null;

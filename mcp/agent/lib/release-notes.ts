@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.85",
+    date: "2026-06-26",
+    title: "Create-instance reliability: no phantom “already exists” error.",
+    highlights: [
+      "Creating a connector instance no longer shows a false “this instance already exists” error when the instance was actually created.",
+      "Root cause: the UI client auto-retried the create request after the container start exceeded the 15s proxy timeout; the retry hit the existing row and 409'd.",
+      "Fix: the API client never auto-retries a state-changing request (only idempotent reads), and the per-instance container now starts in the background so create returns immediately.",
+    ],
+  },
+  {
     version: "0.2.84",
     date: "2026-06-25",
     title: "Playbook Builder: standard object-page + recorded build history.",

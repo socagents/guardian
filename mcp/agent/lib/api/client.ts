@@ -6,6 +6,17 @@ const BASE_DELAY_MS = 1000;
 export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
   token?: string;
+  /**
+   * Whether a network error / 5xx may be auto-retried. Defaults to TRUE for
+   * idempotent methods (GET/HEAD/OPTIONS) and FALSE for every mutating method
+   * (POST/PATCH/PUT/DELETE). A non-idempotent request must never be replayed:
+   * a retry after a *partial* success — e.g. a create whose row was written
+   * but whose response was lost to a proxy timeout — re-sends the mutation,
+   * and the backend rejects the duplicate (409 "already exists"), surfacing a
+   * phantom failure for an action that actually succeeded. Pass `retry: true`
+   * to opt a genuinely-idempotent POST back into retries.
+   */
+  retry?: boolean;
 }
 
 export interface ApiSuccess<T> {
@@ -137,6 +148,16 @@ export async function apiRequest<T>(
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   };
 
+  // Only idempotent methods are safe to auto-retry. A POST/PATCH/PUT/DELETE
+  // that times out or 5xxes may have already applied server-side, so replaying
+  // it risks a duplicate (e.g. a connector instance created twice → the second
+  // attempt 409s "already exists" on a create that actually succeeded). The
+  // caller can force retries on a known-idempotent mutation via `retry: true`.
+  const method = (init.method ?? "GET").toUpperCase();
+  const idempotentMethod =
+    method === "GET" || method === "HEAD" || method === "OPTIONS";
+  const allowRetry = options.retry ?? idempotentMethod;
+
   let lastError: ApiError | undefined;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -171,8 +192,9 @@ export async function apiRequest<T>(
 
       lastError = await parseError(response);
 
-      // Only retry if the error is retryable and we have attempts left.
-      if (!lastError.retryable || attempt === MAX_RETRIES) {
+      // Only retry if the error is retryable, the method is replay-safe, and
+      // we have attempts left.
+      if (!lastError.retryable || !allowRetry || attempt === MAX_RETRIES) {
         return { ok: false, error: lastError };
       }
     } catch (error: unknown) {
@@ -194,7 +216,7 @@ export async function apiRequest<T>(
         retryable: true,
       };
 
-      if (attempt === MAX_RETRIES) {
+      if (!allowRetry || attempt === MAX_RETRIES) {
         return { ok: false, error: lastError };
       }
     }

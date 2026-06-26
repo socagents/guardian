@@ -2850,7 +2850,7 @@ const CONFIGURATION: ApiEndpoint[] = [
     responses: [
       {
         status: "201",
-        description: "Instance created. Returns the redacted serialized instance (secrets masked as \"***\"), requires_mcp_restart=true, the resolved runtime_style, and container_start ({started,container_url,error} for container-style connectors, else null).",
+        description: "Instance created. Returns the redacted serialized instance (secrets masked as \"***\"), requires_mcp_restart=true, the resolved runtime_style, and container_start (for container-style connectors the start runs in the background so this returns {started:null, pending:true} immediately and guardian-updater brings the container up out-of-band; null for non-container connectors).",
         example: {
           instance: {
             id: "3f1c2a9e-4d77-41b0-9a2e-7b1c0d5e8f22",

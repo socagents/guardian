@@ -3536,17 +3536,18 @@ function CreateInstancePanel({ onClose, allConnectors, onCreated }: { onClose: (
         onCreated();
         const cs = result.data.container_start;
         const isContainer = result.data.runtime_style === "container";
-        if (isContainer && cs && cs.started === false) {
-          // issue #42 — the row was created but the connector container
-          // didn't come up immediately (transient docker/registry hiccup).
-          // This is NOT a failure: guardian-updater's boot + periodic
-          // reconcile starts the missing container within a few minutes.
-          // Keep the modal open with an amber notice + a Done button so the
-          // operator gets explicit feedback instead of a silent close.
+        // #88 — the container start now runs in the background, so a container
+        // create returns `started: null` + `pending: true` (row committed,
+        // container coming up out-of-band). `started: false` is the legacy
+        // synchronous-failure shape. Both are NOT failures: guardian-updater's
+        // boot + periodic reconcile brings the container online within a few
+        // minutes. Keep the modal open with an amber notice + a Done button so
+        // the operator gets explicit feedback instead of a silent close.
+        if (isContainer && cs && (cs.started === false || cs.pending)) {
           setStartNotice(
             cs.error
               ? `Instance created. Its connector container hasn't started yet (${cs.error}). Guardian retries automatically every few minutes, so it should come online shortly.`
-              : "Instance created. Its connector container is still starting and will come online within a few minutes.",
+              : "Instance created. Its connector container is starting and will come online within a few minutes.",
           );
           return;
         }
