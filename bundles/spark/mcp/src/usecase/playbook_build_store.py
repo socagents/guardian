@@ -220,10 +220,14 @@ class PlaybookBuildStore:
             clauses.append("status = ?")
             params.append(status)
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        # Tiebreak on the implicit monotonic rowid (insertion order), NOT the
+        # random uuid `id`: created_at is second-resolution, so builds created
+        # in the same second tie on created_at and must fall back to true
+        # creation order — ordering by `id` there is non-deterministic.
         order_by = (
-            "created_at ASC, id ASC"
+            "created_at ASC, rowid ASC"
             if str(order).lower() == "asc"
-            else "created_at DESC, id DESC"
+            else "created_at DESC, rowid DESC"
         )
         with self._lock, self._conn() as c:
             rows = c.execute(
