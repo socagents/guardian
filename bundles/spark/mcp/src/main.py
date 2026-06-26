@@ -282,6 +282,17 @@ async def async_main(transport: str):
     investigation_store_inst = InvestigationStore()
     set_investigation_store(investigation_store_inst)
 
+    # Catalog domain: the playbook-build history. The playbook_build_*
+    # MCP tools + the /api/v1/playbook-builds routes read it via the
+    # singleton accessor. Build metadata only (use-case, YAML, status) —
+    # no SecretStore value.
+    from usecase.playbook_build_store import (
+        PlaybookBuildStore,
+        set_playbook_build_store,
+    )
+    playbook_build_store_inst = PlaybookBuildStore()
+    set_playbook_build_store(playbook_build_store_inst)
+
     # v0.5.0 upgrade migration — for v0.4.x customers carrying
     # instances in the persisted guardian_data volume: every connector
     # that already has an instance gets auto-installed. Otherwise
@@ -915,6 +926,11 @@ async def async_main(transport: str):
     # see api/investigation.py. The Next.js Investigation UI proxies to these.
     from api.investigation import register_investigation_routes
     register_investigation_routes(mcp, investigation_store_inst)
+    # v0.2.50 — Playbook-build history surface. Routes at
+    # /api/v1/playbook-builds* — see api/playbook_builds.py. The Next.js
+    # /playbooks/build UI proxies to these to render the build history.
+    from api.playbook_builds import register_playbook_build_routes
+    register_playbook_build_routes(mcp, playbook_build_store_inst)
     # Round-15 / Phase X — plugin inventory + reload API. Phase S
     # extends this with agent_definition_store so a Reload click
     # also re-applies plugin-contributed agents.

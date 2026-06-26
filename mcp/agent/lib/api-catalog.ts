@@ -3242,6 +3242,132 @@ const OPERATIONS: ApiEndpoint[] = [
     ],
     tags: ["playbooks", "xsoar", "validation"],
   },
+  {
+    id: "playbook-builds-list",
+    category: "operations",
+    method: "GET",
+    path: "/api/agent/playbook-builds",
+    summary: "List recorded playbook builds",
+    description: "Returns the recorded playbook-build history from the PlaybookBuildStore (sqlite playbook_builds.db). Each row is a build the /playbooks/build page created — newest first — with its lifecycle status (drafted | validated | deployed | tested | failed), use_case, product, playbook_name, and timestamps. Drives the build-history grid, stat cards, status tabs, and search on /playbooks/build. Proxies (via the agent proxy, bearer MCP_TOKEN through lib/mcp-proxy.ts) to the embedded MCP at GET /api/v1/playbook-builds.",
+    queryParams: [
+      { name: "status", type: "string", enum: ["drafted", "validated", "deployed", "tested", "failed"], description: "Filter by lifecycle status.", example: "deployed" },
+      { name: "limit", type: "integer", description: "Default 50.", example: 50 },
+    ],
+    responses: [
+      {
+        status: "200",
+        description: "List of build records, newest first.",
+        example: {
+          builds: [
+            {
+              id: "pbb-9f2c1a",
+              use_case: "Isolate a compromised endpoint on CrowdStrike and notify the analyst",
+              product: "crowdstrike",
+              playbook_name: "Isolate + Notify",
+              status: "tested",
+              test_incident_id: "1042",
+              session_id: "sess-7b3e",
+              created_by: "user:operator",
+              created_at: "2026-06-25T14:02:11Z",
+              updated_at: "2026-06-25T14:08:47Z",
+            },
+          ],
+          count: 1,
+        },
+      },
+    ],
+  },
+  {
+    id: "playbook-builds-create",
+    category: "operations",
+    method: "POST",
+    path: "/api/agent/playbook-builds",
+    summary: "Record a new playbook build",
+    description: "Inserts a build record into the PlaybookBuildStore and emits a best-effort playbook_drafted audit event. The build holds metadata only (no secret), so this is on the catalog side of the credential boundary. Proxies to the embedded MCP at POST /api/v1/playbook-builds.",
+    body: {
+      contentType: "application/json",
+      schema: {
+        type: "object",
+        required: ["use_case", "playbook_yaml"],
+        properties: {
+          use_case: { type: "string", description: "Plain-English description the build was generated from." },
+          product: { type: "string", description: "Optional product/integration (crowdstrike, defender, generic)." },
+          playbook_name: { type: "string", description: "Name extracted from the drafted playbook." },
+          playbook_yaml: { type: "string", description: "The drafted Cortex XSOAR playbook YAML." },
+          status: { type: "string", description: "Initial lifecycle status. Default drafted." },
+          validation: { type: "object", description: "Structural validation result (valid/errors/warnings/task_count)." },
+          session_id: { type: "string", description: "Originating chat session id." },
+        },
+      },
+      example: {
+        use_case: "Investigate a phishing email end to end and delete similar messages on confirmation",
+        product: "generic",
+        playbook_name: "Phishing Triage + Cleanup",
+        playbook_yaml: "id: phishing-triage\nname: Phishing Triage + Cleanup\nstarttaskid: \"0\"\ntasks:\n  \"0\":\n    id: \"0\"\n    type: start\n",
+        status: "drafted",
+        session_id: "sess-7b3e",
+      },
+    },
+    responses: [
+      { status: "201", description: "Build recorded; returns the stored record with its id." },
+      { status: "400", description: "Validation error (missing use_case or playbook_yaml, wrong shape)." },
+    ],
+    riskTier: "soft",
+  },
+  {
+    id: "playbook-builds-get",
+    category: "operations",
+    method: "GET",
+    path: "/api/agent/playbook-builds/{id}",
+    summary: "Fetch one playbook build",
+    description: "Returns the full build record — use_case, product, playbook_name, playbook_yaml, status, validation, deploy_summary, test_incident_id, session_id, created_by, timestamps — backing the detail panel on /playbooks/build. Proxies to the embedded MCP at GET /api/v1/playbook-builds/{id}.",
+    pathParams: [{ name: "id", type: "string", description: "Build id.", example: "pbb-9f2c1a" }],
+    responses: [
+      { status: "200", description: "Full build record." },
+      { status: "404", description: "Not found." },
+    ],
+  },
+  {
+    id: "playbook-builds-update",
+    category: "operations",
+    method: "PATCH",
+    path: "/api/agent/playbook-builds/{id}",
+    summary: "Update a playbook build",
+    description: "Patches a build record — typically advancing its lifecycle status (drafted → validated → deployed → tested, or failed) and attaching the validation result, deploy_summary, or test_incident_id as the build progresses. Emits a best-effort playbook_deployed or playbook_test_run audit event on the relevant transitions. Proxies to the embedded MCP at PATCH /api/v1/playbook-builds/{id}.",
+    pathParams: [{ name: "id", type: "string", description: "Build id.", example: "pbb-9f2c1a" }],
+    body: {
+      contentType: "application/json",
+      schema: {
+        type: "object",
+        properties: {
+          status: { type: "string", description: "drafted | validated | deployed | tested | failed." },
+          validation: { type: "object", description: "Structural validation result." },
+          deploy_summary: { type: "object", description: "Import + test-run outcome." },
+          test_incident_id: { type: "string", description: "The disposable [Guardian test] incident the playbook ran on." },
+        },
+      },
+      example: { status: "deployed", deploy_summary: { imported: true, run: true, war_room: "..." }, test_incident_id: "1042" },
+    },
+    responses: [
+      { status: "200", description: "Updated build record." },
+      { status: "404", description: "Not found." },
+    ],
+    riskTier: "soft",
+  },
+  {
+    id: "playbook-builds-delete",
+    category: "operations",
+    method: "DELETE",
+    path: "/api/agent/playbook-builds/{id}",
+    summary: "Delete a playbook build",
+    description: "Permanently removes a build record from the PlaybookBuildStore and emits a best-effort playbook_build_deleted audit event. Removes only the build-history metadata — it does not touch any playbook already imported into a tenant. Proxies to the embedded MCP at DELETE /api/v1/playbook-builds/{id}.",
+    pathParams: [{ name: "id", type: "string", description: "Build id.", example: "pbb-9f2c1a" }],
+    responses: [
+      { status: "200", description: "Deleted." },
+      { status: "404", description: "Not found." },
+    ],
+    riskTier: "destructive",
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────

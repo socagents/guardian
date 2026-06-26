@@ -204,6 +204,21 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     # no catalog mutation) → safe as an agent tool. Paired with the
     # build_xsoar_playbook skill + the /playbooks/build UI.
     ("playbook_validate", playbook_tools.playbook_validate),
+    # v0.2.50 — playbook-build-history tools (read + write). The durable
+    # record of the playbooks the agent authored: list / get / record /
+    # update / delete a build as it moves drafted → validated → deployed
+    # → tested. These are CATALOG-side, NOT credential-side — they
+    # read/write build metadata (use-case, YAML, status) in
+    # playbook_builds.db, touch NO SecretStore value (the XSOAR creds
+    # live in the connector instance's SecretStore, never in a build
+    # row), and mutating catalog metadata is permitted per CLAUDE.md
+    # §"Catalog boundary ≠ credential boundary". So registering the write
+    # tools (record / update / delete) as mcp.tool()s is allowed.
+    ("playbook_builds_list", playbook_tools.playbook_builds_list),
+    ("playbook_builds_get", playbook_tools.playbook_builds_get),
+    ("playbook_build_record", playbook_tools.playbook_build_record),
+    ("playbook_build_update", playbook_tools.playbook_build_update),
+    ("playbook_build_delete", playbook_tools.playbook_build_delete),
     # Phase 11 — agent self-modification (Tier 1: read tools).
     # Lets the agent introspect the same operator-facing state the UI
     # shows: jobs, settings, instances, providers, approvals, audit,
@@ -400,6 +415,9 @@ _ALWAYS_REDACT_ARG_PAIRS: frozenset = frozenset({
     "settings_update:updates",
     "connector_upload:yaml_content",
     "playbook_validate:playbook_yaml",
+    "playbook_build_record:playbook_yaml",
+    "playbook_build_update:playbook_yaml",
+    "playbook_build_update:deploy_summary",
     "agent_batch_propose:actions",
     "jobs_create:action",
     "jobs_update:action",

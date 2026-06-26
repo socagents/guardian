@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.84] (2026-06-25) — *Playbook Builder: standard object-page + recorded build history*
+
+- **The Playbook Builder is now a standard object-list page.** `/playbooks/build` matches the same structure as the Skills page — a header with four stat cards (Total / Deployed / Validated / Failed), status tabs (Drafted / Validated / Deployed / Tested / Failed), a search box, and a grid of every playbook you've built. A **New playbook** button opens the builder panel; clicking any build card opens a detail panel.
+- **Every build is recorded and browsable.** Drafting, validating, deploying, and test-running a playbook are all captured as a build record with a lifecycle status (`drafted → validated → deployed → tested`, or `failed`). Re-open any past build to see its YAML, validation result, and deploy/test outcome, download the `.yml`, or delete it — the work no longer disappears when you close the page.
+- **New audit events for the playbook lifecycle.** `playbook_drafted`, `playbook_deployed`, `playbook_test_run`, and `playbook_build_deleted` now appear in `/observability/events` and the activity log, so building, deploying, and removing a playbook leaves a trail.
+- **The agent can manage your build history.** Five catalog-side tools (`playbook_builds_list`, `playbook_builds_get`, `playbook_build_record`, `playbook_build_update`, `playbook_build_delete`) let the agent list, open, record, update, and delete builds on your behalf. These hold build metadata only — no secret — so they stay on the catalog side of the credential boundary.
+
+Review `/help/architecture#playbook-builder` and `/help/user#playbook-builder`.
+
 ## [v0.2.83] (2026-06-25) — *`^tool` dispatch correlation: complete the trigger/chain fix (#86)*
 
 - **An operator `^tool` direct dispatch is now correctly correlated in the audit log.** Its `tool_call` row records the operator-direct trigger and the dispatch's `chain_id` (and the real principal) instead of dropping to none. The fix forwards those markers on the session-creating `initialize` request — the embedded MCP runs the tool inside the session task it spawns there, so markers attached only to the later `tools/call` arrived too late. This completes the v0.2.82 same-task-middleware work for the one path it didn't reach; the chat and scheduled-job tool calls were already correlated.

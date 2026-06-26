@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.84",
+    date: "2026-06-25",
+    title: "Playbook Builder: standard object-page + recorded build history.",
+    highlights: [
+      "/playbooks/build is now a standard object-list page like Skills: stat cards (Total / Deployed / Validated / Failed), status tabs, search, and a grid of past builds.",
+      "A New playbook button opens the builder panel; clicking a build card opens a detail panel with its YAML, validation, and deploy result.",
+      "Every build is recorded with a lifecycle status (drafted → validated → deployed → tested, or failed) and stays browsable — download the .yml or delete it any time.",
+      "New audit events — playbook_drafted, playbook_deployed, playbook_test_run, playbook_build_deleted — surface in /observability/events and the activity log.",
+      "The agent can manage your build history via five catalog-side tools (list / get / record / update / delete) — build metadata only, no secrets.",
+    ],
+  },
+  {
     version: "0.2.83",
     date: "2026-06-25",
     title: "^tool dispatch correlation: complete the trigger/chain fix (#86).",

@@ -108,6 +108,10 @@ const KNOWN_ACTIONS: string[] = [
   "personality_changed",
   "agent_self_mod_requested",
   "agent_self_mod_executed",
+  "playbook_drafted",
+  "playbook_deployed",
+  "playbook_test_run",
+  "playbook_build_deleted",
 ];
 
 const KNOWN_ACTORS: { value: string; hint?: string }[] = [
@@ -117,7 +121,7 @@ const KNOWN_ACTORS: { value: string; hint?: string }[] = [
   { value: "scheduler:continuous-coverage-cycle", hint: "manifest job" },
 ];
 
-const TARGET_PREFIXES = ["job:", "tool:", "instance:", "secret:", "connector:", "provider:"];
+const TARGET_PREFIXES = ["job:", "tool:", "instance:", "secret:", "connector:", "provider:", "playbook_build:"];
 const TRIGGER_PREFIXES = ["job:", "operator:", "manifest:"];
 
 // Helpers --------------------------------------------------------------------

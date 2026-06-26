@@ -2233,27 +2233,47 @@ Networks documentation and returning evidence-backed, cited answers.
               <Link href="/playbooks/build" className="link">/playbooks/build</Link>{" "}
               drafts a new <strong>Cortex XSOAR playbook</strong> from a
               plain-English use-case, grounded in the ~800 real playbooks in the{" "}
-              <Code>soar-playbooks</Code> knowledge base.
+              <Code>soar-playbooks</Code> knowledge base — and it keeps a record
+              of everything you build so you can come back to it.
             </p>
-            <SubSection icon="bolt" title="How to use it">
+            <SubSection icon="grid_view" title="The build history">
               <p>
+                The page opens on your <strong>build history</strong>: four stat
+                cards across the top (<strong>Total</strong>,{" "}
+                <strong>Deployed</strong>, <strong>Validated</strong>,{" "}
+                <strong>Failed</strong>), status tabs to filter by stage
+                (Drafted / Validated / Deployed / Tested / Failed), a search box,
+                and a grid of every playbook you&apos;ve built. It works like the{" "}
+                <Link href="/skills" className="link">Skills</Link> page — search
+                or tab to find a past build, then click its card.
+              </p>
+              <p>
+                Each build records its lifecycle as it progresses:{" "}
+                <Code>drafted</Code> when first created,{" "}
+                <Code>validated</Code> once the structure check passes,{" "}
+                <Code>deployed</Code> after it&apos;s imported into your tenant,
+                and <Code>tested</Code> after a test-run — or <Code>failed</Code>{" "}
+                if a step didn&apos;t complete. The cards and stat counts update
+                to match.
+              </p>
+            </SubSection>
+            <SubSection icon="bolt" title="Build a new playbook">
+              <p>
+                Click <strong>New playbook</strong> to open the builder panel.
                 Describe what the playbook should do (e.g. &quot;investigate a
                 phishing email end to end, then delete similar messages on
                 confirmation&quot;), optionally name a product/integration
-                (CrowdStrike, Defender, generic), and click{" "}
-                <strong>Build playbook</strong>. The agent finds the closest
-                existing playbooks, studies their task structure, and drafts a
-                new one in that shape — then <strong>validates</strong> it
-                (required fields, the task graph wiring, reachability) so you
-                know it will import. You get the YAML with a{" "}
-                <strong>Validate structure</strong> button and a{" "}
-                <strong>Download .yml</strong>, plus the example playbooks it
-                grounded on.
+                (CrowdStrike, Defender, generic), and build it. The agent finds
+                the closest existing playbooks, studies their task structure, and
+                drafts a new one in that shape — then <strong>validates</strong>{" "}
+                it (required fields, the task graph wiring, reachability) so you
+                know it will import. The new build appears in your history as a
+                card.
               </p>
             </SubSection>
             <SubSection icon="rocket_launch" title="Deploy + test-run">
               <p>
-                Once you have a draft, click <strong>Deploy + test-run</strong>{" "}
+                On a draft, click <strong>Deploy + test-run</strong>{" "}
                 and confirm. Guardian <strong>imports</strong> the playbook into
                 your connected Cortex XSOAR tenant, creates a throwaway{" "}
                 <Code>[Guardian test]</Code> incident, <strong>runs</strong> the
@@ -2272,6 +2292,17 @@ Networks documentation and returning evidence-backed, cited answers.
                 REST API integration for one-click) — then runs the test once the
                 playbook exists. Direct one-click import works on XSOAR 6 and on
                 Cortex 8 with that integration.
+              </p>
+            </SubSection>
+            <SubSection icon="article" title="Open a past build">
+              <p>
+                Click any card to open its <strong>detail panel</strong>. It
+                shows the generated <strong>YAML</strong>, the{" "}
+                <strong>validation</strong> result, the{" "}
+                <strong>deploy summary</strong> (and the test incident, if it was
+                run), a <strong>Download .yml</strong> button, and a{" "}
+                <strong>Delete</strong> action to remove a build you no longer
+                need. Re-open a draft any time to deploy and test-run it later.
               </p>
             </SubSection>
           </Section>

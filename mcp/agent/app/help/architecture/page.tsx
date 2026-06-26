@@ -5871,14 +5871,22 @@ function KnowledgePipeline() {
  <Code>manifest.context.passiveExcludeEcosystems</Code>.
  </p>
  </SubSection>
- <SubSection icon="design_services" title="Playbook builder">
+ <SubSection id="playbook-builder" icon="design_services" title="Playbook builder">
  <p>
- A <em>generative</em> use of a KB: the{" "}
- <Code>/playbooks/build</Code> page drafts a new Cortex XSOAR
- playbook from a use-case description, grounded in the{" "}
- <Code>soar-playbooks</Code> corpus.{" "}
- <strong>Flow</strong>: the page sends a templated request to{" "}
- <Code>/api/chat</Code> that invokes the{" "}
+ A <em>generative</em> use of a KB:{" "}
+ <Code>/playbooks/build</Code> drafts a new Cortex XSOAR playbook
+ from a use-case description, grounded in the{" "}
+ <Code>soar-playbooks</Code> corpus — and it is a{" "}
+ <strong>standard object-list page</strong>: a header with four
+ stat cards (Total / Deployed / Validated / Failed), status tabs
+ (Drafted / Validated / Deployed / Tested / Failed), a search box,
+ and a grid of past builds. A <Code>New playbook</Code> CTA opens a
+ slide-in builder panel; clicking any build card opens a detail
+ panel (YAML, validation result, deploy summary, download, delete).
+ </p>
+ <p>
+ <strong>Build flow</strong>: the builder panel sends a templated
+ request to <Code>/api/chat</Code> that invokes the{" "}
  <Code>build_xsoar_playbook</Code> skill → the agent{" "}
  <Code>knowledge_search</Code>es <Code>soar-playbooks</Code> for the
  2-3 closest real playbooks (their full <Code>raw_yaml</Code> is in
@@ -5894,7 +5902,7 @@ function KnowledgePipeline() {
  <strong>Deploy + test-run</strong>: behind an explicit
  confirm, the <Code>Deploy + test-run</Code> button drives the skill&apos;s
  deploy lifecycle through <Code>/api/chat</Code> — <Code>playbook_validate</Code> →{" "}
- <Code>xsoar_import_playbook</Code> (a new approval-gated connector tool
+ <Code>xsoar_import_playbook</Code> (an approval-gated connector tool
  that uploads the YAML to the tenant) → <Code>xsoar_create_incident</Code>{" "}
  (a disposable <Code>[Guardian test]</Code> case) → <Code>xsoar_run_playbook</Code> →{" "}
  <Code>xsoar_get_war_room</Code> (read the outcome) → <Code>xsoar_close_incident</Code>.
@@ -5906,6 +5914,49 @@ function KnowledgePipeline() {
  guidance (Settings → Playbooks → Import) while the test-run automation still
  runs. Every tenant write uses the connector instance&apos;s API key (catalog
  side of the credential boundary) and is approval-gated.
+ </p>
+ <p>
+ <strong>Recorded build history</strong>: every build is persisted
+ to a dedicated <Code>PlaybookBuildStore</Code> (sqlite at{" "}
+ <Code>&lt;DATA_ROOT&gt;/playbook_builds.db</Code>,{" "}
+ <Code>usecase/playbook_build_store.py</Code>). A record holds the{" "}
+ <Code>use_case</Code>, <Code>product</Code>,{" "}
+ <Code>playbook_name</Code>, <Code>playbook_yaml</Code>,{" "}
+ <Code>status</Code>, the <Code>validation</Code> result, the{" "}
+ <Code>deploy_summary</Code>, the <Code>test_incident_id</Code>, the
+ originating <Code>session_id</Code>, <Code>created_by</Code>, and
+ created / updated timestamps. The lifecycle status walks{" "}
+ <Code>drafted → validated → deployed → tested</Code> (or{" "}
+ <Code>failed</Code>) as the build progresses, and the grid + stat
+ cards + tabs read straight off the store.
+ </p>
+ <p>
+ <strong>Catalog side of the credential boundary</strong>: a build
+ record is build metadata only — it holds no secret — so the agent
+ can manage the history via five catalog-side MCP tools:{" "}
+ <Code>playbook_builds_list</Code>, <Code>playbook_builds_get</Code>,{" "}
+ <Code>playbook_build_record</Code>,{" "}
+ <Code>playbook_build_update</Code>, and{" "}
+ <Code>playbook_build_delete</Code>. The store&apos;s writes emit
+ best-effort audit events visible in{" "}
+ <Code>/observability/events</Code> and the activity log:{" "}
+ <Code>playbook_drafted</Code>, <Code>playbook_deployed</Code>,{" "}
+ <Code>playbook_test_run</Code>, and{" "}
+ <Code>playbook_build_deleted</Code>.
+ </p>
+ <p>
+ <strong>Inter-service wiring</strong>:{" "}
+ <Code>guardian-agent</Code> (Next.js, port 3000) serves the{" "}
+ <Code>/api/agent/playbook-builds</Code> route family (GET list,
+ POST create, and <Code>/[id]</Code> GET / PATCH / DELETE) and
+ proxies each to the embedded MCP at{" "}
+ <Code>/api/v1/playbook-builds</Code> (Python FastMCP, port 8080) —
+ bearer auth via <Code>MCP_TOKEN</Code> through{" "}
+ <Code>lib/mcp-proxy.ts</Code>, in-process loopback over HTTPS. The
+ MCP handlers (<Code>api/playbook_builds.py</Code>) read and write{" "}
+ <Code>PlaybookBuildStore</Code> synchronously; the audit emission
+ on each write is best-effort (a failed audit row never fails the
+ build write).
  </p>
  </SubSection>
  <SubSection icon="science" title="Why bundle-shipped (not runtime CRUD)">

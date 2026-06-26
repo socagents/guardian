@@ -3160,17 +3160,17 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Build a Cortex XSOAR playbook from examples",
     summary:
-      "Describe a use-case on /playbooks/build; the agent grounds a new XSOAR playbook in soar-playbooks examples, validates its structure, and gives you downloadable YAML.",
+      "Click New playbook on /playbooks/build, describe a use-case; the agent grounds a new XSOAR playbook in soar-playbooks examples, validates its structure, and records the build in your history.",
     difficulty: "intermediate",
     durationMin: 4,
     icon: "design_services",
     prompts: [
       {
         text: "Build a Cortex XSOAR playbook to isolate a compromised endpoint on CrowdStrike Falcon and notify the analyst.",
-        note: "Or use the /playbooks/build form (use-case + product).",
+        note: "Or open the New playbook panel on /playbooks/build (use-case + product).",
       },
     ],
-    toolsExercised: ["knowledge_search", "playbook_validate"],
+    toolsExercised: ["knowledge_search", "playbook_validate", "playbook_build_record"],
     apis: [
       { method: "POST", path: "/api/chat", description: "Invokes the build_xsoar_playbook skill." },
       {
@@ -3178,21 +3178,26 @@ export const JOURNEYS: Journey[] = [
         path: "/api/agent/playbooks/validate",
         description: "Structural validation of the drafted playbook YAML.",
       },
+      {
+        method: "POST",
+        path: "/api/agent/playbook-builds",
+        description: "Records the build (status drafted) in the build history.",
+      },
     ],
     howToTest: [
-      "Open /playbooks/build. Describe a use-case (+ optional product) and click Build playbook.",
+      "Open /playbooks/build. Click New playbook, describe a use-case (+ optional product), and build it.",
       "The agent searches soar-playbooks for close examples, drafts a playbook, and validates it.",
       "The result shows the YAML with Validate structure + Download .yml; click Validate — it returns valid + a task count.",
-      "Citations name the example playbooks it grounded on; the draft is yours to import into XSOAR.",
+      "Close the panel — the new build now appears as a card in the history grid (status Drafted), and the Total stat card increments.",
     ],
     expectedResult:
-      "A structurally-valid Cortex XSOAR playbook YAML grounded in real soar-playbooks examples, validated (required fields + task-graph integrity), downloadable. The Build step produces a reviewable draft; deploying + test-running it is the separate playbook-deploy-test-run journey.",
+      "A structurally-valid Cortex XSOAR playbook YAML grounded in real soar-playbooks examples, validated (required fields + task-graph integrity), downloadable, AND recorded in the build-history grid as a Drafted build. The Build step produces a reviewable draft; deploying + test-running it is the separate playbook-deploy-test-run journey.",
     verifyVia: [
       "The drafted YAML passes /api/agent/playbooks/validate (valid:true)",
       "knowledge_search(kb_name='soar-playbooks') appears in the run",
-      "The answer cites at least one soar-playbooks example",
+      "GET /api/agent/playbook-builds lists the new build with status:drafted",
     ],
-    related: ["soar-playbooks-search", "xsoar-investigate-case", "playbook-deploy-test-run"],
+    related: ["soar-playbooks-search", "xsoar-investigate-case", "playbook-deploy-test-run", "playbook-build-history"],
     components: ["knowledge", "mcp"],
   },
   {
@@ -3200,14 +3205,14 @@ export const JOURNEYS: Journey[] = [
     category: "ops",
     title: "Deploy + test-run a drafted playbook",
     summary:
-      "From a drafted playbook on /playbooks/build, import it into the connected Cortex XSOAR tenant, run it on a disposable [Guardian test] incident, see the outcome, and auto-close the incident.",
+      "From a build on /playbooks/build, import it into the connected Cortex XSOAR tenant, run it on a disposable [Guardian test] incident, see the outcome, auto-close the incident, and record the result on the build.",
     difficulty: "intermediate",
     durationMin: 5,
     icon: "rocket_launch",
     prompts: [
       {
         text: "Deploy and test-run this playbook in my XSOAR tenant, then report the outcome and clean up.",
-        note: "Or click Deploy + test-run on /playbooks/build after building a draft.",
+        note: "Or click Deploy + test-run on a build's detail panel on /playbooks/build.",
       },
     ],
     toolsExercised: [
@@ -3217,24 +3222,81 @@ export const JOURNEYS: Journey[] = [
       "xsoar_run_playbook",
       "xsoar_get_war_room",
       "xsoar_close_incident",
+      "playbook_build_update",
     ],
     apis: [
       { method: "POST", path: "/api/chat", description: "Drives the build_xsoar_playbook Deploy lifecycle (D1–D7)." },
+      {
+        method: "PATCH",
+        path: "/api/agent/playbook-builds/{id}",
+        description: "Advances the build status (deployed → tested) and attaches the deploy summary + test incident.",
+      },
     ],
     howToTest: [
-      "Build a draft on /playbooks/build, then click Deploy + test-run and confirm.",
+      "Build a draft on /playbooks/build, open its card, then click Deploy + test-run and confirm.",
       "The agent imports the playbook, creates a [Guardian test] incident, runs the playbook on it, reads the war room, and closes the incident.",
       "On a Cortex 8 tenant without the Core REST API integration, the import returns import_unavailable — the agent gives manual-import steps (Settings → Playbooks → Import) and runs the test once it exists.",
+      "The build card's status advances to Deployed then Tested, the Deployed stat card increments, and the detail panel shows the deploy summary + test incident.",
     ],
     expectedResult:
-      "On XSOAR 6 / Cortex 8 + Core REST API: a one-click import + test-run with the outcome shown and the test incident closed. On a plain Cortex 8 tenant: clear manual-import guidance plus the automated test-run. Every tenant write is approval-gated.",
+      "On XSOAR 6 / Cortex 8 + Core REST API: a one-click import + test-run with the outcome shown and the test incident closed. On a plain Cortex 8 tenant: clear manual-import guidance plus the automated test-run. Every tenant write is approval-gated. The build record advances to deployed/tested with the outcome attached.",
     verifyVia: [
       "xsoar_import_playbook appears in the run (ok:true, or import_unavailable with guidance)",
       "A [Guardian test] incident is created, run on, and closed",
-      "The result reports the run outcome (task results / errors)",
+      "GET /api/agent/playbook-builds/{id} shows status:tested with deploy_summary + test_incident_id",
     ],
-    related: ["playbook-builder", "xsoar-investigate-case"],
+    related: ["playbook-builder", "xsoar-investigate-case", "playbook-build-history"],
     components: ["mcp", "connectors"],
+  },
+
+  {
+    id: "playbook-build-history",
+    category: "ops",
+    title: "Browse the playbook build history",
+    summary:
+      "Walk the /playbooks/build history grid — filter by status tab, search, read the stat cards — then open a past build's detail to download its YAML, review validation + deploy result, or delete it.",
+    difficulty: "starter",
+    durationMin: 3,
+    icon: "grid_view",
+    prompts: [
+      {
+        text: "List the playbooks I've built so far and show me the ones that were deployed.",
+        note: "Or browse the history grid + status tabs on /playbooks/build directly.",
+      },
+    ],
+    toolsExercised: ["playbook_builds_list", "playbook_builds_get"],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/agent/playbook-builds",
+        description: "Lists recorded builds (newest first), filterable by status.",
+      },
+      {
+        method: "GET",
+        path: "/api/agent/playbook-builds/{id}",
+        description: "Full record backing a build's detail panel.",
+      },
+      {
+        method: "DELETE",
+        path: "/api/agent/playbook-builds/{id}",
+        description: "Removes a build from the history.",
+      },
+    ],
+    howToTest: [
+      "Open /playbooks/build. The header shows four stat cards (Total / Deployed / Validated / Failed) and the grid lists every past build, newest first.",
+      "Click a status tab (e.g. Deployed) or type in the search box — the grid filters to matching builds.",
+      "Click a build card to open its detail panel: the generated YAML, validation result, deploy summary (and test incident, if run), Download .yml, and Delete.",
+      "Click Download .yml to get the playbook; click Delete to remove a build you no longer need (its card and stat counts update).",
+    ],
+    expectedResult:
+      "Every playbook you've built is recorded and browsable — the grid + stat cards + status tabs + search match the build history, and each card opens a detail panel where you can download the YAML, review validation + deploy outcome, or delete the build.",
+    verifyVia: [
+      "GET /api/agent/playbook-builds returns the recorded builds (stat-card counts match)",
+      "Filtering by ?status=deployed returns only deployed builds",
+      "GET /api/agent/playbook-builds/{id} returns the full record the detail panel renders",
+    ],
+    related: ["playbook-builder", "playbook-deploy-test-run"],
+    components: ["mcp", "audit"],
   },
 
   {
