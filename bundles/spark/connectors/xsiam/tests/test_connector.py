@@ -36,12 +36,38 @@ def run(coro):
 # ─── 1. Fetcher: auth headers + URL normalization ────────────────────
 
 
-def test_fetcher_builds_cortex_auth_headers():
-    f = Fetcher("https://api-x.xdr.us.paloaltonetworks.com/public_api/v1", "KEY", "ID7")
+def test_fetcher_standard_auth_headers():
+    # auth_type="standard": api_key sent verbatim, no nonce/timestamp.
+    f = Fetcher(
+        "https://api-x.xdr.us.paloaltonetworks.com/public_api/v1",
+        "KEY", "ID7", auth_type="standard",
+    )
     h = f._build_headers()
     assert h["x-xdr-auth-id"] == "ID7"
     assert h["Authorization"] == "KEY"
     assert h["Content-Type"] == "application/json"
+    assert "x-xdr-nonce" not in h and "x-xdr-timestamp" not in h
+
+
+def test_fetcher_advanced_auth_headers_default():
+    import hashlib
+
+    # Default (auth_type omitted) is Advanced: Authorization is
+    # sha256(api_key + nonce + timestamp), with the nonce + timestamp sent
+    # so the server can recompute + replay-check.
+    f = Fetcher("https://api-x.xdr.us.paloaltonetworks.com/public_api/v1", "KEY", "ID7")
+    h = f._build_headers()
+    assert h["x-xdr-auth-id"] == "ID7"
+    assert h["Content-Type"] == "application/json"
+    nonce, ts = h["x-xdr-nonce"], h["x-xdr-timestamp"]
+    assert len(nonce) == 64 and ts.isdigit()
+    assert h["Authorization"] == hashlib.sha256(
+        f"KEY{nonce}{ts}".encode("utf-8")
+    ).hexdigest()
+    # Fresh per call — a second build yields a different nonce (+ signature).
+    h2 = f._build_headers()
+    assert h2["x-xdr-nonce"] != nonce
+    assert h2["Authorization"] != h["Authorization"]
 
 
 @pytest.mark.parametrize(

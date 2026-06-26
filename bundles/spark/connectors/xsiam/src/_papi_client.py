@@ -2,7 +2,11 @@
 
 import os
 import json
+import hashlib
 import logging
+import secrets
+import string
+import time
 from typing import Optional
 
 import httpx
@@ -116,16 +120,44 @@ class Fetcher:
     High-level XSIAM API request helper.
     """
 
-    def __init__(self, url: str, api_key: str, api_key_id: str):
+    def __init__(
+        self,
+        url: str,
+        api_key: str,
+        api_key_id: str,
+        auth_type: str = "advanced",
+    ):
         self.url = url
         self.api_key = api_key
         self.api_key_id = api_key_id
+        # "advanced" (default) = replay-protected nonce+timestamp signing;
+        # "standard" = api_key sent verbatim in Authorization. An Advanced
+        # Cortex key 401s under standard auth and vice-versa.
+        self.auth_type = (auth_type or "advanced").strip().lower()
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def _build_headers(self) -> dict[str, str]:
+        if self.auth_type == "standard":
+            return {
+                "x-xdr-auth-id": self.api_key_id,
+                "Authorization": self.api_key,
+                "Content-Type": "application/json",
+            }
+        # Advanced auth (Cortex XDR/XSIAM): sign api_key + nonce + timestamp
+        # with SHA-256 and send the nonce + timestamp alongside. Computed FRESH
+        # per request (the timestamp is replay-checked server-side, so a cached
+        # signature would be rejected on the second call).
+        nonce = "".join(
+            secrets.choice(string.ascii_letters + string.digits) for _ in range(64)
+        )
+        timestamp = str(int(time.time() * 1000))
+        auth_key = f"{self.api_key}{nonce}{timestamp}".encode("utf-8")
+        api_key_hash = hashlib.sha256(auth_key).hexdigest()
         return {
+            "x-xdr-timestamp": timestamp,
+            "x-xdr-nonce": nonce,
             "x-xdr-auth-id": self.api_key_id,
-            "Authorization": self.api_key,
+            "Authorization": api_key_hash,
             "Content-Type": "application/json",
         }
 

@@ -112,6 +112,7 @@ def _get_xsiam_config() -> dict:
         "api_url": getattr(proxy, "api_url", None),
         "api_id": getattr(proxy, "api_id", None),
         "api_key": getattr(proxy, "api_key", None),
+        "auth_type": getattr(proxy, "auth_type", None),
     }
 
 
@@ -143,7 +144,11 @@ def _get_fetcher() -> Fetcher:
     else:
         base_url = f"{base_url}/public_api/v1"
 
-    return Fetcher(base_url, str(api_key), str(api_key_id))
+    # auth_type defaults to "advanced" (the Cortex-recommended replay-protected
+    # mode + the most common XSIAM key level). An instance that predates this
+    # field has auth_type=None → advanced.
+    auth_type = cfg.get("auth_type") or "advanced"
+    return Fetcher(base_url, str(api_key), str(api_key_id), auth_type=str(auth_type))
 
 
 class RunXqlQueryRequest(BaseModel):
