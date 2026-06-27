@@ -53,6 +53,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       "Two-step flow works end-to-end: create_dataset (typed schema), then add_lookup_data (populate).",
       "Root cause of the earlier hang: this tenant's keys need Advanced (signed) auth — set the XSIAM instance's API key security level to Advanced.",
       "add_lookup_data sends data as an array of rows in one request (a bare object makes the API skip every row); create the dataset before populating it.",
+      "Test Connection now works for Advanced keys — the XSIAM health probe was Standard-only and 401'd valid Advanced keys; it now signs the request like the connector does.",
     ],
   },
   {

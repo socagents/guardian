@@ -26,10 +26,34 @@ templates in bundles/spark/manifest.yaml, which use the uniform
 
 from __future__ import annotations
 
+import hashlib
 import os
+import secrets
+import string
+import time
 from typing import Any
 
 import httpx
+
+
+def _xsiam_papi_headers(api_key: str, api_id: str, auth_type: str) -> dict[str, str]:
+    """Build Cortex public-API auth headers for the XSIAM probe, matching the
+    connector's Fetcher (_papi_client.Fetcher._build_headers). `standard` sends
+    the key verbatim; `advanced` signs api_key + nonce + timestamp with SHA-256.
+    An Advanced key 401s under standard auth and vice-versa."""
+    common = {"Content-Type": "application/json", "Accept": "application/json"}
+    if (auth_type or "standard").strip().lower() != "advanced":
+        return {"Authorization": api_key, "x-xdr-auth-id": str(api_id), **common}
+    nonce = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(64))
+    timestamp = str(int(time.time() * 1000))
+    api_key_hash = hashlib.sha256(f"{api_key}{nonce}{timestamp}".encode("utf-8")).hexdigest()
+    return {
+        "x-xdr-timestamp": timestamp,
+        "x-xdr-nonce": nonce,
+        "x-xdr-auth-id": str(api_id),
+        "Authorization": api_key_hash,
+        **common,
+    }
 
 
 PROBE_IMPLEMENTED: frozenset[str] = frozenset(
@@ -172,12 +196,11 @@ async def real_probe(
 
             if "/public_api/v1" not in base:
                 base = base + "/public_api/v1"
-            headers = {
-                "Authorization": api_key,
-                "x-xdr-auth-id": str(api_id),
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
+            # Honor the instance's auth_type — Advanced keys must be signed, or
+            # the probe 401s a perfectly valid Advanced key (the connector's
+            # Fetcher signs correctly; this probe must match it).
+            auth_type = _first(cfg.get("auth_type"), sec.get("auth_type")) or "standard"
+            headers = _xsiam_papi_headers(api_key, str(api_id), auth_type)
             async with httpx.AsyncClient(timeout=timeout, verify=verify) as c:
                 r = await c.post(
                     f"{base}/incidents/get_incidents/",
