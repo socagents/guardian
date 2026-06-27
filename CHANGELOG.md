@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.86] (2026-06-26) — *XSIAM connector: Standard + Advanced API key auth (#90)*
+
+- **The Cortex XSIAM connector now works with both Standard and Advanced API keys.** Cortex lets you create an API key at two security levels; the connector previously only supported **Standard** (the key sent verbatim), so an **Advanced** key — which requires each request to be signed with a SHA-256 nonce + timestamp — failed with `401 Public API request unauthorized`. A new **API key security level** setting on the XSIAM connector (`Standard` default, `Advanced` opt-in) makes the connector sign requests correctly for whichever level your key uses. If you see a 401 on an XSIAM instance, set this to match the level of the key you created in Cortex (Settings → Configurations → API Keys).
+
 ## [v0.2.85] (2026-06-26) — *Create-instance reliability: no phantom "already exists" (#88)*
 
 - **Creating a connector instance no longer shows a false "this instance already exists" error.** The error came from the UI's API client auto-retrying the create request: a container-style connector (XSIAM, XSOAR, Web) starts its per-instance container as part of the create, which can take up to a minute, but the agent→MCP proxy gives up at 15 seconds — so the client re-sent the create, the row already existed, and the retry was rejected even though the instance had been created. Two fixes: the API client now **never auto-retries a state-changing request** (only safe, idempotent reads are retried), and the container start now runs **in the background** so the create returns immediately with a "still starting" notice instead of hanging. A genuinely duplicate name still returns a clear "already exists." This affected every create/update action, not just instances.

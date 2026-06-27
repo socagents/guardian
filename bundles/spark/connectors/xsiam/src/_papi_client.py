@@ -125,15 +125,17 @@ class Fetcher:
         url: str,
         api_key: str,
         api_key_id: str,
-        auth_type: str = "advanced",
+        auth_type: str = "standard",
     ):
         self.url = url
         self.api_key = api_key
         self.api_key_id = api_key_id
-        # "advanced" (default) = replay-protected nonce+timestamp signing;
-        # "standard" = api_key sent verbatim in Authorization. An Advanced
-        # Cortex key 401s under standard auth and vice-versa.
-        self.auth_type = (auth_type or "advanced").strip().lower()
+        # "standard" (default) = api_key sent verbatim in Authorization — the
+        # connector's original + backwards-compatible behavior. "advanced" =
+        # replay-protected nonce+timestamp signing. An Advanced Cortex key
+        # 401s under standard auth and vice-versa, so the level must match the
+        # key created in Cortex (Settings → API Keys).
+        self.auth_type = (auth_type or "standard").strip().lower()
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def _build_headers(self) -> dict[str, str]:

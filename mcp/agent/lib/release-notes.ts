@@ -37,6 +37,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.86",
+    date: "2026-06-26",
+    title: "XSIAM connector: Standard + Advanced API key auth.",
+    highlights: [
+      "The Cortex XSIAM connector now supports both Standard and Advanced API keys via a new “API key security level” setting (Standard default, Advanced opt-in).",
+      "An Advanced key is signed per request with a SHA-256 nonce+timestamp; a Standard key is sent verbatim. A level mismatch is what causes a 401 “Public API request unauthorized”.",
+    ],
+  },
+  {
     version: "0.2.85",
     date: "2026-06-26",
     title: "Create-instance reliability: no phantom “already exists” error.",

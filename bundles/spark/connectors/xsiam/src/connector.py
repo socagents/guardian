@@ -144,10 +144,10 @@ def _get_fetcher() -> Fetcher:
     else:
         base_url = f"{base_url}/public_api/v1"
 
-    # auth_type defaults to "advanced" (the Cortex-recommended replay-protected
-    # mode + the most common XSIAM key level). An instance that predates this
-    # field has auth_type=None → advanced.
-    auth_type = cfg.get("auth_type") or "advanced"
+    # auth_type defaults to "standard" — the connector's original behavior, so
+    # an instance that predates this field (auth_type=None) keeps working.
+    # Operators with an Advanced Cortex key opt in via the connector config.
+    auth_type = cfg.get("auth_type") or "standard"
     return Fetcher(base_url, str(api_key), str(api_key_id), auth_type=str(auth_type))
 
 

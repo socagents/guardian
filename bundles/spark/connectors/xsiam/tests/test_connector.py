@@ -36,26 +36,30 @@ def run(coro):
 # ─── 1. Fetcher: auth headers + URL normalization ────────────────────
 
 
-def test_fetcher_standard_auth_headers():
-    # auth_type="standard": api_key sent verbatim, no nonce/timestamp.
-    f = Fetcher(
-        "https://api-x.xdr.us.paloaltonetworks.com/public_api/v1",
-        "KEY", "ID7", auth_type="standard",
-    )
-    h = f._build_headers()
-    assert h["x-xdr-auth-id"] == "ID7"
-    assert h["Authorization"] == "KEY"
-    assert h["Content-Type"] == "application/json"
-    assert "x-xdr-nonce" not in h and "x-xdr-timestamp" not in h
+def test_fetcher_standard_auth_headers_default():
+    # auth_type defaults to "standard" (backwards-compatible): api_key sent
+    # verbatim, no nonce/timestamp. Tested with the field omitted AND explicit.
+    for f in (
+        Fetcher("https://api-x.xdr.us.paloaltonetworks.com/public_api/v1", "KEY", "ID7"),
+        Fetcher("https://api-x.xdr.us.paloaltonetworks.com/public_api/v1",
+                "KEY", "ID7", auth_type="standard"),
+    ):
+        h = f._build_headers()
+        assert h["x-xdr-auth-id"] == "ID7"
+        assert h["Authorization"] == "KEY"
+        assert h["Content-Type"] == "application/json"
+        assert "x-xdr-nonce" not in h and "x-xdr-timestamp" not in h
 
 
-def test_fetcher_advanced_auth_headers_default():
+def test_fetcher_advanced_auth_headers():
     import hashlib
 
-    # Default (auth_type omitted) is Advanced: Authorization is
-    # sha256(api_key + nonce + timestamp), with the nonce + timestamp sent
-    # so the server can recompute + replay-check.
-    f = Fetcher("https://api-x.xdr.us.paloaltonetworks.com/public_api/v1", "KEY", "ID7")
+    # auth_type="advanced": Authorization is sha256(api_key + nonce + timestamp),
+    # with the nonce + timestamp sent so the server can recompute + replay-check.
+    f = Fetcher(
+        "https://api-x.xdr.us.paloaltonetworks.com/public_api/v1",
+        "KEY", "ID7", auth_type="advanced",
+    )
     h = f._build_headers()
     assert h["x-xdr-auth-id"] == "ID7"
     assert h["Content-Type"] == "application/json"

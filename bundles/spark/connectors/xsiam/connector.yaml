@@ -58,9 +58,9 @@ configSchema:
       description: "Cortex XSIAM API key id — the x-xdr-auth-id header value."
     auth_type:
       type: "string"
-      enum: ["advanced", "standard"]
-      default: "advanced"
-      description: "API key security level (Settings → Configurations → API Keys in Cortex). 'advanced' (default, recommended) signs each request with a SHA-256 nonce+timestamp; 'standard' sends the key verbatim. An Advanced key fails with 401 under 'standard'."
+      enum: ["standard", "advanced"]
+      default: "standard"
+      description: "API key security level (Settings → Configurations → API Keys in Cortex). Must match the level of the key you created. 'standard' (default) sends the key verbatim; 'advanced' signs each request with a SHA-256 nonce+timestamp. A mismatch fails with 401 'Public API request unauthorized'."
 
 secretSlots:
   - name: "api_key"
