@@ -107,6 +107,15 @@ Compose the XQL query using:
 - The operator's KB examples as the **pattern prior** — match dataset names, field aliases, ordering conventions
 - The cortex-docs lookups as the **syntax reference** — use exact stage/function syntax, argument order, and behavioral notes from the docs
 
+### `xdr_data` field + value conventions (resolve BEFORE authoring)
+
+The XQL *language* (stages/functions) is dataset-agnostic, but **field names and enum values are dataset-specific** — guessing them is the #1 cause of a first-attempt failure. Before authoring against a tenant dataset:
+
+- **Enum-typed columns use the `ENUM.<VALUE>` literal, NOT a quoted string.** In `xdr_data`, `event_type` / `event_sub_type` are enums: write `filter event_type = ENUM.PROCESS` (also `ENUM.NETWORK`, `ENUM.FILE`, `ENUM.STORY`, `ENUM.REGISTRY`, `ENUM.LOGON`…). `event_type = "PROCESS"` (a string) silently matches nothing. Other `*_raw` datasets often store plain strings — confirm per dataset.
+- **Resolve exact field names from the schema, don't guess prefixes.** `xdr_data` distinguishes the *acting* process (`actor_process_*`) from the *target/affected* process (`action_process_*`) and the *causality* chain (`causality_actor_process_*`). Common fields: `actor_process_image_name`, `actor_process_command_line`, `action_process_image_name`, `action_process_image_command_line`, `action_remote_ip`, `action_local_ip`, `agent_hostname`, `actor_effective_username`. The `xql_examples_search` result's `dataset_fields` block and `xsiam.datamodel_describe(dataset="xdr_data")` are authoritative — prefer them over memory.
+- **Flat fields vs `xdm.*` datamodel paths.** A direct `dataset = xdr_data | filter …` query uses the **flat** field names above (`actor_process_image_name`, `action_remote_ip`, `event_type`). The dotted `xdm.<...>` paths (e.g. `xdm.auth.auth_method`) are the **datamodel** view — only valid in a `datamodel dataset = xdr_data | …` query or behind `| datamodel`. Do NOT put `xdm.*` paths in a plain `dataset =` query (they resolve to null). If the `dataset_fields` reference shows `xdm.*` names for a dataset, treat them as datamodel paths, not direct-query fields.
+- When unsure between two field names, run a 1-row probe (`dataset = X | fields <candidate> | limit 1`) before committing the full query.
+
 Output shape:
 
 ````markdown
@@ -114,11 +123,11 @@ Output shape:
 
 ```xql
 dataset = xdr_data
-| filter event_type = "Login" and event_sub_type = "Success"
+| filter event_type = ENUM.PROCESS and actor_process_image_name != null
 | alter ts_5m = bin(_time, 5m)
-| comp count() as logins by user_name, ts_5m
-| filter logins > 50
-| sort desc logins
+| comp count() as execs by actor_process_image_name, ts_5m
+| filter execs > 50
+| sort desc execs
 ```
 
 **Authored from:**

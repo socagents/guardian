@@ -10,6 +10,10 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.87] (2026-06-27) — *XQL authoring skill: xdr_data field + ENUM conventions (from the live pilot)*
+
+- **The agent now authors `xdr_data` XQL correctly on the first attempt more often.** A live pilot against a real XSIAM tenant showed the agent's XQL *syntax* was excellent but it stumbled on two `xdr_data`-specific conventions — guessing a quoted string (`event_type = "PROCESS"`) instead of the enum literal (`event_type = ENUM.PROCESS`), and probing several variants of the process field names. The `cortex_xql_query_authoring` skill itself taught the wrong (string-literal) form in its example. Fixed the example to the `ENUM.<VALUE>` form and added explicit conventions: enum-typed columns use `ENUM.<VALUE>` not strings; resolve exact field names from the schema (`xsiam.datamodel_describe` / the `dataset_fields` block) before authoring; and a direct `dataset = xdr_data` query uses flat field names (`actor_process_image_name`, `action_remote_ip`) while the dotted `xdm.*` paths are the datamodel view only.
+
 ## [v0.2.86] (2026-06-26) — *XSIAM connector: Standard + Advanced API key auth (#90)*
 
 - **The Cortex XSIAM connector now works with both Standard and Advanced API keys.** Cortex lets you create an API key at two security levels; the connector previously only supported **Standard** (the key sent verbatim), so an **Advanced** key — which requires each request to be signed with a SHA-256 nonce + timestamp — failed with `401 Public API request unauthorized`. A new **API key security level** setting on the XSIAM connector (`Standard` default, `Advanced` opt-in) makes the connector sign requests correctly for whichever level your key uses. If you see a 401 on an XSIAM instance, set this to match the level of the key you created in Cortex (Settings → Configurations → API Keys).

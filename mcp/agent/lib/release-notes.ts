@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.87",
+    date: "2026-06-27",
+    title: "Sharper xdr_data XQL authoring (from a live tenant pilot).",
+    highlights: [
+      "The cortex_xql_query_authoring skill now teaches xdr_data's conventions: event_type is an ENUM (event_type = ENUM.PROCESS, not the string \"PROCESS\").",
+      "Resolve exact field names from the schema before authoring; direct dataset=xdr_data queries use flat fields (actor_process_image_name), while xdm.* dotted paths are the datamodel view only.",
+      "Surfaced + fixed via a live XSIAM pilot where the agent's XQL syntax was strong but it fumbled dataset-specific field names + enum literals.",
+    ],
+  },
+  {
     version: "0.2.86",
     date: "2026-06-26",
     title: "XSIAM connector: Standard + Advanced API key auth.",
