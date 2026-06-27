@@ -85,15 +85,6 @@ spec:
       args: []
       returns: { type: "array", description: "Dataset metadata." }
 
-    - name: "create_dataset"
-      method: "POST /xql/create_dataset"
-      description: "Create a new XSIAM dataset (typically for receiving custom log streams)."
-      args:
-        - { name: "dataset_name",   type: "string", description: "Name for new dataset (lowercase with underscores).", required: true  }
-        - { name: "dataset_schema", type: "object", description: "Schema definition with field types (name → type map).", required: false }
-        - { name: "dataset_type",   type: "string", description: "Dataset type (default: lookup).",                   required: false }
-      returns: { type: "object", description: "Created dataset metadata." }
-
     # ─── Cases / issues ─────────────────────────────────────────
     - name: "get_issues"
       method: "POST /issue/search/"
@@ -124,12 +115,12 @@ spec:
     # ─── Lookup tables ──────────────────────────────────────────
     - name: "add_lookup_data"
       method: "POST /xql/lookups/add_data"
-      description: "Append rows to an XSIAM lookup dataset."
+      description: "Create and/or populate an XSIAM lookup dataset. The dataset is created automatically on first write (no separate create step); column types are inferred from the JSON value types sent. Subsequent writes upsert."
       args:
-        - { name: "dataset_name", type: "string", description: "Name of the lookup dataset to add data to.", required: true  }
-        - { name: "data",         type: "array",  description: "List of records to add (each record is an object).", required: true  }
-        - { name: "key_fields",   type: "array",  description: "Optional unique key fields.",          required: false }
-      returns: { type: "object", description: "Insert result." }
+        - { name: "dataset_name", type: "string", description: "Name of the lookup dataset (lowercase with underscores). Created if it does not exist.", required: true  }
+        - { name: "data",         type: "array",  description: "One row object {column: value}, or a list of row objects. Each row is written individually.", required: true  }
+        - { name: "key_fields",   type: "array",  description: "Optional unique key columns — makes the write an upsert keyed by these.", required: false }
+      returns: { type: "object", description: "{ dataset_name, rows_written, results }." }
 
     - name: "get_lookup_data"
       method: "POST /xql/lookups/get_data"

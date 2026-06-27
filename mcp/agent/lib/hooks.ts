@@ -10,7 +10,7 @@
  *
  * Enterprise SOC ops need policy that doesn't fit inside any one tool:
  *
- *   - "Block any xsiam_create_dataset against production tenants
+ *   - "Block any xsiam_add_lookup_data against production tenants
  *      until #soc-ops approves" — needs PreToolUse + external comms.
  *   - "Inject the active incident's ticket id into every chat as
  *      context" — needs UserPromptSubmit.

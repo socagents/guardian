@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.88",
+    date: "2026-06-27",
+    title: "XSIAM lookup datasets create + populate correctly.",
+    highlights: [
+      "Removed the broken create_dataset tool — it called a Cortex endpoint that doesn't exist and hung.",
+      "add_lookup_data now both creates and populates a lookup dataset (it auto-creates on first write).",
+      "Fixed the row payload shape — one object per write, not an array — which was the cause of the hang.",
+    ],
+  },
+  {
     version: "0.2.87",
     date: "2026-06-27",
     title: "Sharper xdr_data XQL authoring (from a live tenant pilot).",

@@ -10,7 +10,7 @@ Mirrors the xsoar connector's shape (error envelope + per-call fetcher)."""
 import asyncio
 import functools
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastmcp import Context
 from pydantic import BaseModel, Field
@@ -31,7 +31,6 @@ __all__ = [
     "xsiam_get_lookup_data",
     "xsiam_remove_lookup_data",
     "xsiam_get_datasets",
-    "xsiam_create_dataset",
     "xsiam_get_asset_by_id",
     "xsiam_get_assets",
     "xsiam_get_issues",
@@ -161,7 +160,9 @@ class LookupDataRequest(BaseModel):
     """Request model for adding lookup data."""
 
     dataset_name: str = Field(description="Name of the lookup dataset to add data to.")
-    data: List[Dict[str, Any]] = Field(description="List of records to add (each record is a dict).")
+    data: Union[Dict[str, Any], List[Dict[str, Any]]] = Field(
+        description="One row object {column: value}, or a list of row objects.",
+    )
     key_fields: Optional[List[str]] = Field(default=None, description="Optional unique key fields.")
 
 
@@ -181,14 +182,6 @@ class RemoveLookupDataRequest(BaseModel):
 
     dataset_name: str = Field(description="Name of the lookup dataset.")
     filters: List[Dict[str, Any]] = Field(description="Filter conditions to identify records to delete.")
-
-
-class CreateDatasetRequest(BaseModel):
-    """Request model for creating a dataset."""
-
-    dataset_name: str = Field(description="Name for new dataset (lowercase with underscores).")
-    dataset_schema: Dict[str, Any] = Field(description="Schema definition with field types.")
-    dataset_type: str = Field(default="lookup", description="Dataset type (default: lookup).")
 
 
 class GetAssessmentResultsRequest(BaseModel):
@@ -323,12 +316,23 @@ async def xsiam_run_xql_query(query: str = "", lookback_hours: float = _XQL_LOOK
 
 async def xsiam_add_lookup_data(
     dataset_name: str = "",
-    data: Optional[List[Dict[str, Any]]] = None,
+    data: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
     key_fields: Optional[List[str]] = None,
     ctx: Context = None,
 ) -> dict:
     """
-    Add or update data in an XSIAM lookup dataset.
+    Create and/or populate an XSIAM lookup dataset.
+
+    The XSIAM `xql/lookups/add_data` endpoint CREATES the lookup dataset on the
+    first write — there is no separate create step — and upserts rows on every
+    subsequent write. Column types are inferred from the JSON value types you
+    send, so pass numbers as JSON numbers, ISO-8601 strings for datetime
+    columns, booleans as booleans, etc.
+
+    `data` is ONE row object `{column: value, ...}` or a list of such row
+    objects. Each row is sent to the API as a single JSON object (the endpoint
+    does NOT accept an array under `data`); a list is written row-by-row.
+    `key_fields` make the write an upsert keyed by those columns.
 
     Example MCP tool call:
     {
@@ -337,7 +341,8 @@ async def xsiam_add_lookup_data(
         "name": "xsiam_add_lookup_data",
         "arguments": {
           "dataset_name": "ioc_lookup",
-          "data": [{"ip": "1.2.3.4", "label": "suspicious"}]
+          "data": [{"ip": "1.2.3.4", "label": "suspicious"}],
+          "key_fields": ["ip"]
         }
       }
     }
@@ -347,13 +352,28 @@ async def xsiam_add_lookup_data(
         data=data if data is not None else [],
         key_fields=key_fields,
     )
+    # Normalize to a list of row objects (a single dict is one row).
+    rows: List[Dict[str, Any]] = (
+        [request.data] if isinstance(request.data, dict) else list(request.data)
+    )
+    if not request.dataset_name:
+        return _create_response({"error": "dataset_name is required"}, is_error=True)
+    if not rows:
+        return _create_response({"error": "data must contain at least one row"}, is_error=True)
+
     try:
         fetcher = _get_fetcher()
-        payload = {"request_data": {"dataset_name": request.dataset_name, "data": request.data}}
-        if request.key_fields:
-            payload["request_data"]["key_fields"] = request.key_fields
-        response = await fetcher.send_request("xql/lookups/add_data", data=payload)
-        return _create_response(response)
+        results: List[Any] = []
+        for row in rows:
+            inner: Dict[str, Any] = {"dataset_name": request.dataset_name, "data": row}
+            if request.key_fields:
+                inner["key_fields"] = request.key_fields
+            results.append(
+                await fetcher.send_request("xql/lookups/add_data", data={"request_data": inner})
+            )
+        return _create_response(
+            {"dataset_name": request.dataset_name, "rows_written": len(rows), "results": results}
+        )
     except Exception as e:
         return _create_response({"error": str(e)}, is_error=True)
 
@@ -440,47 +460,6 @@ async def xsiam_get_datasets(ctx: Context) -> dict:
     try:
         fetcher = _get_fetcher()
         response = await fetcher.send_request("xql/get_datasets", data={})
-        return _create_response(response)
-    except Exception as e:
-        return _create_response({"error": str(e)}, is_error=True)
-
-
-async def xsiam_create_dataset(
-    dataset_name: str = "",
-    dataset_schema: Optional[Dict[str, Any]] = None,
-    dataset_type: str = "lookup",
-    ctx: Context = None,
-) -> dict:
-    """
-    Create a new lookup dataset in XSIAM.
-
-    Example MCP tool call:
-    {
-      "method": "tools/call",
-      "params": {
-        "name": "xsiam_create_dataset",
-        "arguments": {
-          "dataset_name": "ioc_lookup",
-          "dataset_schema": {"ip": "string", "label": "string"}
-        }
-      }
-    }
-    """
-    request = CreateDatasetRequest(
-        dataset_name=dataset_name,
-        dataset_schema=dataset_schema if dataset_schema is not None else {},
-        dataset_type=dataset_type,
-    )
-    try:
-        fetcher = _get_fetcher()
-        payload = {
-            "request_data": {
-                "dataset_name": request.dataset_name,
-                "dataset_schema": request.dataset_schema,
-                "dataset_type": request.dataset_type,
-            }
-        }
-        response = await fetcher.send_request("xql/add_dataset", data=payload)
         return _create_response(response)
     except Exception as e:
         return _create_response({"error": str(e)}, is_error=True)

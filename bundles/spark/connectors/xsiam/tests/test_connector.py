@@ -263,16 +263,75 @@ def test_run_xql_requires_query(monkeypatch):
     assert rf.calls == []  # never hit the API
 
 
+# ─── 3b. add_lookup_data — per-row object payload (create + populate) ─
+
+
+def test_add_lookup_data_sends_row_as_object_not_array(monkeypatch):
+    # The XSIAM xql/lookups/add_data endpoint takes `data` as ONE row OBJECT,
+    # not an array. A single-row list input must serialize to an object.
+    rf = _RecordingFetcher({"reply": {"status": "SUCCESS"}})
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_add_lookup_data(
+        dataset_name="ioc_lookup",
+        data=[{"ip": "1.2.3.4", "label": "suspicious"}],
+        key_fields=["ip"],
+    ))
+    assert out["success"] is True
+    assert out["rows_written"] == 1
+    assert len(rf.calls) == 1
+    _, path, data = rf.calls[0]
+    assert path == "xql/lookups/add_data"
+    rd = data["request_data"]
+    assert rd["dataset_name"] == "ioc_lookup"
+    assert rd["data"] == {"ip": "1.2.3.4", "label": "suspicious"}  # object, NOT [ {...} ]
+    assert isinstance(rd["data"], dict)
+    assert rd["key_fields"] == ["ip"]
+
+
+def test_add_lookup_data_writes_each_row_individually(monkeypatch):
+    # A multi-row list becomes one request per row, each with `data` an object.
+    rf = _RecordingFetcher({"reply": {"status": "SUCCESS"}})
+    _install(monkeypatch, rf)
+    rows = [{"ip": "1.1.1.1"}, {"ip": "2.2.2.2"}, {"ip": "3.3.3.3"}]
+    out = run(connector.xsiam_add_lookup_data(dataset_name="ds", data=rows))
+    assert out["success"] is True
+    assert out["rows_written"] == 3
+    assert len(rf.calls) == 3
+    sent = [c[2]["request_data"]["data"] for c in rf.calls]
+    assert sent == rows
+    assert all(isinstance(s, dict) for s in sent)
+
+
+def test_add_lookup_data_accepts_single_dict(monkeypatch):
+    rf = _RecordingFetcher({"reply": {"status": "SUCCESS"}})
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_add_lookup_data(dataset_name="ds", data={"a": 1}))
+    assert out["success"] is True
+    assert out["rows_written"] == 1
+    assert rf.calls[0][2]["request_data"]["data"] == {"a": 1}
+
+
+def test_add_lookup_data_requires_dataset_and_rows(monkeypatch):
+    rf = _RecordingFetcher({})
+    _install(monkeypatch, rf)
+    assert run(connector.xsiam_add_lookup_data(dataset_name="", data={"a": 1}))["success"] is False
+    assert run(connector.xsiam_add_lookup_data(dataset_name="ds", data=[]))["success"] is False
+    assert rf.calls == []  # neither hit the API
+
+
 # ─── 4. __all__ integrity ────────────────────────────────────────────
 
 _DROPPED = {
     "xsiam_get_cases", "xsiam_send_webhook_log", "xsiam_find_xql_examples_rag",
     "xsiam_get_dataset_fields", "xsiam_get_xql_examples",
+    # Removed: phantom xql/add_dataset endpoint — lookup datasets are created
+    # via add_lookup_data (auto-creates on first write). See #91.
+    "xsiam_create_dataset",
 }
 
 
 def test_all_exports_are_callable_and_dropped_tools_gone():
-    assert len(connector.__all__) == 54
+    assert len(connector.__all__) == 53
     for name in connector.__all__:
         assert callable(getattr(connector, name)), f"{name} not callable"
         assert name not in _DROPPED
