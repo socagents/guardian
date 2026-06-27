@@ -515,6 +515,7 @@ approvals:
     - "xsiam.alert_exclusions_create"
     - "xsiam.alert_exclusions_delete"
     - "xsiam.add_lookup_data"
+    - "xsiam.create_dataset"
     - "xsiam.distribution_create"
     # XSOAR-F2 — Cortex XSOAR mutating/action tools. The agent can REQUEST
     # these in chat (or a job can with bypass_approvals), but the operator

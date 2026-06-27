@@ -48,11 +48,11 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "0.2.88",
     date: "2026-06-27",
-    title: "XSIAM lookup datasets create + populate correctly.",
+    title: "XSIAM lookup datasets: create + populate, with Advanced-auth keys.",
     highlights: [
-      "Removed the broken create_dataset tool — it called a Cortex endpoint that doesn't exist and hung.",
-      "add_lookup_data now both creates and populates a lookup dataset (it auto-creates on first write).",
-      "Fixed the row payload shape — one object per write, not an array — which was the cause of the hang.",
+      "Two-step flow works end-to-end: create_dataset (typed schema), then add_lookup_data (populate).",
+      "Root cause of the earlier hang: this tenant's keys need Advanced (signed) auth — set the XSIAM instance's API key security level to Advanced.",
+      "add_lookup_data sends data as an array of rows in one request (a bare object makes the API skip every row); create the dataset before populating it.",
     ],
   },
   {

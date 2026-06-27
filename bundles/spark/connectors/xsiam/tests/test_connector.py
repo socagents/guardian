@@ -6,7 +6,7 @@ No network. Covers:
   2. connector helpers — the _xsiam_wrap error envelope + _xsiam_ok/_xsiam_err.
   3. A representative read tool (incidents_list) and a representative EDR-response
      tool (endpoints_isolate) — request shaping via a recording fetcher.
-  4. __all__ integrity — the 53 tools are exported + callable, and the
+  4. __all__ integrity — the 54 tools are exported + callable, and the
      dropped simulation-only tools are gone.
 
 Run with:
@@ -263,52 +263,59 @@ def test_run_xql_requires_query(monkeypatch):
     assert rf.calls == []  # never hit the API
 
 
-# ─── 3b. add_lookup_data — per-row object payload (create + populate) ─
+# ─── 3b. lookup datasets — create (add_dataset) + populate (add_data) ─
 
 
-def test_add_lookup_data_sends_row_as_object_not_array(monkeypatch):
-    # The XSIAM xql/lookups/add_data endpoint takes `data` as ONE row OBJECT,
-    # not an array. A single-row list input must serialize to an object.
-    rf = _RecordingFetcher({"reply": {"status": "SUCCESS"}})
+def test_create_dataset_shapes_add_dataset_request(monkeypatch):
+    # create_dataset → POST xql/add_dataset with dataset_name/type/schema.
+    rf = _RecordingFetcher({"reply": {"dataset_name": "high_value_assets"}})
     _install(monkeypatch, rf)
-    out = run(connector.xsiam_add_lookup_data(
-        dataset_name="ioc_lookup",
-        data=[{"ip": "1.2.3.4", "label": "suspicious"}],
-        key_fields=["ip"],
+    out = run(connector.xsiam_create_dataset(
+        dataset_name="high_value_assets",
+        dataset_schema={"asset_id": "text", "risk_score": "number"},
     ))
     assert out["success"] is True
-    assert out["rows_written"] == 1
-    assert len(rf.calls) == 1
+    method, path, data = rf.calls[0]
+    assert path == "xql/add_dataset"
+    rd = data["request_data"]
+    assert rd["dataset_name"] == "high_value_assets"
+    assert rd["dataset_type"] == "lookup"
+    assert rd["dataset_schema"] == {"asset_id": "text", "risk_score": "number"}
+
+
+def test_create_dataset_requires_name_and_schema(monkeypatch):
+    rf = _RecordingFetcher({})
+    _install(monkeypatch, rf)
+    assert run(connector.xsiam_create_dataset(dataset_name="", dataset_schema={"a": "text"}))["success"] is False
+    assert run(connector.xsiam_create_dataset(dataset_name="ds", dataset_schema={}))["success"] is False
+    assert rf.calls == []
+
+
+def test_add_lookup_data_sends_data_as_array_one_request(monkeypatch):
+    # The XSIAM xql/lookups/add_data endpoint takes `data` as a LIST of rows,
+    # sent in ONE request. A bare object makes the API skip every row.
+    rf = _RecordingFetcher({"reply": {"rows added": 2}})
+    _install(monkeypatch, rf)
+    rows = [{"ip": "1.1.1.1"}, {"ip": "2.2.2.2"}]
+    out = run(connector.xsiam_add_lookup_data(dataset_name="ioc_lookup", data=rows, key_fields=["ip"]))
+    assert out["success"] is True
+    assert len(rf.calls) == 1  # ONE request, not one-per-row
     _, path, data = rf.calls[0]
     assert path == "xql/lookups/add_data"
     rd = data["request_data"]
     assert rd["dataset_name"] == "ioc_lookup"
-    assert rd["data"] == {"ip": "1.2.3.4", "label": "suspicious"}  # object, NOT [ {...} ]
-    assert isinstance(rd["data"], dict)
+    assert rd["data"] == rows  # the whole array
+    assert isinstance(rd["data"], list)
     assert rd["key_fields"] == ["ip"]
 
 
-def test_add_lookup_data_writes_each_row_individually(monkeypatch):
-    # A multi-row list becomes one request per row, each with `data` an object.
-    rf = _RecordingFetcher({"reply": {"status": "SUCCESS"}})
-    _install(monkeypatch, rf)
-    rows = [{"ip": "1.1.1.1"}, {"ip": "2.2.2.2"}, {"ip": "3.3.3.3"}]
-    out = run(connector.xsiam_add_lookup_data(dataset_name="ds", data=rows))
-    assert out["success"] is True
-    assert out["rows_written"] == 3
-    assert len(rf.calls) == 3
-    sent = [c[2]["request_data"]["data"] for c in rf.calls]
-    assert sent == rows
-    assert all(isinstance(s, dict) for s in sent)
-
-
-def test_add_lookup_data_accepts_single_dict(monkeypatch):
-    rf = _RecordingFetcher({"reply": {"status": "SUCCESS"}})
+def test_add_lookup_data_wraps_single_dict_to_list(monkeypatch):
+    rf = _RecordingFetcher({"reply": {"rows added": 1}})
     _install(monkeypatch, rf)
     out = run(connector.xsiam_add_lookup_data(dataset_name="ds", data={"a": 1}))
     assert out["success"] is True
-    assert out["rows_written"] == 1
-    assert rf.calls[0][2]["request_data"]["data"] == {"a": 1}
+    assert len(rf.calls) == 1
+    assert rf.calls[0][2]["request_data"]["data"] == [{"a": 1}]  # wrapped to a list
 
 
 def test_add_lookup_data_requires_dataset_and_rows(monkeypatch):
@@ -324,14 +331,11 @@ def test_add_lookup_data_requires_dataset_and_rows(monkeypatch):
 _DROPPED = {
     "xsiam_get_cases", "xsiam_send_webhook_log", "xsiam_find_xql_examples_rag",
     "xsiam_get_dataset_fields", "xsiam_get_xql_examples",
-    # Removed: non-existent xql/add_dataset endpoint — lookup datasets are created
-    # via add_lookup_data (auto-creates on first write). See #91.
-    "xsiam_create_dataset",
 }
 
 
 def test_all_exports_are_callable_and_dropped_tools_gone():
-    assert len(connector.__all__) == 53
+    assert len(connector.__all__) == 54
     for name in connector.__all__:
         assert callable(getattr(connector, name)), f"{name} not callable"
         assert name not in _DROPPED

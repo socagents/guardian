@@ -83,6 +83,15 @@ spec:
       args: []
       returns: { type: "array", description: "Dataset metadata." }
 
+    - name: "create_dataset"
+      method: "POST /xql/add_dataset"
+      description: "Create a new XSIAM lookup dataset with a typed schema. Create the dataset BEFORE populating it with add_lookup_data — writing to a non-existent dataset hangs."
+      args:
+        - { name: "dataset_name",   type: "string", description: "Name for new dataset (lowercase with underscores).", required: true  }
+        - { name: "dataset_schema", type: "object", description: "Column → type map, e.g. {\"asset_id\":\"text\",\"risk_score\":\"number\"}. Types: text | number | boolean | datetime.", required: true }
+        - { name: "dataset_type",   type: "string", description: "Dataset type (default: lookup).",                   required: false }
+      returns: { type: "object", description: "{ dataset_name }." }
+
     # ─── Cases / issues ─────────────────────────────────────────
     - name: "get_issues"
       method: "POST /issue/search/"
@@ -113,12 +122,12 @@ spec:
     # ─── Lookup tables ──────────────────────────────────────────
     - name: "add_lookup_data"
       method: "POST /xql/lookups/add_data"
-      description: "Create and/or populate an XSIAM lookup dataset. The dataset is created automatically on first write (no separate create step); column types are inferred from the JSON value types sent. Subsequent writes upsert."
+      description: "Add or update rows in an EXISTING lookup dataset (create it first with create_dataset). Sends the whole batch in one request."
       args:
-        - { name: "dataset_name", type: "string", description: "Name of the lookup dataset (lowercase with underscores). Created if it does not exist.", required: true  }
-        - { name: "data",         type: "array",  description: "One row object {column: value}, or a list of row objects. Each row is written individually.", required: true  }
+        - { name: "dataset_name", type: "string", description: "Name of the existing lookup dataset.", required: true  }
+        - { name: "data",         type: "array",  description: "List of row objects [{column: value}, ...]. Must be a list — a bare object makes the API skip every row.", required: true  }
         - { name: "key_fields",   type: "array",  description: "Optional unique key columns — makes the write an upsert keyed by these.", required: false }
-      returns: { type: "object", description: "{ dataset_name, rows_written, results }." }
+      returns: { type: "object", description: "{ rows added, rows updated, rows skipped }." }
 
     - name: "get_lookup_data"
       method: "POST /xql/lookups/get_data"

@@ -163,13 +163,13 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
     description:
       "Cortex XSIAM connector — investigation (XQL queries, incidents, alerts, issues, assets, audit, datamodel) and EDR response (endpoint isolate/scan/quarantine, script execution, IOC + hash blocklisting) over the Cortex public API.",
     longDescription:
-      "Guardian's interface to your Cortex XSIAM tenant. The chat agent hunts across the data lake with XQL, triages incidents and alerts, pivots on assets and issues, reads audit logs, and — when a case calls for containment — takes EDR response actions directly: isolate or scan an endpoint, quarantine a file, run a script or snippet, and blocklist a hash or IOC. 53 tools span the investigate-to-respond lifecycle. Authentication is the Cortex public-API key pair (an API key id sent as the x-xdr-auth-id header plus the API key as the Authorization header); the connector appends /public_api/v1 to your tenant API host. Every write/response tool is approval-gated by the connector wrapper, and the one destructive lookup mutation (remove_lookup_data) is denied outright.",
+      "Guardian's interface to your Cortex XSIAM tenant. The chat agent hunts across the data lake with XQL, triages incidents and alerts, pivots on assets and issues, reads audit logs, and — when a case calls for containment — takes EDR response actions directly: isolate or scan an endpoint, quarantine a file, run a script or snippet, and blocklist a hash or IOC. 54 tools span the investigate-to-respond lifecycle. Authentication is the Cortex public-API key pair (an API key id sent as the x-xdr-auth-id header plus the API key as the Authorization header); the connector appends /public_api/v1 to your tenant API host. Every write/response tool is approval-gated by the connector wrapper, and the one destructive lookup mutation (remove_lookup_data) is denied outright.",
     category: "Security",
     tags: ["xsiam", "cortex", "siem", "xql", "edr", "incident-response"],
     icon: "siren",
     iconColor: "#f97316",
     iconBg: "rgba(249, 115, 22, 0.12)",
-    toolCount: 53,
+    toolCount: 54,
     installs: "bundle-internal",
     installCount: 0,
     status: "installed",

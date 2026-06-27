@@ -31,6 +31,7 @@ __all__ = [
     "xsiam_get_lookup_data",
     "xsiam_remove_lookup_data",
     "xsiam_get_datasets",
+    "xsiam_create_dataset",
     "xsiam_get_asset_by_id",
     "xsiam_get_assets",
     "xsiam_get_issues",
@@ -184,6 +185,17 @@ class RemoveLookupDataRequest(BaseModel):
     filters: List[Dict[str, Any]] = Field(description="Filter conditions to identify records to delete.")
 
 
+class CreateDatasetRequest(BaseModel):
+    """Request model for creating a lookup dataset (POST xql/add_dataset)."""
+
+    dataset_name: str = Field(description="Name for new dataset (lowercase with underscores).")
+    dataset_schema: Dict[str, str] = Field(
+        description="Column → type map, e.g. {\"asset_id\": \"text\", \"risk_score\": \"number\"}. "
+        "Types: text | number | boolean | datetime.",
+    )
+    dataset_type: str = Field(default="lookup", description="Dataset type (default: lookup).")
+
+
 class GetAssessmentResultsRequest(BaseModel):
     """Request model for vulnerability assessment results."""
 
@@ -321,18 +333,14 @@ async def xsiam_add_lookup_data(
     ctx: Context = None,
 ) -> dict:
     """
-    Create and/or populate an XSIAM lookup dataset.
+    Add or update rows in an EXISTING XSIAM lookup dataset.
 
-    The XSIAM `xql/lookups/add_data` endpoint CREATES the lookup dataset on the
-    first write — there is no separate create step — and upserts rows on every
-    subsequent write. Column types are inferred from the JSON value types you
-    send, so pass numbers as JSON numbers, ISO-8601 strings for datetime
-    columns, booleans as booleans, etc.
-
-    `data` is ONE row object `{column: value, ...}` or a list of such row
-    objects. Each row is sent to the API as a single JSON object (the endpoint
-    does NOT accept an array under `data`); a list is written row-by-row.
-    `key_fields` make the write an upsert keyed by those columns.
+    The dataset must already exist — create it first with `xsiam_create_dataset`
+    (writing to a non-existent dataset hangs). `data` is a LIST of row objects
+    `[{column: value}, ...]`, sent in a SINGLE request (a lone dict is wrapped to
+    a one-element list). Do NOT pass a bare object — the API then skips every row.
+    `key_fields` make the write an upsert keyed by those columns; omit for append.
+    Returns `{rows added, rows updated, rows skipped}`.
 
     Example MCP tool call:
     {
@@ -352,7 +360,10 @@ async def xsiam_add_lookup_data(
         data=data if data is not None else [],
         key_fields=key_fields,
     )
-    # Normalize to a list of row objects (a single dict is one row).
+    # The API takes `data` as a LIST of row objects in ONE request (a single dict
+    # is wrapped to a one-element list). Sending an object instead of a list makes
+    # XSIAM skip every row. Endpoint does not support concurrent edits, so we never
+    # loop — one request carries the whole batch.
     rows: List[Dict[str, Any]] = (
         [request.data] if isinstance(request.data, dict) else list(request.data)
     )
@@ -363,17 +374,11 @@ async def xsiam_add_lookup_data(
 
     try:
         fetcher = _get_fetcher()
-        results: List[Any] = []
-        for row in rows:
-            inner: Dict[str, Any] = {"dataset_name": request.dataset_name, "data": row}
-            if request.key_fields:
-                inner["key_fields"] = request.key_fields
-            results.append(
-                await fetcher.send_request("xql/lookups/add_data", data={"request_data": inner})
-            )
-        return _create_response(
-            {"dataset_name": request.dataset_name, "rows_written": len(rows), "results": results}
-        )
+        inner: Dict[str, Any] = {"dataset_name": request.dataset_name, "data": rows}
+        if request.key_fields:
+            inner["key_fields"] = request.key_fields
+        response = await fetcher.send_request("xql/lookups/add_data", data={"request_data": inner})
+        return _create_response(response)
     except Exception as e:
         return _create_response({"error": str(e)}, is_error=True)
 
@@ -460,6 +465,55 @@ async def xsiam_get_datasets(ctx: Context) -> dict:
     try:
         fetcher = _get_fetcher()
         response = await fetcher.send_request("xql/get_datasets", data={})
+        return _create_response(response)
+    except Exception as e:
+        return _create_response({"error": str(e)}, is_error=True)
+
+
+async def xsiam_create_dataset(
+    dataset_name: str = "",
+    dataset_schema: Optional[Dict[str, str]] = None,
+    dataset_type: str = "lookup",
+    ctx: Context = None,
+) -> dict:
+    """
+    Create a new XSIAM lookup dataset (POST xql/add_dataset).
+
+    Create the dataset BEFORE populating it with `xsiam_add_lookup_data`
+    (writing to a dataset that does not exist hangs). `dataset_schema` is a
+    column → type map; types are `text | number | boolean | datetime`.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": {
+        "name": "xsiam_create_dataset",
+        "arguments": {
+          "dataset_name": "high_value_assets",
+          "dataset_schema": {"asset_id": "text", "risk_score": "number", "label": "text"}
+        }
+      }
+    }
+    """
+    request = CreateDatasetRequest(
+        dataset_name=dataset_name,
+        dataset_schema=dataset_schema if dataset_schema is not None else {},
+        dataset_type=dataset_type,
+    )
+    if not request.dataset_name:
+        return _create_response({"error": "dataset_name is required"}, is_error=True)
+    if not request.dataset_schema:
+        return _create_response({"error": "dataset_schema (column→type map) is required"}, is_error=True)
+    try:
+        fetcher = _get_fetcher()
+        payload = {
+            "request_data": {
+                "dataset_name": request.dataset_name,
+                "dataset_type": request.dataset_type,
+                "dataset_schema": request.dataset_schema,
+            }
+        }
+        response = await fetcher.send_request("xql/add_dataset", data=payload)
         return _create_response(response)
     except Exception as e:
         return _create_response({"error": str(e)}, is_error=True)
