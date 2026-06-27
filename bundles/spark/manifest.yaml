@@ -382,7 +382,7 @@ tools:
     - "file_write"
     # XSIAM: deny the one destructive lookup mutation outright (it
     # permanently deletes lookup rows). All other writes are
-    # approval-gated, not denied. Mirrors the Phantom deny.
+    # approval-gated, not denied.
     - "xsiam.remove_lookup_data"
     # Phase 11 — security boundary for self-modification (Tier 5).
     # These tools MUST NOT exist as MCP-callable. The agent can configure

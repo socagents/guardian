@@ -1,8 +1,8 @@
-"""One-shot: port + curate Phantom xql-examples entries into Guardian.
+"""One-shot: port + curate upstream xql-examples entries into Guardian.
 
 Run once from the repo root:  python bundles/spark/kbs/xql-examples/_curate.py
 
-Idempotent: rewrites entries/ from the Phantom source each run (only touches
+Idempotent: rewrites entries/ from the upstream source each run (only touches
 files that came from the port — Guardian-authored IR entries are left alone).
 Sanitizes tags to the canonical XQL stage set, sets `ecosystem: xsiam`, and
 drops ONLY true duplicates (entries whose XQL query body is byte-identical to
@@ -38,7 +38,7 @@ def canon_tags(query: str, old_tags) -> list[str]:
 
 def main() -> None:
     if not PH.is_dir():
-        print(f"ERROR: Phantom source not found: {PH}", file=sys.stderr)
+        print(f"ERROR: upstream source not found: {PH}", file=sys.stderr)
         sys.exit(2)
     OUT.mkdir(parents=True, exist_ok=True)
     # Only clear ported files (3-digit-prefixed); keep Guardian IR entries (2xx authored separately use XQL-IR ids/filenames).

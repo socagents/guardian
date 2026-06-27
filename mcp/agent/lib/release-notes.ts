@@ -21,7 +21,7 @@
  * carry its own notes — no fetch from GitHub required.
  */
 
-// [guardian v0.1.0] Retired: the upstream Phantom release history
+// [guardian v0.1.0] Retired: the upstream release history
 // (0.1.x–0.17.x entries) — Guardian is a new product whose history
 // starts at v0.1.0; the inherited entries described removed subsystems.
 
@@ -36,6 +36,15 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: "0.2.89",
+    date: "2026-06-27",
+    title: "Cleaner branding — Guardian is the only product named.",
+    highlights: [
+      "The Cortex XSIAM connector's marketplace card no longer references the upstream platform it was ported from.",
+      "Removed parallel stale references across code, comments, the manifest, and CI; kept genuine security terms (MITRE \"phantom DLL\") and the dated v0.1.0 origin history.",
+    ],
+  },
   {
     version: "0.2.88",
     date: "2026-06-27",

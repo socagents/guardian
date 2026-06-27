@@ -8,8 +8,7 @@ top of raw matches:
   - dataset_fields: for each `dataset = X` in a match, look up its field
     list from `xql_data/dataset_fields.md`.
 
-Pure markdown parsing, module-level cached. Ported from Phantom's
-bundles/spark/connectors/xsiam/src/_xql_enrichment.py.
+Pure markdown parsing, module-level cached.
 """
 
 from __future__ import annotations

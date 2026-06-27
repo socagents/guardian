@@ -11,7 +11,7 @@ For local conventions, read the directory's own `CLAUDE.md`:
 - [`mcp/agent/CLAUDE.md`](mcp/agent/CLAUDE.md) — Next.js + embedded MCP host (the `guardian-agent` container)
 - [`bundles/spark/mcp/CLAUDE.md`](bundles/spark/mcp/CLAUDE.md) — Python FastMCP server
 - [`bundles/spark/connectors/CLAUDE.md`](bundles/spark/connectors/CLAUDE.md) — connector authoring conventions
-<!-- [guardian v0.1.0] Retired: log-generation backend CLAUDE.md entry — that subsystem was removed when Guardian was carved out of Phantom -->
+<!-- [guardian v0.1.0] Retired: log-generation backend CLAUDE.md entry — that subsystem was removed when Guardian was carved out of the upstream platform -->
 - [`installer/CLAUDE.md`](installer/CLAUDE.md) — customer installer template
 - [`updater/CLAUDE.md`](updater/CLAUDE.md) — guardian-updater container-lifecycle daemon
 
@@ -443,7 +443,7 @@ DOCS CHECKLIST → ASK FOR APPROVAL → git tag → release.yml
 
 The "read before code, write after build" pattern is symmetric. Skip either side and the drift returns.
 
-<!-- [guardian v0.1.0] Retired: § Data-source validation doctrine — the marketplace data-sources catalog, its validation skill, and the synthetic-log delivery doctrine were removed when Guardian was carved out of Phantom -->
+<!-- [guardian v0.1.0] Retired: § Data-source validation doctrine — the marketplace data-sources catalog, its validation skill, and the synthetic-log delivery doctrine were removed when Guardian was carved out of the upstream platform -->
 
 ## Architecture page is the spec (MANDATORY — read before editing)
 
@@ -459,7 +459,7 @@ The "read before code, write after build" pattern is symmetric. Skip either side
 | TLS, cert generation, SSL_CERT_PEM/SSL_KEY_PEM, /tls/ volume | `#tls-proxy` |
 | Per-instance connector containers | `#connector-containers` |
 | MCP / agent topology, ports, auth surface | `#stack` |
-<!-- [guardian v0.1.0] Retired row: Data sources / #data-sources — subsystem removed when Guardian was carved out of Phantom -->
+<!-- [guardian v0.1.0] Retired row: Data sources / #data-sources — subsystem removed when Guardian was carved out of the upstream platform -->
 
 **The rule**: if about to change behaviour in any of those areas, open the architecture page first and confirm what you're about to do conforms to the spec. If it doesn't, EITHER update the code to match the spec, OR get explicit operator approval to update the spec itself + update the page in the same PR.
 

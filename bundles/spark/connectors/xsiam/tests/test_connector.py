@@ -6,8 +6,8 @@ No network. Covers:
   2. connector helpers — the _xsiam_wrap error envelope + _xsiam_ok/_xsiam_err.
   3. A representative read tool (incidents_list) and a representative EDR-response
      tool (endpoints_isolate) — request shaping via a recording fetcher.
-  4. __all__ integrity — the 54 ported tools are exported + callable, and the
-     dropped Phantom-simulation tools are gone.
+  4. __all__ integrity — the 53 tools are exported + callable, and the
+     dropped simulation-only tools are gone.
 
 Run with:
   cd bundles/spark/connectors/xsiam && python3 -m pytest tests/ -x
@@ -324,7 +324,7 @@ def test_add_lookup_data_requires_dataset_and_rows(monkeypatch):
 _DROPPED = {
     "xsiam_get_cases", "xsiam_send_webhook_log", "xsiam_find_xql_examples_rag",
     "xsiam_get_dataset_fields", "xsiam_get_xql_examples",
-    # Removed: phantom xql/add_dataset endpoint — lookup datasets are created
+    # Removed: non-existent xql/add_dataset endpoint — lookup datasets are created
     # via add_lookup_data (auto-creates on first write). See #91.
     "xsiam_create_dataset",
 }

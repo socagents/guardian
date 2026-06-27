@@ -1,7 +1,7 @@
 import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-defaults";
 
-// The UI session cookie. (Was the stale Phantom-era "spark-token" until v0.2.6
+// The UI session cookie. (Was the stale legacy "spark-token" until v0.2.6
 // — never re-pointed during the v0.4.0 auth rename, which broke every
 // server-component fetch that authenticates via getToken, e.g. the /jobs page.)
 const COOKIE_NAME = SESSION_COOKIE_NAME;

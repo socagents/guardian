@@ -6,9 +6,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 Each release section is written in operator language, not git-shortlog language. For commit-level granularity, run `git log vPREV..vNEW`.
 
-<!-- [guardian v0.1.0] Retired: the upstream Phantom release history (v0.1.x–v0.17.x) — Guardian is a new product; the inherited changelog described subsystems that no longer exist here. -->
+<!-- [guardian v0.1.0] Retired: the upstream release history (v0.1.x–v0.17.x) — Guardian is a new product; the inherited changelog described subsystems that no longer exist here. -->
 
 ---
+
+## [v0.2.89] (2026-06-27) — *Branding: drop stale references to the upstream platform*
+
+- **Guardian is consistently the only product named.** The Cortex XSIAM connector's marketplace card said it was "Ported from the Phantom XSIAM connector" — a customer shouldn't see the platform Guardian was carved out of. Removed that and the parallel internal references (connector + agent comments, the manifest, a CI comment, a KB curation script) so the codebase refers only to Guardian. **Deliberately kept:** genuine security terminology (e.g. the MITRE "phantom DLL" technique), the ordinary English word *phantom* ("a phantom 'already exists' error"), and the dated v0.1.0 origin entries in this changelog, which accurately record that Guardian was carved out of an upstream platform.
 
 ## [v0.2.88] (2026-06-27) — *XSIAM lookup datasets: create + populate actually works (#91)*
 
@@ -722,7 +726,7 @@ Creating a connector instance could "do nothing" — the dialog spun, then close
 
 ## [v0.2.27] (unreleased) — *Cortex XSIAM connector — investigation + EDR response*
 
-Guardian can now connect to a **Cortex XSIAM** tenant the same way it does Cortex XSOAR — create an instance, then investigate and respond from chat. Ported back from Phantom and adapted to Guardian, minus the simulation-only pieces.
+Guardian can now connect to a **Cortex XSIAM** tenant the same way it does Cortex XSOAR — create an instance, then investigate and respond from chat, minus the simulation-only pieces.
 
 ### What ships
 
@@ -733,9 +737,9 @@ Guardian can now connect to a **Cortex XSIAM** tenant the same way it does Corte
 - **Safety:** every write/response tool is approval-gated by the connector wrapper (same as XSOAR); the one destructive lookup mutation (`remove_lookup_data`) is denied outright in the manifest.
 - Tools advertise to the agent only once you create an instance.
 
-### What was dropped vs the Phantom connector
+### What was dropped from the original connector
 
-The synthetic webhook **log-injection** tool (`send_webhook_log`) and the **xql-examples RAG** tools (`find_xql_examples_rag` / `get_xql_examples` / `get_dataset_fields`) — both belonged to the Phantom *simulation* (the latter depended on the `xql-examples` KB Guardian removed in the XSOAR pivot). XQL syntax reference lives in the `cortex-docs` connector.
+The synthetic webhook **log-injection** tool (`send_webhook_log`) and the **xql-examples RAG** tools (`find_xql_examples_rag` / `get_xql_examples` / `get_dataset_fields`) — both belonged to the original *simulation* (the latter depended on the `xql-examples` KB Guardian removed in the XSOAR pivot). XQL syntax reference lives in the `cortex-docs` connector.
 
 ### Files
 

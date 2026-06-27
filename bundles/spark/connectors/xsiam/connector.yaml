@@ -2,8 +2,6 @@
 # Cortex public API. Tool names are namespaced `xsiam.<tool_name>` by the
 # embedded MCP; manifest tools.allow lists `xsiam.*` with an explicit deny for
 # `xsiam.remove_lookup_data` (the only destructive lookup mutation).
-# Ported from the Phantom xsiam connector, minus its simulation-only pieces
-# (synthetic webhook log injection + the removed xql-examples KB RAG tools).
 
 id: "xsiam"
 version: "0.2.0"

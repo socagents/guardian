@@ -187,7 +187,7 @@ const GUARDIAN_CONNECTORS: MarketplaceConnector[] = [
         date: "2026-06-15",
         changes: [
           "Initial Guardian release — 54 tools covering XSIAM investigation (XQL, incidents, alerts, issues, assets, audit, datamodel, parsers, broker) and EDR response (endpoint isolate/unisolate/scan/quarantine/retrieve-file, script run/snippet, IOC insert/disable/enable, hash blocklist, alert exclusions).",
-          "Ported from the Phantom XSIAM connector, minus its simulation-only pieces (synthetic webhook log injection + the removed xql-examples KB RAG tools). Auth is the Cortex public-API key pair (api_id → x-xdr-auth-id, api_key → Authorization).",
+          "Auth is the Cortex public-API key pair (api_id → x-xdr-auth-id, api_key → Authorization).",
         ],
       },
     ],

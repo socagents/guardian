@@ -561,7 +561,7 @@ jobs:
               .
           else
             # First release with the xsiam connector in the manifest has
-            # no $PREV_V tag (ported back from Phantom in v0.2.27). If the
+            # no $PREV_V tag (the connector was added in v0.2.27). If the
             # PREV pull fails, build from source so this release has a
             # tagged image to pin. The next release retags normally.
             echo "::notice::guardian-connector-xsiam source unchanged — retagging $PREV_V → $V/$MM/latest (or building if PREV pull fails)"
