@@ -1,4 +1,16 @@
-# Guardian — customer-facing Compose file.
+# Guardian — customer-facing Compose file (PODMAN / RHEL variant).
+#
+# Used by the RHEL/Podman installer (RUNTIME=podman). It is identical to
+# installer/docker-compose.yml EXCEPT for two deliberate Podman divergences —
+# keep them when resyncing the rest of this file from docker-compose.yml:
+#   A. guardian-updater has `security_opt: [label=disable]` so it can mount the
+#      Podman API socket + host dir under SELinux-enforcing RHEL.
+#   B. every service uses `restart: always` (NOT `unless-stopped`). On RHEL 8's
+#      podman 4.9, `podman-restart.service` (what revives the stack after a host
+#      reboot) restarts ONLY `restart-policy=always` containers; `unless-stopped`
+#      boot-restart support did not land until podman v5. With `unless-stopped`
+#      the stack would silently stay down after a reboot. Docker honors
+#      `unless-stopped` correctly, so docker-compose.yml keeps it.
 #
 # This is the compose file shipped to customers in
 # guardian-installer-<VERSION>.tar.gz. It pulls pre-built images from
@@ -73,7 +85,7 @@ services:
   guardian-browser:
     image: ghcr.io/kite-production/guardian-browser@${DIGEST_GUARDIAN_BROWSER:-sha256:invalid_digest_run_installer_first}
     container_name: guardian_browser
-    restart: unless-stopped
+    restart: always   # PODMAN: see header note B (podman-restart.service on RHEL 8 only revives restart=always)
     profiles: ["browser"]
     expose:
       - "9222"
@@ -104,7 +116,7 @@ services:
   guardian-updater:
     image: ghcr.io/kite-production/guardian-updater@${DIGEST_GUARDIAN_UPDATER:-sha256:invalid_digest_run_installer_first}
     container_name: guardian_updater
-    restart: unless-stopped
+    restart: always   # PODMAN: see header note B (podman-restart.service on RHEL 8 only revives restart=always)
     # PODMAN/RHEL: the updater mounts the Podman API socket + the host
     # install dir; under SELinux-enforcing RHEL the socket mount is denied
     # unless this container is run unconfined. label=disable scopes that
@@ -179,7 +191,7 @@ services:
   guardian-agent:
     image: ghcr.io/kite-production/guardian-agent@${DIGEST_GUARDIAN_AGENT:-sha256:invalid_digest_run_installer_first}
     container_name: guardian_agent
-    restart: unless-stopped
+    restart: always   # PODMAN: see header note B (podman-restart.service on RHEL 8 only revives restart=always)
     depends_on:
       guardian-updater:
         # service_started is enough — the updater isn't on the

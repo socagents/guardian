@@ -340,11 +340,13 @@ if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
        Check: systemctl status podman.socket ; ls -l /run/podman/podman.sock"
   ok "Podman API socket active at /var/run/docker.sock"
 
-  # Reboot persistence. Rootful Podman does NOT auto-restart `restart:
-  # unless-stopped` containers after a host reboot the way dockerd does;
-  # podman-restart.service (shipped with podman) restarts them at boot. The
-  # stack is brought up in Step 7, so enabling the unit now means the next
-  # boot revives Guardian. Without this the stack stays down after a reboot.
+  # Reboot persistence. Rootful Podman does NOT auto-restart containers after a
+  # host reboot the way dockerd does; podman-restart.service (shipped with
+  # podman) does it at boot — but on RHEL 8's podman 4.9 it revives ONLY
+  # `restart=always` containers (not `unless-stopped`; that landed in podman 5).
+  # podman-compose.yml therefore pins every service to `restart: always` (see
+  # its header note B). The stack is brought up in Step 7, so enabling the unit
+  # now means the next boot revives Guardian.
   if ! _prout="$(systemctl enable podman-restart.service 2>&1)"; then
     warn "Could not enable podman-restart.service (${_prout}). The stack may not"
     warn "auto-start after a reboot — run 'sudo systemctl enable --now podman-restart.service'"
