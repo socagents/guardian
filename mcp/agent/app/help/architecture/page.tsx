@@ -5972,10 +5972,11 @@ function KnowledgePipeline() {
  </SubSection>
  <SubSection icon="query_stats" title="XQL examples + xql_examples_search">
  <p>
- The <Code>xql-examples</Code> KB holds 201 curated Cortex XSIAM
+ The <Code>xql-examples</Code> KB holds 237 curated Cortex XSIAM
  XQL queries — reusable patterns, per-vendor alert-mapping queries,
  and an ATT&amp;CK-tagged IR/threat-hunting set (category{" "}
- <Code>threat-hunting</Code>). It loads through the same pipeline as
+ <Code>threat-hunting</Code>), including 36 complex multi-stage queries
+ each verified live against a real XSIAM tenant. It loads through the same pipeline as
  the other bundle KBs (frontmatter → schema validate → embed →
  upsert) and is searchable via <Code>knowledge_search</Code>.
  </p>

@@ -1,0 +1,30 @@
+---
+id: XQL-IR-282-cidr-subnet-zone-profile-with-int-ranges
+title: Classify source IPs into network zones by CIDR and profile each zone with integer ranges
+category: investigation
+dataset: gx_10_conn
+tags:
+- filter
+- alter
+- comp
+- sort
+embedding_model: text-embedding-004
+embedding: 4jCIPZlGJTzPqsC9hqYfPQ9Kgj1HOrI9ykPIPfP1r7woLxO9SamgvNZpy7xjAJo9pFtCO/sJnbyr6Co9zfRhvL+1pD0sIxo7riM0vYYpErv/ZWy5a7NKvSHHlrxpOyG8wK8jvaCOgLpIude8q08bPFQ1ujuUWP+775LQPKaxyLupunQ73PoBOsnDlruLdVs8TQkdvavttDxb2vg8eQuMvSd3GDzdw4g7iCfCvF8YUT0Pv0w8hEBlvWOv2TsEIVE8sTUHvZ9KfT1yVbw8Qp9nPMhknbyiGns9b9YoPEN9+by0Mqi8qpoCveZCJT0syS67s6zmPKX/A726CMI8CGYbvPJNcz1yqbQ8NMsAvDvpFD14L5O9mwldPMAZQ7y1wZ49B6SQvNDWaz0UEAC9fMoXPDhAXjxMsKw7vNMpPEUDhT3dzj47qc9FvKTUWj1rTt48ra5JvIJlBT11mCU9nAuDvdQMIzwJ8JC8imgQPuU2Cj0xAQs8oDd/PKfEpz0esdW8o/84vcs9+b2sgUw9PB0gPdJ99zxIbQc8eF1XvDDYSrwVCDE9pkYzujCiIL0hWjq9mHQhvZxbJj0sNT49qEvLPOqRbj3QUBK9miG3vDcj2jxYJ3o8U8BmPdS8cjzx2oy7uCH9PK/uYj33cRU8MuhgPc+cfT09Hqc8BnDbvGGvHb0ATLa6QBNTvdrx2zwtrda8XBQdPb4eHjwIpUM84GChPIOl9Tz2JqY8wzJFvEs+JD2C/TG88l01N97TML3nhK+8WW6+PE28VL28AK47X/PQPTU/jTpAEB89C2EuPRimOzwUnBC9SUoTPTjcGb03ezu5N06ZPNvbf72kGUw9bujGvKb5nTwpp169PBSfvYMxVj0u1QY8YM5MvXoDzLziAiG9ptozO9n0DD26Nfi7f8XNOyct9rzmSeO8P7ieumWdG7v/RQe8rNwIvekoY7zeO4u9n9sbPUfVBj1VuJi8dKVlvZOTr7zB9go9i3iQvJ5AMzzdw1A9aE2FPeO8Oj092L68L5aavI3OJLxcmsa7snAIvC2ZgTwHa1W9JxvxvPoYlDutx4Q9kEydvLUxtTra8pu9bMMkvUkcTDwmHn45hqeKOa4tDTyZuYc97w2wPLhRorwoUma9FDVBvO/KPz1m8y28gG9UPf1/tTylV809uXMtu9aIDz2Gqk09AGEqvJxCOj3D9L076fDPO3AUpzzqSzc9nnrivCnWdL1qZJQ79wnpPAmTabv6koQ8IqqvPMzYOT0A3Sc9dfm3PLvQ+bzc8r280IAQPeCkgT30r0Y9wl/LvPNNMj3pKh69aDU5PWfv/bzoQTA8j+g5vbe8rbyMdVG9dZLpvHfBMT1olAa9+0M9PAS8irytu2S8c2lvvIKFBb2eBB89PinNOAsZSrvHCiS9qtckveXibb0YcDe8K9+mvHEGP7xj9O+8KL0lPQ4q/rx4koa8cLYgvf9wb71t2Yw8h8IlvRcY6jwOTGi91qCBvfxd9zvUNBW9Lmj9PA8wnbzZ+5Q8+QC7vGBJTbxT7wM98x6EvGOmUr3JfDI9BF5gPHP1ML0qT8u8uCzXPLOHHzzZeIQ9UOKCPXVtoLxqZQC8nKDHPEg9BT1yMBK8Zo8FPZDUAb3oapm8SyX5vI7XAb2bkZC949AbvDZbLz1q9L078F+DvWpsGTy4DGa9L+UFPRqn5r1VBWe9ftR9vfWxLLx/Udw8/Z2oPDiv1zsA5F88b1M7PUVOzLvZPSc8G2ZvvPrIrrzjPyq9XKsIPZDWrTwEipy8YV81vTNvHzx3O6A8pQ2IvQQpAj3yK4M9vEK3vPfXgLo0+Ok7yNqsPXj5xry/gC+9twYAvQ6sbDxXDx69tPpNPdc+Aj0YhxI8mSScOjIRwzx7IDc7J3mbvEhelrtTqTM8tnvwO5DIOjz7AZK7RsKevEvuYjw0AKy88kPNPI+/5rx1n48606yAPBibFD02BzS9YbaPvJI8Yb3+XpM8amVbPFRCuTycxn09QxVFvdSU6rzaJ288mpZ7uys0YbzVnVO8E8StvFNHhL1SqEk90qu2uoempD3fXdK5IcdVPIfHELwZCQi9frg5vUfK/Ltxuh89OiU1PaCSAr0WLEg81/RfvLC//jzxoOy7T99lPAslxLxGz/O8RzSgO0Mke732jwe8ycfZvPqWszh2OCc9fpXrO1LyWTy/eXY9LdRbvUl1x7zrrPs85aQMPTG1UjxzwHU6AEXbvF/LmToJydU8jtWDvLYmO7yN7Aa9lvmbvEqTaj1oD5O9EZ1ivZ5k8zxdQ5O7xR25vFwfAD3poKk8gxLKu0NQBDzdJtu87MYePSsn1ryUe2e9klxyPR5SUj168Ss8gIRGOyDp0jyJAZ+6Y1KEvCC/wjvA1gg85Ur+POTdnry2H5I8ZjTVO4p50LxHUoA66y93vS4V6b3fFjG8d8gZPD9RmLz07EO8xToKvR4tND2yvX89GcqKPB3/p7sPO566o0g9ukq8yrxJkD89l/wKPYeKUzx78Ns8ovyPPYTyfD2O2VA7BRmCvdgVgD3M1wU9kfOBvCzxFL1zX1q9CrEVvfNRobzgiTa9v2nTO6QBGz33XeK8W2WVvDghmDsCqrc8JW6VvFXJOj2YMFA88COqvOWmp7zL5iQ9YXM/vQwjkjz77o88tQVsvVv6iT381pM9pIQfPZxjKzzKEnu9JmnRvFVZ3TsgONm8bc+CvNyZJD2pfZA9iMMcPawMqbx5iqW80TnyOsH5E71IE9M7gX0ovUnbjbspCpw8WyM6PR8VU73taT+9ZtPuO44MnryGq4U7NZMfvC0bHL0sslC7w3zoPEwkuLz76jk83f/zu/ImMjzziuo8hDntOn3gRz2vhgE6gkRRPNSMQz0F7jA85QCdPWErAj1z5m88YzNhPZAk/Dwx7Ic8OmtIvCGAdz26oSC9TRKOPWoehLu1Uj88vjsTvUliMz2205M9TuMTvbgmljykNeG7U9hNu07LRLzsGMa8trjCvNyPTLzE/MQ6gnSuvBdSGL13wF29SqllPUNgz7y1KLY8cDX3vBXiEr3xJlI9cnNBve2eHT2AJGW80aGqO4LMLj3w3QI9UyaOu0wDp7trLgC9FnCSO03aDL3k6+48vgGDO/2k+rsqpn47+KIguly6RL2JOLO8WudZvEziYjxLu+O8+duLvImLj7zMhT29xNDcOzGDXz37FbS8zzPWPEECK70QhuQ9cvUFvbyWSr3wMOa8DoQpvfermb3s/Po7u58ePMJ+1juXOYs8NYo4va1OU72QyJy9WK8APPsmd72lX+26EftRPJtiPj3H3iU7lpE3PFdnh7uRNms8ZI1FPV9zg71uYzC7THxHO2C3Cjw15C88f0scO8ZxiTw2k+08J6w3vddsqTw6vyy96XSJPSByKDwy0zI9q3chvUXSTj0WQGs69WC9PMOa4jwzf569X6GLO2G1DT2jf2e8URvkvBPnOz1den48MnsGPV9Yi71lPn48fCmmvZydGryKx4u8RZkhOjKLhrt/eK28KHAqO5iUXb2BXRm9inLyvNVEW71S4um52SdRveG2Hr2Qyjm9+IJ5vSjsgzwchAC9x+zPu4vcdj0BLzk96T7iu33sRT0DP089lgTkvI81GT06I467r3+ivLUZ8TwDXga8Ou21PPw11zzjHaU8flHrvE81aryMrSu8VgC2PAmRsrwPMkS8+XCcu1OjiDwhHqg9G2LhOxSbwTyBgUu9EoOzO1zZiDiTZoi80fAovfrJlLyzN8A8/OpeO+wtED3MNEo8mcfxvMDombuZwVG9017UPOPRJD0ok6Y8ZnlUPMn03rtg25s8oIqaPVCrorvb5tS5K7Z5PMF+br31L1I9/bzMupAglDxjFEc8cjMRPDBhBz29PUW9d9AtPKjwILsKis+6dncjvY32WT3+tki9+KVMuyrX1ryv16w8IPd4OloINboCPJI9MxGDvM2XDr06/E881cmsPJbQFD0fhxg9Pf+LPG2DpzxOYp+7YYusvWPpNzttuSE8IPaRvFiNkTxfv2c9tqUyPXlpZbzfJkw94zUGu5U2aLykPMk8QZrpvGIeGrz0l2y9GYVzPAHfsz15dFs8
+---
+# Classify source IPs into network zones by CIDR and profile each zone with integer ranges
+
+**Dataset**: `gx_10_conn`
+
+Builds a per-zone network profile for blast-radius and scoping work. A nested `if`/`incidr` ladder buckets each IPv4 source into a named zone — `corp-core` (10.0.0.0/8), `branch` (192.168.0.0/16), `dmz` (172.16.0.0/12), `cgnat` (100.64.0.0/10), `link-local` (169.254.0.0/16), else `public`. `ip_to_int(src_ip)` converts addresses to sortable integers so `min`/`max` can capture the numeric low/high of each zone, and `int_to_ip` converts those bounds back to readable addresses. The `comp` then reports connection count and distinct-destination fanout per zone. Gotcha: `incidr` compares against a single CIDR, so each tier needs its own nested `if`; the `is_priv` flag from `is_known_private_ipv4` is carried as a second group key to cross-check the CIDR-derived zoning.
+
+```sql
+dataset = gx_10_conn
+| filter is_ipv4(src_ip) = true
+| alter is_priv = is_known_private_ipv4(src_ip)
+| alter zone = if(incidr(src_ip, "10.0.0.0/8") = true, "corp-core", if(incidr(src_ip, "192.168.0.0/16") = true, "branch", if(incidr(src_ip, "172.16.0.0/12") = true, "dmz", if(incidr(src_ip, "100.64.0.0/10") = true, "cgnat", if(incidr(src_ip, "169.254.0.0/16") = true, "link-local", "public")))))
+| alter src_int = ip_to_int(src_ip)
+| comp count() as conns, count_distinct(dst_ip) as fanout, min(src_int) as lo_int, max(src_int) as hi_int by zone, is_priv
+| alter lo_ip = int_to_ip(lo_int), hi_ip = int_to_ip(hi_int)
+| sort desc conns
+| fields zone, is_priv, conns, fanout, lo_ip, hi_ip
+```

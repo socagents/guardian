@@ -1,0 +1,31 @@
+---
+id: XQL-IR-283-dual-stack-egress-detection-v4-v6
+title: Dual-stack (IPv4/IPv6) egress detection — private source to non-corp destination (T1048)
+category: detection
+dataset: gx_10_conn
+tags:
+- alter
+- comp
+- sort
+attack:
+- T1048
+embedding_model: text-embedding-004
+embedding: +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
+---
+# Dual-stack (IPv4/IPv6) egress detection — private source to non-corp destination (T1048)
+
+**Dataset**: `gx_10_conn`
+
+Flags potential data egress / exfiltration where an internal host talks to an address outside all corporate ranges, handling IPv4 and IPv6 in one pass. An `af` field tags each connection's address family via `is_ipv4`/`is_ipv6`, then `src_private` is resolved with the family-correct helper (`is_known_private_ipv4` vs `is_known_private_ipv6`). For v4 destinations, `incidr(dst_ip, "10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12")` checks corporate membership against a comma-separated CIDR list. The `egress_flag` fires `EGRESS` when a private source reaches a non-corp destination; results are rolled up with destination samples per classification. Gotcha: the boolean helpers are wrapped in `to_string` so mixed v4/v6/`n/a` values share one string-typed column the later `if` comparisons can test uniformly.
+
+```sql
+dataset = gx_10_conn
+| alter af = if(is_ipv4(src_ip) = true, "v4", if(is_ipv6(src_ip) = true, "v6", "other"))
+| alter src_private = if(af = "v4", to_string(is_known_private_ipv4(src_ip)), if(af = "v6", to_string(is_known_private_ipv6(src_ip)), "unknown"))
+| alter dst_in_corp_v4 = if(af = "v4" and is_ipv4(dst_ip) = true, to_string(incidr(dst_ip, "10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12")), "n/a")
+| alter egress_flag = if(src_private = "true" and dst_in_corp_v4 = "false", "EGRESS", "local")
+| comp count() as conns, values(dst_ip) as dsts by af, src_private, dst_in_corp_v4, egress_flag
+| alter dsts_csv = arraystring(dsts, ",")
+| sort desc conns
+| fields af, src_private, dst_in_corp_v4, egress_flag, conns, dsts_csv
+```

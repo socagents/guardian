@@ -2047,11 +2047,13 @@ Networks documentation and returning evidence-backed, cited answers.
                   <Link href="/knowledge/xql-examples" className="link">
                     xql-examples
                   </Link>{" "}
-                  knowledge base — <strong>201 example queries</strong>:
+                  knowledge base — <strong>237 example queries</strong>:
                   reusable patterns, per-vendor alert-mapping queries, and an{" "}
                   ATT&amp;CK-tagged <strong>IR / threat-hunting set</strong>{" "}
                   (48 hunts — brute force, C2 beaconing, lateral movement,
-                  exfiltration, ransomware, cloud abuse, …). Browse it under{" "}
+                  exfiltration, ransomware, cloud abuse, …), plus{" "}
+                  <strong>36 complex queries verified live</strong> against a
+                  real XSIAM tenant. Browse it under{" "}
                   <Link href="/knowledge" className="link">Knowledge</Link>.
                 </li>
                 <li>

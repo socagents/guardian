@@ -116,6 +116,85 @@ The XQL *language* (stages/functions) is dataset-agnostic, but **field names and
 - **Flat fields vs `xdm.*` datamodel paths.** A direct `dataset = xdr_data | filter …` query uses the **flat** field names above (`actor_process_image_name`, `action_remote_ip`, `event_type`). The dotted `xdm.<...>` paths (e.g. `xdm.auth.auth_method`) are the **datamodel** view — only valid in a `datamodel dataset = xdr_data | …` query or behind `| datamodel`. Do NOT put `xdm.*` paths in a plain `dataset =` query (they resolve to null). If the `dataset_fields` reference shows `xdm.*` names for a dataset, treat them as datamodel paths, not direct-query fields.
 - When unsure between two field names, run a 1-row probe (`dataset = X | fields <candidate> | limit 1`) before committing the full query.
 
+### XQL syntax gotchas (the top first-shot failure causes — internalize these)
+
+These were each verified against a live tenant; every one silently 400s or zero-results a query that *looks* right:
+
+- **`bin` is a STANDALONE STAGE, not a function.** Bucket time with `| bin _time span = 5m` and then group by `_time` in `comp`. **Do NOT** write `alter x = bin(_time, 5m)` — that is `bad query syntax at 'bin'`. (`span` accepts `1m,5m,1h,1d`, etc.)
+- **No infix arithmetic. No parentheses-grouped math.** `(a / b) * 100` is rejected. Use the function forms inside `alter`: `add(a,b)`, `subtract(a,b)`, `multiply(a,b)`, `divide(a,b)` — nest them: `alter pct = multiply(divide(part, total), 100)`. Wrap integer operands in `to_float(...)`/`to_number(...)` first when you need a fractional result (`divide` on integers truncates).
+- **No SQL `OVER()` window clause.** Anything analytic — a grand total beside per-group rows, a running sum, `rank`, `row_number`, `lag` — uses the **`windowcomp`** stage, never `agg() over ()` inside `alter`. Form: `| windowcomp sum(x) as grand_total` (whole result) or `| windowcomp sum(x) as running by host sort asc _time` (partitioned/ordered).
+- **Comparison operators in `filter` are `=` (not `==`)**, `!=`, `<`, `>`, `<=`, `>=`, `contains`, `in (...)`, `~=` (regex). Chain with `and`/`or`/`not`.
+
+### Working with JSON columns
+
+A text column that holds a JSON string is passed **directly** to the `json_extract_*` functions — only wrap a *native* object/array field in `to_json_string()` first.
+
+- `json_extract_scalar(col, "$.path")` → one scalar, **always returned as a STRING** (even for JSON numbers). For math/aggregation wrap it: `to_integer(json_extract_scalar(col,"$.risk"))`. Nested path = `"$.geo.country"`. Sugar form: `col -> geo.country` (dotted, unquoted).
+- `json_extract_scalar_array(col, "$.tags")` → array of **unquoted** scalars. **Use this** when you will explode-then-filter/count (`filter`/`comp by` match correctly).
+- `json_extract_array(col, "$.tags")` → array with each element **quote-wrapped** (`"admin"`). A downstream `filter arr = "admin"` then silently mismatches — the #1 JSON-array zero-result trap. Prefer `json_extract_scalar_array` for categorical work.
+- `json_path_extract(col, "<jsonpath>")` → full JSONPath (`$..author`, filters, slices) for deep/wildcard paths `json_extract_scalar` can't express.
+- `arrayexpand` needs a **native array**, never a JSON string. Explode recipe: `| alter tags = json_extract_scalar_array(payload, "$.tags") | arrayexpand tags | comp count() by tags`.
+- **A column that IS itself a top-level JSON array** (e.g. `roles = ["admin","vpn"]`) uses path `"$"`: `json_extract_scalar_array(roles, "$")`. The `$.key` form is only for an array nested *under* a key.
+- **JSON write path** (building JSON, not reading it): `object_create("k1", v1, "k2", v2)` builds an object and `object_merge(a, b)` merges two — but **every value argument must be string-coercible**, so wrap numerics: `object_create("host", host, "max_sev", to_string(max_sev))`. Serialize the result with `to_json_string(obj)` for a JSON-string column.
+
+### Working with arrays + composite (delimited) fields
+
+- `split(col, "|")` → array. Index with `arrayindex(arr, 0)` (0-based; **`arrayindex(arr, -1)` = last element** — use it when the split arity varies). `array_length(arr)`, `arraycreate(a,b,...)`, `arrayconcat`, `arraydistinct`, `arraymerge`, `arrayrange`.
+- `arraystring(<array>, ",")` joins an **array** → string (first arg is an array, not a string — it is the inverse of `arrayexpand`).
+- `arrayindexof(arr, "@element" = "login")` — the membership/position test **requires the `"@element"` literal**; `arrayindexof(arr, "login")` is wrong. Same `@element` convention in `arrayfilter`/`arraymap`.
+- Composite-field-split pattern (most common real-world parse): `| alter parts = split(combo, "|") | alter user = arrayindex(parts,0), host = arrayindex(parts,1), cnt = to_number(arrayindex(parts,3)) | comp sum(cnt) by user, host`.
+- Post-aggregation flattening: `comp values(action) as acts by user | alter acts_csv = arraystring(acts, ","), n = array_length(acts)` — `values()`/`list()` produce arrays that pair with `arraystring`/`array_length`. **`values()` returns DISTINCT values; `list()` returns ALL values (with duplicates)** — pick by whether you want a set or the full multiset.
+- Array predicate/transform helpers take the `"@element"` form: `array_any(arr, "@element" = "admin")` (any match), `array_all(arr, "@element" != "")` (all match), `arrayfilter(arr, "@element" contains "x")`, `arraymap(arr, lowercase("@element"))`. `arraymerge(arraycreate(colA, colB))` merges two array columns into one.
+
+### Lookup datasets (operator-built reference tables)
+
+- **Create then populate then query** — a lookup must exist before you write to it (writing to a non-existent dataset hangs). Create with `xsiam_create_dataset(dataset_name, dataset_schema={col: type}, dataset_type="lookup")` (types: `text | number | boolean | datetime`); populate with `xsiam_add_lookup_data(dataset_name, data=[{row}, {row}], key_fields=[...])` (`data` is an **array of row objects**; `key_fields` make it an upsert). Both are approval-gated writes.
+- **Query a lookup exactly like an event dataset:** `dataset = <lookup_name> | ...`. Lookup **text columns are plain strings** — no `ENUM.*` literal (that is `xdr_data`-specific). Numbers stored as `number` type compare/aggregate directly.
+### Joins (enriching across datasets) — the alias-scope gotcha
+
+`| join (dataset = <other>) as <alias> <on-condition>` — but the `<alias>` is in scope **only inside the on-condition**. This is the single biggest join failure and the bundled `xql_doc.md` documents it WRONG (it shows `join1.agent_id` downstream — that 400s at query time):
+
+- **In the on-condition**, use `alias.col` to name the joined dataset's key: `join (dataset = ioc_ip) as ioc ioc.indicator = action_remote_ip`.
+- **Downstream (alter/comp/fields/filter), reference the joined dataset's other columns by their BARE name** — `threat`, `severity`, `tier` — NOT `ioc.threat` / `ioc.severity`. `alter sev = ioc.severity` fails with `unknown field ioc.severity`; `alter sev = severity` works.
+- **Name collisions:** if both sides have a column of the same name (e.g. both have `host`), add `conflict_strategy = both` to the join and the joined side becomes `<col>_joined_<NN>`; or `alter`-rename one side before the join. Default keeps the inner (joined) side's value on a clash.
+- **Unmatched rows after a left join:** `replacenull` targets the **bare** joined field — `| replacenull threat = "none"`, not `replacenull ioc.threat`.
+
+```xql
+dataset = xdr_data | filter event_type = ENUM.NETWORK and action_remote_ip != null
+| join (dataset = gx_ioc_ip) as ioc ioc.indicator = action_remote_ip
+| replacenull threat = "benign"
+| comp count() as hits by action_remote_ip, threat, severity
+| filter threat != "benign" | sort desc severity, desc hits
+```
+
+### Working with IP / CIDR fields
+
+- `incidr` / `incidr6` are **dual-form**: an OPERATOR inside `filter` (`src_ip incidr "10.0.0.0/8"`) and a FUNCTION inside `alter` (`alter internal = incidr(src_ip, "10.0.0.0/8, 192.168.0.0/16")` — a single call takes a **comma-separated multi-CIDR string**, OR semantics).
+- `incidrlist(ip, "1.1.1.1, 8.8.8.8")` takes a comma-separated **string** of IPs (flatten an array first with `arraystring(arr, ", ")`); returns true only when **all** listed IPs are in range.
+- `is_ipv4` / `is_ipv6` / `is_known_private_ipv4` / `is_known_private_ipv6` return **false (not null)** for non-matches. To keep all rows with a classification column use them in `alter`; `filter is_ipv4(x) = true` will silently drop rows.
+- `int_to_ip` / `ip_to_int` are **IPv4-only**; pair with `min()/max()` over the integer form to compute address-range bounds, then `int_to_ip` back.
+
+### Free-text / regex parsing
+
+- `regextract(field, "<re2-with-ONE-group>")` returns an **array** of the (single) capture group's matches — RE2 allows only ONE capture group per call. Grab the first: `arrayindex(regextract(line, "user=(\\w+)"), 0)`. Run one `regextract` per field you need.
+- **`regexcapture()` does NOT work in dataset queries** — it is parsing-rules-only and at query time silently returns `{"dummy": null}` (no error), so a PASS/result-count check won't catch it. Never use it for query-time multi-group parse; use multiple `regextract` calls.
+- Normalize case-variant values with `lowercase(...)` **before** `comp ... by <field>` so `Alice`/`alice` collapse to one group. `wildcard_match(field, "*admin*")`, `replace`/`replex`, `string_count` round out free-text work.
+
+### Geo-enrichment (iploc stage)
+
+- `| iploc <ip-field>` enriches each row with geo columns from the IP: `loc_country`, `loc_city`, `loc_continent`, `loc_region`, `loc_asn`, `loc_asn_org`, `loc_latlon`. Rename inline: `| iploc dst_ip loc_country as country, loc_city as city`. Suffix-all form: `| iploc dst_ip suffix = _geo` → `loc_country_geo`, etc.
+- `loc_latlon` is a single comma-separated `"lat,lon"` **string** — split it for numeric use: `alter lat = arrayindex(split(loc_latlon, ","), 0), lon = arrayindex(split(loc_latlon, ","), 1)`.
+- **`iploc` enriches IPv4 only.** For a column that may hold IPv6, `filter is_ipv4(<ip-field>) = true` first, or those rows get null geo.
+
+### Unions (merging datasets)
+
+- `| union <dataset>` or `| union (<dataset> | <stages>)` appends rows from another source. **Both sides must project matching column names** for a downstream `comp`/`dedup` to align — `fields`/`alter`-rename each side to a common schema *before* the union, then aggregate. `coalesce(a, b, ...)` picks the first non-null when filling a unified column (cast an IP field with `to_string()` if it must share a text column).
+
+### Other stage notes
+
+- `top N <field> by <group> top_count as cnt, top_percent as pct` is the `top` stage form (N first, then `by`, then the count/percent aliases) — e.g. `| top 10 bytes_out by host top_count as cnt`.
+- `to_float` / `to_number` accept a **numeric or aggregated field** too (not only strings) — wrap the operands of `divide` to get a real ratio (`divide(to_float(out), to_float(in))`); raw integer `divide` truncates.
+
 Output shape:
 
 ````markdown
@@ -124,8 +203,8 @@ Output shape:
 ```xql
 dataset = xdr_data
 | filter event_type = ENUM.PROCESS and actor_process_image_name != null
-| alter ts_5m = bin(_time, 5m)
-| comp count() as execs by actor_process_image_name, ts_5m
+| bin _time span = 5m
+| comp count() as execs by actor_process_image_name, _time
 | filter execs > 50
 | sort desc execs
 ```
@@ -138,7 +217,7 @@ dataset = xdr_data
 
 **Notes:**
 
-- `bin` function returns a bucket label per row; using `bin` as a tagging function inside `alter` rather than as a standalone stage matches the dominant pattern in the org KB.
+- `bin` is applied as a standalone stage (`| bin _time span = 5m`), which rewrites `_time` to the bucket start; `comp ... by _time` then aggregates per bucket. (`bin` is NOT a function — `alter x = bin(...)` is a syntax error.)
 - Counts > 50 in 5 minutes is the threshold the example queries used; tune via the `filter logins > N` clause.
 ````
 
@@ -172,6 +251,8 @@ This turns the example KB + live docs into a **blast-radius / threat-hunting loo
 | `found: false` even with correct spelling | Term may be product-specific. Re-call with explicit `product` (e.g. `xsiam` instead of default `xql`) | Cortex publications occasionally hide a function under one product but not others |
 | Only release-notes pages come back | The lookup ranking subtracts heavy points from release notes, so this is rare. If it happens, search with `cortex-docs/search` + the `product` scope; release notes show up because the search hit no canonical reference page | Tell the operator the canonical reference page is missing; cite the release note with that caveat |
 | No KB examples + docs say `found: false` for everything | The operator's question is outside Cortex's documented surface (private internal field, custom playbook, etc.) | Don't invent. Tell the operator and ask for example syntax from their environment |
+| `run_xql_query` returns HTTP 500 `reached max allowed amount of parallel running queries` or `Connection reset by peer` | Tenant-side concurrency throttle / transient infra — NOT a query syntax error | Retry once after a short pause; serialize rather than fan out many simultaneous queries. Do not rewrite the query |
+| `run_xql_query` returns HTTP 500 `query usage exceeded max daily quota` / `error_type: QUOTA_EXCEEDED` (`used_quota` = `max_quota`) | Tenant **daily** XQL scan-quota is exhausted — a hard wall, NOT a query error and it does NOT reset within the session | Stop running queries; the quota resets at UTC midnight. Do not retry (it will keep 500-ing) and do not rewrite the query. Lookup-dataset queries scan far less than `xdr_data` scans, so prefer narrow time windows + `limit` to conserve quota |
 | `xsiam_get_datasets` returns `{"error": "xsiam instance has no papiAuthHeader (API key) configured"}` or similar XSIAM connector error | The operator hasn't installed/configured an XSIAM provider, OR the configured instance is missing the API key | **Do NOT retry via other XSIAM tools** (they will all fail the same way). Ask the operator directly for the dataset name (e.g. `cisco_esa_raw`, `xdr_data`) and proceed with `xql_examples_search` + cortex-docs/xql_lookup for syntax. The skill is designed to work end-to-end without XSIAM access — the bundled `xql-examples` KB and cortex-docs cover the authoring path. Only mention XSIAM tools as a side note: *"If you'd like the agent to discover datasets automatically, configure an XSIAM instance in /connectors."* |
 
 ## Operator-visible surfaces

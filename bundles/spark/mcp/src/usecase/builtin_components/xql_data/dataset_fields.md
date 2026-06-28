@@ -419,6 +419,21 @@
 - xdm.target.zone
 
 ## xdr_data
+
+### Flat fields (for direct `dataset = xdr_data` queries)
+A direct `dataset = xdr_data` query reads **flat** field names (the `xdm.*` paths below are the *datamodel* view used via `datamodel` / `preset`). For raw `dataset = xdr_data` hunts use these flat fields. `event_type` / `event_sub_type` are ENUMs — compare with `ENUM.PROCESS`, `ENUM.NETWORK`, `ENUM.FILE`, `ENUM.REGISTRY`, etc. (not quoted strings).
+
+- **Time / event:** `_time`, `event_type` (ENUM), `event_sub_type` (ENUM), `event_id`
+- **Agent / host:** `agent_hostname`, `agent_id`, `agent_ip_addresses`, `agent_os_type`, `agent_os_sub_type`
+- **Actor (initiating) process:** `actor_process_image_name`, `actor_process_image_path`, `actor_process_command_line`, `actor_process_image_sha256`, `actor_process_image_md5`, `actor_process_instance_id`, `actor_process_os_pid`, `actor_effective_username`, `actor_primary_username`
+- **Causality / parent:** `causality_actor_process_image_name`, `causality_actor_process_command_line`, `causality_actor_process_image_sha256`, `os_actor_process_image_name`, `os_actor_process_command_line`
+- **Target (acted-on) process:** `action_process_image_name`, `action_process_image_command_line`, `action_process_image_sha256`, `action_process_instance_id`, `action_process_os_pid`
+- **Network:** `action_local_ip`, `action_remote_ip`, `action_local_port`, `action_remote_port`, `action_network_protocol`, `action_country`, `action_external_hostname`, `dst_action_external_hostname`, `action_total_download`, `action_total_upload`
+- **File:** `action_file_name`, `action_file_path`, `action_file_sha256`, `action_file_md5`, `action_file_size`, `action_file_previous_file_path`
+- **Registry:** `action_registry_key_name`, `action_registry_value_name`, `action_registry_data`, `action_registry_full_key`
+- **Auth / user:** `action_username`, `auth_outcome`, `action_logon_type`
+
+### XDM datamodel paths
 - xdm.alert.category
 - xdm.alert.description
 - xdm.alert.mitre_tactics

@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.90",
+    date: "2026-06-28",
+    title: "XQL authoring perfected from a 20-scenario live program.",
+    highlights: [
+      "The XQL-authoring skill is hardened against a real XSIAM tenant — 187 queries run live, every failure became a documented fix.",
+      "Verified gotchas baked in: bin is a stage (not a function), no infix math (use divide/multiply), window analytics use windowcomp, joined columns are bare downstream, json_extract_scalar_array to explode.",
+      "36 new live-verified example queries in the xql-examples knowledge base (201 → 237), searchable so the agent retrieves a known-good pattern first.",
+      "The dataset_fields reference now lists the flat xdr_data fields used by direct queries, not just the xdm.* datamodel paths.",
+    ],
+  },
+  {
     version: "0.2.89",
     date: "2026-06-27",
     title: "Cleaner branding — Guardian is the only product named.",
