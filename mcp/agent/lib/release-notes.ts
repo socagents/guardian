@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.95",
+    date: "2026-06-28",
+    title: "Installer: longer first-boot health-timeout so slow boxes don't show a false failure.",
+    highlights: [
+      "The agent's first-ever boot (cert generation + Next.js warm-up + embedded MCP init) can exceed the old 300s health-wait on a fresh/slower box, making the installer wrongly report 'did not become healthy' even though the stack came up fine.",
+      "Default first-boot wait raised to 600s (override with GUARDIAN_HEALTH_TIMEOUT_SECS), and the timeout message now says the stack is still running and to re-check — not that the install failed.",
+      "Found by a customer-faithful deploy from the public socagents/guardian release on RHEL 8.10 + Podman. Applies to both the Docker and Podman installers; no change for fast boots.",
+    ],
+  },
+  {
     version: "0.2.94",
     date: "2026-06-28",
     title: "Podman installer: fix first-install image-pull auth + RHEL 8 live certification.",

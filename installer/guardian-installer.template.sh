@@ -62,7 +62,13 @@ GHCR_REGISTRY="ghcr.io"
 GHCR_USER="thekite-dev"
 GHCR_OWNER="kite-production"
 INSTALL_DIR="${GUARDIAN_INSTALL_DIR:-/opt/guardian}"
-HEALTH_TIMEOUT_SECS=300
+# How long to wait for guardian-agent's first-boot healthcheck. The very first
+# boot does TLS cert generation + Next.js warm-up + embedded MCP subprocess
+# init, which on a fresh/slower box can take several minutes — longer than the
+# old 300s, which produced a false "did not become healthy" failure even though
+# the stack came up fine moments later (seen on RHEL 8 + Podman). Default 600s;
+# override with GUARDIAN_HEALTH_TIMEOUT_SECS. Subsequent boots are fast.
+HEALTH_TIMEOUT_SECS="${GUARDIAN_HEALTH_TIMEOUT_SECS:-600}"
 
 # ─── Embedded digest manifest (v0.3.0+) ──────────────────────────────
 # release.yml builds this installer with the per-image content digests
@@ -1162,11 +1168,14 @@ done
 
 if [[ "$status" != "healthy" ]]; then
   echo ""
-  warn "guardian-agent did not become healthy within ${HEALTH_TIMEOUT_SECS}s."
-  warn "Diagnostic commands:"
+  warn "guardian-agent did not report healthy within ${HEALTH_TIMEOUT_SECS}s."
+  warn "The stack is still running (restart policy keeps it up) and a slow first"
+  warn "boot can finish shortly after this wait — check again in a minute with:"
   warn "    docker compose -f $INSTALL_DIR/docker-compose.yml ps"
+  warn "If it stays unhealthy, inspect the logs:"
   warn "    docker compose -f $INSTALL_DIR/docker-compose.yml logs guardian-agent"
   warn "    docker compose -f $INSTALL_DIR/docker-compose.yml logs guardian-updater"
+  warn "You can raise the wait with GUARDIAN_HEALTH_TIMEOUT_SECS=900 and re-run."
   exit 1
 fi
 

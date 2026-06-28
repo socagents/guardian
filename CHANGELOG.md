@@ -10,6 +10,11 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.95] (2026-06-28) — *Installer: raise first-boot health-timeout (300s → 600s, configurable) to avoid a false failure on slow boxes (#96)*
+
+- **Fixes a false "did not become healthy" failure** seen during a customer-faithful Podman install on RHEL 8. The agent's very first boot — TLS cert generation + Next.js warm-up + embedded MCP subprocess init — can take longer than the installer's old 300s health-wait on a fresh/slower box, so the installer printed a scary warning and exited non-zero *even though the stack came up healthy moments later*. The default first-boot wait is now **600s** (override with `GUARDIAN_HEALTH_TIMEOUT_SECS`), and the timeout message now explains the stack is still running and to re-check rather than implying the install failed. No change for fast boots; applies to both the Docker and Podman installers.
+- Found by deploying Guardian from the public `socagents/guardian` release on a fresh RHEL 8.10 + Podman VM exactly as a customer would (anonymous installer download → run → Podman). The deployment itself succeeded — every service runs under Podman (no Docker daemon); this only fixes the misleading installer message on a slow first boot.
+
 ## [v0.2.94] (2026-06-28) — *Podman installer: fix compose-pull auth (first-install brick) + RHEL 8 live certification (#96)*
 
 - **Fixes a first-install failure on the v0.2.93 Podman installer**, found by live-testing on a real RHEL 8 box. `docker login` (which is `podman login` via the compat shim) writes registry credentials to Podman's auth file, but the Docker Compose v2 plugin — our compose provider — reads `~/.docker/config.json`, a *different* file. So `docker compose pull` failed with `unable to retrieve auth token: invalid username/password: unauthorized` and the install aborted before any image came down. The installer now mirrors the registry credentials into `/root/.docker/config.json` (Docker format) where the compose provider reads them. The Docker installer is unaffected.
