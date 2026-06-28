@@ -2067,6 +2067,19 @@ Networks documentation and returning evidence-backed, cited answers.
                   hunts that scope blast radius, and (with an XSIAM instance
                   configured) runs them to enumerate affected assets.
                 </li>
+                <li>
+                  <strong>Compute-Unit (CU) quota awareness.</strong> XSIAM
+                  meters data-lake queries in Compute Units against a daily
+                  limit. Ask the agent &quot;what&apos;s my XQL quota?&quot; and
+                  it reads the live quota (no CU spent) via{" "}
+                  <Code>xsiam_get_xql_quota</Code>; every query it runs now
+                  reports its <Code>compute_units_used</Code> and remaining
+                  budget. The <Code>cortex_compute_unit_forecasting</Code> skill
+                  (under <Link href="/skills" className="link">Skills</Link>)
+                  explains how CU is consumed — cost scales with data scanned, so
+                  narrowing the time window is the biggest lever — and forecasts
+                  how many queries your daily limit allows.
+                </li>
               </ul>
             </SubSection>
 

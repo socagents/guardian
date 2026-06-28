@@ -70,11 +70,17 @@ spec:
     # ─── XQL queries ────────────────────────────────────────────
     - name: "run_xql_query"
       method: "POST /xql/run_query"
-      description: "Execute an XQL query against XSIAM's data lake and poll until it finishes (bounded). Returns the result rows. Use lookback_hours to widen the window for blast-radius hunts."
+      description: "Execute an XQL query against XSIAM's data lake and poll until it finishes (bounded). Returns the result rows AND the query's compute-unit cost. Use lookback_hours to widen the window for blast-radius hunts. Cost scales with data scanned — narrow lookback_hours + filter early to conserve quota."
       args:
         - { name: "query",         type: "string", description: "XQL query text (e.g. 'dataset = x | filter src_ip = \"1.2.3.4\" | limit 100').", required: true  }
-        - { name: "lookback_hours", type: "number", description: "Query time window in hours (default 0.5 = last 30 min; max 168 = 7 days). For a blast-radius hunt over a multi-day incident, pass e.g. 72.", required: false }
-      returns: { type: "object", description: "Query result rows (reply.results.data)." }
+        - { name: "lookback_hours", type: "number", description: "Query time window in hours (default 0.5 = last 30 min; max 168 = 7 days). For a blast-radius hunt over a multi-day incident, pass e.g. 72. Cost scales ~linearly with this window.", required: false }
+      returns: { type: "object", description: "Query result rows (reply.results.data) plus compute_units_used (CU this query cost), remaining_quota_cu (CU left), and number_of_results." }
+
+    - name: "get_xql_quota"
+      method: "POST /xql/get_quota"
+      description: "Report the tenant's XQL Compute-Unit quota + today's consumption WITHOUT running a query (consumes no CU). Read-only: annual bank (license + purchased + eval), used_quota, computed remaining_annual_cu, daily_used_quota (resets 00:00 UTC), and daily query/concurrency counters. Use it to check headroom before a wide hunt or to explain quota state."
+      args: []
+      returns: { type: "object", description: "Quota object: license_quota, additional_purchased_quota, eval_quota, used_quota, remaining_annual_cu, daily_used_quota, total_daily_running_queries, total_daily_concurrent_rejected_queries, current_concurrent_active_queries_count, max_daily_concurrent_active_query_count." }
 
     # ─── Datasets ───────────────────────────────────────────────
     - name: "get_datasets"

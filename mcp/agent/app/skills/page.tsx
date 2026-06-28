@@ -297,6 +297,27 @@ const SKILLS: SkillDef[] = [
     eligibleAgents: "guardian-agent",
     analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
   },
+  {
+    id: "foundation-cortex-compute-unit-forecasting",
+    name: "cortex_compute_unit_forecasting",
+    displayName: "Cortex Compute-Unit (XQL quota) forecasting",
+    category: "foundation",
+    description:
+      "Explain, measure, and forecast Cortex XSIAM Compute-Unit (CU) consumption so XQL stays inside the daily quota: the accounting model (annual bank, add-on, daily-limit options, 00:00-UTC reset), what consumes CU, how to read actuals (xsiam_get_xql_quota + the per-query compute_units_used now returned by xsiam_run_xql_query), an empirical cost model (cost scales with data scanned), how to forecast queries-per-budget, the levers to cut spend, and handling the QUOTA_EXCEEDED daily cap.",
+    icon: "savings",
+    source: "platform",
+    loadingMode: "on-demand",
+    enabled: true,
+    locked: false,
+    agentCount: 1,
+    calls7d: 0,
+    content: "See bundles/spark/mcp/skills/foundation/cortex_compute_unit_forecasting.md",
+    charCount: 0,
+    tokenCount: 0,
+    maxConcurrentAgents: 0,
+    eligibleAgents: "guardian-agent",
+    analytics: { calls24h: 0, calls7d: 0, calls30d: 0, avgContextTokens: 0, activeAgents: 1, topAgents: [{ name: "guardian", color: "#1f7bff" }] },
+  },
   // ── Workflows ───────────────────────────────────────────────────────
   {
     id: "workflow-xsoar-case-investigation",

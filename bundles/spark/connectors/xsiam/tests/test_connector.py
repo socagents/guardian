@@ -6,8 +6,9 @@ No network. Covers:
   2. connector helpers — the _xsiam_wrap error envelope + _xsiam_ok/_xsiam_err.
   3. A representative read tool (incidents_list) and a representative EDR-response
      tool (endpoints_isolate) — request shaping via a recording fetcher.
-  4. __all__ integrity — the 54 tools are exported + callable, and the
+  4. __all__ integrity — the 55 tools are exported + callable, and the
      dropped simulation-only tools are gone.
+  5. compute-unit cost surfacing (run_xql_query) + get_xql_quota (v0.2.91).
 
 Run with:
   cd bundles/spark/connectors/xsiam && python3 -m pytest tests/ -x
@@ -263,6 +264,70 @@ def test_run_xql_requires_query(monkeypatch):
     assert rf.calls == []  # never hit the API
 
 
+# ─── 3a-cu. compute-unit cost surfacing + quota (v0.2.91) ────────────
+
+
+def test_run_xql_surfaces_compute_units(monkeypatch):
+    # query_cost {tenant: CU} + remaining_quota + number_of_results lift to top level.
+    monkeypatch.setattr(connector, "_XQL_POLL_INTERVAL_S", 0)
+    rf = _XqlFetcher([{"reply": {
+        "status": "SUCCESS",
+        "number_of_results": 5,
+        "query_cost": {"tenant_abc": 0.0012},
+        "remaining_quota": 4.9988,
+        "results": {"data": [{"a": 1}]},
+    }}])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_run_xql_query(query="dataset = x | limit 5", lookback_hours=1))
+    assert out["success"] is True
+    assert out["compute_units_used"] == 0.0012
+    assert out["remaining_quota_cu"] == 4.9988
+    assert out["number_of_results"] == 5
+
+
+def test_run_xql_quota_exceeded_returns_hint(monkeypatch):
+    monkeypatch.setattr(connector, "_XQL_POLL_INTERVAL_S", 0)
+
+    class _RaisingFetcher:
+        def __init__(self, exc):
+            self.exc = exc
+            self.calls = []
+
+        async def send_request(self, path, method="POST", data=None):
+            self.calls.append((path, data))
+            if path == "xql/start_xql_query":
+                return {"reply": "QID-1"}
+            raise self.exc
+
+    rf = _RaisingFetcher(RuntimeError("HTTP 500 query usage exceeded max daily quota"))
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_run_xql_query(query="dataset = x", lookback_hours=1))
+    assert out["success"] is False
+    assert "quota" in out["error"].lower()
+    assert "00:00 UTC" in out.get("hint", "")
+
+
+def test_get_xql_quota_shapes_request_and_computes_remaining(monkeypatch):
+    rf = _RecordingFetcher({"reply": {
+        "license_quota": 655.0,
+        "additional_purchased_quota": 0.0,
+        "eval_quota": 0.0,
+        "used_quota": 6.27,
+        "daily_used_quota": 1.0,
+        "total_daily_running_queries": 1514,
+    }})
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_get_xql_quota())
+    assert out["ok"] is True
+    q = out["quota"]
+    assert q["license_quota"] == 655.0
+    assert q["daily_used_quota"] == 1.0
+    assert q["remaining_annual_cu"] == 648.73  # (655 + 0 + 0) - 6.27
+    method, path, data = rf.calls[0]
+    assert path == "xql/get_quota"
+    assert data == {"request_data": {}}
+
+
 # ─── 3b. lookup datasets — create (add_dataset) + populate (add_data) ─
 
 
@@ -335,7 +400,7 @@ _DROPPED = {
 
 
 def test_all_exports_are_callable_and_dropped_tools_gone():
-    assert len(connector.__all__) == 54
+    assert len(connector.__all__) == 55
     for name in connector.__all__:
         assert callable(getattr(connector, name)), f"{name} not callable"
         assert name not in _DROPPED

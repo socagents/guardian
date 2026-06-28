@@ -7312,7 +7312,12 @@ function XsiamConnector() {
  <strong>XSIAM platform</strong> directly: XQL hunts, incidents,
  alerts, issues, assets, and endpoint response actions (tool
  prefix <Code>xsiam_</Code>). It is the largest connector —{" "}
- <strong>54 tools</strong>.
+ <strong>55 tools</strong>. XQL is metered in Compute Units (CU)
+ against a daily quota: <Code>xsiam_get_xql_quota</Code> reads the
+ live quota without spending CU, and <Code>xsiam_run_xql_query</Code>
+ returns each query&apos;s <Code>compute_units_used</Code> +{" "}
+ <Code>remaining_quota_cu</Code> (see the{" "}
+ <Code>cortex_compute_unit_forecasting</Code> skill).
  </p>
 
  <SubSection icon="hub" title="Dispatch + container">
@@ -7332,7 +7337,7 @@ function XsiamConnector() {
  </p>
  </SubSection>
 
- <SubSection icon="api" title="Tool families (54 tools)">
+ <SubSection icon="api" title="Tool families (55 tools)">
  <ul className="list-disc pl-5 space-y-1 text-sm">
  <li>
  <strong>Investigation</strong> — XQL query (start +

@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.91",
+    date: "2026-06-28",
+    title: "XQL Compute-Unit forecasting — see + budget your query quota.",
+    highlights: [
+      "New xsiam_get_xql_quota tool reads your live Compute-Unit quota without running a query (annual bank, used, remaining, today's usage, concurrency).",
+      "Every XQL query now reports compute_units_used + remaining_quota_cu + number_of_results; QUOTA_EXCEEDED returns a clear, actionable message.",
+      "New cortex_compute_unit_forecasting skill: the full CU model, empirical cost anchors (cost scales with data scanned), forecasting, and levers to cut spend.",
+      "Cost lever #1 is the time window — narrow lookback_hours / config timeframe; filter early; prefer lookup datasets. | limit does not reduce scan cost.",
+    ],
+  },
+  {
     version: "0.2.90",
     date: "2026-06-28",
     title: "XQL authoring perfected from a 20-scenario live program.",

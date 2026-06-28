@@ -27,6 +27,7 @@ from ._papi_client import Fetcher
 # surface in one place.
 __all__ = [
     "xsiam_run_xql_query",
+    "xsiam_get_xql_quota",
     "xsiam_add_lookup_data",
     "xsiam_get_lookup_data",
     "xsiam_remove_lookup_data",
@@ -321,9 +322,88 @@ async def xsiam_run_xql_query(query: str = "", lookback_hours: float = _XQL_LOOK
             status = reply.get("status") if isinstance(reply, dict) else None
             if status != "PENDING":
                 break
+        # Surface compute-unit cost + remaining quota as first-class fields.
+        # Cortex returns query_cost ({tenant_id: CU} map, or a bare number) and
+        # remaining_quota (fractional CU left) in the get_query_results reply —
+        # the raw reply already passes through, but lift them to top-level labeled
+        # keys so the agent + the CU-forecasting skill see the cost of every query.
+        if isinstance(results_resp, dict):
+            _reply = results_resp.get("reply")
+            if isinstance(_reply, dict):
+                _qc = _reply.get("query_cost")
+                try:
+                    if isinstance(_qc, dict) and _qc:
+                        results_resp["compute_units_used"] = round(sum(float(v) for v in _qc.values()), 8)
+                    elif isinstance(_qc, (int, float)):
+                        results_resp["compute_units_used"] = round(float(_qc), 8)
+                except (TypeError, ValueError):
+                    pass
+                if isinstance(_reply.get("remaining_quota"), (int, float)):
+                    results_resp["remaining_quota_cu"] = round(float(_reply["remaining_quota"]), 8)
+                if isinstance(_reply.get("number_of_results"), int):
+                    results_resp["number_of_results"] = _reply["number_of_results"]
         return _create_response(results_resp)
     except Exception as e:
-        return _create_response({"error": f"Error running XQL: {str(e)}"}, is_error=True)
+        msg = str(e)
+        if "quota" in msg.lower():
+            return _create_response({
+                "error": f"XQL daily compute-unit quota exceeded: {msg}",
+                "hint": "The tenant's daily CU limit is reached; it resets at 00:00 UTC. "
+                        "Check remaining headroom with xsiam_get_xql_quota, and reduce cost by "
+                        "narrowing the query time window (lookback_hours), filtering early, or "
+                        "targeting a lookup dataset instead of a wide xdr_data scan.",
+            }, is_error=True)
+        return _create_response({"error": f"Error running XQL: {msg}"}, is_error=True)
+
+
+async def xsiam_get_xql_quota(ctx: Context = None) -> dict:
+    """
+    Report the tenant's XQL Compute-Unit (CU) quota + today's consumption — WITHOUT running a query.
+
+    Read-only metadata: this calls Cortex `xql/get_quota` and does NOT consume any
+    compute units. Use it to check headroom BEFORE a wide blast-radius hunt, or to
+    explain quota state to the operator. Pairs with `xsiam_run_xql_query`, whose
+    response now reports `compute_units_used` + `remaining_quota_cu` per query.
+
+    Returns the live Cortex quota fields plus a computed helper:
+      - license_quota / additional_purchased_quota / eval_quota — the annual CU bank
+      - used_quota — cumulative CU consumed this license year
+      - remaining_annual_cu — (license + purchased + eval) − used   [computed by this tool]
+      - daily_used_quota — CU consumed today (the daily counter resets at 00:00 UTC)
+      - total_daily_running_queries — query COUNT today (volume, not CU)
+      - total_daily_concurrent_rejected_queries — queries rejected (quota/concurrency)
+      - current_concurrent_active_queries_count / max_daily_concurrent_active_query_count
+
+    The daily LIMIT itself is a UI-configured setting (Settings → Configurations →
+    Data Management → Compute Unit Usage; options: divide-annual-evenly / 1% / no-limit
+    / custom; default = annual ÷ 365) and is NOT returned by the API — compare
+    daily_used_quota against the operator's configured daily limit to gauge headroom.
+
+    Example MCP tool call:
+    {
+      "method": "tools/call",
+      "params": { "name": "xsiam_get_xql_quota", "arguments": {} }
+    }
+    """
+    try:
+        fetcher = _get_fetcher()
+        resp = await fetcher.send_request("xql/get_quota", data={"request_data": {}})
+        reply = (resp.get("reply") or {}) if isinstance(resp, dict) else {}
+        out = dict(reply) if isinstance(reply, dict) else {"raw": reply}
+        try:
+            bank = (
+                float(reply.get("license_quota", 0) or 0)
+                + float(reply.get("additional_purchased_quota", 0) or 0)
+                + float(reply.get("eval_quota", 0) or 0)
+            )
+            out["remaining_annual_cu"] = round(bank - float(reply.get("used_quota", 0) or 0), 6)
+        except (TypeError, ValueError):
+            pass
+        return _create_response({"ok": True, "quota": out})
+    except Exception as e:
+        return _create_response(
+            {"ok": False, "error": f"Error reading XQL quota: {str(e)}"}, is_error=True
+        )
 
 
 async def xsiam_add_lookup_data(
