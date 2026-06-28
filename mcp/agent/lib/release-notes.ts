@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.92",
+    date: "2026-06-28",
+    title: "CU forecasting skill — best-practices playbook for saving Compute Units.",
+    highlights: [
+      "The cortex_compute_unit_forecasting skill now has an 18-practice playbook to cut CU spend, grouped: author cheaper queries, route hot vs cold, operate within budget.",
+      "Author: shrink the window (don't straddle UTC midnight for cold), filter early on real fields, aggregate server-side, one multi-agg pass, don't enrich the firehose; | limit is not a cost lever.",
+      "Route: default hot; exploit the free 7-day cold rewarm as a fixed-range sprint; narrow on hot then cold-sweep filtered.",
+      "Operate: calibrate via compute_units_used, pre-flight with xsiam_get_xql_quota (0 CU), skip XQL when the fact is already on the object, respect the ~5-concurrency cap, spread across the 00:00-UTC reset.",
+      "Every practice adversarially reviewed against the documented cost model — no invented constants.",
+    ],
+  },
+  {
     version: "0.2.91",
     date: "2026-06-28",
     title: "XQL Compute-Unit forecasting — see + budget your query quota.",

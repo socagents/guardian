@@ -118,17 +118,85 @@ then divide. Example reference points for a **1 CU/day** limit:
 For a wide hunt, **pre-flight**: estimate cost, call `xsiam_get_xql_quota`, and if
 `estimated_cost > remaining_daily`, narrow the window or split the hunt across days.
 
-## Levers to cut CU (apply in this order)
+## Best practices to save Compute Units
 
-1. **Shrink the time window** — set `lookback_hours` / `config timeframe` to the
-   minimum that answers the question. Biggest lever by far.
-2. **Filter early** — put the most selective `filter` first so fewer rows are scanned.
-3. **Prefer lookup datasets** for reference/synthetic data — they're effectively free.
-4. **Avoid `iploc` and wide presets over large scans** — enrich a *small* filtered
-   set, not the raw dataset; reserve `metrics_view` for genuinely needed spans.
-5. **Don't rely on `| limit` to save cost** — it doesn't reduce the scan.
-6. **Batch/space concurrency** — there's a max-concurrent-query ceiling; bursts get
-   rejected (`total_daily_concurrent_rejected_queries`). Serialize heavy hunts.
+A playbook of CU-saving practices, grouped by where they apply. Each was verified
+against the cost model above; **#1 (window) and #2 (filter) dominate** — apply them
+to every query before reaching for the rest.
+
+### A. Author cheaper queries (reduce the scan)
+
+1. **Shrink the time window to the actual question — the biggest lever.** Hot cost
+   scales ~linearly with the window; set `lookback_hours` / `config timeframe` to the
+   real incident span, not a habitual default (`lookback_hours=2` for a fresh alert,
+   not 72). For **cold**, the window rounds up to whole days — don't straddle a UTC
+   midnight you don't need (23:30→00:30 bills *two* whole days), and query one day at
+   a time when one day is all you need.
+2. **Filter early, most-selective-first, on real fields.** Lead the pipe with the
+   tightest predicate — `dataset = X | filter src_ip = "1.2.3.4" | ...` — so fewer
+   rows reach later stages. Bind the incident's concrete indicators into the `filter`;
+   don't pull a window of everything and post-filter in the agent. **`| limit` is NOT
+   a cost lever** — it caps output, not the scan.
+3. **Confirm field names first with `xsiam_datamodel_describe`.** Filtering on a
+   misspelled/non-existent field silently scans wide (or errors). Resolve the dataset's
+   real, filterable columns before authoring the `filter`.
+4. **Query the dataset that lets you filter tightest.** A specific typed dataset
+   (e.g. `corelight_http_raw`) helps *when* it avoids scanning unrelated telemetry and
+   exposes selective fields — the driver is **window + filter selectivity**, not the
+   dataset name itself. Reach for `xdr_data` only when the hunt genuinely spans sources.
+5. **Aggregate server-side — return a rollup, not thousands of rows.** End hunts with
+   `| comp count() by agent_hostname` (or `comp values(...)`) so the API returns a few
+   rows. Hot cost is partly driven by the number of results returned, and the connector
+   pulls up to 1000 rows per read.
+6. **Answer multiple questions in ONE pass.** Hot queries have no free re-run, so use
+   one multi-aggregation `comp` (`comp count() as c, values(user) as users,
+   values(dst_ip) as dsts by agent_hostname`) instead of three separate queries over
+   the same window.
+7. **Don't enrich the firehose.** `iploc`/geo per-row enrichment is 0.1–0.4 CU and wide
+   presets (`preset = metrics_view`) are 1–3+ CU. Filter to a small set *first*, then
+   enrich the survivors — or push repeated enrichment into a **lookup dataset**
+   (reads ≈0.0003 CU) and `join`, instead of recomputing it every query.
+8. **Project only needed fields early** (`| fields host, action_remote_ip, _time`
+   right after the filter). This is hygiene that trims response payload/complexity —
+   not a documented per-column charge, but it keeps result sets lean.
+
+### B. Route hot vs cold deliberately
+
+9. **Default to hot; reach into cold only past hot retention.** Cold is metered
+   (1 CU / 35 GB queried, whole-day-rounded); a narrow filtered hot scan can be
+   near-free. Keep recent work on hot datasets.
+10. **For a deep cold dive, exploit the free 7-day rewarm.** The first query on a cold
+    range pays the CU; re-queries on the **same range** are free for 7 days. Plan the
+    investigation as a one-week sprint on a *fixed* range — iterate filters/projection
+    over it rather than nudging the window each attempt.
+11. **Narrow on hot first, then cold-sweep filtered.** Use cheap hot queries to pin the
+    key indicators/datasets, then run the (expensive) cold sweep scoped to just those —
+    far fewer GB billed. Target the narrowest cold dataset; avoid wide presets on cold.
+
+### C. Operate within the budget
+
+12. **Calibrate before you scale.** There's no published CU-per-GB constant for hot —
+    run a tiny probe (small window / tight filter), read `compute_units_used` from
+    `xsiam_run_xql_query`, then extrapolate before going wide or scheduling a query to
+    run ×daily.
+13. **Pre-flight wide hunts with `xsiam_get_xql_quota`** (read-only, costs 0 CU). If the
+    estimated cost exceeds `remaining` headroom for the day, narrow the window or defer.
+14. **Skip XQL entirely when the data is already materialized.** For host/user/alert
+    facts already on the object, use the direct REST tools (`xsiam_incidents_get_extra_data`,
+    `xsiam_alerts_list`, `xsiam_endpoints_get`) — the cheapest query is the one you never run.
+15. **Respect the concurrency cap (~5).** Serialize/space automation; excess queries are
+    rejected (`total_daily_concurrent_rejected_queries`). Don't blindly re-fire a rejected
+    query, and remember **parallel PAPI keys don't buy more budget** — all keys share the
+    one tenant daily limit.
+16. **Tune the limit + spread the load.** Set the daily limit near your average; raise it
+    temporarily during an incident and restore it after; consider the add-on for sustained
+    need. The limit resets 00:00 UTC with **no rollover**, so spread heavy/cold work across
+    days rather than burning a day in one batch.
+17. **Monitor + self-throttle.** Track `compute_units_used` per query and the Compute Unit
+    Usage page; for automated loops, set an internal threshold (e.g. stop at X% of the
+    daily limit via `xsiam_get_xql_quota`) so the loop self-throttles before exhaustion.
+18. **Target the right instance.** With 2+ enabled XSIAM instances, pass the `instance`
+    selector — a query fired at the wrong tenant is pure wasted CU on the wrong data.
 
 ## Handling the daily-cap error
 
