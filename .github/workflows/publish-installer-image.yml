@@ -1,0 +1,101 @@
+name: Publish installer image
+
+# Publishes the customer installer as a tiny OCI image on GHCR:
+#   ghcr.io/<owner>/guardian-installer:<version> (+ :v<version>, :latest)
+#
+# WHY: some customers' egress allow-lists permit ghcr.io (+ pkg-containers) but
+# NOT github.com / raw.githubusercontent.com — so they cannot curl/wget the
+# installer from a GitHub release. Shipping the installer as a registry image
+# lets them obtain it through the one channel they already use to pull Guardian:
+#
+#   docker pull ghcr.io/<owner>/guardian-installer:<version>
+#   docker run --rm ghcr.io/<owner>/guardian-installer:<version> cat /guardian-installer > guardian-installer
+#   chmod +x guardian-installer && sudo ./guardian-installer
+#
+# Auth: the auto-issued GITHUB_TOKEN has packages:write in this run — no PAT needed.
+#
+# ONE-TIME, AFTER THE FIRST PUBLISH: make the `guardian-installer` GHCR package
+# PUBLIC (package → Settings → Change visibility). The installer binary has no
+# embedded secrets, and a workflow-pushed package is private by default and not
+# pullable by a customer read:packages PAT until it is public (or granted).
+# Subsequent pushes inherit the public visibility.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to package (e.g. v0.2.92)"
+        required: true
+  release:
+    types: [published]   # auto-publish the installer image on every customer release
+
+permissions:
+  contents: read    # read the release asset
+  packages: write   # ghcr.io push via GITHUB_TOKEN
+
+jobs:
+  publish-installer-image:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ghcr.io
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - name: Resolve + validate release tag
+        id: tag
+        env:
+          # Untrusted inputs → env vars, never interpolated directly into run:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          TAG="${INPUT_TAG:-$RELEASE_TAG}"
+          if [ -z "$TAG" ]; then echo "::error::no tag resolved"; exit 1; fi
+          # Strict allow-list: vMAJOR.MINOR.PATCH with an optional pre-release suffix.
+          # Rejects anything that could be a shell/registry-injection payload.
+          if ! printf '%s' "$TAG" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+([._-][A-Za-z0-9.]+)?$'; then
+            echo "::error::tag '$TAG' is not a valid version tag (expected vX.Y.Z)"; exit 1
+          fi
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "ver=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download the installer asset for the tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}      # validated above
+        run: |
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern guardian-installer --clobber
+          test -s guardian-installer
+          echo "asset first line: $(head -1 guardian-installer)"
+          echo "asset sha256:     $(sha256sum guardian-installer | cut -d' ' -f1)"
+
+      - name: Build + push installer image
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          VER: ${{ steps.tag.outputs.ver }}      # validated above
+          TAGV: ${{ steps.tag.outputs.tag }}     # validated above
+        run: |
+          IMG="${REGISTRY}/${OWNER}/guardian-installer"
+          printf 'FROM busybox:stable\nCOPY guardian-installer /guardian-installer\n' > Dockerfile.installer
+          echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
+          docker build -f Dockerfile.installer -t "$IMG:$VER" -t "$IMG:$TAGV" -t "$IMG:latest" .
+          docker push "$IMG:$VER"
+          docker push "$IMG:$TAGV"
+          docker push "$IMG:latest"
+          {
+            echo "### Installer image published"
+            echo ""
+            echo "- \`$IMG:$VER\`"
+            echo "- \`$IMG:$TAGV\`"
+            echo "- \`$IMG:latest\`"
+            echo ""
+            echo "Customer pull (egress to ghcr.io only):"
+            echo '```'
+            echo "docker pull $IMG:$VER"
+            echo "docker run --rm $IMG:$VER cat /guardian-installer > guardian-installer"
+            echo "chmod +x guardian-installer && sudo ./guardian-installer"
+            echo '```'
+            echo ""
+            echo "> First publish only: make the \`guardian-installer\` GHCR package **Public**."
+          } >> "$GITHUB_STEP_SUMMARY"
