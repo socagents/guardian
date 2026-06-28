@@ -26,8 +26,8 @@ You do **not** need to install anything yourself beforehand except Podman — th
 Log into your server and run these three commands. They download the installer and make it runnable:
 
 ```bash
-podman pull ghcr.io/kite-production/guardian-installer-podman:0.2.93
-podman run --rm ghcr.io/kite-production/guardian-installer-podman:0.2.93 \
+podman pull ghcr.io/kite-production/guardian-installer-podman:0.2.94
+podman run --rm ghcr.io/kite-production/guardian-installer-podman:0.2.94 \
   cat /guardian-installer > guardian-installer
 chmod +x guardian-installer
 ```
