@@ -26,8 +26,19 @@ on:
       tag:
         description: "Release tag to package (e.g. v0.2.92)"
         required: true
+  workflow_call:
+    # Called by release.yml in the SAME run after the GitHub Release is
+    # created. The `release: published` trigger below does NOT fire when the
+    # release is created by release.yml's GITHUB_TOKEN (GitHub suppresses
+    # workflow triggers from GITHUB_TOKEN-created events to prevent recursion),
+    # so the reliable auto-publish path is this reusable-workflow call.
+    inputs:
+      tag:
+        description: "Release tag to package (e.g. v0.2.92)"
+        required: true
+        type: string
   release:
-    types: [published]   # auto-publish the installer image on every customer release
+    types: [published]   # backstop: auto-publish for releases created in the GitHub UI
 
 permissions:
   contents: read    # read the release asset
@@ -44,7 +55,8 @@ jobs:
         id: tag
         env:
           # Untrusted inputs → env vars, never interpolated directly into run:
-          INPUT_TAG: ${{ github.event.inputs.tag }}
+          # `inputs.tag` covers BOTH workflow_dispatch and workflow_call.
+          INPUT_TAG: ${{ inputs.tag }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           TAG="${INPUT_TAG:-$RELEASE_TAG}"

@@ -88,6 +88,10 @@ jobs:
     # runner — that's where the cached-layer speedup actually matters
     # because it runs on every commit, not once per release.
     runs-on: ubuntu-latest
+    outputs:
+      # Consumed by the publish-installer-images job below so it can package the
+      # just-created release's installer assets as GHCR images in the same run.
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1055,3 +1059,19 @@ jobs:
               "$REGISTRY/$OWNER/$img:$MM" 2>/dev/null || true
           done
           docker image prune -f
+
+  # Package the just-created release's installer binaries (Docker + Podman) as
+  # tiny GHCR OCI images for egress-restricted customers (ghcr.io reachable,
+  # github.com not). Runs in THIS run via the reusable workflow because a
+  # separate `release: published`-triggered run does NOT fire for a release
+  # created by release.yml's GITHUB_TOKEN (GitHub suppresses workflow triggers
+  # from GITHUB_TOKEN-created events). See publish-installer-image.yml.
+  publish-installer-images:
+    name: Publish installer OCI images (docker + podman)
+    needs: release
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-installer-image.yml
+    with:
+      tag: v${{ needs.release.outputs.version }}
