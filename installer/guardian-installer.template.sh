@@ -1110,6 +1110,25 @@ echo "$GHCR_TOKEN" \
   | docker login "$GHCR_REGISTRY" -u "$GHCR_USER" --password-stdin
 ok "Logged into $GHCR_REGISTRY"
 
+if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
+  # PODMAN auth divergence: `docker login` here is `podman login` (via the
+  # podman-docker shim), which writes credentials to Podman's auth file
+  # (/run/containers/<uid>/auth.json). But our compose provider is the Docker
+  # Compose v2 plugin binary, which authenticates from $DOCKER_CONFIG/config.json
+  # (default /root/.docker/config.json) — a DIFFERENT file podman login does not
+  # populate. Without this, `docker compose pull` fails with
+  # "unable to retrieve auth token: invalid username/password: unauthorized"
+  # on every install. Write the same creds in Docker config.json format where
+  # the plugin reads them. (Verified live on RHEL 8.10 + podman 4.9.4.)
+  mkdir -p /root/.docker
+  _ghcr_auth="$(printf '%s:%s' "$GHCR_USER" "$GHCR_TOKEN" | base64 | tr -d '\n')"
+  printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$GHCR_REGISTRY" "$_ghcr_auth" \
+    > /root/.docker/config.json
+  chmod 600 /root/.docker/config.json
+  unset _ghcr_auth
+  ok "Registry creds mirrored to /root/.docker/config.json for the compose provider"
+fi
+
 # Pull all images. First pull on a fresh box can take several minutes
 # (~1 GB total across the stack images on amd64).
 info "Pulling images (this may take a few minutes on first install)…"

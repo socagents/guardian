@@ -10,6 +10,12 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.94] (2026-06-28) — *Podman installer: fix compose-pull auth (first-install brick) + RHEL 8 live certification (#96)*
+
+- **Fixes a first-install failure on the v0.2.93 Podman installer**, found by live-testing on a real RHEL 8 box. `docker login` (which is `podman login` via the compat shim) writes registry credentials to Podman's auth file, but the Docker Compose v2 plugin — our compose provider — reads `~/.docker/config.json`, a *different* file. So `docker compose pull` failed with `unable to retrieve auth token: invalid username/password: unauthorized` and the install aborted before any image came down. The installer now mirrors the registry credentials into `/root/.docker/config.json` (Docker format) where the compose provider reads them. The Docker installer is unaffected.
+- **Live-certified the entire Podman install end-to-end on RHEL 8.10 + podman 4.9.4** (no Docker): clean-box podman + podman-docker install, rootful API socket, Docker Compose v2 plugin from the Docker repo registered as Podman's compose provider, authenticated pull of all 9 images through the compat socket, stack reaches **healthy**, agent serves TLS on `:3000`, cross-container DNS resolves on the Podman compose network, and **the stack survives a host reboot** via `podman-restart.service`.
+- **Podman/RHEL customers: use v0.2.94, not v0.2.93.** The Docker installer + Docker customers are unchanged by this release.
+
 ## [v0.2.93] (2026-06-28) — *RHEL / Podman-native installer (Docker-free) — beta (#96)*
 
 - **Guardian can now install on RHEL with Podman and no Docker at all.** A new `guardian-installer-podman` targets RHEL 8 + rootful Podman: it installs `podman` + `podman-docker`, enables the rootful Podman API socket (Docker-compatible, at `/var/run/docker.sock`), installs Docker Compose v2 (the CLI **plugin** only — not the Docker engine) from the Docker repo and registers it as Podman's compose provider, enables `podman-restart.service` so the stack survives a reboot, uses a Podman compose variant (the updater runs `security_opt: [label=disable]` so its socket mount works under SELinux-enforcing RHEL), and otherwise follows the exact same install ceremony as the Docker installer. The existing Docker installer and Docker customers are unchanged (the build is one runtime-switched source; `RUNTIME` defaults to docker).

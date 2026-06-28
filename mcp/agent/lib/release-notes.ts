@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.94",
+    date: "2026-06-28",
+    title: "Podman installer: fix first-install image-pull auth + RHEL 8 live certification.",
+    highlights: [
+      "Fixes a v0.2.93 Podman-installer brick: docker login wrote creds to Podman's auth file, but the Compose v2 plugin reads ~/.docker/config.json — so image pull failed 'unauthorized'. The installer now mirrors creds where the compose provider reads them.",
+      "Live-certified the whole Podman install on real RHEL 8.10 + podman 4.9.4: install, authenticated pull of all 9 images, stack healthy, TLS :3000, cross-container DNS, and reboot survival.",
+      "Podman/RHEL customers should use v0.2.94, not v0.2.93. The Docker installer and Docker customers are unaffected.",
+    ],
+  },
+  {
     version: "0.2.93",
     date: "2026-06-28",
     title: "RHEL / Podman-native installer (Docker-free) — beta.",
