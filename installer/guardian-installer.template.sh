@@ -324,8 +324,12 @@ if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
 
   # Rootful Docker-compatible API socket — the updater drives it to manage
   # connector containers. systemd socket-activates podman on first connect.
-  systemctl enable --now podman.socket 2>/dev/null \
-    || die "Could not enable the rootful Podman API socket. Run: sudo systemctl enable --now podman.socket"
+  # Capture systemd's output so a failure is diagnosable on a box we can't
+  # reach (no test VM) instead of being swallowed by 2>/dev/null.
+  if ! _sockout="$(systemctl enable --now podman.socket 2>&1)"; then
+    die "Could not enable the rootful Podman API socket: ${_sockout}
+       Try: sudo systemctl enable --now podman.socket ; systemctl status podman.socket"
+  fi
   # podman-docker normally symlinks /run/podman/podman.sock → /var/run/docker.sock;
   # create it explicitly if the package didn't.
   if [ ! -S /var/run/docker.sock ] && [ -S /run/podman/podman.sock ]; then
@@ -336,13 +340,55 @@ if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
        Check: systemctl status podman.socket ; ls -l /run/podman/podman.sock"
   ok "Podman API socket active at /var/run/docker.sock"
 
-  # Ensure a 'docker compose' provider resolves (the compat shim routes
-  # 'docker compose' → 'podman compose' → an external provider). If not yet
-  # resolvable, try to install one; the shared check below validates it.
+  # Reboot persistence. Rootful Podman does NOT auto-restart `restart:
+  # unless-stopped` containers after a host reboot the way dockerd does;
+  # podman-restart.service (shipped with podman) restarts them at boot. The
+  # stack is brought up in Step 7, so enabling the unit now means the next
+  # boot revives Guardian. Without this the stack stays down after a reboot.
+  if ! _prout="$(systemctl enable podman-restart.service 2>&1)"; then
+    warn "Could not enable podman-restart.service (${_prout}). The stack may not"
+    warn "auto-start after a reboot — run 'sudo systemctl enable --now podman-restart.service'"
+    warn "or re-run this installer after rebooting."
+  else
+    ok "podman-restart.service enabled — stack will revive after a host reboot"
+  fi
+
+  # Ensure a real Docker Compose v2 provider resolves. The podman-docker shim
+  # routes `docker compose` → `podman compose`, which delegates to an external
+  # provider. podman-compose (Python) is NOT in RHEL 8 base/AppStream — it
+  # lives only in EPEL/pip, which a restricted-egress box can't reach, and it
+  # isn't Compose v2. Instead install the official Docker Compose v2 *plugin*
+  # (a single standalone CLI binary — NOT the Docker engine/daemon; the runtime
+  # stays Podman) from the Docker repo (download.docker.com, the channel these
+  # customers already allow-list), then point Podman's compose provider at it.
+  # Using real Compose v2 also makes containers carry the standard
+  # com.docker.compose.* labels, so guardian-updater's project detection works
+  # identically to Docker.
   if ! docker compose version >/dev/null 2>&1; then
-    warn "'docker compose' not yet resolvable — installing a compose provider (podman-compose)…"
-    if command -v dnf >/dev/null 2>&1; then dnf install -y -q podman-compose 2>/dev/null || true
-    elif command -v yum >/dev/null 2>&1; then yum install -y -q podman-compose 2>/dev/null || true; fi
+    warn "Installing Docker Compose v2 (compose CLI only — the Docker engine is NOT installed; runtime stays Podman)…"
+    if command -v dnf >/dev/null 2>&1; then
+      dnf install -y -q dnf-plugins-core 2>/dev/null || true
+      dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo 2>/dev/null || true
+      dnf install -y -q docker-compose-plugin 2>/dev/null || true
+    elif command -v yum >/dev/null 2>&1; then
+      yum install -y -q yum-utils 2>/dev/null || true
+      yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo 2>/dev/null || true
+      yum install -y -q docker-compose-plugin 2>/dev/null || true
+    fi
+    # The plugin lands as a cli-plugin binary; podman's `compose` won't find it
+    # on PATH automatically, so register it explicitly as the compose provider.
+    _compose_bin=""
+    for _p in /usr/libexec/docker/cli-plugins/docker-compose \
+              /usr/lib/docker/cli-plugins/docker-compose \
+              /usr/local/lib/docker/cli-plugins/docker-compose; do
+      [ -x "$_p" ] && _compose_bin="$_p" && break
+    done
+    if [ -n "$_compose_bin" ]; then
+      mkdir -p /etc/containers/containers.conf.d
+      printf '[engine]\ncompose_providers=["%s"]\ncompose_warning_logs=false\n' "$_compose_bin" \
+        > /etc/containers/containers.conf.d/guardian-compose.conf
+      ok "Docker Compose v2 plugin registered as Podman's compose provider: $_compose_bin"
+    fi
   fi
 else
   # ── Docker path (default; unchanged) ───────────────────────────────
@@ -385,9 +431,23 @@ fi
 # installs it; older boxes that pre-date the plugin-era of compose
 # may need a manual nudge.
 if ! docker compose version >/dev/null 2>&1; then
-  die "'docker compose' v2 plugin not available even after install.
+  if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
+    die "Docker Compose v2 is not resolvable through Podman's compose shim.
+       The installer tried to install the Compose v2 plugin (CLI only — not the
+       Docker engine) from download.docker.com and register it as Podman's
+       compose provider, but it's still not working. Install it manually:
+         sudo dnf install -y dnf-plugins-core
+         sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+         sudo dnf install -y docker-compose-plugin
+         sudo mkdir -p /etc/containers/containers.conf.d
+         printf '[engine]\\ncompose_providers=[\"/usr/libexec/docker/cli-plugins/docker-compose\"]\\n' | \\
+           sudo tee /etc/containers/containers.conf.d/guardian-compose.conf
+       then re-run this installer. (Verify with: docker compose version)"
+  else
+    die "'docker compose' v2 plugin not available even after install.
        Install manually:
        https://docs.docker.com/compose/install/linux/"
+  fi
 fi
 ok "Compose plugin present: $(docker compose version --short 2>/dev/null || docker compose version | head -1)"
 

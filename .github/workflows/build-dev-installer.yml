@@ -271,6 +271,28 @@ jobs:
             ./installer/build-guardian-installer.sh
           ls -lh "$PWD/dist/installer-dev/"
 
+      - name: Build + validate the Podman/RHEL dev installer (generation only)
+        # The customer Podman installer (guardian-installer-podman) is built by
+        # release.yml at tag time. We don't deploy it on the Docker dev VM, but
+        # generate it here every dev push so RUNTIME=podman generation +
+        # bash -n is CI-validated continuously instead of first-run at a
+        # customer tag (it has no Podman host to smoke against).
+        env:
+          VERSION: ${{ steps.digests.outputs.version }}
+          MANIFEST_PATH: ${{ steps.digests.outputs.manifest }}
+        run: |
+          OUTPUT_NAME=guardian-installer-podman-dev \
+          RUNTIME=podman \
+          OUTPUT_DIR="$PWD/dist/installer-dev" \
+            ./installer/build-guardian-installer.sh
+          bash -n "$PWD/dist/installer-dev/guardian-installer-podman-dev"
+          # Guard: the podman binary must select the podman runtime + compose.
+          grep -q 'GUARDIAN_RUNTIME="podman"' "$PWD/dist/installer-dev/guardian-installer-podman-dev"
+          grep -q 'podman.socket' "$PWD/dist/installer-dev/guardian-installer-podman-dev"
+          ! grep -q '__INSTALLER_' "$PWD/dist/installer-dev/guardian-installer-podman-dev"
+          echo "Podman dev installer generated + bash -n clean"
+          ls -lh "$PWD/dist/installer-dev/"
+
       - name: Stage dev installer at /home/ayman/guardian-installer-dev
         # Convenience step: the operator's day-to-day guardian-vm
         # upgrade flow is

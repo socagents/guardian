@@ -466,6 +466,11 @@ def _docker_client() -> docker.DockerClient:
     version="auto" so API-version negotiation works against both dockerd
     and Podman's Docker-compatible endpoint. Defaults are unchanged for
     Docker hosts (no DOCKER_HOST set → from_env over /var/run/docker.sock).
+
+    Note: version="auto" makes the SDK probe the daemon at construction, so a
+    fully unreachable socket surfaces here rather than at first call. Callers
+    already construct per-request and map exceptions to 503, so the failure is
+    still returned as a clean 503 — just raised slightly earlier.
     """
     host = os.environ.get("DOCKER_HOST")
     if host:
@@ -893,9 +898,24 @@ async def _pull_streaming(
             ):
                 loop.call_soon_threadsafe(queue.put_nowait, event)
         except Exception as e:
-            loop.call_soon_threadsafe(
-                queue.put_nowait, {"error": str(e)},
-            )
+            # Podman's Docker-compat socket does not always implement the
+            # Moby streaming-pull event protocol the way dockerd does, so the
+            # streaming pull above can fail where a plain pull would succeed.
+            # Fall back once to the non-streaming high-level pull (same auth)
+            # and synthesize a completion event so the UI still progresses.
+            # Harmless on Docker — only reached when streaming actually fails.
+            try:
+                ref = f"{pull_repository}:{pull_tag}" if pull_tag else pull_repository
+                client.images.pull(ref, auth_config=_registry_auth())
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    {"status": f"pulled {ref} (non-streaming fallback)"},
+                )
+            except Exception as e2:
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    {"error": f"{e} | non-streaming fallback also failed: {e2}"},
+                )
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, SENTINEL)
 
