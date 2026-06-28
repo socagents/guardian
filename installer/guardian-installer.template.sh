@@ -54,6 +54,10 @@ esac
 
 # ─── Constants ────────────────────────────────────────────────────────
 GUARDIAN_VERSION="__INSTALLER_VERSION__"
+# Container runtime this installer targets: "docker" (default) or "podman"
+# (RHEL/Podman-native build). Substituted at build time by
+# build-guardian-installer.sh. Drives Step 2 (runtime install/validation).
+GUARDIAN_RUNTIME="__INSTALLER_RUNTIME__"
 GHCR_REGISTRY="ghcr.io"
 GHCR_USER="thekite-dev"
 GHCR_OWNER="kite-production"
@@ -289,39 +293,92 @@ case "$ARCH" in
   *) die "Unsupported architecture: $ARCH (need amd64 or arm64)." ;;
 esac
 
-# ─── Step 2: Docker install if missing ────────────────────────────────
-info "Step 2/7 — Docker"
+# ─── Step 2: container runtime (Docker, or Podman on RHEL/Podman builds) ──
+if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
+  # ── Podman / RHEL path (no Docker Engine) ──────────────────────────
+  # Strategy ("Podman-as-Docker"): install podman + the podman-docker
+  # compat shim (provides a `docker` CLI alias + the /var/run/docker.sock
+  # symlink the stack mounts), enable the rootful API socket, and ensure a
+  # `docker compose` provider resolves. After this, the rest of the
+  # installer's docker/`docker compose` calls route to Podman unchanged.
+  info "Step 2/7 — Podman runtime (RHEL/Podman build)"
 
-if ! command -v docker >/dev/null 2>&1; then
-  warn "Docker not found — installing via get.docker.com…"
-  warn "(This pulls and runs Docker's official convenience script.)"
-
-  # The convenience script is the canonical way to install Docker
-  # Engine + compose plugin on the supported distros. We need curl
-  # to fetch it; install curl first if missing.
-  if ! command -v curl >/dev/null 2>&1; then
-    info "Installing curl first…"
-    if command -v apt-get >/dev/null 2>&1; then
-      apt-get update -qq && apt-get install -y -qq curl
-    elif command -v dnf >/dev/null 2>&1; then
-      dnf install -y -q curl
+  if ! command -v podman >/dev/null 2>&1; then
+    warn "Podman not found — installing via the system package manager…"
+    if command -v dnf >/dev/null 2>&1; then
+      dnf install -y -q podman podman-docker || die "Failed to install podman + podman-docker via dnf."
     elif command -v yum >/dev/null 2>&1; then
-      yum install -y -q curl
-    elif command -v zypper >/dev/null 2>&1; then
-      zypper -n install -y curl
+      yum install -y -q podman podman-docker || die "Failed to install podman + podman-docker via yum."
     else
-      die "Cannot install curl on this distro. Install it manually."
+      die "No dnf/yum found. Install 'podman' and 'podman-docker' manually, then re-run."
+    fi
+  else
+    # Podman present — make sure the docker-compat shim is installed too
+    # (it provides the `docker` command + /var/run/docker.sock symlink).
+    if ! command -v docker >/dev/null 2>&1; then
+      if command -v dnf >/dev/null 2>&1; then dnf install -y -q podman-docker || true
+      elif command -v yum >/dev/null 2>&1; then yum install -y -q podman-docker || true; fi
     fi
   fi
+  ok "Podman present: $(podman --version)"
 
-  curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
-  sh /tmp/get-docker.sh
-  rm -f /tmp/get-docker.sh
+  # Rootful Docker-compatible API socket — the updater drives it to manage
+  # connector containers. systemd socket-activates podman on first connect.
+  systemctl enable --now podman.socket 2>/dev/null \
+    || die "Could not enable the rootful Podman API socket. Run: sudo systemctl enable --now podman.socket"
+  # podman-docker normally symlinks /run/podman/podman.sock → /var/run/docker.sock;
+  # create it explicitly if the package didn't.
+  if [ ! -S /var/run/docker.sock ] && [ -S /run/podman/podman.sock ]; then
+    ln -sf /run/podman/podman.sock /var/run/docker.sock
+  fi
+  [ -S /var/run/docker.sock ] \
+    || die "Podman API socket missing at /var/run/docker.sock after enabling podman.socket.
+       Check: systemctl status podman.socket ; ls -l /run/podman/podman.sock"
+  ok "Podman API socket active at /var/run/docker.sock"
 
-  systemctl enable --now docker || true
-  ok "Docker installed: $(docker --version)"
+  # Ensure a 'docker compose' provider resolves (the compat shim routes
+  # 'docker compose' → 'podman compose' → an external provider). If not yet
+  # resolvable, try to install one; the shared check below validates it.
+  if ! docker compose version >/dev/null 2>&1; then
+    warn "'docker compose' not yet resolvable — installing a compose provider (podman-compose)…"
+    if command -v dnf >/dev/null 2>&1; then dnf install -y -q podman-compose 2>/dev/null || true
+    elif command -v yum >/dev/null 2>&1; then yum install -y -q podman-compose 2>/dev/null || true; fi
+  fi
 else
-  ok "Docker already present: $(docker --version)"
+  # ── Docker path (default; unchanged) ───────────────────────────────
+  info "Step 2/7 — Docker"
+
+  if ! command -v docker >/dev/null 2>&1; then
+    warn "Docker not found — installing via get.docker.com…"
+    warn "(This pulls and runs Docker's official convenience script.)"
+
+    # The convenience script is the canonical way to install Docker
+    # Engine + compose plugin on the supported distros. We need curl
+    # to fetch it; install curl first if missing.
+    if ! command -v curl >/dev/null 2>&1; then
+      info "Installing curl first…"
+      if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -qq curl
+      elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y -q curl
+      elif command -v yum >/dev/null 2>&1; then
+        yum install -y -q curl
+      elif command -v zypper >/dev/null 2>&1; then
+        zypper -n install -y curl
+      else
+        die "Cannot install curl on this distro. Install it manually."
+      fi
+    fi
+
+    curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+    sh /tmp/get-docker.sh
+    rm -f /tmp/get-docker.sh
+
+    systemctl enable --now docker || true
+    ok "Docker installed: $(docker --version)"
+  else
+    ok "Docker already present: $(docker --version)"
+  fi
 fi
 
 # Verify compose plugin (v2) is available. The convenience script

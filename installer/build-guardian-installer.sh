@@ -57,7 +57,18 @@ if ! printf '%s' "$VERSION" | grep -Eq '^([0-9]+\.[0-9]+\.[0-9]+|dev-[0-9a-f]{7,
 fi
 
 TEMPLATE="$SCRIPT_DIR/guardian-installer.template.sh"
-COMPOSE="$SCRIPT_DIR/docker-compose.yml"
+
+# v0.2.93+ — RUNTIME selects the container runtime the generated installer
+# targets. Default 'docker' (unchanged behavior; release.yml/build-dev-installer
+# don't set it). 'podman' produces the RHEL/Podman-native installer:
+# same template (runtime-branched at __INSTALLER_RUNTIME__) but the
+# Podman compose variant (SELinux security_opt on the socket-mounting updater).
+RUNTIME="${RUNTIME:-docker}"
+case "$RUNTIME" in
+  docker)  COMPOSE="$SCRIPT_DIR/docker-compose.yml" ;;
+  podman)  COMPOSE="$SCRIPT_DIR/podman-compose.yml" ;;
+  *) echo "ERROR: RUNTIME must be 'docker' or 'podman' (got: $RUNTIME)" >&2; exit 1 ;;
+esac
 # v0.4.0: reset-ui-password.sh retired (replaced by image-baked
 # /app/cli/reset-admin.mjs — see template comment in the template
 # for context). The RESET_SH path is no longer read.
@@ -66,7 +77,13 @@ OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/dist}"
 # the default (guardian-installer); build.yml passes
 # OUTPUT_NAME=guardian-installer-dev. The script body is identical
 # between the two — the divergence lives in the manifest, not here.
-OUTPUT_NAME="${OUTPUT_NAME:-guardian-installer}"
+# Default output name: guardian-installer for docker, guardian-installer-podman
+# for podman (CI passes OUTPUT_NAME explicitly for the dev variants).
+if [[ "$RUNTIME" == "podman" ]]; then
+  OUTPUT_NAME="${OUTPUT_NAME:-guardian-installer-podman}"
+else
+  OUTPUT_NAME="${OUTPUT_NAME:-guardian-installer}"
+fi
 OUTPUT="$OUTPUT_DIR/$OUTPUT_NAME"
 
 # v0.3.0+: embed the digest manifest. If MANIFEST_PATH is unset or
@@ -100,6 +117,7 @@ mkdir -p "$OUTPUT_DIR"
 # are passed in via env var (not interpolation) so any future change in
 # the template's escaping rules can't bleed into the build script.
 VERSION="$VERSION" \
+  RUNTIME="$RUNTIME" \
   TEMPLATE="$TEMPLATE" \
   COMPOSE="$COMPOSE" \
   FACTORY_RESET_SH="$FACTORY_RESET_SH" \
@@ -111,6 +129,7 @@ import sys
 
 out_path = sys.argv[1]
 version = os.environ["VERSION"]
+runtime = os.environ["RUNTIME"]
 
 with open(os.environ["TEMPLATE"]) as f:
     template = f.read()
@@ -144,6 +163,7 @@ markers = (
     "__INSTALLER_DIGEST_MANIFEST__",
     "__INSTALLER_FACTORY_RESET_SH__",
     "__INSTALLER_RESET_PASSWORD_SH__",
+    "__INSTALLER_RUNTIME__",
 )
 for marker in markers:
     n = template.count(marker)
@@ -184,6 +204,7 @@ out = out.replace("__INSTALLER_VERSION__", version)
 out = out.replace("__INSTALLER_DIGEST_MANIFEST__", manifest)
 out = out.replace("__INSTALLER_FACTORY_RESET_SH__", factory_reset)
 out = out.replace("__INSTALLER_RESET_PASSWORD_SH__", reset_admin)
+out = out.replace("__INSTALLER_RUNTIME__", runtime)
 
 # Sanity: every marker must have been substituted.
 for marker in markers:

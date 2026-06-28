@@ -1,0 +1,338 @@
+# Guardian — customer-facing Compose file.
+#
+# This is the compose file shipped to customers in
+# guardian-installer-<VERSION>.tar.gz. It pulls pre-built images from
+# ghcr.io/kite-production/* — customers DO NOT have build context (no
+# source repo, no Dockerfiles) and DO NOT need them. Every service
+# uses `image:` only.
+#
+# Differences vs the upstream development compose at the repo root:
+#
+#   1. No `build:` blocks. Images are pulled from GHCR.
+#   2. No `./bundles/spark:/app/bundle:ro` bind-mount on guardian-agent.
+#      That's a dev hot-reload convenience; the image bakes /app/bundle
+#      via Dockerfile COPY, which is what customers should run.
+#   3. The /app/runtime mount is a NAMED volume, not a host bind-mount.
+#      Named volumes survive `docker compose down` properly and don't
+#      assume the operator has a writable host directory at a specific
+#      path.
+#   4. Every operator-runtime config var (XSIAM, webhook, model API
+#      keys, UI creds) is supplied via the FIRST-RUN SETUP PAGE at
+#      http://localhost:3000 — NOT via .env. The handful of vars that
+#      .env carries are the ones needed at container boot before the
+#      setup page is reachable (registry creds, MCP token, encryption
+#      KEK).
+#   5. v0.3.0+ — image refs use DIGEST PINNING (`@sha256:...`), not
+#      version-tag pinning (`:1.2.0`). See "Image pinning" below.
+#
+# Image pinning (v0.3.0+):
+#   Each service references its image by content digest, not by tag:
+#
+#     image: ghcr.io/.../guardian-agent@${DIGEST_GUARDIAN_AGENT:-sha256:invalid_digest_run_installer_first}
+#
+#   The DIGEST_* values are written into .env by the guardian-installer
+#   from a release manifest (release-manifest-vX.Y.Z.env) bundled with
+#   each release. This means:
+#
+#     - docker compose recreates a service iff its image content
+#       actually changed between releases (digest changes ⇒ spec hash
+#       changes ⇒ recreate). Containers whose image bytes are
+#       identical across releases keep running, preserving in-memory
+#       state (in-flight agent jobs, active sessions, etc.).
+#     - The fallback `:-sha256:invalid_digest_run_installer_first`
+#       is INTENTIONALLY invalid — if the customer's .env is missing
+#       a DIGEST_* value, docker compose fails loudly with a clear
+#       hint instead of silently pulling a wrong image.
+#     - Customers MUST install/upgrade via the guardian-installer
+#       (or the install.sh script in the tarball kit). Manually
+#       editing .env to point at a different version is supported
+#       but requires fetching the matching release-manifest-vX.Y.Z.env
+#       from the GitHub Release first.
+#
+#   See app/help/architecture (#image-pinning) for the canonical spec.
+
+services:
+
+  # ─────────────────────────────────────────────────────────────────
+  # guardian-browser — headless-browser sidecar (v0.1.27+).
+  #
+  # Profile-gated: does NOT auto-start with `docker compose up`. The
+  # operator brings it up explicitly when they want web-access tools:
+  #
+  #     docker compose --profile browser up -d guardian-browser
+  #
+  # Then create a `web` connector instance via the agent's /connectors
+  # UI. Tools (web.navigate, web.get_text, etc.) won't advertise to
+  # the agent until at least one instance exists.
+  #
+  # Internal-network only: no host port published. Reachable from
+  # guardian-agent as `guardian-browser:9222`. CDP exposed there is
+  # equivalent to "remotely control this browser, no auth" — keeping
+  # it off the host network is a hard requirement, not a preference.
+  # ─────────────────────────────────────────────────────────────────
+  guardian-browser:
+    image: ghcr.io/kite-production/guardian-browser@${DIGEST_GUARDIAN_BROWSER:-sha256:invalid_digest_run_installer_first}
+    container_name: guardian_browser
+    restart: unless-stopped
+    profiles: ["browser"]
+    expose:
+      - "9222"
+    # No healthcheck. chromedp/headless-shell is too slim for any
+    # portable HTTP probe (no wget/curl/sh/python/nc). The agent's
+    # `_ensure_browser` does a Playwright-roundtrip liveness check
+    # on first navigate() instead — friendlier error than a generic
+    # docker "unhealthy" badge.
+
+  # ─────────────────────────────────────────────────────────────────
+  # guardian-updater — on-prem update sidecar.
+  #
+  # Drives the host docker daemon (via the mounted docker.sock) to
+  # check for newer image versions on GHCR and pull/swap them when the
+  # operator clicks "Update now" in the UI. Runs as its own container
+  # so it survives guardian-agent being replaced during the update —
+  # otherwise the UI's progress stream would die mid-update.
+  #
+  # Security boundary:
+  #   - No host port exposed. Reachable only from the internal compose
+  #     network (guardian-agent proxies UI requests to it).
+  #   - Token-gated: every endpoint except /healthz requires the same
+  #     MCP_TOKEN bearer that guardian-agent uses.
+  #   - Mounting /var/run/docker.sock is root-equivalent on the host.
+  #     Mitigations: minimal image surface, narrow API, internal-only
+  #     reachability, fail-closed auth.
+  # ─────────────────────────────────────────────────────────────────
+  guardian-updater:
+    image: ghcr.io/kite-production/guardian-updater@${DIGEST_GUARDIAN_UPDATER:-sha256:invalid_digest_run_installer_first}
+    container_name: guardian_updater
+    restart: unless-stopped
+    # PODMAN/RHEL: the updater mounts the Podman API socket + the host
+    # install dir; under SELinux-enforcing RHEL the socket mount is denied
+    # unless this container is run unconfined. label=disable scopes that
+    # relaxation to the updater only (agent/browser stay confined). The
+    # updater is already root-equivalent via the socket + internal-only +
+    # MCP_TOKEN-gated, so this does not widen the trust boundary.
+    security_opt:
+      - label=disable
+    environment:
+      # Same bearer the agent uses — the agent attaches it when
+      # proxying /api/updates/* requests through to this service.
+      - MCP_TOKEN
+      # GHCR pull credentials. The updater runs `docker login` against
+      # the host's daemon at startup; subsequent pulls inherit those
+      # credentials. Customer rotates these in .env, then restarts
+      # guardian-updater (or runs install.sh which re-logs-in).
+      - GUARDIAN_REGISTRY_USER
+      - GUARDIAN_REGISTRY_TOKEN
+      - GUARDIAN_REGISTRY=ghcr.io
+      - GUARDIAN_OWNER=kite-production
+      - HOST_INSTALL_DIR=/host
+      # v0.5.51 — GUARDIAN_VERSION + DIGEST_GUARDIAN_* / DIGEST_GUARDIAN_CONNECTOR_*
+      # are NO LONGER passed as env vars to guardian-updater. The updater
+      # now reads them from /host/.env at runtime via the cached helper
+      # in updater/src/main.py ("/host/.env reads" block). Pre-v0.5.51
+      # passing them as env vars caused docker compose to recreate the
+      # guardian-updater container on every stack upgrade — its image
+      # digest was unchanged but its resolved env block was different.
+      # The image-digest-pinning invariant ("containers retain in-memory
+      # state across upgrades that don't change image content") is now
+      # honored for guardian-updater as well.
+      #
+      # If you're maintaining a custom compose AND haven't upgraded to
+      # the v0.5.51+ guardian-updater image, you need to keep these env
+      # entries because the older code reads from os.environ. v0.5.51's
+      # combined release ships the new compose + new image atomically.
+    volumes:
+      # Drives the host's docker daemon — required for both pulls and
+      # `docker compose up -d` of the other services.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The host install dir mounted read-write — v0.3.0+ the updater
+      # WRITES the new digest manifest to /host/.env before running
+      # `docker compose pull / up -d`. Pre-v0.3.0 this was :ro because
+      # the updater only consumed the .env (compose pull/up read it)
+      # but never wrote it; the in-app update flow back then was a
+      # tag-bump done elsewhere (the agent's /api/updates proxy wrote
+      # the tag to /host/.env via a separate mechanism). v0.3.0+ the
+      # updater owns the .env-write end-to-end.
+      #
+      # Security note: the updater is already root-equivalent on the
+      # host via the docker.sock mount, and is internal-network-only +
+      # MCP_TOKEN-gated. Adding write access to the install dir
+      # doesn't expand the trust boundary; it just consolidates writes
+      # the updater service is already responsible for.
+      - .:/host:rw
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/healthz', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    # Intentionally NO `ports:` block. The updater MUST NOT be reachable
+    # from the host network — its API gives root-on-host via the
+    # docker.sock mount, and its only legitimate caller is
+    # guardian-agent's proxy (over the compose internal network).
+
+  # ─────────────────────────────────────────────────────────────────
+  # guardian-agent — Next.js UI + embedded MCP server.
+  # The product surface customers actually log in to. UI on :3000,
+  # embedded MCP on :8080 (same trust boundary, same container).
+  # ─────────────────────────────────────────────────────────────────
+  guardian-agent:
+    image: ghcr.io/kite-production/guardian-agent@${DIGEST_GUARDIAN_AGENT:-sha256:invalid_digest_run_installer_first}
+    container_name: guardian_agent
+    restart: unless-stopped
+    depends_on:
+      guardian-updater:
+        # service_started is enough — the updater isn't on the
+        # critical path for first boot; only the /api/updates/*
+        # routes care that it's up. The agent comes up regardless.
+        condition: service_started
+    environment:
+      # MCP_URL stays http:// here because entrypoint.sh flips it
+      # to https when TLS is enabled (intra-process, same cert).
+      - MCP_URL=http://localhost:8080/api/v1/stream/mcp
+
+      # Pinned image version, sourced from .env. Surfaced to the UI
+      # via /api/agent/version so the sidebar chip + About modal
+      # display authoritative running-version info. Compose already
+      # interpolates this variable into the image tag above; passing
+      # it into the container makes it readable at runtime too.
+      - GUARDIAN_VERSION
+
+      # v0.3.0+ — digest pins for the running stack, surfaced via
+      # /api/agent/version (extended to return a `digests` map) and
+      # /api/agent/digests (new). Primary consumer:
+      # /observability/connectors which displays a digest column per
+      # service so operators can audit "which exact image bytes is
+      # this container running" without having to docker-inspect.
+      # These names match the .env keys the guardian-installer writes
+      # from release-manifest-vX.Y.Z.env.
+      - DIGEST_GUARDIAN_AGENT
+      - DIGEST_GUARDIAN_UPDATER
+      - DIGEST_GUARDIAN_BROWSER
+
+      # MCP coordination token. Required at boot. .env sets this; the
+      # entrypoint will auto-generate one if completely unset, but for
+      # customer installs we want determinism (so smoke-test scripts,
+      # debugging, etc. are reproducible).
+      - MCP_TOKEN
+
+      # SecretStore encryption-at-rest KEK. v0.3.7+ REQUIRED — the
+      # SecretStore refuses to construct without it. The installer
+      # always generates one at first-install time so customer flows
+      # never see this env var unset. See .env.example for the
+      # operator-managed override path.
+      - GUARDIAN_SECRET_KEK
+      # v0.3.7+ escape hatch — set to "1" to allow plaintext mode
+      # when KEK is unset. Customer installs via guardian-installer
+      # never need it (installer auto-generates the KEK); only manual
+      # deploys that knowingly skip encryption should set this.
+      - GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT
+
+      # v0.5.5+ admin bootstrap password. Consumed only by the
+      # agent's entrypoint seed step on first boot of a fresh
+      # SecretStore; never consulted again once the operator
+      # changes their password at /profile. The installer auto-
+      # generates a per-install random value into .env so no
+      # credential is baked into the guardian-agent image (this
+      # was the last remaining one as of v0.5.4; v0.5.5 removed
+      # it). Forced first-login change at /profile is unchanged.
+      - GUARDIAN_DEFAULT_ADMIN_PASSWORD
+
+      # v0.6.36 — operator-tunable chat-route turn cap. v0.6.32 added
+      # the read site in mcp/agent/app/api/chat/route.ts ("Operators
+      # can tune via GUARDIAN_CHAT_MAX_TURNS") but forgot the compose
+      # plumbing — setting it in .env had no effect because docker-
+      # compose only passes through variables explicitly listed here.
+      # Default of 30 (clamped to [5,200]) lives in route.ts; this
+      # line just makes the override actually work.
+      - GUARDIAN_CHAT_MAX_TURNS
+
+      # The remaining operator config flows in via the SETUP PAGE
+      # at http://localhost:3000 on first run. These vars are accepted
+      # if pre-populated in .env (skips a step in the wizard) but are
+      # NOT required.
+      - CORTEX_MCP_PAPI_URL
+      - CORTEX_MCP_PAPI_AUTH_HEADER
+      - CORTEX_MCP_PAPI_AUTH_ID
+      - PLAYGROUND_ID
+      - WEBHOOK_ENDPOINT
+      - WEBHOOK_KEY
+
+      # Runtime mount paths — must match the volume mounts below.
+      # v0.4.0: GUARDIAN_AGENT_SETUP_PATH + GUARDIAN_AGENT_ENV_EXPORT_PATH
+      # retired. The setup page is gone; runtime config lives in
+      # SecretStore (DATA_ROOT/secrets/) + per-store SQLite DBs, not
+      # in /app/runtime/setup.json or /app/runtime/.env.generated.
+      # The guardian_agent_runtime volume below is still mounted as a
+      # no-op until v0.4.1 cleans it up (a separate compose breakage
+      # to deal with — out of scope for the auth release).
+      - BUNDLE_ROOT=/app/bundle
+      - DATA_ROOT=/app/data
+
+      # v0.3.2+ — operator override for the skills auto-merge.
+      # Bare-name forwarding so `FORCE_SKILLS_SYNC=1 docker compose
+      # up -d --force-recreate guardian-agent` flows through to
+      # entrypoint.sh's skills bootstrap. Normally unset — the
+      # marker-driven auto-merge in entrypoint.sh §1 handles
+      # per-release skill rollouts automatically. Set to 1 only when
+      # an operator wants to force-merge image defaults outside the
+      # normal upgrade path (e.g. after manually deleting a default
+      # skill they want back). See entrypoint.sh §1 + the skills
+      # discipline note in CLAUDE.md.
+      - FORCE_SKILLS_SYNC
+
+      # MCP transport defaults (overridable via .env, but customers
+      # rarely need to).
+      - MCP_TRANSPORT=${MCP_TRANSPORT:-streamable-http}
+      - MCP_HOST=${MCP_HOST:-0.0.0.0}
+      - MCP_PORT=${MCP_PORT:-8080}
+      - MCP_PATH=${MCP_PATH:-/api/v1/stream/mcp}
+
+      # Optional Spark platform integration.
+      - SPARK_PLATFORM_GATEWAY
+
+      # URL the agent's /api/updates/* proxy forwards to. Stays on
+      # the internal compose network — never exposed to the host.
+      - GUARDIAN_UPDATER_URL=http://guardian-updater:8090
+    volumes:
+      # v0.4.0: guardian_agent_runtime mount retained but unused. Pre-
+      # v0.4.0 housed setup.json + .env.generated + .setup_complete —
+      # all retired in the auth-redesign release. The volume + mount
+      # stay for now to avoid a compose-incompatible change in the
+      # same release; removed cleanly in v0.4.1 once the operator
+      # confirms no installed customer has lingering state to migrate.
+      - guardian_agent_runtime:/app/runtime
+      # MCP runtime state (audit log, instance store, KB, sessions, jobs).
+      - guardian_mcp_data:/app/data
+      # Skills volume (seeded from /app/mcp/skills-default at first run).
+      - guardian_mcp_skills:/app/skills
+      # Shared TLS volume — the agent writes cert.pem + key.pem here
+      # when the operator picks a TLS mode. Single source of truth for
+      # TLS material across the stack; replaces the old SSL_CERT_PEM
+      # compose-env passthrough.
+      - guardian_tls:/tls
+      # NOTE: the upstream dev compose bind-mounts ./bundles/spark over
+      # /app/bundle for hot-reload during dev. Customers don't have
+      # ./bundles/spark on their host — the image's baked-in copy is
+      # what gets used. Do not add that mount here.
+    ports:
+      - "3000:3000"   # Next.js UI (customer's browser)
+      - "8080:8080"   # Embedded MCP (internal; can firewall externally)
+    healthcheck:
+      # Probe HTTPS first (TLS mode) then fall back to HTTP (plain
+       # mode). The cost in plain mode is one extra TCP attempt against
+       # a non-listening port — fast-fail, then HTTP succeeds. -k skips
+       # cert verification for self-signed.
+      test: ["CMD-SHELL", "(curl -ksf https://localhost:3000/api/auth/status || curl -sf http://localhost:3000/api/auth/status) && (curl -ksf https://localhost:8080/ping/ || curl -sf http://localhost:8080/ping/) || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  guardian_agent_runtime:
+  guardian_mcp_data:
+  guardian_mcp_skills:
+  # Shared TLS volume — written by the agent. See the per-service
+  # volumes: blocks above for mount points.
+  guardian_tls:
