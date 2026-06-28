@@ -25,15 +25,15 @@ Kite gives you the installer one of two ways. Use whichever Kite tells you:
 
 ```bash
 curl -fSL -o guardian-installer \
-  https://github.com/kite-production/guardian/releases/download/v0.2.94/guardian-installer
+  https://github.com/kite-production/guardian/releases/download/v0.2.95/guardian-installer
 chmod +x guardian-installer
 ```
 
 **Option B — from the container registry** (if your firewall allows `ghcr.io` but not `github.com`):
 
 ```bash
-docker pull ghcr.io/kite-production/guardian-installer:0.2.94
-docker run --rm ghcr.io/kite-production/guardian-installer:0.2.94 \
+docker pull ghcr.io/kite-production/guardian-installer:0.2.95
+docker run --rm ghcr.io/kite-production/guardian-installer:0.2.95 \
   cat /guardian-installer > guardian-installer
 chmod +x guardian-installer
 ```

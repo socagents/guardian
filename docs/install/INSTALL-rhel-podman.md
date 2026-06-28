@@ -26,8 +26,8 @@ You do **not** need to install anything yourself beforehand except Podman — th
 Log into your server and run these three commands. They download the installer and make it runnable:
 
 ```bash
-podman pull ghcr.io/kite-production/guardian-installer-podman:0.2.94
-podman run --rm ghcr.io/kite-production/guardian-installer-podman:0.2.94 \
+podman pull ghcr.io/kite-production/guardian-installer-podman:0.2.95
+podman run --rm ghcr.io/kite-production/guardian-installer-podman:0.2.95 \
   cat /guardian-installer > guardian-installer
 chmod +x guardian-installer
 ```
@@ -98,7 +98,7 @@ Kite will walk you through the exact values for these if needed.
 
 ## Updating Guardian later
 
-When Kite ships a new version, repeat **Step 1** with the new version number (e.g. `:0.2.94`), then run `sudo ./guardian-installer` again. It detects your existing install and **keeps all your settings, passwords, and data** — it only updates the software.
+When Kite ships a new version, repeat **Step 1** with the new version number (e.g. `:0.2.95`), then run `sudo ./guardian-installer` again. It detects your existing install and **keeps all your settings, passwords, and data** — it only updates the software.
 
 ---
 
