@@ -439,13 +439,38 @@ _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 # ─── Helpers ──────────────────────────────────────────────────────────
 
 
+def _registry_auth() -> "dict | None":
+    """Explicit registry credentials for image pulls.
+
+    Passing auth_config to images.pull / api.pull makes pulls work
+    consistently across Docker AND Podman's Docker-compat socket. On
+    Podman the daemon-side auth.json lookup diverges from dockerd, so a
+    bare pull (relying on the creds `docker login` stored) can fail with
+    401/403 even after a successful login; passing the creds explicitly
+    sidesteps that. Harmless on Docker — same creds the daemon holds.
+    Returns None when creds aren't configured (falls back to daemon store).
+    """
+    if REGISTRY_USER and REGISTRY_TOKEN:
+        return {"username": REGISTRY_USER, "password": REGISTRY_TOKEN}
+    return None
+
+
 def _docker_client() -> docker.DockerClient:
     """
     Lazy-construct a Docker SDK client. Done per-request so failures
     surface as 503s rather than crashing the whole service at startup
     (e.g. when /var/run/docker.sock isn't mounted yet).
+
+    Honors DOCKER_HOST explicitly (Podman points it at the podman socket;
+    docker-py's from_env() can mis-parse some podman socket URLs) and pins
+    version="auto" so API-version negotiation works against both dockerd
+    and Podman's Docker-compatible endpoint. Defaults are unchanged for
+    Docker hosts (no DOCKER_HOST set → from_env over /var/run/docker.sock).
     """
-    return docker.from_env()
+    host = os.environ.get("DOCKER_HOST")
+    if host:
+        return docker.DockerClient(base_url=host, version="auto")
+    return docker.from_env(version="auto")
 
 
 # Memoized at first use; never changes for the lifetime of the
@@ -864,6 +889,7 @@ async def _pull_streaming(
             for event in client.api.pull(
                 repository=pull_repository, tag=pull_tag,
                 stream=True, decode=True,
+                auth_config=_registry_auth(),
             ):
                 loop.call_soon_threadsafe(queue.put_nowait, event)
         except Exception as e:
@@ -1927,7 +1953,7 @@ def _pull_with_retry(
     delay = base_delay_s
     for attempt in range(1, max_attempts + 1):
         try:
-            client.images.pull(image)
+            client.images.pull(image, auth_config=_registry_auth())
             log.info("pulled image %s (attempt %d)", image, attempt)
             return "pulled"
         except DockerException as exc:
