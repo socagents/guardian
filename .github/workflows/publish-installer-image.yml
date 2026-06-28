@@ -57,45 +57,36 @@ jobs:
           echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
           echo "ver=${TAG#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Download the installer asset for the tag
+      - name: Build + push installer image(s) — docker + podman variants
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.tag.outputs.tag }}      # validated above
-        run: |
-          gh release download "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern guardian-installer --clobber
-          test -s guardian-installer
-          echo "asset first line: $(head -1 guardian-installer)"
-          echo "asset sha256:     $(sha256sum guardian-installer | cut -d' ' -f1)"
-
-      - name: Build + push installer image
-        env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.actor }}
           VER: ${{ steps.tag.outputs.ver }}      # validated above
           TAGV: ${{ steps.tag.outputs.tag }}     # validated above
         run: |
-          IMG="${REGISTRY}/${OWNER}/guardian-installer"
-          printf 'FROM busybox:stable\nCOPY guardian-installer /guardian-installer\n' > Dockerfile.installer
           echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
-          docker build -f Dockerfile.installer -t "$IMG:$VER" -t "$IMG:$TAGV" -t "$IMG:latest" .
-          docker push "$IMG:$VER"
-          docker push "$IMG:$TAGV"
-          docker push "$IMG:latest"
-          {
-            echo "### Installer image published"
-            echo ""
-            echo "- \`$IMG:$VER\`"
-            echo "- \`$IMG:$TAGV\`"
-            echo "- \`$IMG:latest\`"
-            echo ""
-            echo "Customer pull (egress to ghcr.io only):"
-            echo '```'
-            echo "docker pull $IMG:$VER"
-            echo "docker run --rm $IMG:$VER cat /guardian-installer > guardian-installer"
-            echo "chmod +x guardian-installer && sudo ./guardian-installer"
-            echo '```'
-            echo ""
-            echo "> First publish only: make the \`guardian-installer\` GHCR package **Public**."
-          } >> "$GITHUB_STEP_SUMMARY"
+          printf 'ARG SRC\nFROM busybox:stable\nARG SRC\nCOPY ${SRC} /guardian-installer\n' > Dockerfile.installer
+          # asset-name : package-name. Podman is optional (absent on pre-v0.2.93 releases).
+          for pair in "guardian-installer:guardian-installer" "guardian-installer-podman:guardian-installer-podman"; do
+            asset="${pair%%:*}"; pkg="${pair##*:}"
+            if ! gh release download "$TAGV" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --clobber 2>/dev/null; then
+              echo "::notice::asset '$asset' not present on $TAGV — skipping"; continue
+            fi
+            test -s "$asset"
+            echo "$asset first line: $(head -1 "$asset")  sha256: $(sha256sum "$asset" | cut -d' ' -f1)"
+            IMG="${REGISTRY}/${OWNER}/${pkg}"
+            docker build -f Dockerfile.installer --build-arg SRC="$asset" -t "$IMG:$VER" -t "$IMG:$TAGV" -t "$IMG:latest" .
+            docker push "$IMG:$VER"; docker push "$IMG:$TAGV"; docker push "$IMG:latest"
+            {
+              echo "### Published \`$pkg\`"
+              echo '```'
+              echo "# (egress to ghcr.io only)"
+              echo "{docker|podman} pull $IMG:$VER"
+              echo "{docker|podman} run --rm $IMG:$VER cat /guardian-installer > guardian-installer"
+              echo "chmod +x guardian-installer && sudo ./guardian-installer"
+              echo '```'
+              echo "> First publish only: make the \`$pkg\` GHCR package **Public**."
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          done

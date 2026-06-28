@@ -689,6 +689,29 @@ Mechanic: `release.yml` would gain a flag (or a separate `release-beta.yml` work
 
 The two binaries execute the **identical** script body — same install/upgrade ceremony, same compose, same env file, same install location. The ONLY divergence is the digest manifest baked in at build time via `installer/build-guardian-installer.sh`. The customer installer has zero knowledge of dev — no flags, no branches, no toggles.
 
+### RHEL / Podman-native installer (Docker-free) — `guardian-installer-podman` (v0.2.93+, beta)
+
+Some customers run **RHEL with Podman and refuse to install Docker**. For them, `release.yml` builds a **second customer installer** from the *same* template + *same* digest manifest, with `RUNTIME=podman`:
+
+- **One source, runtime-switched.** `installer/build-guardian-installer.sh` takes `RUNTIME={docker|podman}` (default `docker`). `podman` selects `installer/podman-compose.yml` instead of `docker-compose.yml`, sets the output name to `guardian-installer-podman`, and stamps `GUARDIAN_RUNTIME="podman"` into the binary (the `__INSTALLER_RUNTIME__` marker). The Docker installer is byte-for-byte what it was — `RUNTIME` unset ⇒ docker.
+- **What the podman binary does differently (Step 2 only).** Installs `podman` + `podman-docker` (the Docker-compat shim: a `docker` CLI alias + the `/var/run/docker.sock` → `/run/podman/podman.sock` symlink), enables the **rootful** `podman.socket`, and ensures a `docker compose` provider resolves. Every later step (`docker compose version`, `docker info`, compose up, health checks) then runs unchanged through the shim.
+- **SELinux.** `installer/podman-compose.yml` is `docker-compose.yml` + `security_opt: [label=disable]` on `guardian-updater` only — it mounts the runtime socket + the host install dir, which SELinux-enforcing RHEL denies unless the container is unconfined. The agent/browser stay confined; the updater is already root-equivalent via the socket + internal-only + `MCP_TOKEN`-gated, so this doesn't widen the trust boundary.
+- **Updater auth.** `updater/src/main.py` passes explicit `auth_config` (from `GUARDIAN_REGISTRY_USER`/`TOKEN`) on `images.pull` + `api.pull`, and honors `DOCKER_HOST` + `version="auto"`. On Podman the daemon-side auth lookup diverges from dockerd, so a bare pull can 401/403 even after login — explicit creds fix it. No-op on Docker.
+- **Beta.** No Podman host exists in CI, so the path is unit/doc-validated and **certified on the first customer RHEL/Podman install**. The four things to confirm there: authenticated `ghcr.io` pull through the compat socket, dynamic connector-container spawn, agent→connector service-name DNS, and survive-a-reboot. See [issue #96](https://github.com/kite-production/guardian/issues/96) + `installer/guardian-installer.template.sh` (Step 2 podman branch).
+
+### Registry-image delivery (egress-restricted customers)
+
+Some customer egress allow-lists permit `ghcr.io` (to pull images) but **not** `github.com` (so `gh release download` and raw GitHub URLs are unreachable). For them, [publish-installer-image.yml](../.github/workflows/publish-installer-image.yml) wraps **both** installer binaries in a `busybox` image and publishes them as GHCR packages:
+
+- `ghcr.io/<owner>/guardian-installer` (Docker variant) and `ghcr.io/<owner>/guardian-installer-podman` (Podman variant), each tagged `:X.Y.Z`, `:vX.Y.Z`, `:latest`.
+- Customer retrieval (works with either `docker` or `podman`):
+  ```bash
+  podman pull ghcr.io/<owner>/guardian-installer-podman:0.2.93
+  podman run --rm ghcr.io/<owner>/guardian-installer-podman:0.2.93 cat /guardian-installer > guardian-installer
+  chmod +x guardian-installer && sudo ./guardian-installer
+  ```
+- **First-publish only**: the GHCR *package* must be made **Public** (or the customer's `read:packages` PAT granted) before the customer can pull — this is an operator action in the GHCR package settings, not something CI can do.
+
 ### Monorepo release invariant
 
 **Guardian is a monorepo release**: all 3 stack-level services (`guardian-agent`, `guardian-updater`, `guardian-browser`) + 6 per-connector images (`guardian-connector-{runtime,xsiam,cortex-xdr,web,cortex-docs,cortex-content}`) — 9 images total — ship in lockstep at the same `vX.Y.Z` version. Mixed-version manifests are NOT supported by guardian-installer or guardian-updater.

@@ -802,6 +802,13 @@ jobs:
             MANIFEST_PATH="$MANIFEST_PATH" \
             OUTPUT_DIR="$(pwd)/dist/installer" \
             ./installer/build-guardian-installer.sh
+          # RHEL/Podman-native installer (Docker-free) — same template +
+          # manifest, RUNTIME=podman selects the Podman compose + setup.
+          VERSION="$V" \
+            MANIFEST_PATH="$MANIFEST_PATH" \
+            RUNTIME=podman \
+            OUTPUT_DIR="$(pwd)/dist/installer" \
+            ./installer/build-guardian-installer.sh
           ls -lh dist/installer/guardian-installer*
 
       - name: Pack customer install kit
@@ -977,6 +984,8 @@ jobs:
             --notes-file "$NOTES" \
             "dist/installer/guardian-installer" \
             "dist/installer/guardian-installer.sha256" \
+            "dist/installer/guardian-installer-podman" \
+            "dist/installer/guardian-installer-podman.sha256" \
             "dist/installer/guardian-installer-$V.tar.gz" \
             "dist/installer/guardian-installer-$V.tar.gz.sha256" \
             "dist/installer/release-manifest-v$V.env" \

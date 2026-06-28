@@ -37,6 +37,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.93",
+    date: "2026-06-28",
+    title: "RHEL / Podman-native installer (Docker-free) — beta.",
+    highlights: [
+      "Guardian can now install on RHEL with Podman and no Docker at all — a new guardian-installer-podman targets RHEL 8 + rootful Podman.",
+      "It installs podman + podman-docker, enables the rootful Podman API socket (Docker-compatible), and uses a Podman compose variant; the install ceremony is otherwise identical to Docker.",
+      "Existing Docker installer and Docker customers are unchanged — one runtime-switched source builds both.",
+      "Both installers also publish as GHCR images, so customers whose egress allows ghcr.io but not github.com can fetch the installer via podman pull.",
+      "Beta: certified on the first customer RHEL/Podman install (no Podman host in CI).",
+    ],
+  },
+  {
     version: "0.2.92",
     date: "2026-06-28",
     title: "CU forecasting skill — best-practices playbook for saving Compute Units.",
