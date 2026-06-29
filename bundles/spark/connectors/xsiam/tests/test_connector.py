@@ -435,6 +435,51 @@ def test_xql_verify_empty_query_guard():
     assert out["success"] is False and "required" in out["error"].lower()
 
 
+# ─── 3d. datamodel_describe — datamodel-or-sample field discovery (P8) ─
+
+async def _instant_sleep(*a, **k):
+    return None
+
+
+def test_datamodel_describe_uses_datamodel_when_available(monkeypatch):
+    monkeypatch.setattr(connector.asyncio, "sleep", _instant_sleep)
+    rf = _XqlFetcher([{"reply": {"status": "SUCCESS",
+                                 "results": {"data": [{"field": "actor_process_image_name", "type": "string"}]}}}])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_datamodel_describe(dataset="xdr_data"))
+    assert out["success"] is True
+    assert out["method"] == "datamodel" and out["field_count"] == 1
+
+
+def test_datamodel_describe_falls_back_to_sampling(monkeypatch):
+    monkeypatch.setattr(connector.asyncio, "sleep", _instant_sleep)
+    rf = _XqlFetcher([
+        {"reply": {"status": "FAIL", "error": "bad query syntax at 'datamodel'"}},  # datamodel unavailable
+        {"reply": {"status": "SUCCESS", "results": {"data": [
+            {"action_remote_ip": "1.1.1.1", "actor_process_image_name": "x"},
+            {"action_remote_ip": "2.2.2.2"},  # sparse row: missing actor_process_image_name
+        ]}}},
+    ])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_datamodel_describe(dataset="cloud_audit_logs"))
+    assert out["success"] is True
+    assert out["method"] == "sampled"
+    assert out["fields"] == ["action_remote_ip", "actor_process_image_name"]  # sorted union
+    assert out["field_count"] == 2 and out["sampled_rows"] == 2
+
+
+def test_datamodel_describe_empty_dataset_hints(monkeypatch):
+    monkeypatch.setattr(connector.asyncio, "sleep", _instant_sleep)
+    rf = _XqlFetcher([
+        {"reply": {"status": "FAIL", "error": "unavailable"}},
+        {"reply": {"status": "SUCCESS", "results": {"data": []}}},  # quiet dataset
+    ])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_datamodel_describe(dataset="host_firewall_events"))
+    assert out["success"] is True and out["method"] == "sampled"
+    assert out["fields"] == [] and "hint" in out
+
+
 # ─── 4. __all__ integrity ────────────────────────────────────────────
 
 _DROPPED = {

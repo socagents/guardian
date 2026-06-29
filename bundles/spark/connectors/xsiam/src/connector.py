@@ -1715,44 +1715,85 @@ async def xsiam_parsers_get(parser_id: str) -> dict:
 
 
 @_xsiam_wrap
-async def xsiam_datamodel_describe(dataset: str) -> dict:
-    """XSIAM-licensed datamodel introspection — get XDM-typed schema for a dataset.
+async def xsiam_datamodel_describe(dataset: str, sample_rows: int = 50) -> dict:
+    """Describe a dataset's fields for airtight, guess-free XQL authoring.
 
-    Internally builds an XQL query with the `datamodel` stage. XDR-only
-    tenants return "Invalid License - XSIAM" for this query — XSIAM-only.
+    Tries the XSIAM `datamodel` stage (XDM-typed schema). When that stage isn't
+    available — unlicensed OR not supported on the tenant, both of which surface as
+    a generic parse/license error — it FALLS BACK to sampling
+    `dataset = X | fields * | limit N` over a wide window and returns the union of
+    column names actually present. So the agent always gets the real field list
+    before authoring instead of guessing a field name.
+
+    Returns: {dataset, method: "datamodel"|"sampled", field_count, fields}.
+    With method="sampled", `fields` is a list of native column-name strings (a
+    sampled view — a field absent from every sampled row won't appear; widen the
+    window or raise sample_rows if a known field is missing). Empty/quiet datasets
+    yield an empty field list with a hint. Use xsiam_get_datasets first to discover
+    which datasets exist (xdr_data, cloud_audit_logs, host_*, forensics_*, …).
     """
     if not dataset:
         return _xsiam_err("dataset required")
     fetcher = _get_fetcher()
-    query = f"dataset = {dataset} | datamodel"
-    body = {"request_data": {"query": query, "tenants": []}}
-    # Start the query
-    start_resp = await fetcher.send_request("/xql/start_xql_query/", data=body)
-    execution_id = (start_resp.get("reply") or {}).get("execution_id")
-    if not execution_id:
-        return _xsiam_err("could not start datamodel query", raw_response=start_resp)
-    # Poll for results (XSIAM datamodel queries are usually fast — <5s)
-    import asyncio as _async
-    for _attempt in range(20):
-        await _async.sleep(1)
-        poll = await fetcher.send_request(
-            "/xql/get_query_results/",
-            data={"request_data": {"query_id": execution_id, "limit": 1000}},
-        )
-        reply = poll.get("reply") or {}
-        status = reply.get("status")
-        if status == "SUCCESS":
-            return _xsiam_ok({
-                "dataset": dataset,
-                "fields": (reply.get("results") or {}).get("data", []),
-            })
-        if status in ("FAIL", "FAILED", "CANCELLED"):
-            return _xsiam_err(
-                "datamodel query failed",
-                hint="XDR-only tenants return 'Invalid License - XSIAM' here — XSIAM license required",
-                raw_response=poll,
+
+    async def _run(query, timeframe=None):
+        rd = {"query": query, "tenants": []}
+        if timeframe:
+            rd["timeframe"] = timeframe
+        start = await fetcher.send_request("xql/start_xql_query", data={"request_data": rd})
+        # PAPI returns reply = the query_id string (same as run_xql_query), NOT a dict.
+        qid = start.get("reply") if isinstance(start, dict) else None
+        if not qid:
+            return "error", {"stage": "start", "raw": start}
+        for _ in range(20):
+            await asyncio.sleep(1)
+            poll = await fetcher.send_request(
+                "xql/get_query_results",
+                data={"request_data": {"query_id": qid, "limit": 1000}},
             )
-    return _xsiam_err("datamodel query timed out after 20s")
+            reply = poll.get("reply") if isinstance(poll, dict) else None
+            reply = reply if isinstance(reply, dict) else {}
+            st = reply.get("status")
+            if st == "SUCCESS":
+                return "ok", (reply.get("results") or {}).get("data", [])
+            if st in ("FAIL", "FAILED", "CANCELLED", "ERROR"):
+                return "error", {"stage": "poll", "raw": reply}
+        return "error", {"stage": "timeout"}
+
+    # 1) XDM datamodel (typed schema, data-independent) — best when available.
+    try:
+        outcome, payload = await _run(f"dataset = {dataset} | datamodel")
+    except Exception as e:
+        outcome, payload = "error", {"stage": "exception", "raw": str(e)}
+    if outcome == "ok":
+        return _xsiam_ok({"dataset": dataset, "method": "datamodel",
+                          "field_count": len(payload), "fields": payload})
+
+    # 2) Fallback: sample native columns (any tenant/license; data-dependent).
+    try:
+        n = max(1, min(int(sample_rows), 200))
+    except (TypeError, ValueError):
+        n = 50
+    to_ts = int(time.time() * 1000)
+    tf = {"from": to_ts - 7 * 24 * 60 * 60 * 1000, "to": to_ts}  # 7-day window catches sparse data
+    try:
+        s_outcome, s_payload = await _run(f"dataset = {dataset} | fields * | limit {n}", timeframe=tf)
+    except Exception as e:
+        s_outcome, s_payload = "error", {"stage": "exception", "raw": str(e)}
+    if s_outcome != "ok":
+        return _xsiam_err(
+            "could not describe dataset",
+            hint="the `datamodel` stage is unavailable here and field sampling also failed — "
+                 "confirm the dataset name with xsiam_get_datasets",
+            dataset=dataset, datamodel_error=payload, sampling_error=s_payload,
+        )
+    cols = sorted({k for r in s_payload if isinstance(r, dict) for k in r.keys()})
+    res = {"dataset": dataset, "method": "sampled", "field_count": len(cols),
+           "fields": cols, "sampled_rows": len(s_payload)}
+    if not cols:
+        res["hint"] = ("no rows in the last 7 days to sample — the field list reflects present data, so a "
+                       "quiet dataset yields no fields. Confirm it's populated or widen the window.")
+    return _xsiam_ok(res)
 
 
 # ─── XSIAM-unique: Broker ───────────────────────────────────────

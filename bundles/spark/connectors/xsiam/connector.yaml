@@ -535,12 +535,16 @@ spec:
     - name: "datamodel_describe"
       method: "POST /public_api/v1/xql/start_xql_query/ + poll"
       description: |
-        XSIAM-licensed datamodel introspection. Returns the XDM-typed schema
-        for a dataset (field names + types + descriptions). XDR-only tenants
-        return 'Invalid License - XSIAM' here.
+        Describe a dataset's fields for guess-free XQL authoring. Tries the XSIAM
+        `datamodel` stage (XDM-typed schema); when that stage is unavailable
+        (unlicensed OR unsupported on the tenant) it FALLS BACK to sampling real
+        rows and returns the union of native column names present. Always run this
+        (after xsiam_get_datasets) before authoring against an unfamiliar dataset
+        so the agent never invents a field name.
       args:
-        - { name: "dataset", type: "string", description: "Dataset name (xdr_data, endpoints, etc.).", required: true }
-      returns: { type: "object", description: "{ ok, dataset, fields: [...] }" }
+        - { name: "dataset", type: "string", description: "Dataset name (xdr_data, endpoints, cloud_audit_logs, host_firewall_events, forensics_*, …).", required: true }
+        - { name: "sample_rows", type: "number", description: "Rows to sample for the native-field fallback (1-200, default 50). Higher catches sparsely-populated fields.", required: false }
+      returns: { type: "object", description: "{ ok, dataset, method: 'datamodel'|'sampled', field_count, fields }. method='sampled' → fields is a list of native column-name strings (present-data view)." }
 
     - name: "broker_list"
       method: "POST /public_api/v1/broker/list_brokers/"
