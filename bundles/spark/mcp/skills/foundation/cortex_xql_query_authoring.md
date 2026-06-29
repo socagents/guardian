@@ -268,6 +268,19 @@ Call **`xsiam_xql_verify(query=<the authored query>, lookback_hours=<narrow, e.g
 
 If no XSIAM instance is configured, skip this step (author-only) and tell the operator the query is **unverified** — they should run it once on a narrow window before trusting it. Reserve verification skips for genuinely free lookup-dataset queries only when an instance is absent.
 
+### Step 5.6 — Budget the real run from the verified cost (CU-aware planning)
+
+The verify in Step 5.5 already gives you a **measured price tag** on a narrow window — use it to plan the real hunt instead of running wide and hoping. (Deep dive: the `cortex_compute_unit_forecasting` skill.)
+
+1. **Extrapolate.** Verify ran on `lookback_hours = W_v` and reported `compute_units_used = C_v`. A hot `xdr_data` scan's cost scales ~linearly with the window, so the full hunt over `W_t` hours costs roughly **`C_v × (W_t / W_v)`**. Example: verify on 0.5 h cost 0.02 CU → a 72 h hunt ≈ `0.02 × 144 = ~2.9 CU`.
+2. **Check headroom.** Call `xsiam_get_xql_quota` and read `daily_used_quota` against the daily budget. If the extrapolated cost would exceed remaining headroom, do NOT run the wide query blind.
+3. **Narrow or warn — in this order:**
+   - **Reduce the scan** (cheapest lever, since cost = data scanned, not query complexity): tighten `lookback_hours`, push filters as early as possible (filter before comp/join), target a lookup dataset instead of a wide `xdr_data` scan, or select fewer `fields`.
+   - If the operator needs the wide window anyway, **warn with the number**: *"This hunt over 72 h is estimated at ~2.9 CU (verified 0.02 CU on 30 min); you have ~X CU left today. Run it, or should I narrow the window?"* — let them decide before spending the budget.
+4. **Self-calibrate.** The extrapolation is an estimate; after the real run, compare its actual `compute_units_used` to your prediction and adjust the multiplier for the next hunt in the session (cold-storage scans and heavy joins cost more than the linear model predicts).
+
+This keeps Guardian inside the ~1 CU/day budget on a metered tenant while still letting the operator authorize an expensive hunt with eyes open. **Never silently run a hunt you've estimated could exhaust the daily quota.**
+
 ### Step 6 — Offer to broaden if the result feels under-grounded
 
 If only 0-1 examples came back from step 2, tell the operator and offer a `cortex-docs/deep_research` follow-up for the broader topic:
