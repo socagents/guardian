@@ -203,6 +203,30 @@ dataset = xdr_data | filter event_type = ENUM.NETWORK and action_remote_ip != nu
 - `top N <field> by <group> top_count as cnt, top_percent as pct` is the `top` stage form (N first, then `by`, then the count/percent aliases) — e.g. `| top 10 bytes_out by host top_count as cnt`.
 - `to_float` / `to_number` accept a **numeric or aggregated field** too (not only strings) — wrap the operands of `divide` to get a real ratio (`divide(to_float(out), to_float(in))`); raw integer `divide` truncates.
 
+### Verified function/stage vocabulary (and the names that SILENTLY 500)
+
+All confirmed live on a real XSIAM tenant. XQL reports an invalid function name as a **generic HTTP 500 (`"An unexpected error occurred"`) with no hint about which token is wrong**, and one bad name poisons the whole query — so reaching for a Splunk/KQL name you *think* exists is the single most common first-shot failure. Use the confirmed names:
+
+- **`comp` aggregations (confirmed):** `count()`, `count_distinct(x)`, `sum`, `avg`, `min`, `max`, `var(x)`, `values(x)` (distinct set), `earliest(x)`/`latest(x)` (min/max of a time field).
+- **`windowcomp` functions (confirmed):** `row_number()`, `lag(x)`, `avg(x)`, `sum(x)`, `count()` — partitioned by `by P sort D F`, alias `as a` LAST.
+- **Conditionals/null (confirmed):** `if(c, then, else)` (nest for multi-branch), `coalesce(x, default)`.
+- **Strings (confirmed):** `uppercase(x)`, `lowercase(x)`, `replace(field, "old", "new")`.
+- **Time (confirmed):** `timestamp_diff(current_time(), _time, "SECOND")`, `format_timestamp("%Y-%m-%d %H:%M:%S", _time)`, `current_time()`.
+- **Stages (confirmed):** `dedup <field>` (keeps the FIRST row per distinct value — precede with `sort` to choose which survives), `join type = left|inner (subquery) as r r.k = k`.
+
+**Names that DO NOT exist in XQL → silent 500. Substitute:**
+
+| You might reach for | Use instead |
+|---|---|
+| `dcount(x)` | `count_distinct(x)` |
+| `stddev(x)` / `stdev` / `std` | `var(x)` then `\| alter sd = sqrt(v)` (no window stddev exists) |
+| `percentile(x, n)` / `approx_percentile` | no equivalent — rank with `windowcomp row_number()` over a `sort`ed stream |
+| `case(c1, a, c2, b, …)` | nested `if(c1, a, if(c2, b, …))` |
+| `lead(x)` (next row) | only `lag(x)` (prior row) exists |
+| `windowcomp var/stddev` | not window-aggregable → use per-group deviation: `windowcomp avg(x) by g as ga \| alter dev = subtract(x, ga)` |
+
+**Anti-join gotcha:** after `join type = left … as r`, you CANNOT keep non-matches with `filter r.<col> = null` — the joined column isn't exposed as `r.<col>` for unmatched rows (`unknown field r.<col>`). For "rows with no match", put a presence flag inside the subquery or aggregate-and-compare instead.
+
 Output shape:
 
 ````markdown
