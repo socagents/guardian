@@ -19,7 +19,7 @@ embedding: qEa8PLF3xTzl9Fm9cRgOvLernjyDIS09TDW4Pa5rlzx61Ui8KcPCuxs5tTwvvvQ8d3wKP
 
 **Dataset**: `guardian_xql_lab` (composite/array lookup lab)
 
-The JSON WRITE path: `object_create("k1", v1, "k2", v2)` builds an object, but every value argument must be string-coercible — wrap numerics with `to_string(...)`. `to_json_string(obj)` serializes it to a JSON-string column. Pair with `arraystring(values_array, ",")` to flatten a `values()`/`list()` aggregate into a readable CSV. Useful for emitting one compact JSON record per group (e.g. a per-department rollup) for downstream tooling.
+The JSON WRITE path: `object_create("k1", v1, "k2", v2)` builds an object, but every value argument must be string-coercible — wrap numerics with `to_string(...)`. `to_json_string(obj)` serializes it to a JSON-string column. Pair with `arraystring(values_array, ",")` to flatten a `values()` aggregate into a readable CSV. Useful for emitting one compact JSON record per group (e.g. a per-department rollup) for downstream tooling.
 
 ```sql
 dataset = guardian_xql_lab

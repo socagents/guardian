@@ -4711,6 +4711,51 @@ export const JOURNEYS: Journey[] = [
   },
 
   {
+    id: "xql-author-verify-detect",
+    category: "connectors",
+    title: "Author, verify, and harden an XQL query (and turn it into a detection)",
+    summary:
+      "Ask the agent to write a Cortex XQL hunt. It searches the operator's example KB, authors the query, then VERIFIES it on a narrow window before returning it (xsiam_xql_verify) — catching syntax errors and silently-wrong results, surfacing the compute-unit cost, and discovering real field names instead of guessing. Then ask it to shape the hunt into a scheduled correlation rule.",
+    difficulty: "starter",
+    durationMin: 4,
+    icon: "query_stats",
+    prompts: [
+      {
+        text: "Hunt my XSIAM tenant for processes making lots of outbound connections to a single external IP (possible beaconing). Verify the query before you give it to me.",
+        note: "The agent authors the XQL, runs xsiam_xql_verify on a short window, checks the sample values + columns, reports the CU cost, then returns the verified query.",
+      },
+      {
+        text: "Turn that into a scheduled correlation rule and tell me what to set in the rule editor.",
+        note: "cortex_detection_rule_authoring: the agent produces the filter→bin→comp→threshold→project query body and lists the rule-wrapper settings (schedule, severity, MITRE, suppression) that aren't in the XQL.",
+      },
+    ],
+    toolsExercised: ["xsiam_xql_verify", "xsiam_run_xql_query", "xsiam_datamodel_describe", "xsiam_get_xql_quota", "xql_examples_search"],
+    apis: [
+      {
+        method: "POST",
+        path: "/api/chat",
+        description:
+          "Chat drives the flow. The agent calls xql_examples_search (KB), xsiam_datamodel_describe (real fields), xsiam_xql_verify (bounded validation run + CU cost), and xsiam_get_xql_quota (headroom) — all read-only, no approval cards.",
+      },
+    ],
+    howToTest: [
+      "Create + enable a Cortex XSIAM instance first (see 'Create a Cortex XSIAM instance').",
+      "Open a fresh chat and paste prompt 1. Watch the agent author the query, then call xsiam_xql_verify before returning it.",
+      "Confirm the reply includes the verified query, the columns/sample it checked, and the compute-unit cost.",
+      "Paste prompt 2. The agent returns a correlation-rule XQL body plus the rule-editor settings (schedule/severity/MITRE/suppression) it can't set from the query.",
+    ],
+    expectedResult:
+      "The agent returns an XQL query it actually ran on a narrow window — not an unverified guess — with the columns, a sample, and the CU cost surfaced; and can reshape it into a scheduled correlation rule. Field names come from the live schema (datamodel_describe), so the query references real fields.",
+    verifyVia: [
+      "The chat transcript shows an xsiam_xql_verify tool call with a verdict (parses/columns/sample/compute_units_used) before the final query.",
+      "GET /api/agent/skills → cortex_xql_query_authoring and cortex_detection_rule_authoring are listed.",
+    ],
+    related: ["xsiam-investigate-respond", "ops-create-xsiam-instance"],
+    prerequisites: ["ops-create-xsiam-instance"],
+    components: ["connectors", "skills", "knowledge"],
+  },
+
+  {
     id: "ops-xsoar-v6-v8-side-by-side",
     category: "connectors",
     title: "Run XSOAR v6 + v8 instances side by side",

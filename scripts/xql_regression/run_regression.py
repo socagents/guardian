@@ -123,11 +123,19 @@ def main():
             if outcome == "ok":
                 cols = c.get("columns")
                 rows = payload if isinstance(payload, list) else []
-                if cols and rows:
-                    present = {k for r in rows if isinstance(r, dict) for k in r}
-                    ok = all(col in present for col in cols)
+                # xdr_data cases are shape-only: SUCCESS with 0 rows is a pass (quiet
+                # tenant). Seeded-LAB cases (no `dataset` key) have data, so a declared
+                # column set MUST appear — 0 rows there is the silent-wrong failure this
+                # harness exists to catch, NOT a pass.
+                shape_only = c.get("dataset") == "xdr_data"
+                if cols:
+                    if rows:
+                        present = {k for r in rows if isinstance(r, dict) for k in r}
+                        ok = all(col in present for col in cols)
+                    else:
+                        ok = shape_only  # LAB + columns + 0 rows → FAIL
                 else:
-                    ok = True  # shape-only (xdr_data 0-rows allowed) or no column assertion
+                    ok = True  # no column assertion (shape-only)
         if outcome == "infra":
             print(f"  SKIP  {c['id']:<32} (infra: {payload})")
             continue

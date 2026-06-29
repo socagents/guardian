@@ -2047,13 +2047,15 @@ Networks documentation and returning evidence-backed, cited answers.
                   <Link href="/knowledge/xql-examples" className="link">
                     xql-examples
                   </Link>{" "}
-                  knowledge base — <strong>237 example queries</strong>:
-                  reusable patterns, per-vendor alert-mapping queries, and an{" "}
+                  knowledge base — <strong>281 example queries</strong>:
+                  reusable patterns, per-vendor alert-mapping queries, an{" "}
                   ATT&amp;CK-tagged <strong>IR / threat-hunting set</strong>{" "}
-                  (48 hunts — brute force, C2 beaconing, lateral movement,
-                  exfiltration, ransomware, cloud abuse, …), plus{" "}
-                  <strong>36 complex queries verified live</strong> against a
-                  real XSIAM tenant. Browse it under{" "}
+                  (brute force, C2 beaconing, lateral movement, exfiltration,
+                  ransomware, cloud abuse, …), the full stage/function coverage
+                  matrix, and correlation-rule bodies — with{" "}
+                  <strong>44 added by running them live</strong> against a real
+                  XSIAM tenant, each tagged with its measured CU cost. Browse it
+                  under{" "}
                   <Link href="/knowledge" className="link">Knowledge</Link>.
                 </li>
                 <li>
@@ -2079,6 +2081,30 @@ Networks documentation and returning evidence-backed, cited answers.
                   explains how CU is consumed — cost scales with data scanned, so
                   narrowing the time window is the biggest lever — and forecasts
                   how many queries your daily limit allows.
+                </li>
+                <li>
+                  <strong>It verifies before it returns.</strong> Before handing
+                  you a query, the agent runs it on a narrow window via{" "}
+                  <Code>xsiam_xql_verify</Code> and checks that it parses, that
+                  the expected columns and sample values come back, and what it
+                  costs — so a <em>silently-wrong</em> query (one that returns
+                  rows that look right but aren&apos;t) is caught before you act
+                  on it. It also discovers a dataset&apos;s real field names from
+                  the live schema (<Code>xsiam_datamodel_describe</Code>) rather
+                  than guessing — across the hundreds of datasets a tenant
+                  ingests (cloud audit logs, firewall events, forensic
+                  artifacts), not just endpoint telemetry.
+                </li>
+                <li>
+                  <strong>Authoring detections, not just hunts.</strong> The{" "}
+                  <Code>cortex_detection_rule_authoring</Code> skill (under{" "}
+                  <Link href="/skills" className="link">Skills</Link>) turns a
+                  hunt into a scheduled <strong>correlation rule</strong>: the{" "}
+                  <em>filter → bucket-time → aggregate → threshold → project
+                  entities</em> shape, which output columns map to the alert,
+                  suppression to avoid alert storms, and which settings live in
+                  the rule editor (schedule, severity, MITRE) rather than the
+                  query. Ask &quot;turn that hunt into a correlation rule.&quot;
                 </li>
               </ul>
             </SubSection>

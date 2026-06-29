@@ -7312,12 +7312,30 @@ function XsiamConnector() {
  <strong>XSIAM platform</strong> directly: XQL hunts, incidents,
  alerts, issues, assets, and endpoint response actions (tool
  prefix <Code>xsiam_</Code>). It is the largest connector —{" "}
- <strong>55 tools</strong>. XQL is metered in Compute Units (CU)
+ <strong>56 tools</strong>. XQL is metered in Compute Units (CU)
  against a daily quota: <Code>xsiam_get_xql_quota</Code> reads the
  live quota without spending CU, and <Code>xsiam_run_xql_query</Code>
  returns each query&apos;s <Code>compute_units_used</Code> +{" "}
  <Code>remaining_quota_cu</Code> (see the{" "}
  <Code>cortex_compute_unit_forecasting</Code> skill).
+ </p>
+ <p className="mt-2">
+ Two tools make the agent author XQL <em>correctly first-shot</em>
+ rather than guess. <Code>xsiam_xql_verify</Code> runs an authored
+ query on a bounded window and returns a verdict —{" "}
+ <Code>parses</Code>, the result <Code>columns</Code> + a{" "}
+ <Code>sample</Code> of rows, <Code>compute_units_used</Code>, and
+ warnings — so a syntax error <em>or</em> a silently-wrong result
+ (HTTP 200 with plausible-but-incorrect rows) is caught before it
+ reaches an analyst; cost is driven by the window, not the sample.{" "}
+ <Code>xsiam_datamodel_describe</Code> returns a dataset&apos;s real
+ fields: it tries the XSIAM <Code>datamodel</Code> stage and, where
+ that stage is unavailable, <strong>falls back to sampling</strong>{" "}
+ real rows — so it always yields the native field list, across the
+ hundreds of datasets a tenant ingests, not just{" "}
+ <Code>xdr_data</Code>. Both are read-only; the{" "}
+ <Code>cortex_xql_query_authoring</Code> +{" "}
+ <Code>cortex_detection_rule_authoring</Code> skills drive them.
  </p>
 
  <SubSection icon="hub" title="Dispatch + container">

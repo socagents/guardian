@@ -37,6 +37,19 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.96",
+    date: "2026-06-29",
+    title: "XQL mastery: the agent verifies queries, knows 281 live-tested examples, stops guessing field names, and can author detection rules.",
+    highlights: [
+      "New xsiam_xql_verify tool: the agent runs an authored XQL query on a narrow window first and checks the columns + sample values + CU cost, catching silently-wrong queries (HTTP 200 with plausible-but-incorrect rows) before you act on them.",
+      "44 new live-verified XQL examples (knowledge base now 281), every one run on a real tenant with its measured CU cost — IR hunts, the full stage/function coverage matrix, and ATT&CK-tagged impact/defense-evasion hunts.",
+      "The agent now knows the function names that silently 500 (dcount/stddev/percentile/case/lead) and their working substitutes — so Splunk/KQL habits no longer fail mysteriously.",
+      "Airtight field discovery: xsiam_datamodel_describe was fixed to always return a dataset's real fields (falls back to sampling), so the agent authors across cloud, firewall, and forensic datasets — not just endpoint telemetry — without guessing field names.",
+      "New cortex_detection_rule_authoring skill for writing scheduled Cortex correlation rules (the filter→bin→comp→threshold→project shape, alert-field mapping, suppression, severity→case), with four live-verified rule bodies.",
+      "CU-aware planning: a wide hunt's cost is estimated from the cheap verification run and checked against your daily quota before it's spent.",
+    ],
+  },
+  {
     version: "0.2.95",
     date: "2026-06-28",
     title: "Installer: longer first-boot health-timeout so slow boxes don't show a false failure.",
