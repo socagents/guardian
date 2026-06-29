@@ -485,15 +485,23 @@ async def xsiam_xql_verify(query: str = "", lookback_hours: float = _XQL_LOOKBAC
     except Exception as e:
         msg = str(e)
         low = msg.lower()
-        if "quota" in low:
+        # A genuine quota wall needs an EXPLICIT marker. Do NOT match bare "quota":
+        # every XQL 500 body carries "remaining_quota", which would misclassify a
+        # syntax/bad-name error as a budget problem (live-found bug).
+        if "quota_exceeded" in low or "quota exceeded" in low or "max daily quota" in low or "exceeded max daily" in low:
             return _create_response({
                 "verified": False, "parses": True, "error": f"quota exceeded: {msg}",
                 "guidance": "Daily CU quota is spent (resets 00:00 UTC). Can't verify now — check xsiam_get_xql_quota.",
             }, is_error=True)
+        # Reaching here means the query failed to START. XQL reports an invalid
+        # function/stage name as a GENERIC 500 ("an unexpected error occurred") with
+        # no parse marker, so treat a start-failure as parses=False (a query that
+        # won't start must not be blessed) and point at the likely cause.
         return _create_response({
-            "verified": False, "parses": not _syntax_err(msg), "error": msg,
-            "guidance": ("Syntax error — fix and re-verify." if _syntax_err(msg)
-                         else "The verification call errored; retry once, then check the query."),
+            "verified": False, "parses": False, "error": msg,
+            "guidance": ("The query failed to start — almost always an invalid function/stage name "
+                         "(XQL reports these as a generic 500 with no hint) or a syntax error. Check the "
+                         "names against the verified vocabulary in cortex_xql_query_authoring, fix, and re-verify."),
         }, is_error=True)
 
 

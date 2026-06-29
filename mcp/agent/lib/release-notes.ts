@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.97",
+    date: "2026-06-29",
+    title: "Fix: the XQL verify tool no longer mislabels a bad-query error as 'quota exceeded'.",
+    highlights: [
+      "v0.2.96's xsiam_xql_verify checked for the word 'quota' in the error to detect a budget wall — but every XSIAM error body carries 'remaining_quota', so a query with an invalid function/stage name (reported by XSIAM as a hint-less 500) was wrongly shown as 'daily CU quota exceeded'.",
+      "Now a verification start-failure is reported as a parse/name error (parses=false) with guidance to check the name against the verified vocabulary; only an explicit quota-exceeded marker is treated as a budget wall.",
+      "Found by the post-release deployed smoke of v0.2.96; two regression tests added (one reproduces the real error-body shape the mocked unit tests missed).",
+    ],
+  },
+  {
     version: "0.2.96",
     date: "2026-06-29",
     title: "XQL mastery: the agent verifies queries, knows 281 live-tested examples, stops guessing field names, and can author detection rules.",

@@ -10,6 +10,11 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.97] (2026-06-29) — *Fix: `xsiam_xql_verify` mislabeled an invalid-query error as "quota exceeded"*
+
+- **The verify-before-return tool now names the real problem.** v0.2.96's `xsiam_xql_verify` decided whether a failed verification was a quota wall by looking for the word "quota" in the error — but *every* XSIAM query-error body carries `remaining_quota`, so a query with an invalid function/stage name (which XSIAM reports as a hint-less generic 500) was wrongly reported as **"daily CU quota exceeded"** with `parses: true`, instead of a syntax/name error. An analyst (or the agent) would think they were out of budget and stop, rather than fix the bad name. Now a verification *start-failure* is reported as **`parses: false`** with guidance pointing at the most common cause (an invalid name — check it against the authoring skill's verified vocabulary), and only an **explicit** quota-exceeded marker is treated as a budget wall.
+- **Found by the post-release deployed smoke of v0.2.96** (calling `xsiam_xql_verify` through the running agent against a real tenant with ~85% quota remaining, where two forbidden-name queries were both mislabeled "quota exceeded"). The unit tests mocked the fetcher and didn't carry the real `remaining_quota` body shape, so they missed it — two regression tests now reproduce both the real 500 body and an actual quota-exceeded message.
+
 ## [v0.2.96] (2026-06-29) — *XQL mastery: verify-before-return, a 44-example knowledge base, airtight field discovery, and detection-rule authoring*
 
 A focused program to make Guardian author **perfect Cortex XQL first-shot** — for ad-hoc hunts and during an incident — grounded in extensive live testing against a real XSIAM tenant. Everything below was verified by running it, not by reading docs.

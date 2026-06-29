@@ -435,6 +435,35 @@ def test_xql_verify_empty_query_guard():
     assert out["success"] is False and "required" in out["error"].lower()
 
 
+class _RaisingFetcher:
+    def __init__(self, exc):
+        self._exc = exc
+
+    async def send_request(self, path, method="POST", data=None):
+        raise self._exc
+
+
+def test_xql_verify_500_with_remaining_quota_is_not_misread_as_quota(monkeypatch):
+    # Live-found bug: every XQL 500 body carries "remaining_quota", so a bad-function-name
+    # syntax 500 must NOT be classified as a quota wall. It's a start failure → parses=False.
+    rf = _RaisingFetcher(Exception(
+        'Server error 500: {"reply": {"err_code": 500, "err_msg": "An unexpected error occurred '
+        'by XDR public API", "err_extra": {"query_cost_charged": 0, "remaining_quota": 0.85}}}'))
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_xql_verify(query="dataset = xdr_data | comp dcount(x) as c"))
+    assert out["success"] is False
+    assert out["verified"] is False and out["parses"] is False
+    assert not str(out["error"]).lower().startswith("quota exceeded")
+
+
+def test_xql_verify_real_quota_exceeded_is_classified(monkeypatch):
+    rf = _RaisingFetcher(Exception("query usage exceeded max daily quota; QUOTA_EXCEEDED"))
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_xql_verify(query="dataset = xdr_data | limit 1"))
+    assert out["verified"] is False and out["parses"] is True
+    assert "quota exceeded" in str(out["error"]).lower()
+
+
 # ─── 3d. datamodel_describe — datamodel-or-sample field discovery (P8) ─
 
 async def _instant_sleep(*a, **k):
