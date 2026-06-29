@@ -231,6 +231,19 @@ dataset = xdr_data
 
 Always cite the docs as `docs-cortex.paloaltonetworks.com - <Title> (<Publication>)` — that's the source string the connector returns.
 
+### Step 5.5 — Verify before returning (catch syntax AND silent-wrong-results)
+
+**When an XSIAM instance is connected, do NOT return an unverified query.** A query that is syntactically valid can still be *silently wrong* — it returns HTTP 200 with plausible-looking but incorrect rows (live-observed examples: `incidr(ip, <column-with-comma-list>)` returns `false` for every row; a nested-`@element` array intersection returns the whole array instead of the overlap). "Does it parse" and "does it return rows" both pass these. The only general defense is to **run it on a bounded window and check the actual values**.
+
+Call **`xsiam_xql_verify(query=<the authored query>, lookback_hours=<narrow, e.g. 0.5–2>)`** — it runs the query cheaply (cost is driven by the window, not the sample) and returns a verdict: `parses`, `columns`, `row_count`, a `sample` of rows, `compute_units_used`, and `warnings`. Then:
+
+- **`parses = false`** → it's a syntax error. Fix the XQL per `error` and re-verify; do not return a broken query.
+- **`verified = true` but check the SAMPLE** → confirm the `columns` you expected are present and the sample VALUES are what the question asks for (e.g. an "external IPs" hunt should show external IPs, not internal ones). If the values are wrong, the query is silently wrong — fix the logic (re-read the array/incidr/windowcomp gotchas above) and re-verify.
+- **`row_count = 0` (a warning)** → either a true negative (rare event in the window) or a wrong field/filter/enum. Widen `lookback_hours`, relax the filter, or confirm field names with `xsiam_datamodel_describe` before concluding "nothing found".
+- **Surface the cost** → include `compute_units_used` in your answer so the operator sees what the (real) hunt will cost; pre-flight a wide hunt with `xsiam_get_xql_quota` if the verification window's cost extrapolates past the daily budget.
+
+If no XSIAM instance is configured, skip this step (author-only) and tell the operator the query is **unverified** — they should run it once on a narrow window before trusting it. Reserve verification skips for genuinely free lookup-dataset queries only when an instance is absent.
+
 ### Step 6 — Offer to broaden if the result feels under-grounded
 
 If only 0-1 examples came back from step 2, tell the operator and offer a `cortex-docs/deep_research` follow-up for the broader topic:

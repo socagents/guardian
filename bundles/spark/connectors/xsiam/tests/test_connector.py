@@ -391,6 +391,50 @@ def test_add_lookup_data_requires_dataset_and_rows(monkeypatch):
     assert rf.calls == []  # neither hit the API
 
 
+# ─── 3c. xql_verify — verify-before-return guard (P2) ────────────────
+
+
+def test_xql_verify_success_surfaces_columns_sample_and_cu(monkeypatch):
+    monkeypatch.setattr(connector, "_XQL_POLL_INTERVAL_S", 0)
+    rf = _XqlFetcher([{"reply": {"status": "SUCCESS",
+                                 "results": {"data": [{"host": "a", "n": 3}, {"host": "b", "n": 1}]},
+                                 "query_cost": {"t1": 0.0003}, "remaining_quota": 0.99,
+                                 "number_of_results": 2}}])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_xql_verify(query="dataset = x | comp count() by host"))
+    assert out["success"] is True
+    assert out["verified"] is True and out["parses"] is True
+    assert out["columns"] == ["host", "n"]
+    assert out["row_count"] == 2 and len(out["sample"]) == 2
+    assert out["compute_units_used"] == 0.0003
+    assert out["remaining_quota_cu"] == 0.99
+
+
+def test_xql_verify_zero_rows_warns(monkeypatch):
+    monkeypatch.setattr(connector, "_XQL_POLL_INTERVAL_S", 0)
+    rf = _XqlFetcher([{"reply": {"status": "SUCCESS", "results": {"data": []}}}])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_xql_verify(query="dataset = x | filter a = 1"))
+    assert out["verified"] is True and out["row_count"] == 0
+    assert any("0 rows" in w for w in out["warnings"])
+
+
+def test_xql_verify_validation_failure_is_not_syntax(monkeypatch):
+    monkeypatch.setattr(connector, "_XQL_POLL_INTERVAL_S", 0)
+    rf = _XqlFetcher([{"reply": {"status": "FAIL",
+                                 "error": {"validation_message": "Expecting field/array, but received @element"}}}])
+    _install(monkeypatch, rf)
+    out = run(connector.xsiam_xql_verify(query='dataset = x | alter m = incidr(ip, "@element")'))
+    assert out["success"] is False
+    assert out["verified"] is False and out["parses"] is True  # validation error, not a parse error
+    assert "@element" in out["error"]
+
+
+def test_xql_verify_empty_query_guard():
+    out = run(connector.xsiam_xql_verify(query="   "))
+    assert out["success"] is False and "required" in out["error"].lower()
+
+
 # ─── 4. __all__ integrity ────────────────────────────────────────────
 
 _DROPPED = {
@@ -400,7 +444,7 @@ _DROPPED = {
 
 
 def test_all_exports_are_callable_and_dropped_tools_gone():
-    assert len(connector.__all__) == 55
+    assert len(connector.__all__) == 56  # +xsiam_xql_verify (verify-before-return guard)
     for name in connector.__all__:
         assert callable(getattr(connector, name)), f"{name} not callable"
         assert name not in _DROPPED

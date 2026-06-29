@@ -76,6 +76,15 @@ spec:
         - { name: "lookback_hours", type: "number", description: "Query time window in hours (default 0.5 = last 30 min; max 168 = 7 days). For a blast-radius hunt over a multi-day incident, pass e.g. 72. Cost scales ~linearly with this window.", required: false }
       returns: { type: "object", description: "Query result rows (reply.results.data) plus compute_units_used (CU this query cost), remaining_quota_cu (CU left), and number_of_results." }
 
+    - name: "xql_verify"
+      method: "POST /xql/start_xql_query"
+      description: "Verify an XQL query BEFORE returning it: run it on a bounded window and return a verdict — parses (no syntax error), the result columns + a small sample of rows, row_count, the compute-unit cost, and warnings (e.g. zero-rows-in-window). Use as the LAST authoring step to catch a syntax error OR a silently-wrong result before an analyst acts on it. Cheap — cost is driven by lookback_hours, not sample_limit. Eyeball the sample VALUES, not just that it ran."
+      args:
+        - { name: "query",         type: "string", description: "XQL query text to validate.", required: true }
+        - { name: "lookback_hours", type: "number", description: "Verification window in hours (default 0.5 = last 30 min; max 168). Keep narrow to stay cheap; widen only if a true negative is suspected.", required: false }
+        - { name: "sample_limit",   type: "number", description: "Max sample rows to return (1-50, default 5). Does NOT affect CU cost.", required: false }
+      returns: { type: "object", description: "Verdict: verified, parses, error, columns, row_count, sample, compute_units_used, remaining_quota_cu, warnings, guidance." }
+
     - name: "get_xql_quota"
       method: "POST /xql/get_quota"
       description: "Report the tenant's XQL Compute-Unit quota + today's consumption WITHOUT running a query (consumes no CU). Read-only: annual bank (license + purchased + eval), used_quota, computed remaining_annual_cu, daily_used_quota (resets 00:00 UTC), and daily query/concurrency counters. Use it to check headroom before a wide hunt or to explain quota state."

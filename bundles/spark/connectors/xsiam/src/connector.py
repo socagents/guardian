@@ -27,6 +27,7 @@ from ._papi_client import Fetcher
 # surface in one place.
 __all__ = [
     "xsiam_run_xql_query",
+    "xsiam_xql_verify",
     "xsiam_get_xql_quota",
     "xsiam_add_lookup_data",
     "xsiam_get_lookup_data",
@@ -354,6 +355,146 @@ async def xsiam_run_xql_query(query: str = "", lookback_hours: float = _XQL_LOOK
                         "targeting a lookup dataset instead of a wide xdr_data scan.",
             }, is_error=True)
         return _create_response({"error": f"Error running XQL: {msg}"}, is_error=True)
+
+
+async def xsiam_xql_verify(query: str = "", lookback_hours: float = _XQL_LOOKBACK_DEFAULT_HOURS,
+                           sample_limit: int = 5, ctx: Context = None) -> dict:
+    """
+    Verify an XQL query BEFORE trusting or returning it.
+
+    Runs the query on a bounded window, confirms it parses, and surfaces the
+    result COLUMNS + a small SAMPLE of rows + the compute-unit cost so a syntax
+    error OR a silently-wrong result is caught before an analyst acts on it.
+    Call this as the LAST step of authoring a query. The check is cheap — cost is
+    driven by the narrow `lookback_hours` window, NOT by `sample_limit` (limit
+    caps output, not scan). Eyeball the sample VALUES, not just that it ran:
+    many wrong queries return HTTP 200 with plausible-looking but incorrect rows.
+
+    Verdict fields:
+      - verified        — ran to SUCCESS with no error
+      - parses          — no syntax/parse error ('bad query syntax' → false)
+      - error           — the error / validation message when it failed
+      - columns         — field names present in the result (confirm the expected ones)
+      - row_count       — rows matched in the verification window
+      - sample          — up to sample_limit result rows
+      - compute_units_used / remaining_quota_cu
+      - warnings        — e.g. zero-rows (valid but matched nothing: a true negative,
+                          or the filter/field is wrong — widen the window / recheck)
+      - guidance        — one-line next step for the agent
+    """
+    request = RunXqlQueryRequest(query=query)
+    if not request.query or not request.query.strip():
+        return _create_response({"error": "XQL query is required"}, is_error=True)
+
+    try:
+        lb = float(lookback_hours)
+    except (TypeError, ValueError):
+        lb = _XQL_LOOKBACK_DEFAULT_HOURS
+    if lb <= 0:
+        lb = _XQL_LOOKBACK_DEFAULT_HOURS
+    lb = min(lb, _XQL_LOOKBACK_MAX_HOURS)
+    try:
+        n = int(sample_limit)
+    except (TypeError, ValueError):
+        n = 5
+    n = max(1, min(n, 50))
+
+    def _syntax_err(msg: str) -> bool:
+        m = (msg or "").lower()
+        return "bad query syntax" in m or "unable to parse" in m or "parse_err" in m or "syntax" in m
+
+    try:
+        fetcher = _get_fetcher()
+        to_ts = int(time.time() * 1000)
+        from_ts = to_ts - int(lb * 60 * 60 * 1000)
+        start_resp = await fetcher.send_request(
+            "xql/start_xql_query",
+            data={"request_data": {"query": request.query.strip(), "timeframe": {"from": from_ts, "to": to_ts}}},
+        )
+        # The PAPI returns the execution id as `reply` (same as run_xql_query).
+        query_id = start_resp.get("reply") if isinstance(start_resp, dict) else None
+        if not query_id:
+            return _create_response({
+                "verified": False, "parses": False,
+                "error": "could not start query", "details": start_resp,
+                "guidance": "The query failed to start — usually a syntax error. Fix the XQL and re-verify.",
+            }, is_error=True)
+
+        results_resp: dict = {}
+        for _ in range(_XQL_POLL_MAX_TRIES):
+            await asyncio.sleep(_XQL_POLL_INTERVAL_S)
+            results_resp = await fetcher.send_request(
+                "xql/get_query_results",
+                data={"request_data": {"query_id": query_id, "pending_flag": True, "limit": n, "format": "json"}},
+            )
+            reply = results_resp.get("reply") if isinstance(results_resp, dict) else None
+            status = reply.get("status") if isinstance(reply, dict) else None
+            if status != "PENDING":
+                break
+
+        reply = results_resp.get("reply") if isinstance(results_resp, dict) else {}
+        reply = reply if isinstance(reply, dict) else {}
+        status = reply.get("status")
+
+        # CU cost (same extraction as xsiam_run_xql_query)
+        cu_used = None
+        _qc = reply.get("query_cost")
+        try:
+            if isinstance(_qc, dict) and _qc:
+                cu_used = round(sum(float(v) for v in _qc.values()), 8)
+            elif isinstance(_qc, (int, float)):
+                cu_used = round(float(_qc), 8)
+        except (TypeError, ValueError):
+            pass
+        remaining = reply.get("remaining_quota")
+        remaining = round(float(remaining), 8) if isinstance(remaining, (int, float)) else None
+
+        if status == "SUCCESS":
+            rows = (reply.get("results") or {}).get("data", []) if isinstance(reply.get("results"), dict) else []
+            cols = sorted({k for r in rows if isinstance(r, dict) for k in r.keys()})
+            warnings = []
+            if not rows:
+                warnings.append(
+                    f"0 rows in the {lb}h verification window — the query is syntactically valid but matched "
+                    "nothing. Either a true negative (rare event) or a wrong field/filter/enum. Widen "
+                    "lookback_hours, relax the filter, or confirm field names with xsiam_datamodel_describe."
+                )
+            if lb <= _XQL_LOOKBACK_DEFAULT_HOURS:
+                warnings.append(f"Verification used a narrow {lb}h window; a real hunt may need a wider lookback_hours.")
+            return _create_response({
+                "verified": True, "parses": True, "error": None,
+                "columns": cols, "row_count": len(rows), "sample": rows[:n],
+                "compute_units_used": cu_used, "remaining_quota_cu": remaining,
+                "warnings": warnings,
+                "guidance": ("Query is valid. CHECK THE SAMPLE VALUES against what you expect before returning it — "
+                             "a 200 with plausible-but-wrong rows is the silent-failure case. Confirm the expected "
+                             "columns are present and the values look right."),
+            })
+
+        # FAIL / ERROR — extract the validation/error message
+        err = reply.get("error") or reply.get("validation_message") or reply.get("err_msg") or status or "query failed"
+        if isinstance(err, dict):
+            err = err.get("validation_message") or str(err)[:400]
+        return _create_response({
+            "verified": False, "parses": not _syntax_err(str(err)),
+            "error": str(err), "columns": [], "row_count": 0, "sample": [],
+            "compute_units_used": cu_used, "remaining_quota_cu": remaining,
+            "warnings": [], "guidance": "The query ran but failed — fix per the error and re-verify before returning it.",
+        }, is_error=True)
+
+    except Exception as e:
+        msg = str(e)
+        low = msg.lower()
+        if "quota" in low:
+            return _create_response({
+                "verified": False, "parses": True, "error": f"quota exceeded: {msg}",
+                "guidance": "Daily CU quota is spent (resets 00:00 UTC). Can't verify now — check xsiam_get_xql_quota.",
+            }, is_error=True)
+        return _create_response({
+            "verified": False, "parses": not _syntax_err(msg), "error": msg,
+            "guidance": ("Syntax error — fix and re-verify." if _syntax_err(msg)
+                         else "The verification call errored; retry once, then check the query."),
+        }, is_error=True)
 
 
 async def xsiam_get_xql_quota(ctx: Context = None) -> dict:
