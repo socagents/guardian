@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.100",
+    date: "2026-06-30",
+    title: "XSOAR connector — Threat-Intel write: persist the agent's IoC verdicts back into the store.",
+    highlights: [
+      "New update_indicator tool: set an indicator's reputation/verdict as a DBotScore (0=Unknown, 1=Good, 2=Suspicious, 3=Bad) — recorded as a manual analyst verdict — plus tags and a timeline comment. The agent's judgment now sticks tenant-wide, not just on one incident.",
+      "New create_indicator tool: add an IP/Domain/URL/File/CVE/Email/Host/Account indicator the investigation surfaced, optionally with the verdict + tags in one call.",
+      "Both verified end-to-end against a live XSOAR tenant before shipping; served on the public REST API on XSOAR 6 and 8 (no playground). The mutating tools are approval-gated. The XSOAR connector now exposes 31 tools.",
+      "Second release of the XSOAR capability-expansion arc (after playbook discovery in v0.2.99).",
+    ],
+  },
+  {
     version: "0.2.99",
     date: "2026-06-30",
     title: "XSOAR connector — playbook discovery: list and inspect the tenant's playbooks.",

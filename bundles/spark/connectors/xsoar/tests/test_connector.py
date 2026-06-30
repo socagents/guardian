@@ -933,6 +933,8 @@ def test_all_exported_tools_are_callable():
         "xsoar_list_incident_types",
         "xsoar_get_incident_fields",
         "xsoar_search_indicators",
+        "xsoar_create_indicator",
+        "xsoar_update_indicator",
         "xsoar_save_evidence",
         "xsoar_search_evidence",
         "xsoar_health_check",
@@ -1895,3 +1897,79 @@ def test_get_playbook_not_found(monkeypatch):
     assert out["ok"] is False
     assert "not found" in out["error"]
     assert out["playbook_id"] == "nope"
+
+
+# ─── create_indicator / update_indicator (R2: TIM write) ─────────────
+
+
+def test_create_indicator_request_and_summary(monkeypatch):
+    # /indicator/create returns the FLAT created indicator object (verified live)
+    rf = _RecordingFetcher(post_reply={
+        "id": "1192500", "version": 1, "indicator_type": "IP",
+        "value": "203.0.113.77", "score": 3, "source": "Guardian",
+        "created": "t0", "modified": "t1",
+    })
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_create_indicator(
+        value="203.0.113.77", indicator_type="IP", score=3,
+        tags=["guardian-r2"], source="Guardian"))
+    assert out["ok"] is True
+    assert out["id"] == "1192500"
+    assert out["created"]["value"] == "203.0.113.77"
+    assert out["created"]["score"] == 3
+    assert out["created"]["reputation"] == "Bad"
+
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/indicator/create")
+    ind = body["indicator"]
+    assert ind["value"] == "203.0.113.77"
+    assert ind["indicator_type"] == "IP"
+    assert ind["score"] == 3 and ind["manualScore"] is True
+    assert ind["CustomFields"] == {"tags": ["guardian-r2"]}
+    assert ind["source"] == "Guardian"
+
+
+def test_create_indicator_requires_value_and_type(monkeypatch):
+    _install_fetcher(monkeypatch, _RecordingFetcher())
+    assert run(connector.xsoar_create_indicator(value="", indicator_type="IP"))["ok"] is False
+    assert run(connector.xsoar_create_indicator(value="x", indicator_type=""))["ok"] is False
+
+
+def test_update_indicator_sets_reputation(monkeypatch):
+    rf = _RecordingFetcher(post_reply={
+        "id": "1192500", "version": 4, "indicator_type": "IP",
+        "value": "203.0.113.77", "score": 3,
+    })
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_update_indicator(
+        indicator_id="1192500", score=3, comment="manual verdict"))
+    assert out["ok"] is True
+    assert out["updated"]["score"] == 3
+    assert out["updated"]["reputation"] == "Bad"
+
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/indicator/edit")
+    assert body["id"] == "1192500"
+    assert body["score"] == 3 and body["manualScore"] is True
+    assert body["comment"] == "manual verdict"
+    # no value/indicator_type on an edit-only body
+    assert "value" not in body and "indicator_type" not in body
+
+
+def test_update_indicator_tags_only(monkeypatch):
+    rf = _RecordingFetcher(post_reply={"id": "5", "indicator_type": "Domain", "value": "x.com"})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_update_indicator(indicator_id="5", tags=["phish"]))
+    assert out["ok"] is True
+    assert rf.calls[0][2]["CustomFields"] == {"tags": ["phish"]}
+    # score not sent when not provided
+    assert "score" not in rf.calls[0][2]
+
+
+def test_update_indicator_requires_a_field(monkeypatch):
+    _install_fetcher(monkeypatch, _RecordingFetcher())
+    out = run(connector.xsoar_update_indicator(indicator_id="5"))
+    assert out["ok"] is False
+    assert "nothing to update" in out["error"]

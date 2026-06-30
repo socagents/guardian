@@ -8,7 +8,7 @@ GETs) a logical XSOAR REST path. The fetcher applies the dual-
 generation base-URL + header rules (v6 vs v8) — every tool here stays
 generation-agnostic.
 
-Tool catalog (29):
+Tool catalog (31):
   xsoar_list_incidents        POST /incidents/search — filtered case list
   xsoar_get_incident          POST /incidents/search (filter.id) — one case
   xsoar_get_war_room          POST /investigation/{id} — war-room entries
@@ -19,6 +19,8 @@ Tool catalog (29):
   xsoar_list_incident_types   POST /incidents/search — derive distinct types
   xsoar_get_incident_fields   GET /incidentfields/associatedTypes/{type}
   xsoar_search_indicators     POST /indicators/search — threat-intel lookup
+  xsoar_create_indicator      POST /indicator/create — add an IoC (opt. verdict + tags)
+  xsoar_update_indicator      POST /indicator/edit — set reputation/verdict + tags
   xsoar_save_evidence         POST /evidence — mark an entry as evidence
   xsoar_search_evidence       POST /evidence/search — list a case's evidence
   xsoar_health_check          GET /health — server-availability probe
@@ -85,6 +87,8 @@ __all__ = [
     "xsoar_list_incident_types",
     "xsoar_get_incident_fields",
     "xsoar_search_indicators",
+    "xsoar_create_indicator",
+    "xsoar_update_indicator",
     "xsoar_save_evidence",
     "xsoar_search_evidence",
     "xsoar_health_check",
@@ -1293,6 +1297,129 @@ async def xsoar_search_indicators(
         "total": total,
         "result_count": len(indicators),
     }
+
+
+# ─── xsoar_create_indicator / xsoar_update_indicator (TIM write) ─────
+
+
+def _build_indicator_body(
+    value: Optional[str],
+    indicator_type: Optional[str],
+    score: Optional[int],
+    tags: Optional[list],
+    source: Optional[str],
+) -> dict:
+    """Assemble an XSOAR indicator object for /indicator/create or /indicator/edit.
+
+    Manual reputation: passing `score` (DBotScore 0-3) also sets
+    manualScore=true so XSOAR records it as an analyst VERDICT (not a
+    feed-derived score). Tags live under CustomFields.tags (verified against a
+    live v6 tenant). Only the fields the caller supplies are included, so the
+    same builder serves create (value+type required) and edit (id-keyed patch).
+    """
+    obj: dict = {}
+    if value is not None:
+        obj["value"] = str(value)
+    if indicator_type is not None:
+        obj["indicator_type"] = str(indicator_type)
+    if source:
+        obj["source"] = str(source)
+    if score is not None:
+        obj["score"] = _norm_int(score, 0)
+        obj["manualScore"] = True
+    if tags is not None:
+        obj["CustomFields"] = {"tags": [str(t) for t in tags]}
+    return obj
+
+
+@_wrap_xsoar_call
+async def xsoar_create_indicator(
+    value: str,
+    indicator_type: str,
+    score: Optional[int] = None,
+    tags: Optional[list] = None,
+    source: Optional[str] = None,
+) -> dict:
+    """Create a threat-intel indicator (IoC) in the XSOAR store.
+
+    Use to record an IoC the investigation surfaced that isn't in the store yet
+    — optionally with the agent's verdict (score) and tags — so it's available
+    tenant-wide for correlation. To set/change the verdict on an indicator that
+    already exists, use xsoar_update_indicator instead.
+
+    POSTs /indicator/create (served on the public REST API on both XSOAR 6 and
+    8; no playground_id).
+
+    Args:
+        value: The IoC value (e.g. "1.2.3.4", "evil.com", a file hash, a CVE).
+        indicator_type: XSOAR indicator type, capitalized — "IP", "Domain",
+            "URL", "File", "CVE", "Email", "Host", "Account".
+        score: Optional manual reputation/verdict as a DBotScore 0-3
+            (0=Unknown, 1=Good, 2=Suspicious, 3=Bad/Malicious). Setting it marks
+            the indicator manualScore=true — an analyst verdict, not a feed score.
+        tags: Optional list of tags to apply (stored in CustomFields.tags).
+        source: Optional source label for provenance (defaults to the API user).
+
+    Returns:
+        {ok, id, created: {id, type, value, score, reputation, source,
+        created, modified, ...}} — the compact summary of the created
+        indicator, or {ok:false, error}.
+    """
+    if not value:
+        raise ValueError("value is required")
+    if not indicator_type:
+        raise ValueError("indicator_type is required")
+    fetcher = _get_fetcher()
+    indicator = _build_indicator_body(value, indicator_type, score, tags, source)
+    resp = await fetcher.post("/indicator/create", {"indicator": indicator})
+    created = resp if isinstance(resp, dict) else {}
+    return {"id": created.get("id"), "created": _summarize_indicator(created)}
+
+
+@_wrap_xsoar_call
+async def xsoar_update_indicator(
+    indicator_id: str,
+    score: Optional[int] = None,
+    tags: Optional[list] = None,
+    source: Optional[str] = None,
+    comment: Optional[str] = None,
+) -> dict:
+    """Update an indicator — set its reputation/verdict (score) and/or tags.
+
+    The way the agent PERSISTS an IoC verdict back into XSOAR's Threat-Intel so
+    it sticks tenant-wide, not just on one incident. Setting `score` records a
+    manual analyst verdict (manualScore=true). Editing does NOT require the
+    prior version. POSTs /indicator/edit (public REST API, both generations; no
+    playground_id).
+
+    Args:
+        indicator_id: The XSOAR indicator id to edit (from
+            xsoar_search_indicators or xsoar_create_indicator).
+        score: New reputation/verdict as a DBotScore 0-3 (0=Unknown, 1=Good,
+            2=Suspicious, 3=Bad/Malicious). Marks manualScore=true.
+        tags: Replace the indicator's tags (CustomFields.tags).
+        source: Optional source label.
+        comment: Optional comment recorded on the indicator's timeline (e.g. the
+            verdict rationale — "manual verdict from incident #123").
+
+    Returns:
+        {ok, updated: {id, type, value, score, reputation, ...}} or
+        {ok:false, error}. At least one of score/tags/source/comment is required.
+    """
+    if not indicator_id:
+        raise ValueError("indicator_id is required")
+    if score is None and tags is None and source is None and comment is None:
+        raise ValueError(
+            "nothing to update — pass at least one of score, tags, source, comment"
+        )
+    fetcher = _get_fetcher()
+    body = _build_indicator_body(None, None, score, tags, source)
+    body["id"] = str(indicator_id)
+    if comment:
+        body["comment"] = str(comment)
+    resp = await fetcher.post("/indicator/edit", body)
+    updated = resp if isinstance(resp, dict) else {}
+    return {"updated": _summarize_indicator(updated)}
 
 
 # ─── xsoar_save_evidence ─────────────────────────────────────────────

@@ -226,6 +226,39 @@ spec:
         - { name: "size",  type: "integer", description: "Page size (default 50, max 200).", required: false }
       returns: { type: "object", description: "{ ok, indicators: [...], total }" }
 
+    - name: "create_indicator"
+      method: "POST /indicator/create"
+      description: |
+        Create a threat-intel indicator (IoC) in the XSOAR store — optionally
+        with the agent's verdict (score) and tags — so it's available
+        tenant-wide for correlation. To set the verdict on an indicator that
+        already EXISTS, use update_indicator instead. Served on the public REST
+        API on both XSOAR 6 and 8 (no playground_id). Approval-gated (mutating).
+      args:
+        - { name: "value", type: "string", description: "The IoC value (e.g. 1.2.3.4, evil.com, a file hash, a CVE).", required: true }
+        - { name: "indicator_type", type: "string", description: "XSOAR indicator type, capitalized: IP, Domain, URL, File, CVE, Email, Host, Account.", required: true }
+        - { name: "score", type: "integer", description: "Optional manual verdict as a DBotScore 0-3 (0=Unknown,1=Good,2=Suspicious,3=Bad). Sets manualScore=true (analyst verdict).", required: false }
+        - { name: "tags", type: "array", description: "Optional tags to apply (stored in CustomFields.tags).", required: false }
+        - { name: "source", type: "string", description: "Optional source label for provenance.", required: false }
+      returns: { type: "object", description: "{ ok, id, created: {id, type, value, score, reputation, source, ...} }" }
+
+    - name: "update_indicator"
+      method: "POST /indicator/edit"
+      description: |
+        Update an indicator — set its reputation/verdict (score) and/or tags.
+        This is how the agent PERSISTS an IoC verdict back into XSOAR's
+        Threat-Intel so it sticks tenant-wide, not just on one incident. Setting
+        score records a manual analyst verdict (manualScore=true); editing does
+        not require the prior version. Served on the public REST API on both
+        generations (no playground_id). Approval-gated (mutating).
+      args:
+        - { name: "indicator_id", type: "string", description: "The XSOAR indicator id to edit (from search_indicators or create_indicator).", required: true }
+        - { name: "score", type: "integer", description: "New verdict as a DBotScore 0-3 (0=Unknown,1=Good,2=Suspicious,3=Bad). Sets manualScore=true.", required: false }
+        - { name: "tags", type: "array", description: "Replace the indicator's tags (CustomFields.tags).", required: false }
+        - { name: "source", type: "string", description: "Optional source label.", required: false }
+        - { name: "comment", type: "string", description: "Optional comment recorded on the indicator timeline (e.g. verdict rationale).", required: false }
+      returns: { type: "object", description: "{ ok, updated: {id, type, value, score, reputation, ...} }" }
+
     - name: "save_evidence"
       method: "POST /evidence (v6) | POST /entry/tags (v8)"
       description: |

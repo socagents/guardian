@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.100] (2026-06-30) — *XSOAR connector — Threat-Intel write: `create_indicator` + `update_indicator` (arc R2 of the XSOAR capability expansion)*
+
+Second release of the XSOAR capability-expansion arc. Until now Guardian could *read* the indicator store (`search_indicators`, `enrich_indicator`) but could not *write* to it — so the agent's verdict on a malicious IP/hash lived only on the incident, never in the tenant's Threat-Intel where it would correlate against future activity. This closes that gap.
+
+- **`update_indicator` — persist a verdict tenant-wide.** Set an indicator's reputation/verdict as a DBotScore (`0`=Unknown, `1`=Good, `2`=Suspicious, `3`=Bad/Malicious) — recorded as a **manual analyst verdict** (`manualScore`) — plus tags and a timeline comment. Now when the agent concludes an IP is malicious, that judgment sticks in XSOAR's store and shows up the next time the IP appears.
+- **`create_indicator` — add an IoC the investigation surfaced.** Create an IP/Domain/URL/File/CVE/Email/Host/Account indicator that isn't in the store yet, optionally with the verdict + tags in one call.
+- **Verified against a live XSOAR 6 tenant** — both endpoints (`POST /indicator/create`, `POST /indicator/edit`) confirmed end-to-end (create → set score=3 → tag → clean up) before shipping; editing needs no prior-version match, and tags live under `CustomFields.tags`. Both are served on the public REST API on XSOAR 6 and 8 (no playground required).
+- The mutating tools are **approval-gated** (the operator confirms before a write runs), consistent with the rest of the action toolset. XSOAR connector tool count **29 → 31**.
+
 ## [v0.2.99] (2026-06-30) — *XSOAR connector — playbook discovery: `list_playbooks` + `get_playbook` (arc R1 of the XSOAR capability expansion)*
 
 First release of a multi-part arc expanding what Guardian can do against Cortex XSOAR. This one closes the biggest gap in the connector's playbook surface: until now the agent could *run* a playbook (`run_playbook`) and *monitor* it (`get_playbook_state`) but could not see **which playbooks exist on the tenant** or **what inputs one needs** — so it had to be told a playbook name and ran blind to its parameters.
