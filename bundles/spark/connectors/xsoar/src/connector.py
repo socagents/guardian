@@ -8,7 +8,7 @@ GETs) a logical XSOAR REST path. The fetcher applies the dual-
 generation base-URL + header rules (v6 vs v8) — every tool here stays
 generation-agnostic.
 
-Tool catalog (31):
+Tool catalog (35):
   xsoar_list_incidents        POST /incidents/search — filtered case list
   xsoar_get_incident          POST /incidents/search (filter.id) — one case
   xsoar_get_war_room          POST /investigation/{id} — war-room entries
@@ -42,6 +42,10 @@ Tool catalog (31):
   xsoar_run_playbook          POST /inv-playbook/{pb}/{inv} — run a playbook on a case
   xsoar_get_playbook_state    GET /inv-playbook/{inv} — playbook tasks + state on a case
   xsoar_import_playbook       POST /playbook/import — upload a playbook YAML
+  xsoar_list_jobs             POST /jobs/search — scheduled-job catalog
+  xsoar_get_job               POST /jobs/search (id:) — one scheduled job
+  xsoar_create_job            POST /jobs — schedule a playbook (cron/one-time)
+  xsoar_delete_job            DELETE /jobs/{id} — remove a scheduled job
 
 Auth model (see _xsoar_client.XSOARFetcher):
   XSOAR 6 — Authorization: <api_key>                       (api_id unset)
@@ -108,6 +112,10 @@ __all__ = [
     "xsoar_run_playbook",
     "xsoar_get_playbook_state",
     "xsoar_import_playbook",
+    "xsoar_list_jobs",
+    "xsoar_get_job",
+    "xsoar_create_job",
+    "xsoar_delete_job",
 ]
 
 
@@ -1297,6 +1305,178 @@ async def xsoar_search_indicators(
         "total": total,
         "result_count": len(indicators),
     }
+
+
+# ─── xsoar_list_jobs / get_job / create_job / delete_job (R4) ────────
+
+
+def _summarize_job(j: dict) -> dict:
+    """Compact scheduled-job summary the agent can read at a glance.
+
+    Mirrors the other _summarize_* projections: id/name/type plus the schedule
+    (recurrent + cron, or the next trigger time) and which playbook the job
+    runs. Drop the verbose internal fields (CustomFields, sortValues, …).
+    """
+    return {
+        "id": j.get("id"),
+        "name": j.get("name"),
+        "type": j.get("type"),
+        "recurrent": bool(j.get("recurrent", False)),
+        "cron": j.get("cron"),
+        "playbook_id": j.get("playbookId") or None,
+        "next_trigger": j.get("nextTriggerTime"),
+        "disabled": bool(j.get("disabled", False)),
+        "scheduled": bool(j.get("scheduled", False)),
+    }
+
+
+def _extract_jobs(resp: Any) -> list:
+    """Pull the job list out of a /jobs/search response ({total, data})."""
+    if isinstance(resp, dict):
+        jobs = resp.get("data") or resp.get("jobs") or []
+        if isinstance(jobs, list):
+            return [j for j in jobs if isinstance(j, dict)]
+    return []
+
+
+@_wrap_xsoar_call
+async def xsoar_list_jobs(
+    query: Optional[str] = None,
+    page: int = 0,
+    size: int = 50,
+) -> dict:
+    """List the SCHEDULED JOBS defined on this XSOAR tenant.
+
+    An XSOAR job runs a playbook on a schedule (cron) or one-off. Use this to
+    answer "what scheduled jobs run on this tenant?", audit recurring
+    automation, or find a job to inspect/remove. Served directly via
+    `POST /jobs/search` (no playground_id, both generations).
+
+    Args:
+        query: Optional XSOAR job-search query (e.g. `name:"Daily"`,
+            `type:Phishing`). Omit to list all.
+        page: Zero-based page index (default 0).
+        size: Page size (default 50, capped at 200).
+
+    Returns:
+        {ok, jobs: [{id, name, type, recurrent, cron, playbook_id,
+        next_trigger, disabled, scheduled}], total, result_count}.
+    """
+    fetcher = _get_fetcher()
+    body: dict = {"page": _norm_int(page, 0), "size": min(_norm_int(size, 50), 200)}
+    if query:
+        body["query"] = str(query)
+    resp = await fetcher.post("/jobs/search", body)
+    jobs = _extract_jobs(resp)
+    total = resp.get("total") if isinstance(resp, dict) and isinstance(resp.get("total"), int) else len(jobs)
+    summaries = [_summarize_job(j) for j in jobs]
+    return {"jobs": summaries, "total": total, "result_count": len(summaries)}
+
+
+@_wrap_xsoar_call
+async def xsoar_get_job(job_id: str) -> dict:
+    """Read one scheduled job by id — its schedule + which playbook it runs.
+
+    Served via `POST /jobs/search {query:"id:<id>"}` (no playground_id).
+
+    Args:
+        job_id: The XSOAR job id (from xsoar_list_jobs).
+
+    Returns:
+        {ok, job: {id, name, type, recurrent, cron, playbook_id, next_trigger,
+        disabled, scheduled}} or {ok:false, error} when no such job exists.
+    """
+    if not job_id:
+        raise ValueError("job_id is required")
+    fetcher = _get_fetcher()
+    resp = await fetcher.post("/jobs/search", {"query": f"id:{job_id}", "size": 1})
+    jobs = _extract_jobs(resp)
+    if not jobs:
+        return _err(f"job '{job_id}' not found", job_id=str(job_id))
+    return {"job": _summarize_job(jobs[0])}
+
+
+@_wrap_xsoar_call
+async def xsoar_create_job(
+    name: str,
+    incident_type: str,
+    recurrent: bool = True,
+    cron: Optional[str] = None,
+    start_date: Optional[str] = None,
+    playbook_id: Optional[str] = None,
+) -> dict:
+    """Create a SCHEDULED JOB — run a playbook on a schedule.
+
+    Use to automate a recurring hunt/triage/report: the job creates an incident
+    of `incident_type` on its schedule and runs the associated playbook. A
+    RECURRING job needs `cron`; a ONE-TIME job (recurrent=false) needs
+    `start_date`. WRITES to the tenant — approval-gated. POSTs `/jobs` (no
+    playground_id).
+
+    Args:
+        name: Display name for the job.
+        incident_type: A valid incident type on the tenant (e.g. "Phishing").
+            Use xsoar_list_incident_types to see the options.
+        recurrent: True = recurring (needs `cron`); False = one-time (needs
+            `start_date`). Default True.
+        cron: Cron expression for a recurring job (e.g. "0 0 * * *" = daily at
+            midnight). Required when recurrent=true.
+        start_date: ISO 8601 start time for a one-time job (e.g.
+            "2026-01-01T00:00:00Z"). Required when recurrent=false.
+        playbook_id: Optional playbook to run when the job fires (its name; see
+            xsoar_list_playbooks).
+
+    Returns:
+        {ok, id, created: {id, name, type, recurrent, cron, playbook_id, ...}}
+        or {ok:false, error}.
+    """
+    if not name:
+        raise ValueError("name is required")
+    if not incident_type:
+        raise ValueError("incident_type is required")
+    body: dict = {"name": str(name), "type": str(incident_type), "recurrent": bool(recurrent)}
+    if recurrent:
+        if not cron:
+            raise ValueError("a recurring job requires `cron` (e.g. '0 0 * * *')")
+        body["cron"] = str(cron)
+    else:
+        if not start_date:
+            raise ValueError(
+                "a one-time job (recurrent=false) requires `start_date` (ISO 8601)"
+            )
+        body["startDate"] = str(start_date)
+        body["times"] = 1
+    if playbook_id:
+        body["playbookId"] = str(playbook_id)
+    fetcher = _get_fetcher()
+    resp = await fetcher.post("/jobs", body)
+    # XSOAR returns an error envelope with id == "editJobErr" on a bad spec.
+    if isinstance(resp, dict) and resp.get("id") == "editJobErr":
+        return _err(
+            f"create_job failed: {resp.get('error') or resp.get('detail')}",
+            name=str(name),
+        )
+    job = resp if isinstance(resp, dict) else {}
+    return {"id": job.get("id"), "created": _summarize_job(job)}
+
+
+@_wrap_xsoar_call
+async def xsoar_delete_job(job_id: str) -> dict:
+    """Delete a scheduled job by id. WRITES to the tenant — approval-gated.
+
+    `DELETE /jobs/{id}` (no playground_id).
+
+    Args:
+        job_id: The XSOAR job id to delete (from xsoar_list_jobs).
+
+    Returns:
+        {ok, deleted: true, job_id} or {ok:false, error}.
+    """
+    if not job_id:
+        raise ValueError("job_id is required")
+    fetcher = _get_fetcher()
+    await fetcher.delete(f"/jobs/{job_id}")
+    return {"deleted": True, "job_id": str(job_id)}
 
 
 # ─── xsoar_create_indicator / xsoar_update_indicator (TIM write) ─────

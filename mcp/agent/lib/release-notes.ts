@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.102",
+    date: "2026-06-30",
+    title: "XSOAR connector — scheduled jobs: list, inspect, create, and delete jobs.",
+    highlights: [
+      "New list_jobs / get_job tools: see and inspect the tenant's scheduled jobs — name, type, cron schedule, which playbook each runs, next trigger.",
+      "New create_job tool: schedule a playbook to run automatically — recurring (give a cron) or one-time (give a start date) — e.g. a daily hunt or recurring triage.",
+      "New delete_job tool. Create/delete are approval-gated. All verified live against a real XSOAR tenant; direct REST, no Playground. The XSOAR connector now exposes 35 tools.",
+      "Note: XSOAR v6 has no REST 'run a job now' endpoint, so there's no trigger tool — run something immediately by creating the incident + running the playbook.",
+    ],
+  },
+  {
     version: "0.2.101",
     date: "2026-06-30",
     title: "XSOAR connector — self-sufficient on Cortex 8: no Core REST API integration or Playground needed.",

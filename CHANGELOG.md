@@ -10,6 +10,16 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.102] (2026-06-30) — *XSOAR connector — scheduled jobs: `list_jobs` + `get_job` + `create_job` + `delete_job` (arc R4 of the XSOAR capability expansion)*
+
+Fourth release of the XSOAR capability-expansion arc. Guardian can now see and manage the tenant's **scheduled jobs** — the automation that runs a playbook on a cron schedule (or one-off).
+
+- **`list_jobs` / `get_job`** — enumerate and inspect the scheduled jobs on the tenant (name, type, schedule/cron, which playbook each runs, next trigger time). The agent can answer *"what scheduled jobs run here?"* and audit recurring automation.
+- **`create_job`** — schedule a playbook to run automatically: a **recurring** job (give a `cron` like `0 0 * * *`) or a **one-time** job (give a `start_date`), creating an incident of the chosen type and running its playbook. Useful for standing up a daily hunt or a recurring triage/report.
+- **`delete_job`** — remove a scheduled job.
+- All four were **verified live against a real XSOAR tenant** (created/inspected/deleted real jobs during the build) and are direct REST (`/jobs/search`, `POST /jobs`, `DELETE /jobs/{id}`) — no Playground required, both generations. Create/delete are **approval-gated**. XSOAR connector tool count **31 → 35**.
+- *Note:* XSOAR v6 has no REST "run a job now" endpoint, so there's no `trigger_job` — to run something immediately the agent creates the incident directly and runs the playbook; scheduled execution is what jobs are for.
+
 ## [v0.2.101] (2026-06-30) — *XSOAR connector — self-sufficient on Cortex 8: no Core REST API integration or Playground required (arc R3 of the XSOAR capability expansion)*
 
 Third release of the XSOAR capability-expansion arc — a robustness change for **Cortex XSOAR 8 / cloud** tenants. Two connector capabilities (reading a running playbook's state, and importing a playbook) previously relied on the tenant having the **Core REST API integration** installed *and* a **Playground / War Room ID** configured on the connector instance. When the integration was missing, mis-configured, or just slow, those calls could **stall for minutes** (the integration retries each HTTP call for up to 3 minutes, 3×) before failing.

@@ -324,3 +324,32 @@ class XSOARFetcher:
             return self._parse(r, path)
         self._raise_for_status(r, path)
         return {}  # unreachable — _raise_for_status always raises
+
+    async def delete(
+        self,
+        path: str,
+        *,
+        internal: bool = False,
+        timeout_seconds: float = 30.0,
+    ) -> dict:
+        """DELETE the logical `path` with the auth headers. Returns parsed JSON.
+
+        `internal=True` targets the v8 full internal API (/xsoar/*). Used for
+        REST-path deletes like `DELETE /jobs/{id}`.
+        """
+        full_url = self._full_url(path, internal=internal)
+        timeout = httpx.Timeout(timeout_seconds, connect=10.0)
+        try:
+            async with httpx.AsyncClient(
+                timeout=timeout, verify=self.verify_ssl
+            ) as client:
+                r = await client.delete(full_url, headers=self._headers())
+        except httpx.HTTPError as exc:
+            raise XSOARError(
+                f"network error talking to XSOAR: {type(exc).__name__}: {exc}"
+            ) from exc
+
+        if 200 <= r.status_code < 300:
+            return self._parse(r, path)
+        self._raise_for_status(r, path)
+        return {}  # unreachable — _raise_for_status always raises

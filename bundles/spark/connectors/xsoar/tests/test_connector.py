@@ -334,6 +334,10 @@ class _RecordingFetcher:
             raise self.multipart_exc
         return self.multipart_reply if self.multipart_reply is not None else self.post_reply
 
+    async def delete(self, path, **kw):
+        self.calls.append(("DELETE", path, None))
+        return self.post_reply
+
 
 def _install_fetcher(monkeypatch, fetcher: _RecordingFetcher):
     monkeypatch.setattr(connector, "_get_fetcher", lambda: fetcher)
@@ -954,6 +958,10 @@ def test_all_exported_tools_are_callable():
         "xsoar_run_playbook",
         "xsoar_get_playbook_state",
         "xsoar_import_playbook",
+        "xsoar_list_jobs",
+        "xsoar_get_job",
+        "xsoar_create_job",
+        "xsoar_delete_job",
     }
     assert set(connector.__all__) == expected
     for name in expected:
@@ -2031,3 +2039,76 @@ def test_fetch_workplan_v6_unchanged(monkeypatch):
     out = run(connector.xsoar_get_playbook_state("INV"))
     assert out["ok"] is True
     assert f.calls[0][0] == "/investigation/INV/workplan"
+
+
+# ─── R4: scheduled jobs (list / get / create / delete) ───────────────
+
+
+def test_list_jobs_shape(monkeypatch):
+    rf = _RecordingFetcher(post_reply={
+        "total": 1,
+        "data": [{"id": "j1", "name": "Daily Hunt", "type": "Phishing",
+                  "recurrent": True, "cron": "0 0 * * *", "playbookId": "PB",
+                  "nextTriggerTime": "t", "disabled": False, "scheduled": True}],
+    })
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_list_jobs(query="type:Phishing", size=10))
+    assert out["ok"] is True and out["total"] == 1 and out["result_count"] == 1
+    j = out["jobs"][0]
+    assert j == {"id": "j1", "name": "Daily Hunt", "type": "Phishing",
+                 "recurrent": True, "cron": "0 0 * * *", "playbook_id": "PB",
+                 "next_trigger": "t", "disabled": False, "scheduled": True}
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/jobs/search")
+    assert body == {"page": 0, "size": 10, "query": "type:Phishing"}
+
+
+def test_create_job_recurring(monkeypatch):
+    rf = _RecordingFetcher(post_reply={"id": "j9", "name": "Nightly", "type": "Access",
+                                       "recurrent": True, "cron": "0 0 * * *"})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_create_job(name="Nightly", incident_type="Access",
+                                         recurrent=True, cron="0 0 * * *", playbook_id="PB"))
+    assert out["ok"] is True and out["id"] == "j9"
+    body = rf.calls[0][2]
+    assert body["name"] == "Nightly" and body["type"] == "Access"
+    assert body["recurrent"] is True and body["cron"] == "0 0 * * *"
+    assert body["playbookId"] == "PB"
+    assert "startDate" not in body
+
+
+def test_create_job_recurring_requires_cron(monkeypatch):
+    _install_fetcher(monkeypatch, _RecordingFetcher())
+    out = run(connector.xsoar_create_job(name="x", incident_type="Access", recurrent=True))
+    assert out["ok"] is False and "cron" in out["error"]
+
+
+def test_create_job_onetime_requires_start_date(monkeypatch):
+    _install_fetcher(monkeypatch, _RecordingFetcher())
+    out = run(connector.xsoar_create_job(name="x", incident_type="Access", recurrent=False))
+    assert out["ok"] is False and "start_date" in out["error"]
+
+
+def test_create_job_error_envelope(monkeypatch):
+    # XSOAR returns id=="editJobErr" on a bad spec — surface it as ok:false.
+    rf = _RecordingFetcher(post_reply={"id": "editJobErr", "status": 400,
+                                       "error": "invalid type ''"})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_create_job(name="x", incident_type="Bogus",
+                                         recurrent=True, cron="0 0 * * *"))
+    assert out["ok"] is False and "invalid type" in out["error"]
+
+
+def test_delete_job(monkeypatch):
+    rf = _RecordingFetcher(post_reply={})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_delete_job("j1"))
+    assert out["ok"] is True and out["deleted"] is True and out["job_id"] == "j1"
+    assert rf.calls[0] == ("DELETE", "/jobs/j1", None)
+
+
+def test_get_job_not_found(monkeypatch):
+    rf = _RecordingFetcher(post_reply={"total": 0, "data": []})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_get_job("nope"))
+    assert out["ok"] is False and "not found" in out["error"]

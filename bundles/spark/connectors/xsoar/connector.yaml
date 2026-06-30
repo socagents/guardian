@@ -551,3 +551,50 @@ spec:
         - { name: "playbook_yaml", type: "string", description: "The full playbook definition as a YAML string.", required: true }
         - { name: "filename",      type: "string", description: "Optional upload filename (default 'guardian-playbook.yml').", required: false }
       returns: { type: "object", description: "{ ok, playbook_id, playbook_name, imported, raw_response }" }
+
+    - name: "list_jobs"
+      method: "POST /jobs/search"
+      description: |
+        List the SCHEDULED JOBS on this XSOAR tenant — automation that runs a
+        playbook on a schedule (cron) or one-off. Answers "what scheduled jobs
+        run here?" and finds a job to inspect or remove. Direct REST, no
+        playground_id, both generations.
+      args:
+        - { name: "query", type: "string", description: "Optional XSOAR job-search query (name:\"Daily\", type:Phishing). Omit to list all.", required: false }
+        - { name: "page",  type: "integer", description: "Zero-based page index (default 0).", required: false }
+        - { name: "size",  type: "integer", description: "Page size (default 50, capped 200).", required: false }
+      returns: { type: "object", description: "{ ok, jobs: [{id, name, type, recurrent, cron, playbook_id, next_trigger, disabled, scheduled}], total, result_count }" }
+
+    - name: "get_job"
+      method: "POST /jobs/search (id:)"
+      description: |
+        Read one scheduled job by id — its schedule + which playbook it runs.
+        Direct REST, no playground_id.
+      args:
+        - { name: "job_id", type: "string", description: "The XSOAR job id (from list_jobs).", required: true }
+      returns: { type: "object", description: "{ ok, job: {id, name, type, recurrent, cron, playbook_id, next_trigger, disabled, scheduled} }" }
+
+    - name: "create_job"
+      method: "POST /jobs"
+      description: |
+        Create a SCHEDULED JOB — run a playbook on a schedule. The job creates an
+        incident of `incident_type` on its schedule and runs the playbook. A
+        RECURRING job needs `cron`; a ONE-TIME job (recurrent=false) needs
+        `start_date`. WRITES to the tenant — approval-gated. No playground_id.
+      args:
+        - { name: "name", type: "string", description: "Display name for the job.", required: true }
+        - { name: "incident_type", type: "string", description: "A valid incident type on the tenant (e.g. Phishing). See list_incident_types.", required: true }
+        - { name: "recurrent", type: "boolean", description: "True = recurring (needs cron); False = one-time (needs start_date). Default true.", required: false }
+        - { name: "cron", type: "string", description: "Cron expression for a recurring job (e.g. '0 0 * * *' = daily midnight). Required when recurrent=true.", required: false }
+        - { name: "start_date", type: "string", description: "ISO 8601 start time for a one-time job. Required when recurrent=false.", required: false }
+        - { name: "playbook_id", type: "string", description: "Optional playbook (name) to run when the job fires. See list_playbooks.", required: false }
+      returns: { type: "object", description: "{ ok, id, created: {id, name, type, recurrent, cron, playbook_id, ...} }" }
+
+    - name: "delete_job"
+      method: "DELETE /jobs/{id}"
+      description: |
+        Delete a scheduled job by id. WRITES to the tenant — approval-gated.
+        No playground_id.
+      args:
+        - { name: "job_id", type: "string", description: "The XSOAR job id to delete (from list_jobs).", required: true }
+      returns: { type: "object", description: "{ ok, deleted: true, job_id }" }
