@@ -17,7 +17,7 @@
 # Logical paths + request bodies are identical across generations.
 
 id: "xsoar"
-version: "0.2.8"
+version: "0.2.9"
 description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, enrich with indicators and evidence, and import + run playbooks. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
 displayName: "Cortex XSOAR"
 tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]
@@ -106,6 +106,37 @@ spec:
       args:
         - { name: "incident_id", type: "string", description: "The XSOAR incident id.", required: true }
       returns: { type: "object", description: "{ ok, incident: { ... full record incl. version, CustomFields, labels, investigationId ... } }" }
+
+    - name: "linked_incidents"
+      method: "POST /incidents/search (linkedIncidents)"
+      description: |
+        List the incidents LINKED to a given XSOAR incident. XSOAR lets
+        analysts and playbooks link related incidents (the incident carries a
+        linkedIncidents list + linkedCount); this reads that link set and
+        returns a compact summary of each linked case. The first hop when
+        pivoting from one incident to the rest of an already-grouped campaign
+        — feed the results into a Guardian Case to track it.
+      args:
+        - { name: "incident_id", type: "string", description: "The XSOAR incident id to read links from.", required: true }
+      returns: { type: "object", description: "{ ok, incident_id, linked_count, linked: [{id, name, type, severity, status, owner, created, modified}] }" }
+
+    - name: "related_incidents"
+      method: "POST /incidents/search (type query)"
+      description: |
+        Find OTHER incidents SIMILAR to a given one — campaign discovery.
+        Unlike linked_incidents (which reads links already made), this
+        DISCOVERS related cases by searching the queue. Default relation is
+        shared incident type ("show me the other cases of the same type").
+        Use after triaging one incident to surface the rest of a potential
+        campaign, then group the hits into a Guardian Case (case_create /
+        case_add_issue) and roll them up (case_rollup).
+      args:
+        - { name: "incident_id",    type: "string",  description: "The reference XSOAR incident id.", required: true }
+        - { name: "by",             type: "string",  description: "Relation to search on. 'type' (default) finds incidents of the same XSOAR incident type. Only 'type' is supported today.", required: false }
+        - { name: "extra_query",    type: "string",  description: "Optional extra XSOAR query AND'd onto the relation — e.g. a host/user value to narrow 'same type AND mentioning <indicator>'.", required: false }
+        - { name: "include_closed", type: "boolean", description: "Include closed/archived incidents (default false — only pending + active returned).", required: false }
+        - { name: "limit",          type: "integer", description: "Max related incidents (default 25, max 200).", required: false }
+      returns: { type: "object", description: "{ ok, incident_id, relation, incident_type, related: [summaries], total } — the reference incident is excluded from related." }
 
     - name: "get_war_room"
       method: "POST /investigation/{id}"

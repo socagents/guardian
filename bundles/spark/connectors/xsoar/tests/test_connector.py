@@ -925,10 +925,107 @@ def test_run_playbook_requires_ids(monkeypatch):
 # ─── public surface ──────────────────────────────────────────────────
 
 
+# ─── linked_incidents / related_incidents (R6) ───────────────────────
+
+
+class _SeqFetcher:
+    """Fetcher returning queued post replies in order — for the two
+    sequential /incidents/search calls R6's tools make (read source, then
+    fetch links / search related)."""
+
+    def __init__(self, post_replies, is_v8=False):
+        self._queue = list(post_replies)
+        self.is_v8 = is_v8
+        self.calls: list = []
+
+    async def post(self, path, body=None, **kw):
+        self.calls.append(("POST", path, body))
+        return self._queue.pop(0) if self._queue else {"data": []}
+
+
+def test_linked_incidents_returns_summaries(monkeypatch):
+    src = {"data": [{"id": "42", "linkedIncidents": ["7", "9"], "linkedCount": 2}]}
+    links = {"data": [
+        {"id": "7", "name": "Linked A", "type": "Phishing", "severity": 2},
+        {"id": "9", "name": "Linked B", "type": "Phishing", "severity": 3},
+    ]}
+    f = _SeqFetcher([src, links])
+    _install_fetcher(monkeypatch, f)
+    out = run(connector.xsoar_linked_incidents("42"))
+    assert out["ok"] is True
+    assert out["linked_count"] == 2
+    assert {i["id"] for i in out["linked"]} == {"7", "9"}
+    assert f.calls[0][2]["filter"]["id"] == ["42"]
+    assert set(f.calls[1][2]["filter"]["id"]) == {"7", "9"}
+
+
+def test_linked_incidents_empty_when_no_links(monkeypatch):
+    src = {"data": [{"id": "42", "linkedIncidents": None, "linkedCount": 0}]}
+    f = _SeqFetcher([src])
+    _install_fetcher(monkeypatch, f)
+    out = run(connector.xsoar_linked_incidents("42"))
+    assert out["ok"] is True
+    assert out["linked_count"] == 0 and out["linked"] == []
+    assert len(f.calls) == 1  # no second fetch when there are no links
+
+
+def test_linked_incidents_not_found(monkeypatch):
+    f = _SeqFetcher([{"data": []}])
+    _install_fetcher(monkeypatch, f)
+    out = run(connector.xsoar_linked_incidents("999"))
+    assert out["ok"] is False and "not found" in out["error"]
+
+
+def test_related_incidents_by_type_excludes_self(monkeypatch):
+    src = {"data": [{"id": "42", "type": "Phishing"}]}
+    rel = {"data": [
+        {"id": "42", "name": "self", "type": "Phishing"},
+        {"id": "50", "name": "other A", "type": "Phishing"},
+        {"id": "51", "name": "other B", "type": "Phishing"},
+    ], "total": 3}
+    f = _SeqFetcher([src, rel])
+    _install_fetcher(monkeypatch, f)
+    out = run(connector.xsoar_related_incidents("42"))
+    assert out["ok"] is True
+    assert out["incident_type"] == "Phishing" and out["relation"] == "type"
+    assert {i["id"] for i in out["related"]} == {"50", "51"}  # self excluded
+    q = f.calls[1][2]["filter"]
+    assert 'type:"Phishing"' in q["query"]
+    assert q["status"] == [0, 1]  # closed excluded by default
+
+
+def test_related_incidents_include_closed_and_extra_query(monkeypatch):
+    src = {"data": [{"id": "42", "type": "Phishing"}]}
+    f = _SeqFetcher([src, {"data": [], "total": 0}])
+    _install_fetcher(monkeypatch, f)
+    run(connector.xsoar_related_incidents("42", extra_query='labels.Email/from:"x"',
+                                          include_closed=True))
+    q = f.calls[1][2]["filter"]
+    assert "status" not in q  # include_closed → no status filter
+    assert 'labels.Email/from:"x"' in q["query"] and 'type:"Phishing"' in q["query"]
+
+
+def test_related_incidents_unsupported_relation(monkeypatch):
+    f = _SeqFetcher([{"data": [{"id": "42", "type": "Phishing"}]}])
+    _install_fetcher(monkeypatch, f)
+    out = run(connector.xsoar_related_incidents("42", by="indicators"))
+    assert out["ok"] is False and "unsupported relation" in out["error"]
+    assert f.calls == []  # guard fires before any fetch
+
+
+def test_related_incidents_no_type(monkeypatch):
+    f = _SeqFetcher([{"data": [{"id": "42"}]}])
+    _install_fetcher(monkeypatch, f)
+    out = run(connector.xsoar_related_incidents("42"))
+    assert out["ok"] is False and "no type" in out["error"]
+
+
 def test_all_exported_tools_are_callable():
     expected = {
         "xsoar_list_incidents",
         "xsoar_get_incident",
+        "xsoar_linked_incidents",
+        "xsoar_related_incidents",
         "xsoar_get_war_room",
         "xsoar_add_entry",
         "xsoar_add_note",

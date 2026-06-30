@@ -107,6 +107,17 @@ Four calls, one per severity — not a page-scan, and not a dozen syntax variant
 
 ---
 
+## Finding related incidents (campaign discovery)
+
+Two tools turn one incident into the campaign around it — don't hand-roll this with `xsoar_list_incidents` query gymnastics:
+
+- `xsoar_linked_incidents(incident_id)` — the incidents an analyst or playbook **already linked** to this case (XSOAR's `linkedIncidents` / `linkedCount`). Use first; these are human-confirmed siblings.
+- `xsoar_related_incidents(incident_id)` — **discovers** unlinked siblings by searching the queue for other incidents of the **same type** (the default relation). Narrow with `extra_query` when you have a shared pivot: `xsoar_related_incidents(incident_id="42", extra_query='labels.Email/from:"x@evil.test"')`. Excludes the reference incident; excludes closed cases unless `include_closed=true`.
+
+Group the genuinely-related hits into a Guardian Case (`case_create` / `case_add_issue`) — that's how a single triaged incident becomes a mapped campaign.
+
+---
+
 ## Indicator query syntax (`xsoar_search_indicators`)
 
 `xsoar_search_indicators(query=…)` passes an XSOAR **indicator-search** query verbatim to `/indicators/search`. Build it from these fields (XSOAR's indicator query DSL):

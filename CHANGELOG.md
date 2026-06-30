@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.104] (2026-07-01) — *XSOAR connector — campaign discovery: `linked_incidents` + `related_incidents` (arc R6 of the XSOAR capability expansion)*
+
+One triaged incident is rarely the whole story. R6 gives Guardian two ways to find the **rest of a campaign** sitting in the XSOAR queue, then group it into a Guardian Case.
+
+- **`xsoar_linked_incidents`** — lists the incidents an analyst (or a playbook) already **linked** to a given case. XSOAR carries these in the incident's `linkedIncidents` / `linkedCount` fields; this reads the link set and returns a compact summary of each linked case. The first hop when pivoting from one incident to an already-grouped campaign.
+- **`xsoar_related_incidents`** — **discovers** related cases the analyst hasn't linked yet by searching the live queue. The default relation is shared incident **type** ("show me the other cases of the same type"); narrow it with `extra_query` to AND on a shared pivot (e.g. `labels.Email/from:"attacker@evil.test"` for "same type AND from this sender"). Excludes the reference incident and, by default, closed/archived cases.
+- **Feeds the existing campaign machinery.** The agent runs these during investigation, then groups the genuinely-related incidents into a Guardian Case (`case_create` / `case_add_issue`) and rolls them up (`case_rollup`) — closing the gap between "I investigated one incident" and "I mapped the campaign across the queue."
+- Read-only connector tools (no approval gate); both go through the governed per-instance dispatch. XSOAR connector toolset 35 → 37; connector version 0.2.8 → 0.2.9.
+
 ## [v0.2.103] (2026-07-01) — *Closed-loop: `sync_investigation_to_xsoar` — write the verdict back + approval-gated containment (arc R5 of the XSOAR capability expansion)*
 
 The keystone of the arc: Guardian's investigation conclusions now flow **back into the XSOAR incident the SOC analyst works**, in one step, with the connector tools the earlier releases added (R1–R4) doing the writing.

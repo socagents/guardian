@@ -342,6 +342,17 @@ Alongside the XSOAR case, keep a **local Guardian Issue** — Guardian's own rec
 
    Use `issues_list` / `cases_list` before creating to avoid duplicates. **Let the graph find the siblings for you:** call `infer_relationships(issue_id="<this issue>")` — it SUGGESTS (never writes) sibling issues that share an ATT&CK technique or an IOC, and transitive STIX edges (`infer_relationships(indicator_id=…)`: A resolves-to V, indicator(V) communicates-with C ⇒ suggest A→C). Confirm a suggestion before acting on it; record a genuine indicator edge with `indicator_relate`.
 
+   **Discover the campaign on the XSOAR side too — don't rely only on Guardian's local graph.** Two connector tools surface incidents the local store may not have an Issue for yet:
+
+   ```
+   xsoar_linked_incidents(incident_id="<the XSOAR id>")    # incidents an analyst already LINKED to this case
+   xsoar_related_incidents(incident_id="<the XSOAR id>")   # OTHER queue incidents of the SAME type (campaign discovery)
+   #   narrow with extra_query when you have a shared pivot:
+   xsoar_related_incidents(incident_id="<id>", extra_query='labels.Email/from:"attacker@evil.test"')
+   ```
+
+   `linked_incidents` reads links a human/playbook already made; `related_incidents` searches the live queue by shared incident type (default; AND a host/user/IOC via `extra_query` to tighten it). For each genuinely related XSOAR incident, fetch + investigate it (or open a tracking Issue with its `source_ref`) and `case_add_issue` it into the same Case. This is how one triaged incident expands into the full real-queue campaign.
+
 5. **Roll up the campaign + type it by playbook (stage C).** Once an Issue that belongs to a Case is resolved:
 
    ```

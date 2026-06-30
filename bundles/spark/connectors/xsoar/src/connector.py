@@ -83,6 +83,8 @@ from ._xsoar_client import (
 __all__ = [
     "xsoar_list_incidents",
     "xsoar_get_incident",
+    "xsoar_linked_incidents",
+    "xsoar_related_incidents",
     "xsoar_get_war_room",
     "xsoar_add_entry",
     "xsoar_add_note",
@@ -749,6 +751,151 @@ async def xsoar_get_incident(incident_id: str) -> dict:
         return _err(f"incident {incident_id} not found", incident_id=incident_id)
 
     return {"incident": data[0]}
+
+
+# ─── xsoar_linked_incidents ──────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_linked_incidents(incident_id: str) -> dict:
+    """List the incidents LINKED to a given XSOAR incident.
+
+    XSOAR lets analysts (and playbooks) link related incidents — the
+    incident carries a `linkedIncidents` list + a `linkedCount`. This reads
+    that link set and returns a compact summary of each linked case. It's
+    the first hop when pivoting from one incident to the rest of a campaign
+    that's already been grouped on the platform; feed the results into a
+    Guardian Case to track the campaign.
+
+    Args:
+        incident_id: The XSOAR incident id to read links from.
+
+    Example bodies POSTed to /incidents/search:
+        {"filter": {"id": ["42"], "page": 0, "size": 1}}      # read the source
+        {"filter": {"id": ["7","9"], "page": 0, "size": 200}} # fetch the links
+
+    Returns:
+        {ok, incident_id, linked_count, linked: [{id, name, type, severity,
+        status, owner, created, modified}]}. `linked` is empty when the
+        incident has no links (linkedCount 0).
+    """
+    if not incident_id:
+        raise ValueError("incident_id is required")
+
+    fetcher = _get_fetcher()
+    base = await fetcher.post(
+        "/incidents/search", {"filter": {"id": [str(incident_id)], "page": 0, "size": 1}}
+    )
+    data = base.get("data") or []
+    if not data:
+        return _err(f"incident {incident_id} not found", incident_id=incident_id)
+    inc = data[0]
+
+    # linkedIncidents is a list of incident ids (or dicts with an id), or None
+    # when there are none. linkedCount is the platform's own count.
+    raw_links = inc.get("linkedIncidents") or []
+    link_ids = [str(x.get("id") if isinstance(x, dict) else x) for x in raw_links if x]
+    linked_count = inc.get("linkedCount") or len(link_ids)
+
+    linked: list[dict] = []
+    if link_ids:
+        resp = await fetcher.post(
+            "/incidents/search",
+            {"filter": {"id": link_ids, "page": 0, "size": min(len(link_ids), 200)}},
+        )
+        linked = [_summarize_incident(i) for i in (resp.get("data") or [])]
+
+    return {"incident_id": str(incident_id), "linked_count": linked_count, "linked": linked}
+
+
+# ─── xsoar_related_incidents ─────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_related_incidents(
+    incident_id: str,
+    by: str = "type",
+    extra_query: Optional[str] = None,
+    include_closed: bool = False,
+    limit: int = 25,
+) -> dict:
+    """Find OTHER incidents SIMILAR to a given one — campaign discovery.
+
+    Unlike xsoar_linked_incidents (which reads links an analyst already
+    made), this DISCOVERS related cases by searching the queue. The default
+    relation is shared incident type: "show me the other cases of the same
+    type as this one". Use it after triaging one incident to surface the
+    rest of a potential campaign, then group the hits into a Guardian Case
+    (case_create / case_add_issue) and roll them up (case_rollup).
+
+    Args:
+        incident_id: The reference XSOAR incident id.
+        by: Relation to search on. "type" (default) finds incidents of the
+            same XSOAR incident type. (Only "type" is supported today.)
+        extra_query: Optional extra XSOAR query AND'd onto the relation —
+            e.g. a host or user value to narrow "same type AND mentioning
+            <indicator>". Free-text or fielded (e.g. 'labels.Email/from:"x"').
+        include_closed: Include closed/archived incidents (default False —
+            only pending + active are returned).
+        limit: Max related incidents to return (default 25, max 200).
+
+    Example body POSTed to /incidents/search:
+        {"filter": {"query": "type:\\"Phishing\\"", "status": [0, 1],
+                    "page": 0, "size": 26,
+                    "sort": [{"field": "created", "asc": false,
+                              "fieldType": "date"}]}}
+
+    Returns:
+        {ok, incident_id, relation, incident_type, related: [summaries],
+        total}. The reference incident itself is excluded from `related`.
+    """
+    if not incident_id:
+        raise ValueError("incident_id is required")
+    if by != "type":
+        return _err(
+            f"unsupported relation {by!r}; only 'type' is supported", incident_id=incident_id
+        )
+
+    size = _clamp_int(limit, 25, 1, 200)
+    fetcher = _get_fetcher()
+
+    base = await fetcher.post(
+        "/incidents/search", {"filter": {"id": [str(incident_id)], "page": 0, "size": 1}}
+    )
+    data = base.get("data") or []
+    if not data:
+        return _err(f"incident {incident_id} not found", incident_id=incident_id)
+    inc_type = data[0].get("type")
+    if not inc_type:
+        return _err(f"incident {incident_id} has no type to relate on", incident_id=incident_id)
+
+    # type:"X" is a searchable query field; AND any caller narrowing onto it.
+    clauses = [f'type:"{inc_type}"']
+    if extra_query:
+        clauses.append(f"({extra_query})")
+    filt: dict[str, Any] = {
+        "query": " and ".join(clauses),
+        "page": 0,
+        # over-fetch by one so dropping the self-incident still fills the page
+        "size": min(size + 1, 200),
+        "sort": [{"field": "created", "asc": False, "fieldType": "date"}],
+    }
+    if not include_closed:
+        filt["status"] = [0, 1]  # pending + active only
+
+    resp = await fetcher.post("/incidents/search", {"filter": filt})
+    found = resp.get("data") or []
+    related = [
+        _summarize_incident(i) for i in found if str(i.get("id")) != str(incident_id)
+    ][:size]
+
+    return {
+        "incident_id": str(incident_id),
+        "relation": by,
+        "incident_type": inc_type,
+        "related": related,
+        "total": resp.get("total", len(found)),
+    }
 
 
 # ─── xsoar_get_war_room ──────────────────────────────────────────────

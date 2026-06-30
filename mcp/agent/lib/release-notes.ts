@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.104",
+    date: "2026-07-01",
+    title: "XSOAR campaign discovery — find the rest of an attack across the incident queue.",
+    highlights: [
+      "New xsoar_linked_incidents tool: list the incidents an analyst or playbook already linked to a case (XSOAR's linkedIncidents) — the first hop into an already-grouped campaign.",
+      "New xsoar_related_incidents tool: discover related cases the analyst hasn't linked yet by searching the queue for other incidents of the same type; narrow with extra_query to AND on a shared sender/host/IOC.",
+      "Feeds the campaign machinery: the agent groups the genuinely-related incidents into a Guardian Case and rolls them up — one triaged incident expands into the full real-queue campaign.",
+    ],
+  },
+  {
     version: "0.2.103",
     date: "2026-07-01",
     title: "Closed-loop: write the investigation's verdict back into the XSOAR incident + approval-gated containment.",
