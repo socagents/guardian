@@ -34,6 +34,8 @@ Detection is automatic inside the connector (if a key id is configured → v8 sh
 | Tool | Phase | Purpose |
 |---|---|---|
 | `xsoar_list_incidents` | monitor | List/filter cases by status/severity/time/free-text. Open work = `status:1` (active). |
+| `xsoar_sla_breaches` | monitor | Open incidents nearest their SLA deadline, most-overdue first (`minutes_to_due`, `overdue`). The "what to work next" signal — SLA-first triage + the autonomous loop's prioritizer. |
+| `xsoar_linked_incidents` / `xsoar_related_incidents` | monitor | Linked siblings (analyst-made) / same-type queue siblings (discovered) — campaign discovery from one case. |
 | `xsoar_get_incident` | fetch | Full record for one case id: fields, labels, owner, severity, status, `CustomFields`, `version`, `investigationId`. |
 | `xsoar_get_war_room` | fetch | War-room entries (notes, command output, playbook task outputs, evidence markers). Read before adding findings. |
 | `xsoar_list_incident_types` | fetch | Distinct incident types in use on the tenant. Pick a type before `get_incident_fields`. |
@@ -92,6 +94,7 @@ xsoar_list_incidents(query="status:active severity:high")
 - **"Open" means an active status** — `status:active` (code 1). Do not pull closed cases (code 2) unless the operator asks for history.
 - Filter on the codes in § Field reference below, not on free-text guesses.
 - Take every incident id **from the live response**. Never fabricate an id.
+- **SLA-first when choosing what to work next** (and ALWAYS for the autonomous investigation loop): before picking an arbitrary open case, call `xsoar_sla_breaches()` — it returns the open incidents nearest their SLA deadline, **most-overdue first**, each with `minutes_to_due` (negative = already breached) and `due_date`. Investigate the breached / soonest-due cases ahead of newer-but-slacker ones. `xsoar_sla_breaches(include_breached=false)` is "due soon but not yet breached"; pass `within_hours=N` to widen/narrow the window (default 24h). Severity still breaks ties — a Critical due in 2h outranks a Low due in 1h — but an unworked SLA breach is the strongest "work me next" signal the queue has.
 
 ### Step 2 — Fetch: read the case fully BEFORE touching it
 

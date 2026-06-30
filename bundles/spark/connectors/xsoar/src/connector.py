@@ -63,6 +63,7 @@ import functools
 import json
 import re
 import yaml
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from ._xsoar_client import (
@@ -85,6 +86,7 @@ __all__ = [
     "xsoar_get_incident",
     "xsoar_linked_incidents",
     "xsoar_related_incidents",
+    "xsoar_sla_breaches",
     "xsoar_get_war_room",
     "xsoar_add_entry",
     "xsoar_add_note",
@@ -485,11 +487,45 @@ async def _post_incident_resolving_version(
     raise XSOARError("update_incident: exhausted version-resolve retries")
 
 
+# XSOAR writes the zero-value Go time ("0001-01-01T00:00:00Z") into dueDate
+# when no SLA deadline is set. Treat any 0001-prefixed timestamp as "unset".
+_SLA_UNSET_PREFIX = "0001-01-01"
+
+
+def _norm_due_date(raw: Optional[str]) -> Optional[str]:
+    """Normalize XSOAR's dueDate: the 0001 zero-value sentinel → None."""
+    if not raw or str(raw).startswith(_SLA_UNSET_PREFIX):
+        return None
+    return raw
+
+
+def _parse_xsoar_dt(raw: str) -> Optional["datetime"]:
+    """Parse an XSOAR ISO timestamp (handles trailing 'Z' + nanosecond
+    fractional seconds that exceed Python's 6-digit microsecond limit).
+    Returns a tz-aware UTC datetime, or None if unparseable."""
+    if not raw:
+        return None
+    s = str(raw).strip().replace("Z", "+00:00")
+    # Truncate fractional seconds to 6 digits (XSOAR emits up to 9).
+    m = re.match(r"^(.*\.\d{6})\d*([+-]\d{2}:\d{2})$", s)
+    if m:
+        s = m.group(1) + m.group(2)
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _summarize_incident(inc: dict) -> dict:
     """Project a compact case summary the agent can triage on.
 
     Operators don't need every XSOAR field at the list level; use
-    xsoar_get_incident for the full record.
+    xsoar_get_incident for the full record. `due_date` is the SLA deadline
+    (None when no SLA is set — XSOAR's 0001 zero-value sentinel is normalized
+    away so the agent doesn't mistake it for a real, long-overdue deadline).
     """
     return {
         "id": inc.get("id"),
@@ -500,6 +536,7 @@ def _summarize_incident(inc: dict) -> dict:
         "owner": inc.get("owner"),
         "created": inc.get("created"),
         "modified": inc.get("modified"),
+        "due_date": _norm_due_date(inc.get("dueDate")),
     }
 
 
@@ -895,6 +932,99 @@ async def xsoar_related_incidents(
         "incident_type": inc_type,
         "related": related,
         "total": resp.get("total", len(found)),
+    }
+
+
+# ─── xsoar_sla_breaches ──────────────────────────────────────────────
+
+
+@_wrap_xsoar_call
+async def xsoar_sla_breaches(
+    within_hours: Optional[float] = 24,
+    include_breached: bool = True,
+    limit: int = 25,
+    scan: int = 200,
+) -> dict:
+    """List the OPEN incidents nearest their SLA deadline — work-prioritization.
+
+    XSOAR stamps each incident with a `dueDate` (the SLA deadline; unset
+    incidents carry a 0001 zero-value that is treated as "no SLA"). This
+    returns the open incidents whose deadline is already breached or coming
+    up soon, **sorted most-urgent-first** (most overdue, then soonest due),
+    each annotated with how many minutes remain. The triage entrypoint for an
+    SLA-aware queue: "what should I work next?" — and the prioritization step
+    for the autonomous investigation loop, which should pull SLA breaches
+    before picking arbitrary open cases.
+
+    Args:
+        within_hours: Upper bound on time-to-due. Incidents due within this
+            many hours (plus any already overdue, when include_breached) are
+            returned. Default 24. Pass null/None for no upper bound (every
+            open incident that has an SLA set).
+        include_breached: Include already-overdue incidents (negative
+            minutes_to_due). Default True. Set False for "due soon but not yet
+            breached" only.
+        limit: Max incidents to return after sorting (default 25, max 200).
+        scan: How many open incidents to scan for SLA data (default 200,
+            max 1000). Incidents are fetched dueDate-descending so real
+            deadlines are scanned before the no-SLA sentinels.
+
+    Example body POSTed to /incidents/search:
+        {"filter": {"status": [0, 1], "page": 0, "size": 200,
+                    "sort": [{"field": "dueDate", "asc": false,
+                              "fieldType": "date"}]}}
+
+    Returns:
+        {ok, now, within_hours, include_breached, count, scanned,
+        breaches: [{id, name, type, severity, status, owner, created,
+        modified, due_date, minutes_to_due, overdue}]}. minutes_to_due is
+        negative for an already-breached SLA; breaches are sorted ascending
+        on it (most overdue first).
+    """
+    now = datetime.now(timezone.utc)
+    scan_n = _clamp_int(scan, 200, 1, 1000)
+    size = _clamp_int(limit, 25, 1, 200)
+    window = None if within_hours is None else float(within_hours)
+
+    fetcher = _get_fetcher()
+    filt = {
+        "page": 0,
+        "size": scan_n,
+        "status": [0, 1],  # pending + active only
+        # dueDate-descending so real future/past deadlines are scanned ahead
+        # of the 0001 zero-value sentinels (which sort last).
+        "sort": [{"field": "dueDate", "asc": False, "fieldType": "date"}],
+    }
+    resp = await fetcher.post("/incidents/search", {"filter": filt})
+    data = resp.get("data") or []
+
+    breaches: list[dict] = []
+    for inc in data:
+        due = _norm_due_date(inc.get("dueDate"))
+        if not due:
+            continue  # no SLA set on this incident
+        dt = _parse_xsoar_dt(due)
+        if dt is None:
+            continue
+        minutes = (dt - now).total_seconds() / 60.0
+        overdue = minutes < 0
+        if overdue and not include_breached:
+            continue
+        if window is not None and minutes > window * 60.0:
+            continue  # due beyond the window and not overdue
+        s = _summarize_incident(inc)
+        s["minutes_to_due"] = round(minutes, 1)
+        s["overdue"] = overdue
+        breaches.append(s)
+
+    breaches.sort(key=lambda x: x["minutes_to_due"])  # most overdue / soonest first
+    return {
+        "now": now.isoformat(),
+        "within_hours": window,
+        "include_breached": include_breached,
+        "count": min(len(breaches), size),
+        "scanned": len(data),
+        "breaches": breaches[:size],
     }
 
 

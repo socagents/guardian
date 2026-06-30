@@ -17,7 +17,7 @@
 # Logical paths + request bodies are identical across generations.
 
 id: "xsoar"
-version: "0.2.9"
+version: "0.2.10"
 description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, enrich with indicators and evidence, and import + run playbooks. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
 displayName: "Cortex XSOAR"
 tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]
@@ -137,6 +137,24 @@ spec:
         - { name: "include_closed", type: "boolean", description: "Include closed/archived incidents (default false — only pending + active returned).", required: false }
         - { name: "limit",          type: "integer", description: "Max related incidents (default 25, max 200).", required: false }
       returns: { type: "object", description: "{ ok, incident_id, relation, incident_type, related: [summaries], total } — the reference incident is excluded from related." }
+
+    - name: "sla_breaches"
+      method: "POST /incidents/search (dueDate)"
+      description: |
+        List the OPEN incidents nearest their SLA deadline, sorted
+        most-urgent-first (most overdue, then soonest due). XSOAR stamps each
+        incident with a dueDate (unset = the 0001 zero-value, treated as "no
+        SLA"); this returns those already breached or due soon, each annotated
+        with minutes_to_due (negative = overdue). The SLA-aware triage
+        entrypoint ("what should I work next?") and the prioritization step for
+        the autonomous investigation loop — pull SLA breaches before arbitrary
+        open cases.
+      args:
+        - { name: "within_hours",     type: "number",  description: "Upper bound on time-to-due in hours. Incidents due within this window (plus overdue, when include_breached) are returned. Default 24. null = no upper bound (every open incident with an SLA).", required: false }
+        - { name: "include_breached", type: "boolean", description: "Include already-overdue incidents (negative minutes_to_due). Default true. false = due-soon-but-not-yet-breached only.", required: false }
+        - { name: "limit",            type: "integer", description: "Max incidents returned after sorting (default 25, max 200).", required: false }
+        - { name: "scan",             type: "integer", description: "How many open incidents to scan for SLA data (default 200, max 1000); fetched dueDate-descending so real deadlines are scanned before no-SLA sentinels.", required: false }
+      returns: { type: "object", description: "{ ok, now, within_hours, include_breached, count, scanned, breaches: [{id, name, type, severity, status, owner, created, modified, due_date, minutes_to_due, overdue}] }" }
 
     - name: "get_war_room"
       method: "POST /investigation/{id}"

@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.105",
+    date: "2026-07-01",
+    title: "SLA-aware triage — work the cases closest to breaching first.",
+    highlights: [
+      "New xsoar_sla_breaches tool: lists the open incidents nearest their SLA deadline, most-overdue first, each with minutes-to-due and an overdue flag — the 'what should I work next?' view.",
+      "Every case summary now carries its SLA due_date (XSOAR's 0001 zero-value is normalized away so a no-SLA case never reads as overdue).",
+      "The autonomous investigation loop is now SLA-aware — it triages by deadline urgency, with severity breaking ties.",
+    ],
+  },
+  {
     version: "0.2.104",
     date: "2026-07-01",
     title: "XSOAR campaign discovery — find the rest of an attack across the incident queue.",

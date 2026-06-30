@@ -118,6 +118,23 @@ Group the genuinely-related hits into a Guardian Case (`case_create` / `case_add
 
 ---
 
+## SLA-aware triage (`xsoar_sla_breaches`)
+
+Every XSOAR incident carries a `dueDate` (its SLA deadline). Unset incidents get the Go zero-value `0001-01-01T00:00:00Z`, which Guardian normalizes to `due_date: null` — so a no-SLA case never looks "150 days overdue."
+
+`xsoar_sla_breaches()` returns the open incidents nearest their deadline, **most-overdue first**, each with `minutes_to_due` (negative = breached) and `overdue`. Use it to answer "what should I work next?" and as the **prioritizer for the autonomous investigation loop** — pull SLA breaches before arbitrary open cases.
+
+```
+xsoar_sla_breaches()                         # breached + due within 24h, most-overdue first
+xsoar_sla_breaches(within_hours=4)           # tighten the window to the next 4h
+xsoar_sla_breaches(include_breached=false)   # "due soon but not yet breached" only
+xsoar_sla_breaches(within_hours=null)        # every open incident that has an SLA set
+```
+
+Don't hand-roll this with `xsoar_list_incidents` + a `dueDate` sort: the zero-value sentinel sorts to one extreme and buries the real deadlines. `xsoar_sla_breaches` filters the sentinel out and computes time-to-due for you.
+
+---
+
 ## Indicator query syntax (`xsoar_search_indicators`)
 
 `xsoar_search_indicators(query=…)` passes an XSOAR **indicator-search** query verbatim to `/indicators/search`. Build it from these fields (XSOAR's indicator query DSL):

@@ -396,6 +396,7 @@ def test_list_incidents_request_shape(monkeypatch):
     assert out["incidents"][0] == {
         "id": "1", "name": "Phish", "type": "Phishing", "severity": 3,
         "status": 1, "owner": "alice", "created": "t0", "modified": "t1",
+        "due_date": None,  # no dueDate in the fixture → normalized to None (R7)
     }
 
     method, path, body = rf.calls[0]
@@ -1020,12 +1021,84 @@ def test_related_incidents_no_type(monkeypatch):
     assert out["ok"] is False and "no type" in out["error"]
 
 
+# ─── sla_breaches (R7) ───────────────────────────────────────────────
+
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+
+def _iso_z(dt):
+    """XSOAR-style ISO with a trailing Z (mirrors what the tenant emits)."""
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def test_sla_date_helpers():
+    assert connector._norm_due_date("0001-01-01T00:00:00Z") is None  # zero-value sentinel
+    assert connector._norm_due_date(None) is None
+    assert connector._norm_due_date("2026-02-01T04:38:25Z") == "2026-02-01T04:38:25Z"
+    # nanosecond fractional + Z (the real tenant format) parses to tz-aware UTC
+    dt = connector._parse_xsoar_dt("2026-02-01T04:38:25.032270187Z")
+    assert dt is not None and dt.tzinfo is not None
+    assert connector._parse_xsoar_dt("not-a-date") is None
+
+
+def test_summarize_incident_includes_due_date():
+    assert connector._summarize_incident(
+        {"id": "1", "dueDate": "2026-02-01T00:00:00Z"})["due_date"] == "2026-02-01T00:00:00Z"
+    # the 0001 sentinel is normalized to None so the agent doesn't read it as overdue
+    assert connector._summarize_incident(
+        {"id": "2", "dueDate": "0001-01-01T00:00:00Z"})["due_date"] is None
+
+
+def test_sla_breaches_classifies_and_sorts(monkeypatch):
+    now = datetime.now(timezone.utc)
+    incidents = [
+        {"id": "due_soon", "dueDate": _iso_z(now + timedelta(minutes=30))},
+        {"id": "overdue", "dueDate": _iso_z(now - timedelta(hours=2))},
+        {"id": "far", "dueDate": _iso_z(now + timedelta(hours=100))},
+        {"id": "no_sla", "dueDate": "0001-01-01T00:00:00Z"},
+    ]
+    rf = _RecordingFetcher(post_reply={"data": incidents})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_sla_breaches())  # within_hours=24, include_breached=True
+    ids = [b["id"] for b in out["breaches"]]
+    assert ids == ["overdue", "due_soon"]  # most overdue first; far + no_sla excluded
+    assert out["breaches"][0]["overdue"] is True
+    assert out["breaches"][1]["overdue"] is False
+    assert out["breaches"][0]["minutes_to_due"] < 0
+    # the search used open status + a dueDate sort
+    filt = rf.calls[0][2]["filter"]
+    assert filt["status"] == [0, 1]
+    assert filt["sort"][0]["field"] == "dueDate"
+
+
+def test_sla_breaches_exclude_breached(monkeypatch):
+    now = datetime.now(timezone.utc)
+    incidents = [
+        {"id": "due_soon", "dueDate": _iso_z(now + timedelta(minutes=30))},
+        {"id": "overdue", "dueDate": _iso_z(now - timedelta(hours=2))},
+    ]
+    rf = _RecordingFetcher(post_reply={"data": incidents})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_sla_breaches(include_breached=False))
+    assert [b["id"] for b in out["breaches"]] == ["due_soon"]  # overdue dropped
+
+
+def test_sla_breaches_no_window_includes_far(monkeypatch):
+    now = datetime.now(timezone.utc)
+    incidents = [{"id": "far", "dueDate": _iso_z(now + timedelta(hours=100))}]
+    rf = _RecordingFetcher(post_reply={"data": incidents})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_sla_breaches(within_hours=None))
+    assert [b["id"] for b in out["breaches"]] == ["far"]  # no upper bound
+
+
 def test_all_exported_tools_are_callable():
     expected = {
         "xsoar_list_incidents",
         "xsoar_get_incident",
         "xsoar_linked_incidents",
         "xsoar_related_incidents",
+        "xsoar_sla_breaches",
         "xsoar_get_war_room",
         "xsoar_add_entry",
         "xsoar_add_note",

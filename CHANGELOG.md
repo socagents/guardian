@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.105] (2026-07-01) — *XSOAR connector — SLA-aware triage: `sla_breaches` + due-date on every case (arc R7 of the XSOAR capability expansion)*
+
+The autonomous investigation loop (and any analyst) should work the cases closest to breaching their SLA first. R7 gives Guardian the deadline data and a prioritized view of it.
+
+- **`xsoar_sla_breaches`** — lists the open incidents nearest their SLA deadline, **most-overdue first**, each annotated with `minutes_to_due` (negative = already breached), an `overdue` flag, and the `due_date`. The "what should I work next?" entrypoint, and the prioritizer for the autonomous loop: pull SLA breaches before arbitrary open cases. Tunable with `within_hours` (default 24; `null` = no window), `include_breached` (default true; false = "due soon but not yet breached"), and `limit`/`scan`.
+- **`due_date` on every case summary** — `xsoar_list_incidents`, `xsoar_linked_incidents`, and `xsoar_related_incidents` now carry the SLA deadline. XSOAR's `0001-01-01` zero-value (no SLA set) is normalized to `null`, so a no-SLA case never reads as wildly overdue.
+- **The autonomous loop is now SLA-aware** — the investigation skill's monitor step leads with `xsoar_sla_breaches`, so the loop triages by deadline urgency, with severity breaking ties.
+- Read-only connector tool (no approval gate); per-instance dispatch. XSOAR connector toolset 37 → 38; connector version 0.2.9 → 0.2.10.
+
 ## [v0.2.104] (2026-07-01) — *XSOAR connector — campaign discovery: `linked_incidents` + `related_incidents` (arc R6 of the XSOAR capability expansion)*
 
 One triaged incident is rarely the whole story. R6 gives Guardian two ways to find the **rest of a campaign** sitting in the XSOAR queue, then group it into a Guardian Case.
