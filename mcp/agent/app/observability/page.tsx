@@ -191,6 +191,7 @@ export default function ObservabilityOverview() {
           <SubpageCard href="/observability/logs" icon="terminal" label="Logs" hint="Structured events" />
           <SubpageCard href="/observability/events" icon="policy" label="Events" hint="Audit log" />
           <SubpageCard href="/observability/pipeline" icon="account_tree" label="Pipeline" hint="Component health" />
+          <SubpageCard href="/observability/xsoar" icon="security" label="XSOAR Ops" hint="Incident + SLA KPIs" />
         </div>
       </section>
     </div>

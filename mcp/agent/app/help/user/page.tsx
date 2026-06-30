@@ -76,6 +76,7 @@ const SECTIONS: SectionDef[] = [
   { id: "api-keys", label: "API Keys", group: "Integration", icon: "vpn_key" },
 
   { id: "obs-pipeline", label: "Pipeline Health", group: "Observability", icon: "account_tree" },
+  { id: "obs-xsoar", label: "XSOAR Operational Metrics", group: "Observability", icon: "security" },
   { id: "obs-metrics", label: "Metrics & Traces", group: "Observability", icon: "monitoring" },
   { id: "obs-logs", label: "Logs & Events", group: "Observability", icon: "terminal" },
   { id: "cost-ux", label: "Cost Rollup", group: "Observability", icon: "payments" },
@@ -4589,6 +4590,47 @@ probed          ── transient state during an in-flight probe`}</Pre>
               HTTP code + latency per probe (so you can see exact response
               times), and a <Term>Recent Traffic</Term> feed of the last
               audit events.
+            </p>
+          </Section>
+
+          <Section
+            id="obs-xsoar"
+            icon="security"
+            title="XSOAR Operational Metrics"
+          >
+            <p>
+              <Link href="/observability/xsoar" className="link">
+                /observability/xsoar
+              </Link>{" "}
+              answers <em>&ldquo;how busy is my SOC right now?&rdquo;</em> at a
+              glance, reading live from your connected XSOAR instance(s). It is
+              read-only — it never acts on the tenant. Three panels:
+            </p>
+            <ul className="list-disc pl-5 space-y-1.5 text-sm">
+              <li>
+                <Term>Open incidents by severity</Term> — a count tile per
+                severity (Critical / High / Medium / Low) plus the total of
+                open cases, so you see the shape of the queue immediately.
+              </li>
+              <li>
+                <Term>SLA breaches</Term> — the open incidents at or nearing
+                their SLA deadline, most-overdue first, each with how long it
+                is overdue (or how long until it&apos;s due). This is the
+                &ldquo;what should I work next?&rdquo; list.
+              </li>
+              <li>
+                <Term>Integration health</Term> — how many of the tenant&apos;s
+                integration instances are unhealthy, and which ones errored, so
+                a broken feed surfaces here before it silently stops creating
+                incidents.
+              </li>
+            </ul>
+            <p>
+              If you run multiple XSOAR instances (e.g. one per MSSP tenant),
+              each gets its own block. The page degrades gracefully: a slow or
+              failing metric shows a per-panel note instead of blanking the
+              whole page, and with no XSOAR connector configured it points you
+              to the Connectors page. Hit <Term>Refresh</Term> to re-pull.
             </p>
           </Section>
 

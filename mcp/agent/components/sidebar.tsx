@@ -120,6 +120,7 @@ const navEntries: NavEntry[] = [
       { href: "/observability/events", label: "Events", icon: "policy" },
       { href: "/observability/runtime-events", label: "Runtime events", icon: "bolt" },
       { href: "/observability/connectors", label: "Connectors", icon: "settings_input_component" },
+      { href: "/observability/xsoar", label: "XSOAR Ops", icon: "security" },
       { href: "/observability/pipeline", label: "Pipeline", icon: "account_tree" },
       { href: "/observability/cost", label: "Cost", icon: "payments" },
       { href: "/observability/telemetry", label: "Telemetry", icon: "insights" },

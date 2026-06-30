@@ -2063,7 +2063,7 @@ function ObservabilityOverview() {
  orients you across them and points at the deeper specs.
  </p>
 
- <SubSection icon="hub" title="The ten surfaces">
+ <SubSection icon="hub" title="The eleven surfaces">
  <p>
  Each surface answers a different question. Pick by what you
  want to know:
@@ -2106,6 +2106,16 @@ function ObservabilityOverview() {
  <Link href="#connector-state" className="link">Connector State Machine</Link> covers the state graph.
  </li>
  <li>
+ <Term><Link href="/observability/xsoar" className="link">/observability/xsoar</Link></Term>
+ {" "}— XSOAR operational KPIs read live from the connected XSOAR instance(s): open incidents by
+ severity, SLA-breach status (most-overdue first), and integration health. The page&apos;s
+ <Code>/api/agent/observability/xsoar</Code> route runs server-side, discovers the enabled XSOAR
+ instances via <Code>GET /api/v1/instances?connector_id=xsoar</Code>, then dispatches the read-only
+ <Code>xsoar_list_incidents</Code> / <Code>xsoar_sla_breaches</Code> / <Code>xsoar_get_integration_status</Code>
+ tools over JSON-RPC (<Code>GuardianMCPClient</Code>, bearer <Code>MCP_TOKEN</Code>) — per-tool
+ <Code>Promise.allSettled</Code> so one slow/failing tool degrades to a per-panel error.
+ </li>
+ <li>
  <Term><Link href="/observability/logs" className="link">/observability/logs</Link></Term>
  {" "}— live tail of raw container stdout/stderr (SSE-streamed, last 200 lines per container).
  The fallback when audit and runtime-events don&apos;t carry enough detail.
@@ -2136,7 +2146,7 @@ function ObservabilityOverview() {
  looking for a specific signal and unsure which surface to
  open:
  </p>
- <Pre>{`UI surfaces (10)
+ <Pre>{`UI surfaces (11)
   ┌──────────────────────────────────────────────────────────────┐
   │  /observability/{events,runtime-events,metrics,traces,...}   │
   └──────────────────────────────────────────────────────────────┘

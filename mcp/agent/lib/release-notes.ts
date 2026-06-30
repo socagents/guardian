@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.107",
+    date: "2026-07-01",
+    title: "XSOAR Operational Metrics — a live SOC dashboard under Observability.",
+    highlights: [
+      "New /observability/xsoar page: open incidents by severity, SLA breaches (most-overdue first), and integration health, read live from the connected XSOAR instance(s).",
+      "Resilient by design — per-panel errors instead of a blank page if a metric is slow, and a clean empty state when no XSOAR connector is configured.",
+      "Multi-instance aware: each enabled XSOAR instance (e.g. one per MSSP tenant) gets its own block. Read-only — no actions on the tenant.",
+    ],
+  },
+  {
     version: "0.2.106",
     date: "2026-07-01",
     title: "MSSP multi-tenant — scope a connector instance to an XSOAR 6 child account.",

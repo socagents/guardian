@@ -903,6 +903,44 @@ export const JOURNEYS: Journey[] = [
     components: ["jobs"],
   },
   {
+    id: "xsoar-ops-metrics",
+    category: "ops",
+    title: "Read XSOAR operational metrics at a glance",
+    summary:
+      "Open-incident counts by severity, SLA breaches (most-overdue first), and integration health from the connected XSOAR instance(s).",
+    difficulty: "starter",
+    durationMin: 1,
+    icon: "security",
+    prompts: [],
+    toolsExercised: [
+      "xsoar_list_incidents",
+      "xsoar_sla_breaches",
+      "xsoar_get_integration_status",
+    ],
+    apis: [
+      {
+        method: "GET",
+        path: "/api/agent/observability/xsoar",
+        description:
+          "Runs server-side: discovers enabled xsoar instances via GET /api/v1/instances?connector_id=xsoar, then dispatches the read-only xsoar_list_incidents / xsoar_sla_breaches / xsoar_get_integration_status tools over JSON-RPC (GuardianMCPClient, bearer MCP_TOKEN), aggregating per instance with Promise.allSettled.",
+      },
+    ],
+    howToTest: [
+      "Configure + enable an XSOAR connector instance on /connectors first.",
+      "Open /observability/xsoar (sidebar → Observability → XSOAR Ops).",
+      "Confirm the three panels render: severity tiles, SLA breaches, integration health.",
+      "Click Refresh to re-pull live.",
+    ],
+    expectedResult:
+      "Severity tiles show open-incident counts (Critical/High/Medium/Low + total); the SLA panel lists incidents breaching or due within 24h, most-overdue first; the integration panel shows the unhealthy count + any errored integrations. With no XSOAR instance, an empty-state card points to /connectors.",
+    verifyVia: [
+      "GET /api/agent/observability/xsoar — `instances[]` each carry `severity`, `sla`, and `integrations`; `no_instance:true` when none configured.",
+      "A failing tool surfaces as a per-panel `errors` note, not a blank page.",
+    ],
+    related: ["recall-org-config"],
+    components: ["xsoar"],
+  },
+  {
     id: "export-chat-session",
     category: "ops",
     title: "Export a chat session transcript",

@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.107] (2026-07-01) — *Observability — XSOAR Operational Metrics surface (arc R9, completes the XSOAR capability expansion)*
+
+The capstone of the arc: a new `/observability/xsoar` page that answers *"how busy is my SOC right now?"* at a glance, reading live from the connected XSOAR instance(s).
+
+- **New `/observability/xsoar` surface** with three panels: **open incidents by severity** (Critical / High / Medium / Low + total), **SLA breaches** (the incidents at/nearing their deadline, most-overdue first — the work-next list), and **integration health** (how many integration instances are unhealthy + which errored). Sidebar entry under Observability + a drill-in card on the Observability overview.
+- **Read-only + resilient.** A server-side route (`/api/agent/observability/xsoar`) discovers the enabled XSOAR instances, then dispatches the read-only `xsoar_list_incidents` / `xsoar_sla_breaches` / `xsoar_get_integration_status` tools over JSON-RPC (bearer `MCP_TOKEN`). Per-tool `Promise.allSettled` so one slow/failing tool degrades to a per-panel note, not a blank page. With no XSOAR connector configured, an empty state points to `/connectors`.
+- **Multi-instance aware** — each enabled XSOAR instance (e.g. one per MSSP tenant) gets its own block.
+- Catalog-side reads only (no SecretStore access). Agent-side feature — no connector image change. Architecture `#observability-overview` now lists eleven surfaces; user guide + journeys updated.
+
 ## [v0.2.106] (2026-07-01) — *XSOAR connector — MSSP multi-tenant account scoping: `list_accounts` + the `account` config (arc R8 of the XSOAR capability expansion)*
 
 MSSPs run one XSOAR 6 host with many child accounts. R8 lets Guardian scope a connector instance to a specific child, and clarifies how the same goal works on XSOAR 8.
