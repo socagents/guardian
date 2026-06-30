@@ -27,7 +27,7 @@ type IntegrationItem = {
 
 type InstanceMetrics = {
   instance: string;
-  severity: { low: number | null; medium: number | null; high: number | null; critical: number | null; total: number };
+  severity: { low: number; medium: number; high: number; critical: number; total: number; sampled: boolean } | null;
   sla: { breaches: number; top: Breach[] } | null;
   integrations: { total: number; unhealthy: number; items: IntegrationItem[] } | null;
   errors?: Record<string, string>;
@@ -132,11 +132,14 @@ export default function XsoarOpsPage() {
               <span className="material-symbols-outlined text-base text-on-surface-variant">bar_chart</span>
               <span className="font-label uppercase tracking-wider text-xs text-on-surface-variant">Open incidents by severity</span>
               {inst.errors?.severity && <span className="text-xs text-tertiary">({inst.errors.severity})</span>}
+              {inst.severity?.sampled && (
+                <span className="text-xs text-on-surface-variant">(split of the 200 most recent; total is exact)</span>
+              )}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {(["critical", "high", "medium", "low"] as const).map((k) => {
                 const meta = SEV_META[k];
-                const v = inst.severity[k];
+                const v = inst.severity ? inst.severity[k] : null;
                 return (
                   <div key={k} className="rounded-2xl p-4" style={glassStyle}>
                     <div className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-label uppercase tracking-wider ${meta.bg} ${meta.color} mb-2`}>
@@ -150,7 +153,7 @@ export default function XsoarOpsPage() {
                 <div className="inline-block px-2 py-0.5 rounded-full text-[10px] font-label uppercase tracking-wider bg-white/5 text-on-surface-variant mb-2">
                   Total open
                 </div>
-                <div className="font-mono text-3xl font-bold text-on-surface">{inst.severity.total}</div>
+                <div className="font-mono text-3xl font-bold text-on-surface">{inst.severity ? inst.severity.total : "—"}</div>
               </div>
             </div>
           </div>
