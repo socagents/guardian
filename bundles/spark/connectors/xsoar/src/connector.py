@@ -8,7 +8,7 @@ GETs) a logical XSOAR REST path. The fetcher applies the dual-
 generation base-URL + header rules (v6 vs v8) — every tool here stays
 generation-agnostic.
 
-Tool catalog (27):
+Tool catalog (29):
   xsoar_list_incidents        POST /incidents/search — filtered case list
   xsoar_get_incident          POST /incidents/search (filter.id) — one case
   xsoar_get_war_room          POST /investigation/{id} — war-room entries
@@ -35,6 +35,8 @@ Tool catalog (27):
   xsoar_set_list              POST /lists/save — overwrite/create a list
   xsoar_append_to_list        GET /lists/ + POST /lists/save — append to a list
   xsoar_create_incident       POST /incident — create a case
+  xsoar_list_playbooks        POST /playbook/search — tenant playbook catalog (both gens)
+  xsoar_get_playbook          POST /playbook/search (id:) — one playbook: inputs + tasks
   xsoar_run_playbook          POST /inv-playbook/{pb}/{inv} — run a playbook on a case
   xsoar_get_playbook_state    GET /inv-playbook/{inv} — playbook tasks + state on a case
   xsoar_import_playbook       POST /playbook/import — upload a playbook YAML
@@ -97,6 +99,8 @@ __all__ = [
     "xsoar_set_list",
     "xsoar_append_to_list",
     "xsoar_create_incident",
+    "xsoar_list_playbooks",
+    "xsoar_get_playbook",
     "xsoar_run_playbook",
     "xsoar_get_playbook_state",
     "xsoar_import_playbook",
@@ -2365,6 +2369,196 @@ async def _resolve_playbook_name(fetcher: XSOARFetcher, ref: str) -> str:
         if name:
             return str(name)
     return ref
+
+
+def _extract_playbooks(resp: Any) -> list:
+    """Pull the playbook list out of a /playbook/search response.
+
+    XSOAR returns hits under "playbooks" on both generations; some gateway
+    shapes use "data". Returns [] for any non-list / empty body, and drops
+    non-dict entries so callers can index safely.
+    """
+    if isinstance(resp, dict):
+        pbs = resp.get("playbooks") or resp.get("data") or []
+        if isinstance(pbs, list):
+            return [p for p in pbs if isinstance(p, dict)]
+    return []
+
+
+def _summarize_playbook(pb: dict) -> dict:
+    """Compact playbook summary for the catalog list — enough to CHOOSE one.
+
+    Mirrors _summarize_incident / _summarize_indicator: an agent picking a
+    playbook to run doesn't need the full task graph, just id/name/what-it-does
+    plus the input + task counts. Drill in with xsoar_get_playbook.
+    """
+    inputs = pb.get("inputs")
+    tasks = pb.get("tasks")
+    return {
+        "id": pb.get("id") or pb.get("name"),
+        "name": pb.get("name"),
+        "description": (pb.get("description") or "").strip(),
+        "tags": pb.get("tags") or [],
+        "system": bool(pb.get("system", False)),
+        "input_count": len(inputs) if isinstance(inputs, list) else 0,
+        "task_count": len(tasks) if isinstance(tasks, dict) else 0,
+    }
+
+
+def _summarize_playbook_input(inp: dict) -> dict:
+    """Project one playbook input → {key, required, description, default}.
+
+    XSOAR wraps an input's default under value.simple (a literal) or
+    value.complex (a context/transform reference). Surface the literal; mark a
+    complex reference rather than dumping the nested transform object.
+    """
+    val = inp.get("value")
+    default: Any = None
+    if isinstance(val, dict):
+        default = val.get("simple")
+        if default is None and val.get("complex") is not None:
+            default = "<complex/context reference>"
+    elif val is not None:
+        default = val
+    return {
+        "key": inp.get("key"),
+        "required": bool(inp.get("required", False)),
+        "description": (inp.get("description") or "").strip(),
+        "default": default,
+    }
+
+
+def _detail_playbook(pb: dict) -> dict:
+    """Full-but-compact playbook detail: INPUTS (to parametrize a run) + tasks.
+
+    The inputs[] are the point of this tool — they're what must be present (on
+    the incident's fields / context) for run_playbook to produce a useful
+    result. Tasks are summarized to {id, name, type} and capped so a 100-task
+    default playbook can't bloat the response; task_count reflects the full plan.
+    """
+    raw_inputs = pb.get("inputs")
+    inputs = (
+        [_summarize_playbook_input(i) for i in raw_inputs if isinstance(i, dict)]
+        if isinstance(raw_inputs, list)
+        else []
+    )
+    tasks_raw = pb.get("tasks")
+    task_list: list[dict] = []
+    if isinstance(tasks_raw, dict):
+        for node in tasks_raw.values():
+            if not isinstance(node, dict):
+                continue
+            t = node.get("task") if isinstance(node.get("task"), dict) else {}
+            task_list.append(
+                {
+                    "id": node.get("id"),
+                    "name": t.get("name") or node.get("name"),
+                    "type": node.get("type") or t.get("type"),
+                }
+            )
+    _TASK_CAP = 100
+    truncated = len(task_list) > _TASK_CAP
+    return {
+        "id": pb.get("id") or pb.get("name"),
+        "name": pb.get("name"),
+        "description": (pb.get("description") or "").strip(),
+        "tags": pb.get("tags") or [],
+        "system": bool(pb.get("system", False)),
+        "start_task_id": pb.get("startTaskId"),
+        "inputs": inputs,
+        "input_count": len(inputs),
+        "task_count": len(task_list),
+        "tasks": task_list[:_TASK_CAP],
+        "tasks_truncated": truncated,
+    }
+
+
+@_wrap_xsoar_call
+async def xsoar_list_playbooks(
+    query: Optional[str] = None,
+    page: int = 0,
+    size: int = 50,
+) -> dict:
+    """List the playbooks defined on this XSOAR tenant — the automation catalog.
+
+    Discovery tool: shows which playbooks actually EXIST on the tenant so you
+    recommend / run one that is really there instead of guessing a name. Pair
+    with xsoar_get_playbook (read a playbook's inputs + tasks before running)
+    and xsoar_run_playbook (assign one to an incident).
+
+    Works on BOTH XSOAR 6 and 8 — `POST /playbook/search` is served directly on
+    both generations (no playground_id needed).
+
+    Args:
+        query: Optional XSOAR playbook-search query. Common forms:
+            `name:"Phishing"` (name substring), `tag:phishing` (by tag),
+            `system:T` / `system:F` (built-in vs custom playbooks). Omit to
+            list everything.
+        page: Zero-based page index (default 0).
+        size: Page size (default 50, capped at 200).
+
+    Returns:
+        {ok, playbooks: [{id, name, description, tags, system, input_count,
+        task_count}], total, result_count}. `total` is XSOAR's reported count
+        (may exceed this page); `result_count` is this page's length. Use a
+        playbook's `name` (or `id`) as the playbook_id for xsoar_run_playbook.
+    """
+    fetcher = _get_fetcher()
+    body: dict = {"page": _norm_int(page, 0), "size": min(_norm_int(size, 50), 200)}
+    if query:
+        body["query"] = str(query)
+    resp = await fetcher.post("/playbook/search", body)
+    pbs = _extract_playbooks(resp)
+    total: Optional[int] = None
+    if isinstance(resp, dict) and isinstance(resp.get("total"), int):
+        total = resp["total"]
+    summaries = [_summarize_playbook(p) for p in pbs]
+    return {
+        "playbooks": summaries,
+        "total": total if total is not None else len(summaries),
+        "result_count": len(summaries),
+    }
+
+
+@_wrap_xsoar_call
+async def xsoar_get_playbook(playbook_id: str) -> dict:
+    """Read one playbook's definition — its INPUTS and task list.
+
+    Use before xsoar_run_playbook to learn what a playbook needs: its inputs[]
+    are the parameters that must be present (on the incident's fields / context)
+    for the run to do useful work. Accepts either a playbook id or its display
+    name (resolves by id first, then falls back to a name match).
+
+    Works on BOTH XSOAR 6 and 8 (`POST /playbook/search`, no playground_id).
+
+    Args:
+        playbook_id: The playbook id OR display name to fetch.
+
+    Returns:
+        {ok, id, name, description, tags, system, start_task_id, inputs:
+        [{key, required, description, default}], input_count, task_count,
+        tasks: [{id, name, type}] (capped at 100; tasks_truncated flags
+        overflow)}, or {ok:false, error} when no such playbook exists.
+    """
+    if not playbook_id:
+        raise ValueError("playbook_id is required")
+    fetcher = _get_fetcher()
+    ref = str(playbook_id)
+    resp = await fetcher.post("/playbook/search", {"query": f"id:{ref}"})
+    pbs = _extract_playbooks(resp)
+    if not pbs:
+        # Fall back to a name match — callers often pass the display name.
+        resp = await fetcher.post("/playbook/search", {"query": f'name:"{ref}"'})
+        pbs = _extract_playbooks(resp)
+    if not pbs:
+        return _err(f"playbook '{ref}' not found", playbook_id=ref)
+    # Prefer an exact id/name match if the name query was broad.
+    chosen = pbs[0]
+    for p in pbs:
+        if p.get("id") == ref or p.get("name") == ref:
+            chosen = p
+            break
+    return _detail_playbook(chosen)
 
 
 @_wrap_xsoar_call

@@ -437,6 +437,34 @@ spec:
         - { name: "create_investigation", type: "boolean", description: "Create the war-room investigation (default true).", required: false }
       returns: { type: "object", description: "{ ok, incident_id, name, created }" }
 
+    - name: "list_playbooks"
+      method: "POST /playbook/search"
+      description: |
+        List the playbooks defined on this XSOAR tenant — the automation
+        catalog. Discovery tool: shows which playbooks actually EXIST so you
+        recommend / run one that is really there instead of guessing a name.
+        Pair with get_playbook (read a playbook's inputs + tasks) and
+        run_playbook (assign one to an incident). Served directly on BOTH XSOAR
+        6 and 8 — no playground_id needed.
+      args:
+        - { name: "query", type: "string", description: "Optional XSOAR playbook-search query: name:\"Phishing\" (name), tag:phishing (by tag), system:T|F (built-in vs custom). Omit to list all.", required: false }
+        - { name: "page", type: "integer", description: "Zero-based page index (default 0).", required: false }
+        - { name: "size", type: "integer", description: "Page size (default 50, capped at 200).", required: false }
+      returns: { type: "object", description: "{ ok, playbooks: [{id, name, description, tags, system, input_count, task_count}], total, result_count }" }
+
+    - name: "get_playbook"
+      method: "POST /playbook/search (id: then name:)"
+      description: |
+        Read one playbook's definition — its INPUTS and task list. Use before
+        run_playbook to learn what a playbook needs: its inputs[] are the
+        parameters that must be present (on the incident's fields / context) for
+        the run to do useful work. Accepts a playbook id OR display name
+        (resolves by id first, falls back to a name match). Served directly on
+        BOTH XSOAR 6 and 8 — no playground_id needed.
+      args:
+        - { name: "playbook_id", type: "string", description: "The playbook id OR display name to fetch.", required: true }
+      returns: { type: "object", description: "{ ok, id, name, description, tags, system, start_task_id, inputs: [{key, required, description, default}], input_count, task_count, tasks: [{id, name, type}], tasks_truncated }" }
+
     - name: "run_playbook"
       method: "POST /incident/investigate + POST /entry/execute/sync (!setPlaybook)"
       description: |

@@ -947,6 +947,8 @@ def test_all_exported_tools_are_callable():
         "xsoar_set_list",
         "xsoar_append_to_list",
         "xsoar_create_incident",
+        "xsoar_list_playbooks",
+        "xsoar_get_playbook",
         "xsoar_run_playbook",
         "xsoar_get_playbook_state",
         "xsoar_import_playbook",
@@ -1779,3 +1781,117 @@ def test_list_incidents_source_instance_and_query_combined(monkeypatch):
     assert "(status:active)" in q
     assert 'sourceInstance:"splunk-mimic"' in q
     assert " and " in q
+
+
+# ─── list_playbooks / get_playbook (R1: tenant playbook catalog + detail) ──
+
+
+def test_list_playbooks_request_shape_and_summary(monkeypatch):
+    rf = _RecordingFetcher(post_reply={
+        "total": 2,
+        "playbooks": [
+            {"id": "pb-1", "name": "Phishing Investigation",
+             "description": "Triage phishing", "tags": ["phishing"],
+             "system": True, "inputs": [{"key": "URL"}],
+             "tasks": {"0": {}, "1": {}, "2": {}}},
+            {"id": "pb-2", "name": "Malware Containment", "system": False},
+        ],
+    })
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_list_playbooks(query="tag:phishing", page=1, size=25))
+    assert out["ok"] is True
+    assert out["total"] == 2
+    assert out["result_count"] == 2
+    first = out["playbooks"][0]
+    assert first["id"] == "pb-1"
+    assert first["name"] == "Phishing Investigation"
+    assert first["input_count"] == 1
+    assert first["task_count"] == 3
+    assert first["system"] is True
+
+    method, path, body = rf.calls[0]
+    assert (method, path) == ("POST", "/playbook/search")
+    assert body == {"page": 1, "size": 25, "query": "tag:phishing"}
+
+
+def test_list_playbooks_size_capped_and_total_fallback(monkeypatch):
+    rf = _RecordingFetcher(post_reply={"playbooks": [{"id": "pb-1", "name": "A"}]})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_list_playbooks(size=9999))
+    # size capped at 200; no "query" key when omitted
+    assert rf.calls[0][2] == {"page": 0, "size": 200}
+    # total falls back to result_count when XSOAR omits "total"
+    assert out["total"] == 1
+    assert out["result_count"] == 1
+
+
+def test_get_playbook_detail_inputs_and_tasks(monkeypatch):
+    rf = _RecordingFetcher(post_reply={
+        "playbooks": [{
+            "id": "pb-1", "name": "Phishing Investigation",
+            "description": "Triage phishing", "tags": ["phishing"],
+            "system": True, "startTaskId": "0",
+            "inputs": [
+                {"key": "URL", "required": True, "description": "url to detonate",
+                 "value": {"simple": "https://x"}},
+                {"key": "Sender", "required": False,
+                 "value": {"complex": {"root": "incident"}}},
+            ],
+            "tasks": {
+                "0": {"id": "0", "type": "start", "task": {"name": "Start"}},
+                "1": {"id": "1", "type": "regular", "task": {"name": "Detonate URL"}},
+            },
+        }],
+    })
+    _install_fetcher(monkeypatch, rf)
+
+    out = run(connector.xsoar_get_playbook("pb-1"))
+    assert out["ok"] is True
+    assert out["id"] == "pb-1"
+    assert out["start_task_id"] == "0"
+    assert out["input_count"] == 2
+    assert out["inputs"][0] == {
+        "key": "URL", "required": True,
+        "description": "url to detonate", "default": "https://x",
+    }
+    # a complex/context value reference is summarized, not dumped
+    assert out["inputs"][1]["default"] == "<complex/context reference>"
+    assert out["task_count"] == 2
+    assert out["tasks"][1] == {"id": "1", "name": "Detonate URL", "type": "regular"}
+    # resolved by an id: query first
+    assert rf.calls[0] == ("POST", "/playbook/search", {"query": "id:pb-1"})
+
+
+def test_get_playbook_name_fallback(monkeypatch):
+    # id: query returns empty → name: query returns the hit
+    class _TwoStep:
+        is_v8 = False
+
+        def __init__(self):
+            self.calls: list = []
+            self._n = 0
+
+        async def post(self, path, body=None, **kw):
+            self.calls.append(("POST", path, body))
+            self._n += 1
+            if self._n == 1:
+                return {"playbooks": []}
+            return {"playbooks": [{"id": "pb-9", "name": "My PB"}]}
+
+    f = _TwoStep()
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
+    out = run(connector.xsoar_get_playbook("My PB"))
+    assert out["ok"] is True
+    assert out["name"] == "My PB"
+    assert f.calls[0][2] == {"query": "id:My PB"}
+    assert f.calls[1][2] == {"query": 'name:"My PB"'}
+
+
+def test_get_playbook_not_found(monkeypatch):
+    rf = _RecordingFetcher(post_reply={"playbooks": []})
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_get_playbook("nope"))
+    assert out["ok"] is False
+    assert "not found" in out["error"]
+    assert out["playbook_id"] == "nope"

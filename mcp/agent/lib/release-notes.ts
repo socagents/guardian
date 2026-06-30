@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.99",
+    date: "2026-06-30",
+    title: "XSOAR connector — playbook discovery: list and inspect the tenant's playbooks.",
+    highlights: [
+      "New list_playbooks tool: the agent can now enumerate the playbooks that actually exist on your XSOAR tenant (filter by name, tag, or built-in vs custom) and recommend one that's really there instead of guessing a name.",
+      "New get_playbook tool: read a playbook's inputs (key, required, default) and task list before running it — so the agent knows what parameters the run needs.",
+      "Both work on XSOAR 6 and 8 with no playground required. The XSOAR connector now exposes 29 tools.",
+      "First release of a multi-part arc expanding Guardian's XSOAR capabilities (threat-intel writes, command discovery, jobs, closed-loop sync, and more to follow).",
+    ],
+  },
+  {
     version: "0.2.98",
     date: "2026-06-30",
     title: "XQL knowledge base: +102 live-verified examples (the full 20-scenario coverage program).",

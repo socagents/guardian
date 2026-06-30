@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.99] (2026-06-30) — *XSOAR connector — playbook discovery: `list_playbooks` + `get_playbook` (arc R1 of the XSOAR capability expansion)*
+
+First release of a multi-part arc expanding what Guardian can do against Cortex XSOAR. This one closes the biggest gap in the connector's playbook surface: until now the agent could *run* a playbook (`run_playbook`) and *monitor* it (`get_playbook_state`) but could not see **which playbooks exist on the tenant** or **what inputs one needs** — so it had to be told a playbook name and ran blind to its parameters.
+
+- **`list_playbooks` — the tenant's playbook catalog.** The agent can now enumerate the playbooks actually defined on your XSOAR tenant (optionally filtered by `name:`, `tag:`, or `system:T|F`), so it recommends and runs a playbook that *really exists there* instead of guessing a name. Returns a compact `{id, name, description, tags, system, input_count, task_count}` per playbook.
+- **`get_playbook` — a playbook's inputs + tasks.** Reads one playbook (by id or display name) and returns its **inputs** (`{key, required, description, default}`) plus a task summary — so before running a playbook the agent (or you) can see what parameters it expects on the incident's fields/context for the run to do useful work.
+- **Both work on XSOAR 6 and 8 with no playground_id** — they use `POST /playbook/search`, which is served directly on both generations (the same path the connector already uses to resolve a playbook id→name).
+- The XSOAR connector tool count goes **27 → 29**; the marketplace card and the `xsoar_platform_reference` skill are updated to match.
+
 ## [v0.2.98] (2026-06-30) — *XQL knowledge base: +102 live-verified examples (the full 20-scenario coverage program) + an `event_sub_type` correction*
 
 - **The XQL example knowledge base grows from 281 to 383 entries.** This folds in the remaining **102 verified queries from the earlier 20-scenario coverage program** — process-execution anomaly, network beaconing, IOC-IP joins, JSON-payload parsing, failed-logon brute force, RDP lateral movement, data-exfil-by-volume, composite-field splitting, regex log extraction, and CIDR-list matching. Every one was **re-run live on a real XSIAM tenant** before it was added (the earlier "verified" tag predated the rigorous value-checking added this week, so each query was confirmed to still parse and return results today), and all carry pre-baked embeddings for instant semantic search. Of the program's 139 queries, 37 were already represented; this adds the other 102, so the full program is now in the KB.
