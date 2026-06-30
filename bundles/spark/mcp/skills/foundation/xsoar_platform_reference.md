@@ -60,7 +60,7 @@ You rarely need a raw `!command` — a first-class `xsoar_*` tool wraps the comm
 | `!setList listName=<n> listData=<d>` | **Update an EXISTING List only** — errors "Item not found" on a new name. Use `!createList`/`xsoar_set_list` to create. | — (avoid; use `xsoar_set_list`) | yes |
 | `!setIncident <field>=<v>` | Mutate incident fields. | **`xsoar_update_incident`** (resolves `version` itself) | no (REST) |
 | `!taskComplete id=<n>` | Advance a stuck playbook task. | **`xsoar_complete_task`** | yes |
-| `!core-api-post/get/put/delete uri=<u> body=\`<json>\`` | Generic call through the **Core REST API integration** (must be installed on the tenant). Body is wrapped in backticks. The v8 playbook-import path uses `core-api-post uri=/playbook/save body=\`[{…}]\``. | `xsoar_import_playbook` (for playbook import); else `xsoar_run_command` | yes |
+| `!core-api-post/get/put/delete uri=<u> body=\`<json>\`` | Generic call through the **Core REST API integration** (must be installed on the tenant). Body is wrapped in backticks. NOTE: the connector's own tools (e.g. `xsoar_import_playbook`, `xsoar_get_playbook_state`) no longer go through this integration on Cortex 8 — they call the full internal API (`/xsoar/*`) directly. `!core-api-*` via `xsoar_run_command` is only for ad-hoc calls the connector doesn't already wrap. | `xsoar_run_command` | yes |
 
 **Backtick rule for `!core-api-*`:** the JSON `body` is delimited by backticks, so the JSON itself must not contain a backtick. `/playbook/save` expects a JSON **array** of playbooks, not a bare object.
 

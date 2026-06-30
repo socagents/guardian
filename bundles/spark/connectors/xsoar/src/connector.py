@@ -2863,19 +2863,31 @@ async def _fetch_workplan(fetcher: XSOARFetcher, incident_id: str) -> Any:
     """Fetch the raw work plan for an incident, generation-aware.
 
     v6 (on-prem): GET /investigation/{id}/workplan directly. v8 / Cortex: the
-    public gateway doesn't serve that route, so read it through the Core REST
-    API integration in the playground (!core-api-get) — which needs
-    playground_id.
+    /investigation/{id}/workplan route isn't on the public gateway
+    (/xsoar/public/v1), but it IS on the full internal API (/xsoar/*) — the same
+    URL the Core REST API integration's `!core-api-get` hits, with the same
+    api_key + x-xdr-auth-id auth. So we read it DIRECTLY via the internal path
+    (no integration, no playground_id). The Core REST API integration is kept
+    only as a fallback for a tenant where the internal path is unavailable.
     """
     if not fetcher.is_v8:
         return await fetcher.get(f"/investigation/{incident_id}/workplan")
+    # v8: direct internal-API read (returns the same workplan dict as v6).
+    try:
+        return await fetcher.get(
+            f"/investigation/{incident_id}/workplan", internal=True
+        )
+    except XSOARError:
+        pass  # fall through to the Core REST API integration path
+    # Fallback: read through the Core REST API integration in the playground.
     cfg = _get_xsoar_config()
     playground_id = cfg.get("playground_id")
     if not playground_id:
         raise ValueError(
-            "On Cortex XSOAR 8 the work plan isn't on the public API — reading "
-            "playbook state needs the Core REST API integration AND this "
-            "instance's playground_id (set it at /connectors)."
+            "On Cortex XSOAR 8 the work plan isn't on the public API. Guardian "
+            "tried the internal API directly and it was unavailable; the "
+            "Core REST API integration fallback needs this instance's "
+            "playground_id (set it at /connectors)."
         )
     result = await _execute_command(
         fetcher, str(playground_id),
@@ -3119,31 +3131,41 @@ async def xsoar_import_playbook(
         # makes the SERVER parse the native v6 YAML, preserving every binding.
         response = await fetcher.post_multipart("/playbook/save/yaml", files=files)
     except XSOARRequestError as exc:
-        # Cortex 8's public API gateway doesn't proxy /playbook/save/yaml (405),
-        # and v6 REST endpoints 303-redirect on Cortex 8. When the direct path
-        # is unavailable, try the Core REST API integration path (issue #46):
-        # core-api-post → /playbook/save run in the playground. That needs the
-        # integration installed AND a playground_id; if either is missing we
-        # fall through to the guided-manual message (still correct behavior).
+        # Cortex 8's public API gateway (/xsoar/public/v1) doesn't proxy
+        # /playbook/save/yaml (405), and v6 REST endpoints 303-redirect on
+        # Cortex 8. But the FULL internal API (/xsoar/*) DOES serve it — the same
+        # surface the Core REST API integration reaches, with the same auth — so
+        # try the NON-LOSSY direct internal multipart upload first (no
+        # integration, no playground_id; the server parses native YAML so task
+        # command bindings survive). Only if the internal path is unavailable do
+        # we fall back to the Core REST API integration (lossy JSON /playbook/save,
+        # needs a playground_id) and finally the guided-manual message.
         msg = str(exc)
         _markers = ("405", "method not allowed", "redirect", "not served")
-        if any(m in msg.lower() for m in _markers):
+        if not any(m in msg.lower() for m in _markers):
+            raise
+        try:
+            response = await fetcher.post_multipart(
+                "/playbook/save/yaml", files=files, internal=True
+            )
+            # Success on the internal path — fall through to normalization below.
+        except XSOARError:
             via_core_api = await _import_via_core_api(fetcher, playbook_yaml)
             if via_core_api is not None:
                 return via_core_api  # Core REST API import succeeded (or its own error)
             return _err(
-                "Direct playbook import isn't available on this tenant's public "
-                "API. For one-click import, install the Core REST API "
-                "integration AND set this instance's playground_id (the "
-                "Playground / War Room investigation ID) at /connectors — "
-                "Guardian then imports via that integration. Otherwise import "
-                "the YAML manually via Playbooks → Import. The test-run still "
-                "works once the playbook exists in the tenant.",
+                "Direct playbook import isn't available on this tenant. Guardian "
+                "tried the public API, the internal API, and (if configured) the "
+                "Core REST API integration. To enable one-click import either "
+                "ensure the connector's API key can reach the internal "
+                "/playbook/save/yaml endpoint, or install the Core REST API "
+                "integration AND set this instance's playground_id at "
+                "/connectors. Otherwise import the YAML manually via Playbooks → "
+                "Import; the test-run still works once the playbook exists.",
                 import_unavailable=True,
                 reason="import_endpoint_unavailable_and_no_core_api_path",
                 detail=msg,
             )
-        raise
 
     # Normalize to the imported playbook's id/name across response shapes:
     #   * {"playbook": {...}}  — /playbook/save/yaml on v6 (the live shape)

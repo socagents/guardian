@@ -38,6 +38,14 @@ logger = logging.getLogger(__name__)
 # v8 / Cortex-cloud logical-path prefix. Appended to the base URL ONLY
 # when the instance is detected as v8 (api_id present).
 _V8_PATH_PREFIX = "/xsoar/public/v1"
+# v8 INTERNAL-API prefix. The Cortex API gateway serves the full XSOAR API
+# under /xsoar/* (what the Core REST API integration's !core-api-* commands
+# reach), in addition to the limited public surface under /xsoar/public/v1.
+# `internal=True` on post()/get() targets this path so the connector can call
+# endpoints not exposed on the public gateway (e.g. /investigation/{id}/workplan,
+# /playbook/save) DIRECTLY — no Core REST API integration / playground needed.
+# Same api_key + x-xdr-auth-id auth. On v6 there is no prefix either way.
+_V8_INTERNAL_PREFIX = "/xsoar"
 
 
 class XSOARError(Exception):
@@ -135,22 +143,32 @@ class XSOARFetcher:
             headers["x-xdr-auth-id"] = self.api_id
         return headers
 
-    def _full_url(self, path: str) -> str:
+    def _full_url(self, path: str, internal: bool = False) -> str:
         """Compose the absolute URL for a logical path.
 
-        base + ("/xsoar/public/v1" if v8 else "") + <logical-path>
+        base + ("/xsoar/public/v1" (public) | "/xsoar" (internal) if v8 else "")
+              + <logical-path>
 
-        Defensive de-dup: if a caller passes a path that already carries
-        the v8 prefix, strip it first so we never double it.
+        `internal=True` targets the full XSOAR API under /xsoar/* (v8) — used
+        for endpoints not on the public gateway. On v6 internal and public are
+        identical (no prefix). Defensive de-dup: if a caller passes a path that
+        already carries a v8 prefix, strip it first so we never double it.
         """
         if not path.startswith("/"):
             path = "/" + path
-        # Don't double the v8 prefix if the caller already included it.
-        if path.startswith(_V8_PATH_PREFIX):
-            path = path[len(_V8_PATH_PREFIX):]
-            if not path.startswith("/"):
-                path = "/" + path
-        prefix = _V8_PATH_PREFIX if self.is_v8 else ""
+        # Don't double a v8 prefix if the caller already included one. Strip the
+        # longer (public) prefix first so "/xsoar/public/v1/x" doesn't get
+        # mis-stripped to "/public/v1/x" by the shorter internal prefix.
+        for pfx in (_V8_PATH_PREFIX, _V8_INTERNAL_PREFIX):
+            if path.startswith(pfx + "/") or path == pfx:
+                path = path[len(pfx):] or "/"
+                if not path.startswith("/"):
+                    path = "/" + path
+                break
+        if self.is_v8:
+            prefix = _V8_INTERNAL_PREFIX if internal else _V8_PATH_PREFIX
+        else:
+            prefix = ""
         return f"{self.base}{prefix}{path}"
 
     def _raise_for_status(self, r: httpx.Response, path: str) -> None:
@@ -194,15 +212,20 @@ class XSOARFetcher:
     async def post(
         self,
         path: str,
-        body: Optional[dict] = None,
+        body: Optional[Any] = None,
         *,
+        internal: bool = False,
         timeout_seconds: float = 30.0,
     ) -> dict:
         """POST to the logical `path` with the auth headers. Returns parsed JSON.
 
-        Raises one of the XSOARError subclasses on a non-2xx response.
+        `internal=True` targets the v8 full internal API (/xsoar/*) instead of
+        the public gateway (/xsoar/public/v1) — for endpoints the public surface
+        doesn't expose. `body` may be a dict OR a list (some XSOAR endpoints,
+        e.g. /playbook/save, take a JSON array). Raises one of the XSOARError
+        subclasses on a non-2xx response.
         """
-        full_url = self._full_url(path)
+        full_url = self._full_url(path, internal=internal)
         timeout = httpx.Timeout(timeout_seconds, connect=10.0)
 
         try:
@@ -228,6 +251,7 @@ class XSOARFetcher:
         files: dict,
         *,
         data: Optional[dict] = None,
+        internal: bool = False,
         timeout_seconds: float = 60.0,
     ) -> dict:
         """POST a multipart/form-data body (file upload) to the logical path.
@@ -239,7 +263,7 @@ class XSOARFetcher:
         303-redirect, and surfacing that as an error (rather than silently
         following to an HTML login) makes the generation mismatch visible.
         """
-        full_url = self._full_url(path)
+        full_url = self._full_url(path, internal=internal)
         timeout = httpx.Timeout(timeout_seconds, connect=10.0)
         headers = self._headers()
         headers.pop("Content-Type", None)  # httpx sets multipart boundary
@@ -273,10 +297,15 @@ class XSOARFetcher:
         path: str,
         *,
         params: Optional[dict] = None,
+        internal: bool = False,
         timeout_seconds: float = 30.0,
     ) -> dict:
-        """GET the logical `path` with the auth headers. Returns parsed JSON."""
-        full_url = self._full_url(path)
+        """GET the logical `path` with the auth headers. Returns parsed JSON.
+
+        `internal=True` targets the v8 full internal API (/xsoar/*) instead of
+        the public gateway — for endpoints the public surface doesn't expose.
+        """
+        full_url = self._full_url(path, internal=internal)
         timeout = httpx.Timeout(timeout_seconds, connect=10.0)
 
         try:

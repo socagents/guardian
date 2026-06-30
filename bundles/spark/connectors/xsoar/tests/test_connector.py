@@ -1973,3 +1973,61 @@ def test_update_indicator_requires_a_field(monkeypatch):
     out = run(connector.xsoar_update_indicator(indicator_id="5"))
     assert out["ok"] is False
     assert "nothing to update" in out["error"]
+
+
+# ─── R3: connector self-sufficiency — /xsoar internal path ───────────
+
+
+def test_full_url_internal_vs_public():
+    from src._xsoar_client import XSOARFetcher
+    v6 = XSOARFetcher(api_url="https://xsoar6", api_key="k", api_id=None, verify_ssl=False)
+    v8 = XSOARFetcher(api_url="https://api-t.xdr.us", api_key="k", api_id="42", verify_ssl=False)
+    # v6: no prefix, internal and public identical
+    assert v6._full_url("/playbook/save") == "https://xsoar6/playbook/save"
+    assert v6._full_url("/playbook/save", internal=True) == "https://xsoar6/playbook/save"
+    # v8: public gateway vs full internal API
+    assert v8._full_url("/playbook/save") == "https://api-t.xdr.us/xsoar/public/v1/playbook/save"
+    assert v8._full_url("/playbook/save", internal=True) == "https://api-t.xdr.us/xsoar/playbook/save"
+    assert (v8._full_url("/investigation/9/workplan", internal=True)
+            == "https://api-t.xdr.us/xsoar/investigation/9/workplan")
+    # de-dup a path that already carries the public prefix
+    assert v8._full_url("/xsoar/public/v1/x") == "https://api-t.xdr.us/xsoar/public/v1/x"
+
+
+def test_fetch_workplan_v8_prefers_internal_direct(monkeypatch):
+    # On v8, the work plan is read via the DIRECT internal API path
+    # (no Core REST API integration / playground), not !core-api-get.
+    class _WPFetcher:
+        is_v8 = True
+
+        def __init__(self):
+            self.calls: list = []
+
+        async def get(self, path, **kw):
+            self.calls.append((path, kw.get("internal")))
+            return {"id": "INV"}  # a (minimal) workplan dict
+
+    f = _WPFetcher()
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
+    out = run(connector.xsoar_get_playbook_state("INV"))
+    assert out["ok"] is True
+    assert f.calls and f.calls[0] == ("/investigation/INV/workplan", True)
+
+
+def test_fetch_workplan_v6_unchanged(monkeypatch):
+    # v6 still reads the work plan directly (no internal flag needed).
+    class _WP6:
+        is_v8 = False
+
+        def __init__(self):
+            self.calls: list = []
+
+        async def get(self, path, **kw):
+            self.calls.append((path, kw.get("internal")))
+            return {"id": "INV"}
+
+    f = _WP6()
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: f)
+    out = run(connector.xsoar_get_playbook_state("INV"))
+    assert out["ok"] is True
+    assert f.calls[0][0] == "/investigation/INV/workplan"

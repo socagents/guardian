@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.101] (2026-06-30) — *XSOAR connector — self-sufficient on Cortex 8: no Core REST API integration or Playground required (arc R3 of the XSOAR capability expansion)*
+
+Third release of the XSOAR capability-expansion arc — a robustness change for **Cortex XSOAR 8 / cloud** tenants. Two connector capabilities (reading a running playbook's state, and importing a playbook) previously relied on the tenant having the **Core REST API integration** installed *and* a **Playground / War Room ID** configured on the connector instance. When the integration was missing, mis-configured, or just slow, those calls could **stall for minutes** (the integration retries each HTTP call for up to 3 minutes, 3×) before failing.
+
+- **The connector now calls the full XSOAR API directly.** Cortex 8's API gateway serves the complete XSOAR API under `/xsoar/*` (the same surface the Core REST API integration reaches), in addition to the limited public surface under `/xsoar/public/v1`. Guardian's connector now reaches that internal path itself — with the same API key it already uses — so **`get_playbook_state` (work-plan read) and `import_playbook` no longer need the Core REST API integration or a Playground ID** on Cortex 8.
+- **Playbook import is also now lossless on Cortex 8.** It uploads the native YAML via the internal `/playbook/save/yaml` endpoint (the server parses it), so task command bindings survive — instead of the previous fallback through the integration's JSON `/playbook/save`, which re-serialized and silently dropped them.
+- **No more multi-minute stalls.** The Core REST API integration is kept only as a *fallback* for a tenant where the internal path isn't reachable; the direct path is tried first and any war-room command is bounded. XSOAR 6 (on-prem) behavior is unchanged — it always used direct REST.
+- Internal change only — same 31 tools, no new operator surface. The `xsoar_platform_reference` skill is updated to note these two tools no longer require a Playground on Cortex 8.
+
 ## [v0.2.100] (2026-06-30) — *XSOAR connector — Threat-Intel write: `create_indicator` + `update_indicator` (arc R2 of the XSOAR capability expansion)*
 
 Second release of the XSOAR capability-expansion arc. Until now Guardian could *read* the indicator store (`search_indicators`, `enrich_indicator`) but could not *write* to it — so the agent's verdict on a malicious IP/hash lived only on the incident, never in the tenant's Threat-Intel where it would correlate against future activity. This closes that gap.

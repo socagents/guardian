@@ -517,7 +517,7 @@ spec:
       returns: { type: "object", description: "{ ok, incident_id, playbook_id, opened_investigation, output }" }
 
     - name: "get_playbook_state"
-      method: "GET /investigation/{id}/workplan (v6) | core-api-get (v8)"
+      method: "GET /investigation/{id}/workplan (v6 direct | v8 internal /xsoar)"
       description: |
         Report the state of the playbook running on an incident — task by task.
         The MONITORING companion to run_playbook: after assigning a playbook,
@@ -526,16 +526,16 @@ spec:
         tasks) by state, flags the failed (Error/LoopError) tasks, and
         best-effort attaches each failed task's error message from the war room.
         ran_to_success is true only when overall_state == 'Completed' AND no
-        task is in Error/LoopError. On XSOAR 6 this is a direct GET (no
-        playground_id needed); on XSOAR 8 (where the work plan isn't on the
-        public API) it reads via the Core REST API integration, which needs the
-        instance's playground_id.
+        task is in Error/LoopError. Reads the work plan via DIRECT REST on both
+        generations — on XSOAR 6 a plain GET, on Cortex 8 the full internal API
+        (/xsoar/investigation/{id}/workplan). No Core REST API integration or
+        playground_id needed (the integration is kept only as a fallback).
       args:
         - { name: "incident_id", type: "string", description: "The XSOAR incident id (== its investigation id) whose running playbook to inspect.", required: true }
       returns: { type: "object", description: "{ ok, incident_id, has_playbook, playbook_id, playbook_name, overall_state, ran_to_success, counts: {completed, error, waiting, inprogress, skipped, blocked, new}, task_total, failed_tasks: [{id, name, scriptId, state, errorMessage?}] }" }
 
     - name: "import_playbook"
-      method: "POST /playbook/import (v6) | core-api-post /playbook/save (Cortex 8)"
+      method: "POST /playbook/save/yaml (v6 direct | v8 internal /xsoar; integration fallback)"
       description: |
         Import (deploy) a playbook DEFINITION into the tenant's library so it
         appears in XSOAR ready to assign + run. Distinct from run_playbook,

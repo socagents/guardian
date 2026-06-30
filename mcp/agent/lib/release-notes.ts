@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.101",
+    date: "2026-06-30",
+    title: "XSOAR connector — self-sufficient on Cortex 8: no Core REST API integration or Playground needed.",
+    highlights: [
+      "Reading a running playbook's state (get_playbook_state) and importing a playbook no longer require the Core REST API integration or a configured Playground ID on Cortex XSOAR 8 — the connector now calls the full XSOAR API (/xsoar/*) directly with its own API key.",
+      "No more multi-minute stalls: those calls used to wait on the integration's 3-minute-times-3 retry timeout when it was missing or unhealthy. The integration is kept only as a fallback.",
+      "Playbook import on Cortex 8 is now lossless — it uploads native YAML to /playbook/save/yaml, so task command bindings survive (the old integration JSON path dropped them).",
+      "Internal robustness change; XSOAR 6 (on-prem) behavior unchanged. Same 31 tools.",
+    ],
+  },
+  {
     version: "0.2.100",
     date: "2026-06-30",
     title: "XSOAR connector — Threat-Intel write: persist the agent's IoC verdicts back into the store.",
