@@ -45,7 +45,7 @@ Adding `_time` to the `comp ... by` list makes each aggregate per-window-per-ent
 
 Detection rules ship to production; a guessed field name is a detection that silently never fires. **Always** resolve field names from the live schema first — `xsiam.datamodel_describe(dataset="…")` or a `dataset = X | fields * | limit 1` probe. Live-found gotchas this skill was built on:
 
-- **`event_sub_type` is not reliably queryable** — filtering on it can return `validation_message: "The event_sub_type field cannot…"`. Scope with `event_type = ENUM.<VALUE>` (the ENUM literal) only.
+- **`event_sub_type`: filter on it, but never GROUP BY it.** `filter event_type = ENUM.PROCESS and event_sub_type = ENUM.PROCESS_START` works (live-verified) and narrows to true process starts. But `comp ... by event_sub_type` FAILS — `validation_message: "The event_sub_type field cannot be queried…"` — so it can't be an aggregation key. Always pair an `event_sub_type` filter with its `event_type`.
 - **Login outcome is `auth_outcome`** (`= "FAILURE"`), the IdP/cloud-auth field — it is populated for identity/SaaS login events and is frequently **null for raw endpoint logons**, so a brute-force rule on endpoint data may need a different signal. Confirm population on the target tenant. (A reasonable-sounding `action_login_result` does NOT exist — this is exactly why you verify.)
 - **File events**: `action_file_path`, `action_file_name`, `action_file_extension` are real; `actor_process_image_sha256` is the stable initiator artifact.
 
@@ -88,7 +88,7 @@ dataset = xdr_data
 | fields _time, action_remote_ip, auth_identity, fails, targets
 ```
 
-**Office app spawning a shell/script host (T1059, High)** — note: no `event_sub_type` (not queryable):
+**Office app spawning a shell/script host (T1059, High)** — scoped on `event_type` only; you can add `and event_sub_type = ENUM.PROCESS_START` to narrow to true process starts (filtering on it is fine; just never GROUP BY it):
 ```
 dataset = xdr_data
 | filter event_type = ENUM.PROCESS and causality_actor_process_image_name in ("winword.exe","excel.exe","outlook.exe","powerpnt.exe") and actor_process_image_name in ("powershell.exe","cmd.exe","wscript.exe","cscript.exe","mshta.exe")

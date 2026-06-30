@@ -2047,15 +2047,14 @@ Networks documentation and returning evidence-backed, cited answers.
                   <Link href="/knowledge/xql-examples" className="link">
                     xql-examples
                   </Link>{" "}
-                  knowledge base — <strong>281 example queries</strong>:
+                  knowledge base — <strong>383 example queries</strong>:
                   reusable patterns, per-vendor alert-mapping queries, an{" "}
                   ATT&amp;CK-tagged <strong>IR / threat-hunting set</strong>{" "}
                   (brute force, C2 beaconing, lateral movement, exfiltration,
                   ransomware, cloud abuse, …), the full stage/function coverage
-                  matrix, and correlation-rule bodies — with{" "}
-                  <strong>44 added by running them live</strong> against a real
-                  XSIAM tenant, each tagged with its measured CU cost. Browse it
-                  under{" "}
+                  matrix, correlation-rule bodies, and the complete 20-scenario
+                  coverage program — with <strong>146 added by running them
+                  live</strong> against a real XSIAM tenant. Browse it under{" "}
                   <Link href="/knowledge" className="link">Knowledge</Link>.
                 </li>
                 <li>

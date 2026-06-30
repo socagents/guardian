@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.98",
+    date: "2026-06-30",
+    title: "XQL knowledge base: +102 live-verified examples (the full 20-scenario coverage program).",
+    highlights: [
+      "The XQL example knowledge base grows from 281 to 383 entries, folding in the remaining 102 verified queries from the earlier 20-scenario coverage program (process anomaly, beaconing, IOC joins, JSON parsing, brute force, lateral movement, exfil, regex, CIDR matching).",
+      "Every one was re-run live on a real XSIAM tenant before being added, and all carry pre-baked embeddings for instant semantic search.",
+      "Corrects an over-broad caveat: you CAN filter on event_sub_type (e.g. = ENUM.PROCESS_START); only grouping BY it in comp fails. The authoring + detection skills now state the precise rule.",
+    ],
+  },
+  {
     version: "0.2.97",
     date: "2026-06-29",
     title: "Fix: the XQL verify tool no longer mislabels a bad-query error as 'quota exceeded'.",

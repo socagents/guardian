@@ -22,7 +22,7 @@ embedding: e+X5O5huUT1Dy8W9exAhur5skD1o1Ok8I5uNPb85rDygcqI8t+u6vC7DHj2l8ts8QLlCP
 
 **Suggested severity**: High · **Dataset**: `xdr_data`
 
-Scheduled correlation rule: a productivity app (`winword/excel/outlook/powerpnt.exe`) as the causality root spawning a shell/script host (`powershell/cmd/wscript/cscript/mshta.exe`) — a classic macro/phishing execution chain. Uses `causality_actor_process_image_name` (chain root) vs `actor_process_image_name` (spawned child). IMPORTANT: do NOT filter on `event_sub_type` (e.g. `ENUM.PROCESS_START`) — that field is not reliably queryable and returns a validation error; scope with `event_type = ENUM.PROCESS` only. `values(actor_process_command_line)` captures the payload command lines per chain. High severity (auto-opens a case). Set MITRE=T1059 + severity in the wrapper.
+Scheduled correlation rule: a productivity app (`winword/excel/outlook/powerpnt.exe`) as the causality root spawning a shell/script host (`powershell/cmd/wscript/cscript/mshta.exe`) — a classic macro/phishing execution chain. Uses `causality_actor_process_image_name` (chain root) vs `actor_process_image_name` (spawned child). NOTE on `event_sub_type`: you CAN filter on it (`and event_sub_type = ENUM.PROCESS_START` narrows to true process starts, live-verified) — just never use it as a `comp ... by` grouping key (that returns "The event_sub_type field cannot be queried…"). `values(actor_process_command_line)` captures the payload command lines per chain. High severity (auto-opens a case). Set MITRE=T1059 + severity in the wrapper.
 
 ```sql
 dataset = xdr_data
