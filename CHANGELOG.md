@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.103] (2026-07-01) — *Closed-loop: `sync_investigation_to_xsoar` — write the verdict back + approval-gated containment (arc R5 of the XSOAR capability expansion)*
+
+The keystone of the arc: Guardian's investigation conclusions now flow **back into the XSOAR incident the SOC analyst works**, in one step, with the connector tools the earlier releases added (R1–R4) doing the writing.
+
+- **`sync_investigation_to_xsoar`** — after Guardian reaches a verdict on an incident, this closes the loop in a single call: it (1) writes the structured verdict (with ATT&CK techniques + blast radius) into the incident's **war room** and pins it as **evidence**; (2) **escalates the incident severity** to match the verdict (Malicious→Critical, Suspicious→High, Benign→Low); (3) **pushes the IOCs** the investigation surfaced into XSOAR's Threat-Intel with the matching reputation + a `guardian` tag; and (4) optionally **runs a containment playbook** on the incident.
+- **Containment stays human-gated.** The containment step runs through the XSOAR `run_playbook` tool, which is approval-gated — so the agent *recommends* containment and the *operator approves* before anything executes. The verdict write-back + severity + IOC steps are routine documentation and run without a gate (same as the existing verdict pushback).
+- This is the superset of the existing `push_verdict_to_xsoar` (which only wrote the war-room verdict); that tool stays for the lighter "just log the verdict" case.
+- Agent-side built-in (no new connector tool); every write goes through the governed tool-dispatcher path (per-instance routing + approval gate + audit all apply). Reaches the connector's `xsoar_add_entry` / `xsoar_save_evidence` / `xsoar_update_incident` / `xsoar_create_indicator` / `xsoar_run_playbook`.
+
 ## [v0.2.102] (2026-06-30) — *XSOAR connector — scheduled jobs: `list_jobs` + `get_job` + `create_job` + `delete_job` (arc R4 of the XSOAR capability expansion)*
 
 Fourth release of the XSOAR capability-expansion arc. Guardian can now see and manage the tenant's **scheduled jobs** — the automation that runs a playbook on a cron schedule (or one-off).

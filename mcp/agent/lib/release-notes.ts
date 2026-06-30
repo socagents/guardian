@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.103",
+    date: "2026-07-01",
+    title: "Closed-loop: write the investigation's verdict back into the XSOAR incident + approval-gated containment.",
+    highlights: [
+      "New sync_investigation_to_xsoar tool: in one step it writes Guardian's verdict (with ATT&CK + blast radius) into the incident's war room as evidence, escalates the incident severity to match the verdict, and pushes the surfaced IOCs to XSOAR Threat-Intel with the matching reputation.",
+      "Optional containment: it can run a containment playbook on the incident — and that step is approval-gated, so the agent recommends and the operator approves before anything executes.",
+      "The keystone of the XSOAR arc — the agent's conclusions now land where the SOC analyst works the case, using the connector tools the earlier releases added.",
+    ],
+  },
+  {
     version: "0.2.102",
     date: "2026-06-30",
     title: "XSOAR connector — scheduled jobs: list, inspect, create, and delete jobs.",

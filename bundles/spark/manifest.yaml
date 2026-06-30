@@ -277,6 +277,7 @@ tools:
     - "incidents_by_technique"
     - "generate_investigation_report"
     - "push_verdict_to_xsoar"
+    - "sync_investigation_to_xsoar"
     - "case_rollup"
     - "issue_match_playbook"
     - "case_relate"

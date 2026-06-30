@@ -345,6 +345,9 @@ _BUILTIN_LEGACY_TOOLS: list[tuple[str, Callable]] = [
     # incident war room. Reaches the xsoar connector via the tool dispatcher
     # (approvals + audit + per-instance contextvar apply); guarded on source_ref.
     ("push_verdict_to_xsoar", investigation_tools.push_verdict_to_xsoar),
+    # Closed-loop superset of push_verdict: verdict war-room write + severity
+    # escalation + IOC push + approval-gated containment (run_playbook self-gates).
+    ("sync_investigation_to_xsoar", investigation_tools.sync_investigation_to_xsoar),
     ("case_create", investigation_tools.case_create),
     ("case_add_issue", investigation_tools.case_add_issue),
     ("cases_list", investigation_tools.cases_list),

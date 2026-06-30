@@ -771,6 +771,198 @@ async def push_verdict_to_xsoar(issue_id: str, instance: str | None = None) -> d
     }
 
 
+# Verdict → XSOAR incident severity (1-4) + DBotScore (0-3). Keyword match is
+# case-insensitive + tolerant of the verdict label spellings. None ⇒ no change.
+def _verdict_to_severity_score(verdict: str) -> tuple[int | None, int | None]:
+    v = (verdict or "").lower().replace("_", " ")  # TRUE_POSITIVE → "true positive"
+    if any(k in v for k in ("malicious", "true positive", "confirmed", "compromise")):
+        return 4, 3
+    if "suspicious" in v:
+        return 3, 2
+    if any(k in v for k in ("benign", "false positive", "not malicious")):
+        return 1, 1
+    return None, None
+
+
+def _xsoar_indicator_type(local_type: str) -> str:
+    """Map a local Indicator.type onto XSOAR's capitalized indicator-type name."""
+    t = (local_type or "").strip().lower()
+    return {
+        "ip": "IP", "ipv4": "IP", "ipv6": "IP", "domain": "Domain", "url": "URL",
+        "file": "File", "hash": "File", "md5": "File", "sha256": "File", "sha1": "File",
+        "cve": "CVE", "email": "Email", "host": "Host", "account": "Account",
+    }.get(t, (local_type or "IP"))
+
+
+async def sync_investigation_to_xsoar(
+    issue_id: str,
+    instance: str | None = None,
+    escalate_severity: bool = True,
+    sync_indicators: bool = True,
+    containment_playbook: str | None = None,
+) -> dict[str, Any]:
+    """Close the loop: write a resolved investigation's full disposition back
+    into its upstream XSOAR incident, and optionally run containment (v0.2.103).
+
+    The verdict, ATT&CK techniques, blast radius, and recommendations Guardian
+    reached live in the local store after an investigation; this lands them
+    where the SOC analyst works the case. In ONE call it:
+      1. writes the structured verdict as a war-room entry + pins it as evidence
+         (the richer report markdown — verdict, ATT&CK, blast radius);
+      2. (escalate_severity) raises the XSOAR incident severity to match the
+         verdict — Malicious→Critical, Suspicious→High, Benign→Low;
+      3. (sync_indicators) pushes each IOC the investigation surfaced into
+         XSOAR's Threat-Intel with the matching reputation + a `guardian` tag
+         (best-effort, per indicator);
+      4. (containment_playbook) runs a containment playbook on the incident —
+         this step is **APPROVAL-GATED** (the XSOAR run_playbook tool requires
+         operator confirmation), so the agent recommends, the operator approves.
+    Every connector write goes THROUGH the tool dispatcher (per-instance
+    contextvar + approval gate + audit all apply).
+
+    This is the closed-loop superset of push_verdict_to_xsoar: that one writes
+    only the war-room verdict; this also escalates severity, syncs IOCs, and can
+    contain.
+
+    Guards (no-op with error, connector untouched): the issue must track an
+    XSOAR incident (`source_ref`) AND have a structured `verdict`. For a tenant
+    with 2+ enabled XSOAR instances, pass `instance`.
+
+    Args:
+        issue_id: The local investigation Issue id to sync.
+        instance: XSOAR connector instance name (required when 2+ enabled).
+        escalate_severity: Raise the incident severity to match the verdict
+            (default True; no change for a verdict with no severity mapping).
+        sync_indicators: Push the investigation's IOCs to XSOAR Threat-Intel
+            with the verdict reputation (default True; best-effort).
+        containment_playbook: Optional playbook NAME to run on the incident as
+            containment. Set ONLY when the operator asked to contain (e.g.
+            "isolate the host", "block these IOCs"). Approval-gated.
+
+    Returns:
+        {ok, partial, steps: {add_entry, save_evidence, update_severity?,
+        indicators_synced?, containment?, timeline_event}, issue_id,
+        incident_id, entry_id, indicators_pushed, containment}.
+    """
+    s, err = _store()
+    if err:
+        return err
+    issue = s.get_issue(issue_id)
+    if issue is None:
+        return {"error": f"issue {issue_id!r} not found"}
+    if not issue.source_ref:
+        return {"error": "issue has no source_ref — it does not track an XSOAR incident; nothing to sync"}
+    if not issue.verdict:
+        return {"error": "issue has no structured verdict yet — set it with issue_set_verdict before syncing"}
+
+    dispatcher = get_tool_dispatcher()
+    if dispatcher is None:
+        return {"error": "tool dispatcher not available on this MCP runtime"}
+
+    inst = {} if instance is None else {"instance": instance}
+    incident_id = issue.source_ref
+    steps: dict[str, bool] = {}
+
+    # 1. War-room verdict entry — the disposition landing in XSOAR.
+    content = _verdict_warroom_markdown(s, issue)
+    try:
+        entry = await dispatcher("xsoar_add_entry", {"incident_id": incident_id, "content": content, **inst})
+    except Exception as e:
+        return {"error": f"could not write verdict to XSOAR incident {incident_id}: {e}"}
+    if not isinstance(entry, dict) or not entry.get("ok"):
+        return {"error": f"xsoar_add_entry did not succeed for incident {incident_id}", "raw": entry}
+    steps["add_entry"] = True
+    entry_id = entry.get("entry_id")
+
+    # 2. Pin the verdict entry as evidence.
+    if entry_id:
+        try:
+            ev = await dispatcher(
+                "xsoar_save_evidence",
+                {"incident_id": incident_id, "entry_id": entry_id,
+                 "description": f"Guardian verdict: {issue.verdict}", **inst},
+            )
+            steps["save_evidence"] = bool(isinstance(ev, dict) and ev.get("ok"))
+        except Exception:
+            steps["save_evidence"] = False
+
+    severity, score = _verdict_to_severity_score(issue.verdict)
+
+    # 3. Escalate incident severity to match the verdict.
+    if escalate_severity and severity is not None:
+        try:
+            up = await dispatcher(
+                "xsoar_update_incident",
+                {"incident_id": incident_id, "severity": severity, **inst},
+            )
+            steps["update_severity"] = bool(isinstance(up, dict) and up.get("ok"))
+        except Exception:
+            steps["update_severity"] = False
+
+    # 4. Push the investigation's IOCs into XSOAR Threat-Intel (best-effort).
+    indicators_pushed = 0
+    if sync_indicators:
+        try:
+            iocs = s.list_indicators_for_issue(issue.id)
+        except Exception:
+            iocs = []
+        for ind in (iocs or []):
+            val = getattr(ind, "value", None)
+            typ = getattr(ind, "type", None)
+            if not val or not typ:
+                continue
+            args = {"value": val, "indicator_type": _xsoar_indicator_type(typ),
+                    "tags": ["guardian", f"issue:{issue_id}"], **inst}
+            if score is not None:
+                args["score"] = score
+            try:
+                r = await dispatcher("xsoar_create_indicator", args)
+                if isinstance(r, dict) and r.get("ok"):
+                    indicators_pushed += 1
+            except Exception:
+                pass
+        steps["indicators_synced"] = (indicators_pushed > 0) or (not iocs)
+
+    # 5. Containment — runs the playbook via the connector's run_playbook tool,
+    #    which is itself approval-gated (operator confirms before it executes).
+    containment = None
+    if containment_playbook:
+        try:
+            containment = await dispatcher(
+                "xsoar_run_playbook",
+                {"incident_id": incident_id, "playbook_id": containment_playbook, **inst},
+            )
+            steps["containment"] = bool(isinstance(containment, dict) and containment.get("ok"))
+        except Exception as e:
+            containment = {"ok": False, "error": str(e)}
+            steps["containment"] = False
+
+    # 6. Record the sync on the Issue timeline.
+    try:
+        suffix = f" + containment '{containment_playbook}'" if containment_playbook else ""
+        issue_add_event(
+            issue_id, type="sync_to_xsoar",
+            content=(f"Synced investigation to XSOAR incident {incident_id}: verdict "
+                     f"{issue.verdict}{suffix} ({indicators_pushed} IOC(s) pushed)."),
+        )
+        steps["timeline_event"] = True
+    except Exception as e:
+        logger.warning("sync_investigation_to_xsoar: timeline event failed for issue %s: %s", issue_id, e)
+        steps["timeline_event"] = False
+
+    all_ok = all(steps.values())
+    return {
+        "ok": all_ok,
+        "partial": (not all_ok) and steps.get("add_entry", False),
+        "steps": steps,
+        "issue_id": issue_id,
+        "incident_id": incident_id,
+        "entry_id": entry_id,
+        "indicators_pushed": indicators_pushed,
+        "containment": containment,
+    }
+
+
 def issue_get(issue_id: str) -> dict[str, Any]:
     """Fetch one Issue with its activity timeline + its case (if grouped).
 

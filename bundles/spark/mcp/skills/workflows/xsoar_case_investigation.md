@@ -298,6 +298,8 @@ Alongside the XSOAR case, keep a **local Guardian Issue** — Guardian's own rec
 
    This is the one local tool that writes to the tenant; it goes through the approval gate like any other XSOAR write, so expect a confirmation prompt and proceed once granted. Only push after you've actually reached a verdict — don't push an `INCONCLUSIVE` placeholder.
 
+   **Or close the loop fully in one call — `sync_investigation_to_xsoar`.** When you want to land the *whole* disposition (not just the war-room verdict), call `sync_investigation_to_xsoar(issue_id="<id>")` instead of `push_verdict_to_xsoar`. It does the verdict war-room write + evidence pin AND escalates the incident severity to match the verdict (Malicious→Critical, Suspicious→High, Benign→Low) AND pushes the investigation's IOCs into XSOAR Threat-Intel with the matching reputation + a `guardian` tag. To ALSO run containment in the same step, pass `containment_playbook="<playbook name>"` — that runs the playbook via the approval-gated `run_playbook` tool (you recommend, the operator approves). Same guards (source_ref + verdict) and `instance=` rule as above.
+
    **For a TRUE_POSITIVE, recommend containment — recommend-only, never auto-execute.** When the verdict is `TRUE_POSITIVE` (and as appropriate for `NEEDS_ESCALATION`), produce a structured **recommended containment** record for the operator to approve. You RECOMMEND; the human APPROVES; execution stays behind the existing approval gate. Do NOT call the containment tools yourself.
 
    ```
