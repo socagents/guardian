@@ -13,9 +13,7 @@ You need:
 1. **A RHEL 8+ server** you can log into, with **`sudo`** (administrator) rights and **Podman** installed.
 2. **The access token from Kite.** Kite sends you a long secret string that looks like `ghp_xxxx…` or `github_pat_xxxx…`.
    - Think of it as a **password that lets your server download Guardian's software**. You do **not** need a GitHub account, and you do **not** create anything — just keep the token Kite gave you handy. **Treat it like a password.**
-3. **Outbound internet access** from the server to these addresses (your network/firewall team may need to allow them):
-   - `ghcr.io` and `pkg-containers.githubusercontent.com` — where Guardian's software is downloaded from
-   - `download.docker.com` — for the compose tool Guardian uses (this does **not** install Docker; it's just a small helper command)
+3. **Outbound internet access** (HTTPS / TCP 443) from the server to a small, fixed set of hosts. To **install + run** Guardian the server needs exactly three: `ghcr.io`, `pkg-containers.githubusercontent.com`, and `download.docker.com`. To **use** Guardian's AI it also needs your AI provider's host. Your firewall/security team will want the precise list with IP ranges — it's in **[Appendix — Firewall allow-list](#appendix--firewall-allow-list-for-your-networksecurity-team)** at the end of this guide (empirically validated, exact FQDNs + CIDRs).
 
 You do **not** need to install anything yourself beforehand except Podman — the installer sets up the rest.
 
@@ -99,6 +97,49 @@ Kite will walk you through the exact values for these if needed.
 ## Updating Guardian later
 
 When Kite ships a new version, repeat **Step 1** with the new version number (e.g. `:0.2.95`), then run `sudo ./guardian-installer` again. It detects your existing install and **keeps all your settings, passwords, and data** — it only updates the software.
+
+---
+
+## Appendix — Firewall allow-list (for your network/security team)
+
+Guardian needs a **small, fixed set of outbound HTTPS (TCP 443)** destinations from the server. This list was **empirically validated** on a fresh RHEL 8.10 + Podman 4.9 host: with the host firewall set to **deny all outbound traffic** and allow only the entries below, a full `guardian-installer-podman` install pulled every image and started the stack — and **nothing outside this list was attempted** (verified with a default-DROP `iptables` egress policy + connection logging).
+
+> The hosts below are **specific endpoints** (e.g. `ghcr.io`, `pkg-containers.githubusercontent.com`) — not bare apex domains. You do **not** need to allow `github.com`.
+
+### 1. Required to INSTALL + RUN Guardian — allow all three
+
+| Destination (FQDN) | Purpose |
+|---|---|
+| `ghcr.io` | Pull Guardian's container images (registry API + authentication) — GitHub Container Registry |
+| `pkg-containers.githubusercontent.com` | The image data itself (container layers) |
+| `download.docker.com` | The Compose v2 plugin Guardian uses as Podman's compose runner — **this does not install Docker** |
+
+**If your firewall filters by FQDN / SNI / HTTP proxy (recommended):** allow exactly those three hosts.
+
+**If your firewall filters by IP range (CIDR):**
+
+| Host | CIDR(s) | Authoritative source |
+|---|---|---|
+| `pkg-containers.githubusercontent.com` | **`185.199.108.0/22`** (stable) | `https://api.github.com/meta` → `web` |
+| `ghcr.io` | GitHub: `140.82.112.0/20`, `192.30.252.0/22`, `185.199.108.0/22` **and** Microsoft Azure (e.g. `20.233.0.0/16`) | `https://api.github.com/meta` → `packages` + `web` |
+| `download.docker.com` | AWS CloudFront ranges (large, rotating) | `https://ip-ranges.amazonaws.com/ip-ranges.json` → service `CLOUDFRONT` |
+
+> **Important for `ghcr.io` and `download.docker.com`:** both are served from rotating cloud/CDN address pools (Azure, AWS CloudFront), so a fixed IP allow-list will drift. **Filter these two by FQDN/SNI if at all possible**; if you must use CIDRs, pull the current ranges from the authoritative sources above and refresh them periodically.
+
+### 2. Required to USE Guardian's AI — allow the set matching your provider
+
+Guardian calls your chosen AI provider at runtime. Allow **only** the one Kite set you up with:
+
+- **Google Vertex AI** — `oauth2.googleapis.com`, `www.googleapis.com`, and `<region>-aiplatform.googleapis.com` (use your configured region, e.g. `us-central1-aiplatform.googleapis.com`).
+- **Google Gemini API key** — `generativelanguage.googleapis.com`.
+
+### 3. Explicitly NOT required (do not add these)
+
+- **`github.com` / `objects.githubusercontent.com`** — only the *Docker* installer downloads from there; the Podman installer is delivered from `ghcr.io`, so these are never used on RHEL/Podman.
+- **Your RHEL package repositories** (`cdn.redhat.com`, `subscription.rhsm.redhat.com`, Red Hat Satellite, or your cloud's RHUI) — the installer uses them to add `podman-docker` + the compose plugin, but these are the **same repositories you already use to patch RHEL**, not a Guardian-specific URL.
+- **Your security tools (Cortex XSIAM / XSOAR)** — Guardian reaches these on your **internal** network, not the internet.
+
+*Validation: fresh RHEL 8.10 + Podman 4.9; host `iptables` set to `OUTPUT` policy DROP with only the allow-list above (plus DNS + loopback); the full `guardian-installer-podman` install completed and re-pulled all service images with **zero** blocked connections logged.*
 
 ---
 
