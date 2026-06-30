@@ -12,7 +12,9 @@
  *     stateful, so we use a FRESH client per call (no shared-session race) and
  *     race each call against a hard timeout. A slow/hung tool degrades to a
  *     per-panel error instead of hanging the whole request.
- *   - Per-tool Promise.allSettled so one failing tool doesn't sink the others.
+ *   - Each tool call is independently timed-out + error-isolated (safeCall
+ *     returns null on failure/timeout), so one failing tool doesn't sink the
+ *     others — Promise.all over safeCall never rejects.
  *   - Clean empty state when no XSOAR instance is configured.
  */
 import { NextResponse } from "next/server";

@@ -10,12 +10,20 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.108] (2026-07-01) — *Pre-release QA — doc-accuracy fixes across the XSOAR arc*
+
+A QA pass before sharing the v0.2.103–107 arc with customers caught a customer-visible documentation error and some spec/doc drift. No code behaviour changes — documentation + comments only.
+
+- **Egress allow-list — corrected the Vertex AI host set (was customer-blocking).** `docs/install/INSTALL-rhel-podman.md` listed only the **regional** `<region>-aiplatform.googleapis.com`, which the agent uses only for memory/KB embeddings. The chat **inference + context-caching** path uses the **non-regional** `aiplatform.googleapis.com` — so a strict-firewall customer who allow-listed exactly the doc would have had a working search but a **blocked chat agent**. The Vertex bullet now lists both hosts (with which path each serves) plus `oauth2.googleapis.com`, and the validation note is honest that the deny-all test covered the install path, not the runtime AI hosts.
+- **Architecture page now lists `sync_investigation_to_xsoar`.** The investigation-tools reference (the canonical spec) listed `push_verdict_to_xsoar` but omitted its closed-loop superset; both the reference list and the outbound-hand-off prose now describe it.
+- **Accurate resilience wording for the XSOAR observability route.** The route was described as using `Promise.allSettled`; it actually runs each tool call through an independently-timed-out, error-isolated `safeCall` (fresh client per call). Corrected in the architecture page, journeys, the route comment, and this changelog's v0.2.107 entry.
+
 ## [v0.2.107] (2026-07-01) — *Observability — XSOAR Operational Metrics surface (arc R9, completes the XSOAR capability expansion)*
 
 The capstone of the arc: a new `/observability/xsoar` page that answers *"how busy is my SOC right now?"* at a glance, reading live from the connected XSOAR instance(s).
 
 - **New `/observability/xsoar` surface** with three panels: **open incidents by severity** (Critical / High / Medium / Low + total), **SLA breaches** (the incidents at/nearing their deadline, most-overdue first — the work-next list), and **integration health** (how many integration instances are unhealthy + which errored). Sidebar entry under Observability + a drill-in card on the Observability overview.
-- **Read-only + resilient.** A server-side route (`/api/agent/observability/xsoar`) discovers the enabled XSOAR instances, then dispatches the read-only `xsoar_list_incidents` / `xsoar_sla_breaches` / `xsoar_get_integration_status` tools over JSON-RPC (bearer `MCP_TOKEN`). Per-tool `Promise.allSettled` so one slow/failing tool degrades to a per-panel note, not a blank page. With no XSOAR connector configured, an empty state points to `/connectors`.
+- **Read-only + resilient.** A server-side route (`/api/agent/observability/xsoar`) discovers the enabled XSOAR instances, then dispatches the read-only `xsoar_list_incidents` / `xsoar_sla_breaches` / `xsoar_get_integration_status` tools over JSON-RPC (a fresh client per call, bearer `MCP_TOKEN`). Each tool call is independently timed-out + error-isolated, so one slow/failing tool degrades to a per-panel note, not a blank page. With no XSOAR connector configured, an empty state points to `/connectors`.
 - **Multi-instance aware** — each enabled XSOAR instance (e.g. one per MSSP tenant) gets its own block.
 - Catalog-side reads only (no SecretStore access). Agent-side feature — no connector image change. Architecture `#observability-overview` now lists eleven surfaces; user guide + journeys updated.
 

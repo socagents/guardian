@@ -2112,8 +2112,9 @@ function ObservabilityOverview() {
  <Code>/api/agent/observability/xsoar</Code> route runs server-side, discovers the enabled XSOAR
  instances via <Code>GET /api/v1/instances?connector_id=xsoar</Code>, then dispatches the read-only
  <Code>xsoar_list_incidents</Code> / <Code>xsoar_sla_breaches</Code> / <Code>xsoar_get_integration_status</Code>
- tools over JSON-RPC (<Code>GuardianMCPClient</Code>, bearer <Code>MCP_TOKEN</Code>) — per-tool
- <Code>Promise.allSettled</Code> so one slow/failing tool degrades to a per-panel error.
+ tools over JSON-RPC (a fresh <Code>GuardianMCPClient</Code> per call, bearer <Code>MCP_TOKEN</Code>) —
+ each call is independently timed-out + error-isolated, so one slow/failing tool degrades to a
+ per-panel error rather than hanging or blanking the page.
  </li>
  <li>
  <Term><Link href="/observability/logs" className="link">/observability/logs</Link></Term>
@@ -6811,6 +6812,10 @@ function Investigation() {
  approval gate, and audit all apply — calling the connector&apos;s{" "}
  <Code>xsoar_add_entry</Code> + <Code>xsoar_save_evidence</Code>, and is
  guarded on <Code>source_ref</Code> (no-op for a standalone Issue).{" "}
+ <Code>sync_investigation_to_xsoar</Code> is the fuller closed-loop option —
+ the same verdict write-back <em>plus</em> matching the incident severity to
+ the verdict, pushing the surfaced IOCs to XSOAR Threat-Intel, and (when
+ asked) an approval-gated containment playbook.{" "}
  <Code>export_to_webhook</Code> POSTs the verdict + report + IOCs + STIX
  to an operator-configured webhook — the only investigation tool that{" "}
  <strong>sends data externally</strong>, so it is <Term>opt-in</Term>{" "}
@@ -6906,6 +6911,12 @@ function Investigation() {
  <li><Code>push_verdict_to_xsoar</Code> — write the structured verdict
  + findings back to the upstream XSOAR war room via the governed tool
  dispatcher (approval-gated, guarded on <Code>source_ref</Code>).</li>
+ <li><Code>sync_investigation_to_xsoar</Code> — the closed-loop superset of{" "}
+ <Code>push_verdict_to_xsoar</Code>: the war-room verdict + evidence pin,{" "}
+ <em>plus</em> escalating the incident severity to match the verdict, pushing
+ the surfaced IOCs to XSOAR Threat-Intel, and optionally running an
+ approval-gated containment playbook — all through the governed dispatcher,
+ guarded on <Code>source_ref</Code> + a set verdict.</li>
  <li><Code>webhook_preview</Code> — read-only preview of the exact
  payload <Code>export_to_webhook</Code> would send.</li>
  <li><Code>export_to_webhook</Code> — the lone outbound: POST the

@@ -922,7 +922,7 @@ export const JOURNEYS: Journey[] = [
         method: "GET",
         path: "/api/agent/observability/xsoar",
         description:
-          "Runs server-side: discovers enabled xsoar instances via GET /api/v1/instances?connector_id=xsoar, then dispatches the read-only xsoar_list_incidents / xsoar_sla_breaches / xsoar_get_integration_status tools over JSON-RPC (GuardianMCPClient, bearer MCP_TOKEN), aggregating per instance with Promise.allSettled.",
+          "Runs server-side: discovers enabled xsoar instances via GET /api/v1/instances?connector_id=xsoar, then dispatches the read-only xsoar_list_incidents / xsoar_sla_breaches / xsoar_get_integration_status tools over JSON-RPC (a fresh GuardianMCPClient per call, bearer MCP_TOKEN); each call is independently timed-out + error-isolated so one slow/failing tool degrades to a per-panel error.",
       },
     ],
     howToTest: [

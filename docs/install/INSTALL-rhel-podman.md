@@ -130,7 +130,11 @@ Guardian needs a **small, fixed set of outbound HTTPS (TCP 443)** destinations f
 
 Guardian calls your chosen AI provider at runtime. Allow **only** the one Kite set you up with:
 
-- **Google Vertex AI** — `oauth2.googleapis.com`, `www.googleapis.com`, and `<region>-aiplatform.googleapis.com` (use your configured region, e.g. `us-central1-aiplatform.googleapis.com`).
+- **Google Vertex AI** — allow **all** of:
+  - `aiplatform.googleapis.com` — **non-regional**; the agent's chat inference (Gemini) **and** prompt-context caching go here. This is the critical path: without it, the AI agent cannot answer at all.
+  - `<region>-aiplatform.googleapis.com` — **regional** (use your configured region, e.g. `us-central1-aiplatform.googleapis.com`); used only by the memory + knowledge-base **embeddings** (`text-embedding-*`). Without it, chat still works but semantic memory/KB search silently degrades.
+  - `oauth2.googleapis.com` — the service-account token exchange (SA-JWT → access token).
+  - `www.googleapis.com` — the OAuth scope host (`/auth/cloud-platform`); harmless to include.
 - **Google Gemini API key** — `generativelanguage.googleapis.com`.
 
 ### 3. Explicitly NOT required (do not add these)
@@ -139,7 +143,7 @@ Guardian calls your chosen AI provider at runtime. Allow **only** the one Kite s
 - **Your RHEL package repositories** (`cdn.redhat.com`, `subscription.rhsm.redhat.com`, Red Hat Satellite, or your cloud's RHUI) — the installer uses them to add `podman-docker` + the compose plugin, but these are the **same repositories you already use to patch RHEL**, not a Guardian-specific URL.
 - **Your security tools (Cortex XSIAM / XSOAR)** — Guardian reaches these on your **internal** network, not the internet.
 
-*Validation: fresh RHEL 8.10 + Podman 4.9; host `iptables` set to `OUTPUT` policy DROP with only the allow-list above (plus DNS + loopback); the full `guardian-installer-podman` install completed and re-pulled all service images with **zero** blocked connections logged.*
+*Validation: the deny-all test covered the **install/upgrade path** (§1) — fresh RHEL 8.10 + Podman 4.9, host `iptables` `OUTPUT` policy DROP with only the §1 allow-list (plus DNS + loopback); the full `guardian-installer-podman` install completed and re-pulled all service images with **zero** blocked connections. The **runtime AI hosts in §2** are taken from Guardian's own egress manifest + the Vertex/Gemini SDK paths (`aiplatform.googleapis.com` for inference + caching, the regional host for embeddings), not from that deny-all run — confirm a live chat turn end-to-end after you apply the §2 rules.*
 
 ---
 

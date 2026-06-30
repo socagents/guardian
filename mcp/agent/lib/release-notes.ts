@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.108",
+    date: "2026-07-01",
+    title: "Pre-release QA — documentation-accuracy fixes (no behaviour change).",
+    highlights: [
+      "Fixed the RHEL/Podman egress allow-list: it now lists the non-regional aiplatform.googleapis.com (chat inference + caching) as well as the regional embedding host — a strict-firewall customer following the old list would have had a blocked chat agent.",
+      "Architecture page now documents sync_investigation_to_xsoar in the investigation-tools reference.",
+      "Corrected the XSOAR observability route's resilience description (independently timed-out, error-isolated per-call — not Promise.allSettled).",
+    ],
+  },
+  {
     version: "0.2.107",
     date: "2026-07-01",
     title: "XSOAR Operational Metrics — a live SOC dashboard under Observability.",
