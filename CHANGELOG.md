@@ -10,6 +10,15 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.106] (2026-07-01) — *XSOAR connector — MSSP multi-tenant account scoping: `list_accounts` + the `account` config (arc R8 of the XSOAR capability expansion)*
+
+MSSPs run one XSOAR 6 host with many child accounts. R8 lets Guardian scope a connector instance to a specific child, and clarifies how the same goal works on XSOAR 8.
+
+- **`xsoar_list_accounts`** — lists the MSSP child accounts on a multi-tenant XSOAR 6 host, each with a `scope` value. Graceful by design: on a single-tenant host (no `/accounts` endpoint) it returns `multi_tenant: false` with an empty list, not an error.
+- **`account` instance config** — set it to a child account's `scope` and the connector routes *every* request from that instance to the child (the XSOAR 6 `/acc_<account>` URL prefix). Leave blank for a single-tenant host / the main account.
+- **XSOAR 8 / Cortex multi-tenant is per-tenant** — there, multi-tenant means one connector instance per tenant (Guardian's existing multi-instance support), not an account prefix. `xsoar_list_accounts` on a v8 instance returns `multi_tenant: false` with that guidance, and the skill explains "investigate across all tenants" = enumerate the per-tenant instances.
+- Read-only connector tool (no approval gate). Live-verified graceful behavior on the real single-tenant v6 (clean `multi_tenant: false`; `/acc_<x>` URL built correctly; non-existent scope returns a clean error envelope, not a crash). Full MSSP routing needs a real multi-tenant host to confirm end-to-end. XSOAR connector toolset 38 → 39; connector version 0.2.10 → 0.2.11.
+
 ## [v0.2.105] (2026-07-01) — *XSOAR connector — SLA-aware triage: `sla_breaches` + due-date on every case (arc R7 of the XSOAR capability expansion)*
 
 The autonomous investigation loop (and any analyst) should work the cases closest to breaching their SLA first. R7 gives Guardian the deadline data and a prioritized view of it.

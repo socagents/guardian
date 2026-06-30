@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.106",
+    date: "2026-07-01",
+    title: "MSSP multi-tenant — scope a connector instance to an XSOAR 6 child account.",
+    highlights: [
+      "New xsoar_list_accounts tool: lists the child accounts on a multi-tenant XSOAR 6 host (graceful 'not multi-tenant' on a single-tenant host).",
+      "New account instance config: set it to a child account and the connector routes every request from that instance to that account (XSOAR 6 /acc_ scoping).",
+      "XSOAR 8 / Cortex multi-tenant is per-tenant — run one connector instance per tenant (Guardian's existing multi-instance), and the tools say so.",
+    ],
+  },
+  {
     version: "0.2.105",
     date: "2026-07-01",
     title: "SLA-aware triage — work the cases closest to breaching first.",

@@ -1092,6 +1092,60 @@ def test_sla_breaches_no_window_includes_far(monkeypatch):
     assert [b["id"] for b in out["breaches"]] == ["far"]  # no upper bound
 
 
+# ─── MSSP account scoping (R8) ───────────────────────────────────────
+
+
+def test_fetcher_account_prefix_v6():
+    f = XSOARFetcher("https://host", "key", api_id=None, account="ClientA")
+    assert f.is_v8 is False
+    assert f._full_url("/incidents/search") == "https://host/acc_ClientA/incidents/search"
+
+
+def test_fetcher_no_account_no_prefix():
+    f = XSOARFetcher("https://host", "key", api_id=None)
+    assert f._full_url("/incidents/search") == "https://host/incidents/search"
+
+
+def test_fetcher_account_ignored_on_v8():
+    # api_id present → v8; the /acc_ prefix is NOT applied (v8 MSSP = per-tenant instance)
+    f = XSOARFetcher("https://host", "key", api_id="id1", account="ClientA")
+    assert f.is_v8 is True
+    url = f._full_url("/incidents/search")
+    assert "/acc_ClientA" not in url
+    assert url == "https://host/xsoar/public/v1/incidents/search"
+
+
+def test_list_accounts_v6_parses(monkeypatch):
+    rf = _RecordingFetcher(get_reply=[
+        {"name": "acc_ClientA", "displayName": "ClientA", "hostGroupName": "h1"},
+        {"name": "acc_ClientB", "displayName": "ClientB"},
+    ], is_v8=False)
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_list_accounts())
+    assert out["ok"] is True and out["multi_tenant"] is True and out["count"] == 2
+    assert out["accounts"][0]["scope"] == "ClientA"  # acc_ prefix stripped → instance `account` value
+    assert out["accounts"][0]["host"] == "h1"
+
+
+def test_list_accounts_single_tenant_graceful(monkeypatch):
+    class Raises:
+        is_v8 = False
+        async def get(self, path, **kw):
+            raise RuntimeError("404 Not Found")
+    monkeypatch.setattr(connector, "_get_fetcher", lambda: Raises())
+    out = run(connector.xsoar_list_accounts())
+    assert out["ok"] is True and out["multi_tenant"] is False and out["accounts"] == []
+    assert "single-tenant" in out["note"]
+
+
+def test_list_accounts_v8_returns_guidance(monkeypatch):
+    rf = _RecordingFetcher(is_v8=True)
+    _install_fetcher(monkeypatch, rf)
+    out = run(connector.xsoar_list_accounts())
+    assert out["ok"] is True and out["multi_tenant"] is False
+    assert "per-tenant" in out["note"]
+
+
 def test_all_exported_tools_are_callable():
     expected = {
         "xsoar_list_incidents",
@@ -1099,6 +1153,7 @@ def test_all_exported_tools_are_callable():
         "xsoar_linked_incidents",
         "xsoar_related_incidents",
         "xsoar_sla_breaches",
+        "xsoar_list_accounts",
         "xsoar_get_war_room",
         "xsoar_add_entry",
         "xsoar_add_note",

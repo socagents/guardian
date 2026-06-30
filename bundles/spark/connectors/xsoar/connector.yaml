@@ -17,7 +17,7 @@
 # Logical paths + request bodies are identical across generations.
 
 id: "xsoar"
-version: "0.2.10"
+version: "0.2.11"
 description: "Cortex XSOAR REST API wrapper — investigate incidents (cases): list and drill into cases, read the war room, document findings as entries and notes, update and close cases, enrich with indicators and evidence, and import + run playbooks. Supports XSOAR 6 (on-prem) and XSOAR 8 / Cortex cloud."
 displayName: "Cortex XSOAR"
 tags: ["cortex", "xsoar", "soar", "incidents", "cases", "investigation", "incident-response", "war-room", "evidence", "indicators"]
@@ -62,6 +62,9 @@ configSchema:
     playground_id:
       type: "string"
       description: "Playground / War Room investigation ID, used to run XSOAR commands (REQUIRED for run_command, enrich_indicator, complete_task; the other tools work without it). Find it in XSOAR: open your Playground and copy the investigation ID from the URL. Leave blank if you don't use the command tools."
+    account:
+      type: "string"
+      description: "XSOAR 6 MSSP child-account scope. On a multi-tenant XSOAR 6 host, set this to a child account's name (the value xsoar_list_accounts reports as `scope`) to route ALL this instance's requests to that account (the connector adds the /acc_<account> URL prefix). Leave blank for a single-tenant host / the main account. NOT for XSOAR 8 / Cortex — there, multi-tenant means one connector instance per tenant, not this field."
 
 secretSlots:
   - name: "api_key"
@@ -155,6 +158,20 @@ spec:
         - { name: "limit",            type: "integer", description: "Max incidents returned after sorting (default 25, max 200).", required: false }
         - { name: "scan",             type: "integer", description: "How many open incidents to scan for SLA data (default 200, max 1000); fetched dueDate-descending so real deadlines are scanned before no-SLA sentinels.", required: false }
       returns: { type: "object", description: "{ ok, now, within_hours, include_breached, count, scanned, breaches: [{id, name, type, severity, status, owner, created, modified, due_date, minutes_to_due, overdue}] }" }
+
+    - name: "list_accounts"
+      method: "GET /accounts"
+      description: |
+        List the MSSP child accounts on a multi-tenant XSOAR 6 host. Each
+        account's `scope` is the value to put in an instance's `account`
+        config to route that instance's requests to the child (the connector
+        adds the /acc_<account> URL prefix). Graceful: on a single-tenant
+        host (no /accounts endpoint) it returns ok with multi_tenant=false +
+        an empty list. XSOAR 8 / Cortex multi-tenant is per-tenant — use one
+        connector instance per tenant; on a v8 instance this returns
+        multi_tenant=false with that guidance.
+      args: []
+      returns: { type: "object", description: "{ ok, multi_tenant, count, accounts: [{name, display_name, scope, host}], note? }" }
 
     - name: "get_war_room"
       method: "POST /investigation/{id}"

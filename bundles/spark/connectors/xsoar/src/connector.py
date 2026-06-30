@@ -87,6 +87,7 @@ __all__ = [
     "xsoar_linked_incidents",
     "xsoar_related_incidents",
     "xsoar_sla_breaches",
+    "xsoar_list_accounts",
     "xsoar_get_war_room",
     "xsoar_add_entry",
     "xsoar_add_note",
@@ -196,6 +197,7 @@ def _get_fetcher() -> XSOARFetcher:
     api_id = cfg.get("api_id")
     verify_ssl = cfg.get("verify_ssl", True)
     version = cfg.get("version")
+    account = cfg.get("account")  # v6 MSSP child-account scope (optional)
 
     return XSOARFetcher(
         str(api_url),
@@ -203,6 +205,7 @@ def _get_fetcher() -> XSOARFetcher:
         api_id=str(api_id) if api_id not in (None, "") else None,
         verify_ssl=bool(verify_ssl),
         version=str(version) if version not in (None, "") else None,
+        account=str(account) if account not in (None, "") else None,
     )
 
 
@@ -1026,6 +1029,74 @@ async def xsoar_sla_breaches(
         "scanned": len(data),
         "breaches": breaches[:size],
     }
+
+
+# ─── xsoar_list_accounts ─────────────────────────────────────────────
+
+
+def _extract_accounts(resp: Any) -> list[dict]:
+    """Project the v6 /accounts response into compact account summaries.
+
+    XSOAR 6 MSSP returns a list of account objects (or {data:[...]}). Each
+    `name` is typically prefixed `acc_<displayName>`; the value an operator
+    puts in the instance `account` config is that display name (the part the
+    /acc_<...> URL prefix expects)."""
+    items = resp if isinstance(resp, list) else (resp.get("data") if isinstance(resp, dict) else None)
+    if not isinstance(items, list):
+        return []
+    out: list[dict] = []
+    for a in items:
+        if not isinstance(a, dict):
+            continue
+        name = a.get("name") or a.get("displayName")
+        if not name:
+            continue
+        scope = str(name)[4:] if str(name).startswith("acc_") else str(name)
+        out.append({
+            "name": name,
+            "display_name": a.get("displayName") or scope,
+            "scope": scope,  # what to set as the instance `account` config
+            "host": a.get("hostGroupName") or a.get("host"),
+        })
+    return out
+
+
+@_wrap_xsoar_call
+async def xsoar_list_accounts() -> dict:
+    """List the MSSP child accounts on a multi-tenant XSOAR 6 host.
+
+    XSOAR 6 multi-tenant (MSSP) hosts a "main" account plus child accounts;
+    a request is scoped to a child via the instance's `account` config (the
+    /acc_<account> URL prefix the connector adds). This lists the child
+    accounts so the operator knows what to scope an instance to — set the
+    instance's `account` config to an account's `scope` value.
+
+    Graceful by design: on a single-tenant host (no /accounts endpoint) it
+    returns `ok` with `multi_tenant: false` and an empty list rather than an
+    error. **XSOAR 8 / Cortex multi-tenant is per-tenant** — configure one
+    Guardian connector instance per tenant instead of using this; on a v8
+    instance this returns `multi_tenant: false` with that guidance.
+
+    Returns:
+        {ok, multi_tenant, count, accounts: [{name, display_name, scope,
+        host}], note?}.
+    """
+    fetcher = _get_fetcher()
+    if fetcher.is_v8:
+        return {
+            "multi_tenant": False, "count": 0, "accounts": [],
+            "note": ("XSOAR 8 / Cortex multi-tenant is per-tenant — configure one "
+                     "Guardian connector instance per tenant; /accounts is XSOAR 6 MSSP only."),
+        }
+    try:
+        resp = await fetcher.get("/accounts")
+    except Exception as e:
+        return {
+            "multi_tenant": False, "count": 0, "accounts": [],
+            "note": f"no /accounts endpoint — this looks like a single-tenant XSOAR 6 host ({e}).",
+        }
+    accounts = _extract_accounts(resp)
+    return {"multi_tenant": bool(accounts), "count": len(accounts), "accounts": accounts}
 
 
 # ─── xsoar_get_war_room ──────────────────────────────────────────────

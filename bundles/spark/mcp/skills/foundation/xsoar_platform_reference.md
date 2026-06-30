@@ -135,6 +135,14 @@ Don't hand-roll this with `xsoar_list_incidents` + a `dueDate` sort: the zero-va
 
 ---
 
+## MSSP multi-tenant (`xsoar_list_accounts` + the `account` config)
+
+An **XSOAR 6 MSSP** host serves a "main" account plus child accounts. To work a specific child, scope the connector **instance** to it: `xsoar_list_accounts()` lists the children (each with a `scope` value), and the operator sets that `scope` as the instance's `account` config — the connector then prefixes every request with `/acc_<account>`. `xsoar_list_accounts` is graceful: on a single-tenant host it returns `multi_tenant: false` with an empty list, not an error.
+
+**XSOAR 8 / Cortex multi-tenant is different** — it's per-tenant, so you run **one connector instance per tenant** (Guardian's multi-instance support), not an `account` prefix. On a v8 instance `xsoar_list_accounts` returns `multi_tenant: false` with that guidance. When the operator asks to "investigate across all our tenants," that means enumerating the configured instances (each scoped to a tenant), not a single cross-tenant query.
+
+---
+
 ## Indicator query syntax (`xsoar_search_indicators`)
 
 `xsoar_search_indicators(query=…)` passes an XSOAR **indicator-search** query verbatim to `/indicators/search`. Build it from these fields (XSOAR's indicator query DSL):

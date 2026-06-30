@@ -97,6 +97,7 @@ class XSOARFetcher:
         api_id: Optional[str] = None,
         verify_ssl: bool = True,
         version: Optional[str] = None,
+        account: Optional[str] = None,
     ):
         # Normalize base url: strip trailing /. Do NOT bake the v8 prefix
         # into self.base here — we prepend it per-request in _full_url so
@@ -104,6 +105,11 @@ class XSOARFetcher:
         # passes a prefixed path is de-duplicated.
         self.base = api_url.rstrip("/")
         self.api_key = api_key
+        # XSOAR 6 MSSP child-account scoping: requests to a child account go
+        # to /acc_<account>/<path>. Only meaningful on v6 (XSOAR 8 / Cortex
+        # multi-tenant uses a per-tenant connector instance, not a path
+        # prefix); applied in _full_url for v6 only. Empty → main account.
+        self.account = str(account).strip() if account not in (None, "") else None
         # Empty string is treated the same as None (v6). The flat config
         # may surface a blank api_id for v6 instances.
         self.api_id = str(api_id) if api_id not in (None, "") else None
@@ -167,9 +173,12 @@ class XSOARFetcher:
                 break
         if self.is_v8:
             prefix = _V8_INTERNAL_PREFIX if internal else _V8_PATH_PREFIX
+            acc = ""  # v8 MSSP is a per-tenant instance, not a /acc_ path prefix
         else:
             prefix = ""
-        return f"{self.base}{prefix}{path}"
+            # v6 MSSP: scope the request to a child account when configured.
+            acc = f"/acc_{self.account}" if self.account else ""
+        return f"{self.base}{acc}{prefix}{path}"
 
     def _raise_for_status(self, r: httpx.Response, path: str) -> None:
         """Map a non-2xx XSOAR response onto a typed exception."""
