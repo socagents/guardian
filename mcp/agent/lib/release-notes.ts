@@ -37,6 +37,19 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.3.0",
+    date: "2026-07-01",
+    breaking: true,
+    title: "Public distribution — pull the whole stack from the public socagents org (one firewall namespace).",
+    highlights: [
+      "Customers now pull every Guardian image from ghcr.io/socagents/* (public org) instead of the private kite-production org — the outbound firewall allow-list is a single namespace + pkg-containers.githubusercontent.com, with no private-org reference.",
+      "Images stay token-gated (the installer still authenticates with your Kite token), so the product isn't world-readable — only the namespace changed.",
+      "MAJOR bump: the customer installer binary now targets socagents, so download the fresh installer rather than re-running the one on disk. The internal dev pipeline is untouched.",
+      "Fix: the installer validated the registry token against a dev-only image tag and failed against the customer org — it now probes the release version.",
+      "Fix: the agent crash-looped on a cold-volume first boot when the knowledge-base load exceeded a hardcoded 60s readiness cap — now a 300s budget (tunable), still fast-failing on a genuine crash. This affected any fresh install.",
+    ],
+  },
+  {
     version: "0.2.110",
     date: "2026-07-01",
     title: "Cohere North provider — run Guardian on a private Cohere deployment.",

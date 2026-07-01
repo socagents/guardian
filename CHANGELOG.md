@@ -10,6 +10,14 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.3.0] (2026-07-01) — *Public distribution: pull the whole stack from the socagents org*
+
+- **Customers now pull Guardian's entire image stack from the public `socagents` org** instead of the private `kite-production` org. A customer's outbound firewall allow-list collapses to a single registry namespace — `ghcr.io/socagents/*` + `pkg-containers.githubusercontent.com` — with no reference to any private org. Images remain **token-gated** (the installer still authenticates with the token Kite provides), so the product isn't world-readable; only which namespace the install targets changed.
+- **The installer is owner-parameterized.** The customer installer (built by `release.yml`) targets `socagents`; the internal dev-cycle installer keeps targeting `kite-production`, so the development pipeline is untouched. This is why v0.3.0 is a **MAJOR** bump — the customer installer binary changed, so customers download a fresh installer rather than re-running the one on disk.
+- **Fix — installer token validation.** The installer validated the registry token by probing the `dev` image tag, which exists only in the dev org; against the customer's org (version + `latest` tags only) validation always failed. It now probes the release-version tag, so validation works against any distribution namespace.
+- **Fix — agent first-boot crash-loop on a cold volume.** The agent entrypoint capped the embedded MCP's first-boot readiness at 60 seconds, then killed and restarted it. As the bundled knowledge base grew (MITRE ATT&CK + ATLAS + XQL ≈ 1,500 docs), a cold-volume first boot exceeded 60s and the agent restart-looped without ever coming up. The readiness budget is now **300s** (tunable via `MCP_READY_TIMEOUT_S`), still failing fast on a genuine crash. This affected **any** fresh install, not just the new distribution.
+- *Verified end-to-end on a fresh RHEL 8.10 + Podman VM: `podman pull` the installer image from socagents → run → pull all service images from socagents (token-gated) → both containers healthy → UI reachable. ([guardian#99](https://github.com/kite-production/guardian/issues/99))*
+
 ## [v0.2.110] (2026-07-01) — *Cohere North provider — run Guardian on a private Cohere deployment*
 
 - **New model provider: Cohere North.** Configure a private / on-prem Cohere deployment (endpoint URL + agent id + bearer token) on the Providers page. Once the connection test passes, "Cohere North" appears on the Models page and in the chat / jobs / subagent model dropdowns — analysts can switch an investigation from Gemini to Cohere (and back) like any other model. The **full tool-using investigation loop** runs on it: the new `CohereProvider` adapter translates Guardian's tool calls to Cohere's format, POSTs `{endpoint}/api/v1/chat`, and polls `{endpoint}/api/v1/conversations/{id}` for the reply.
