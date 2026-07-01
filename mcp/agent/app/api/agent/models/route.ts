@@ -236,6 +236,22 @@ const ANTHROPIC_MODELS: ModelInfo[] = [
   },
 ];
 
+// R2 — Cohere North. Single static model (no discovery endpoint). Surfaced in
+// the chat/jobs model dropdowns when a cohere-north provider is configured.
+const COHERE_NORTH_MODELS: ModelInfo[] = [
+  {
+    provider: "cohere-north",
+    model: "cohere-north-default",
+    displayName: "Cohere North",
+    kind: "chat",
+    contextWindow: 128_000,
+    supportsThinking: false,
+    supportsTools: true,
+    interactionPatterns: ["streaming_api", "async_job", "interactive_session"],
+    launchStage: "PRIVATE_PREVIEW",
+  },
+];
+
 export async function GET() {
   // v0.6.9 fix — pre-v0.6.9 this read `cfg.vertexProjectId` +
   // `cfg.vertexServiceAccountJson`, which DON'T EXIST on the
@@ -279,10 +295,19 @@ export async function GET() {
     cfg.GEMINI_API_KEY && cfg.GEMINI_API_KEY.trim(),
   );
   const anthropicConfigured = Boolean(anthropicApiKey || anthropicCliKey);
+  // cfg carries the Cohere North endpoint + bearer (resolved from the
+  // ProviderStore by getEffectiveRuntimeConfig). Both present → configured.
+  const cohereConfigured = Boolean(
+    cfg.COHERE_NORTH_ENDPOINT &&
+      cfg.COHERE_NORTH_ENDPOINT.trim() &&
+      cfg.COHERE_NORTH_BEARER_TOKEN &&
+      cfg.COHERE_NORTH_BEARER_TOKEN.trim(),
+  );
 
   const models: ModelInfo[] = [
     ...(vertexConfigured || geminiKeyConfigured ? VERTEX_MODELS : []),
     ...(anthropicConfigured ? ANTHROPIC_MODELS : []),
+    ...(cohereConfigured ? COHERE_NORTH_MODELS : []),
   ];
   return NextResponse.json(models);
 }

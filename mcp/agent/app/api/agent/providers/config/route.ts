@@ -39,6 +39,7 @@ import { NextResponse } from "next/server";
 import { resolveMcp } from "@/lib/mcp-proxy";
 import { bustVertexCredsCache } from "@/lib/vertex-credentials";
 import { bustAnthropicCredsCache } from "@/lib/anthropic-credentials";
+import { bustCohereCredsCache } from "@/lib/cohere-credentials";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,10 @@ const PROVIDER_KEYS = [
   "vertexServiceAccountJson",
   "vertexProjectId",
   "vertexLocation",
+  "cohereNorthEndpoint",
+  "cohereNorthAgentId",
+  "cohereNorthBearerToken",
+  "cohereNorthTlsVerify",
 ] as const;
 type ProviderKey = (typeof PROVIDER_KEYS)[number];
 
@@ -60,6 +65,7 @@ const SENSITIVE_KEYS: ReadonlySet<ProviderKey> = new Set<ProviderKey>([
   "openaiApiKey",
   "openaiCodexToken",
   "vertexServiceAccountJson",
+  "cohereNorthBearerToken",
 ]);
 
 const REDACTED = "***";
@@ -68,6 +74,8 @@ const VERTEX_PROVIDER_ID = "vertex";
 const VERTEX_DEFAULT_INSTANCE_NAME = "primary-vertex";
 const ANTHROPIC_PROVIDER_ID = "anthropic";
 const ANTHROPIC_DEFAULT_INSTANCE_NAME = "primary-anthropic";
+const COHERE_NORTH_PROVIDER_ID = "cohere-north";
+const COHERE_NORTH_DEFAULT_INSTANCE_NAME = "primary-cohere-north";
 
 interface McpProviderInstance {
   id: string;
@@ -87,6 +95,13 @@ async function fetchVertexInstance(
   token: string,
 ): Promise<McpProviderInstance | null> {
   return fetchFirstInstance(base, token, VERTEX_PROVIDER_ID);
+}
+
+async function fetchCohereInstance(
+  base: string,
+  token: string,
+): Promise<McpProviderInstance | null> {
+  return fetchFirstInstance(base, token, COHERE_NORTH_PROVIDER_ID);
 }
 
 async function fetchAnthropicInstance(
@@ -266,10 +281,30 @@ export async function GET() {
   // Read directly from ProviderStore — no setup.json fallback. Both
   // provider lookups run in parallel; failure on either falls back to
   // "not configured" without disturbing the other.
-  const [vertex, anthropic] = await Promise.all([
+  const [vertex, anthropic, cohere] = await Promise.all([
     fetchVertexInstance(r.base, r.token).catch(() => null),
     fetchAnthropicInstance(r.base, r.token).catch(() => null),
+    fetchCohereInstance(r.base, r.token).catch(() => null),
   ]);
+
+  if (cohere) {
+    const endpoint = cohere.config?.endpoint_url;
+    const agentId = cohere.config?.agent_id;
+    const tlsVerify = cohere.config?.tls_verify;
+    if (typeof endpoint === "string" && endpoint.length > 0) {
+      providers.cohereNorthEndpoint = endpoint; // plaintext config, not a secret
+      configured.cohereNorthEndpoint = true;
+    }
+    if (typeof agentId === "string" && agentId.length > 0) {
+      providers.cohereNorthAgentId = agentId;
+      configured.cohereNorthAgentId = true;
+    }
+    providers.cohereNorthTlsVerify = tlsVerify === false ? "false" : "true";
+    if (cohere.secrets?.bearer_token !== undefined) {
+      providers.cohereNorthBearerToken = REDACTED;
+      configured.cohereNorthBearerToken = true;
+    }
+  }
 
   if (vertex) {
     const project = vertex.config?.project_id;
@@ -326,6 +361,8 @@ export async function PUT(request: Request) {
   const vertexConfigPatch: Record<string, string> = {};
   const vertexSecretsPatch: Record<string, string> = {};
   const anthropicSecretsPatch: Record<string, string> = {};
+  const cohereConfigPatch: Record<string, string> = {};
+  const cohereSecretsPatch: Record<string, string> = {};
 
   // ── Vertex ─────────────────────────────────────────────────
   if (typeof incoming.vertexProjectId === "string" && incoming.vertexProjectId.trim()) {
@@ -358,11 +395,31 @@ export async function PUT(request: Request) {
     anthropicSecretsPatch.cli_key = incoming.anthropicCliKey.trim();
   }
 
+  // ── Cohere North ───────────────────────────────────────────
+  if (typeof incoming.cohereNorthEndpoint === "string" && incoming.cohereNorthEndpoint.trim()) {
+    cohereConfigPatch.endpoint_url = incoming.cohereNorthEndpoint.trim();
+  }
+  if (typeof incoming.cohereNorthAgentId === "string" && incoming.cohereNorthAgentId.trim()) {
+    cohereConfigPatch.agent_id = incoming.cohereNorthAgentId.trim();
+  }
+  if (typeof incoming.cohereNorthTlsVerify === "string" && incoming.cohereNorthTlsVerify.trim()) {
+    cohereConfigPatch.tls_verify = incoming.cohereNorthTlsVerify.trim() === "false" ? "false" : "true";
+  }
+  if (
+    typeof incoming.cohereNorthBearerToken === "string" &&
+    incoming.cohereNorthBearerToken !== "" &&
+    incoming.cohereNorthBearerToken !== REDACTED
+  ) {
+    cohereSecretsPatch.bearer_token = incoming.cohereNorthBearerToken.trim();
+  }
+
   // Short-circuit if nothing to do.
   if (
     Object.keys(vertexConfigPatch).length === 0 &&
     Object.keys(vertexSecretsPatch).length === 0 &&
-    Object.keys(anthropicSecretsPatch).length === 0
+    Object.keys(anthropicSecretsPatch).length === 0 &&
+    Object.keys(cohereConfigPatch).length === 0 &&
+    Object.keys(cohereSecretsPatch).length === 0
   ) {
     return NextResponse.json({
       ok: true,
@@ -371,15 +428,16 @@ export async function PUT(request: Request) {
   }
 
   // Fetch existing instances in parallel.
-  const [vertexExisting, anthropicExisting] = await Promise.all([
+  const [vertexExisting, anthropicExisting, cohereExisting] = await Promise.all([
     fetchVertexInstance(r.base, r.token).catch(() => null),
     fetchAnthropicInstance(r.base, r.token).catch(() => null),
+    fetchCohereInstance(r.base, r.token).catch(() => null),
   ]);
 
   // Process per-provider upserts in parallel. Failure on one doesn't
   // abort the other — the response carries both results so the
   // operator sees exactly which provider succeeded.
-  const [vertexResult, anthropicResult] = await Promise.all([
+  const [vertexResult, anthropicResult, cohereResult] = await Promise.all([
     upsertProviderInstance(r.base, r.token, {
       providerId: VERTEX_PROVIDER_ID,
       name: VERTEX_DEFAULT_INSTANCE_NAME,
@@ -415,6 +473,23 @@ export async function PUT(request: Request) {
           "primary-anthropic instance for the first time.",
       },
     }),
+    upsertProviderInstance(r.base, r.token, {
+      providerId: COHERE_NORTH_PROVIDER_ID,
+      name: COHERE_NORTH_DEFAULT_INSTANCE_NAME,
+      configPatch: cohereConfigPatch,
+      secretsPatch: cohereSecretsPatch,
+      existing: cohereExisting,
+      requiredOnCreate: {
+        // Endpoint + agent id + bearer token are ALL required to make any
+        // Cohere North call — a half-configured instance is useless.
+        keys: ["endpoint_url", "agent_id", "bearer_token"],
+        mode: "all",
+        failureReason:
+          "Cohere North provider is not yet configured. Endpoint URL, agent " +
+          "id, and bearer token are all required to create the " +
+          "primary-cohere-north instance for the first time.",
+      },
+    }),
   ]);
 
   // Bust per-provider caches so the next chat / CLI dispatch sees the
@@ -425,16 +500,20 @@ export async function PUT(request: Request) {
   if (anthropicResult.success && anthropicResult.action !== "skipped") {
     bustAnthropicCredsCache();
   }
+  if (cohereResult.success && cohereResult.action !== "skipped") {
+    bustCohereCredsCache();
+  }
 
   // Aggregate response. Any failure → HTTP 400 with both results so
   // the form can surface per-provider errors. All success → 200.
-  const allSuccess = vertexResult.success && anthropicResult.success;
+  const allSuccess = vertexResult.success && anthropicResult.success && cohereResult.success;
   return NextResponse.json(
     {
       ok: allSuccess,
       mcp_sync: {
         vertex: vertexResult,
         anthropic: anthropicResult,
+        "cohere-north": cohereResult,
       },
     },
     { status: allSuccess ? 200 : 400 },
