@@ -110,6 +110,10 @@ _GUARDIAN_DIGEST_MANIFEST_HEREDOC_END_
 ORIGINAL_ARGS=("$@")
 
 UPGRADE_TO=""
+# --offline <bundle.tar.gz> → air-gapped install: load every image from the
+# bundle (podman/docker load) instead of pulling from the registry. No token,
+# no network to ghcr.io — the single downloaded file is everything.
+OFFLINE_BUNDLE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --upgrade-to)
@@ -119,6 +123,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --upgrade-to=*)
       UPGRADE_TO="${1#*=}"
+      shift
+      ;;
+    --offline)
+      [[ -n "${2:-}" ]] || { echo "ERROR: --offline requires a bundle path (e.g. --offline guardian-offline-v$GUARDIAN_VERSION.tar.gz)" >&2; exit 1; }
+      OFFLINE_BUNDLE="$2"
+      shift 2
+      ;;
+    --offline=*)
+      OFFLINE_BUNDLE="${1#*=}"
       shift
       ;;
     --help|-h)
@@ -605,6 +618,16 @@ validate_ghcr_token() {
 # validation failure, we fall through to the interactive prompt
 # (rather than silently using a token that's going to fail at pull
 # time and waste the operator's debugging cycle).
+if [[ -n "$OFFLINE_BUNDLE" ]]; then
+  # ── Air-gapped install: no registry token needed. Every image comes from
+  #    the bundle (loaded in Step 7); resolve + verify the bundle exists now
+  #    so we fail before any state change if the path is wrong.
+  [[ -f "$OFFLINE_BUNDLE" ]] || die "Offline bundle not found: $OFFLINE_BUNDLE
+       Pass the downloaded guardian-offline-*.tar.gz via --offline <path>."
+  OFFLINE_BUNDLE="$(cd "$(dirname "$OFFLINE_BUNDLE")" && pwd)/$(basename "$OFFLINE_BUNDLE")"
+  GHCR_TOKEN=""
+  ok "Offline install — images load from $(basename "$OFFLINE_BUNDLE") (no registry token needed)"
+else
 GHCR_TOKEN="${GUARDIAN_REGISTRY_TOKEN:-}"
 TOKEN_SOURCE="env var"
 
@@ -697,6 +720,7 @@ if [[ "$EXISTING_INSTALL" == "1" && "$TOKEN_SOURCE" != "$INSTALL_DIR/.env" ]]; t
     warn "Failed to persist token to $INSTALL_DIR/.env; current install proceeds OK but next re-run will re-prompt"
   fi
 fi
+fi  # ── end of the online (registry-token) branch; offline installs skipped it
 
 # ─── Step 5: Runtime secrets (reuse or generate) ──────────────────────
 info "Step 5/7 — runtime secrets"
@@ -779,6 +803,14 @@ cat > "$INSTALL_DIR/docker-compose.yml" <<'_GUARDIAN_COMPOSE_HEREDOC_END_'
 __INSTALLER_COMPOSE_YAML__
 _GUARDIAN_COMPOSE_HEREDOC_END_
 chmod 644 "$INSTALL_DIR/docker-compose.yml"
+if [[ -n "$OFFLINE_BUNDLE" ]]; then
+  # Offline: the bundle's images are tagged by version, not addressed by
+  # content digest. Rewrite each `@${DIGEST_GUARDIAN_*:-...}` image ref to
+  # `:${GUARDIAN_VERSION}` so `docker compose up` resolves the just-loaded
+  # images by tag with no registry pull.
+  sed -i -E 's#@\$\{DIGEST_GUARDIAN_[A-Z_]+:-[^}]*\}#:'"${GUARDIAN_VERSION}"'#g' "$INSTALL_DIR/docker-compose.yml"
+  ok "Offline: image refs pinned to :${GUARDIAN_VERSION} (loaded from bundle)"
+fi
 ok "docker-compose.yml refreshed"
 
 # v0.5.3 — host-side recovery utilities, embedded in the installer
@@ -1119,6 +1151,16 @@ info "Step 7/7 — pulling images and starting the stack"
 
 cd "$INSTALL_DIR"
 
+if [[ -n "$OFFLINE_BUNDLE" ]]; then
+  # ── Air-gapped: load every image from the single bundle instead of a
+  #    registry pull. No docker login, no ghcr.io — the compose refs were
+  #    rewritten to :$GUARDIAN_VERSION tags in Step 6, matching the tags the
+  #    bundle carries.
+  info "Loading images from the offline bundle (this can take a minute)…"
+  docker load -i "$OFFLINE_BUNDLE"
+  ok "Images loaded from $(basename "$OFFLINE_BUNDLE")"
+else
+
 # docker login. --password-stdin keeps the token out of process listings
 # and shell history.
 echo "$GHCR_TOKEN" \
@@ -1149,6 +1191,7 @@ fi
 info "Pulling images (this may take a few minutes on first install)…"
 docker compose pull
 ok "Images pulled"
+fi  # ── end of the online (login + pull) branch; offline loaded from the bundle
 
 # Bring the stack up.
 info "Starting Guardian…"
