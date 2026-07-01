@@ -91,6 +91,33 @@ Air-gapped or IP-based firewall? GitHub publishes its CIDR blocks at `https://ap
 
 ---
 
+## Install — offline (single file, no registry)
+
+**No outbound access to `ghcr.io`?** Download two files and install with `--offline` —
+the whole stack comes from one bundle. Nothing is pulled from a registry; no token is needed.
+
+```bash
+# 1. The installer  (Docker hosts; on RHEL/Podman use guardian-installer-podman)
+curl -fSL -o guardian-installer \
+  https://github.com/socagents/guardian/releases/download/v0.3.0/guardian-installer
+chmod +x guardian-installer
+
+# 2. The offline image bundle — every Guardian service image in one file (~619 MB)
+curl -fSL -o guardian-offline-v0.3.0.tar.gz \
+  https://github.com/socagents/guardian/releases/download/v0.3.0/guardian-offline-v0.3.0.tar.gz
+
+# 3. Install — loads every image from the bundle, pulls nothing
+sudo ./guardian-installer --offline guardian-offline-v0.3.0.tar.gz
+```
+
+This path only needs outbound HTTPS to **`github.com`** and
+**`release-assets.githubusercontent.com`**, and only long enough to download the two
+files. After that Guardian pulls nothing — ideal for air-gapped or tightly firewalled
+servers. Installing a newer release later? Swap `v0.3.0` for that version in both URLs
+and the `--offline` filename.
+
+---
+
 ## Install on RHEL / Podman
 
 For **RHEL 8+ with Podman and no Docker.** Run on your server:
