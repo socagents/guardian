@@ -2765,6 +2765,29 @@ Networks documentation and returning evidence-backed, cited answers.
               the bundle&apos;s <Code>requiredSecrets</Code> declares
               where it lands.
             </p>
+            <SubSection icon="hub" title="Cohere North — a private Cohere model">
+              <p>
+                To run Guardian on a private / on-prem Cohere deployment
+                (e.g. an air-gapped or sovereignty deployment), open the{" "}
+                <strong>Cohere North</strong> card on{" "}
+                <Link href="/providers" className="link">/providers</Link> and
+                enter the <strong>Endpoint URL</strong>, the{" "}
+                <strong>Agent ID</strong>, and the <strong>Bearer Token</strong>.
+                Click <em>Test Connection</em>, then <em>Save</em>. Once saved,{" "}
+                <strong>Cohere North</strong> appears in the model dropdown on{" "}
+                <Link href="/models" className="link">/models</Link> and in the
+                chat / jobs / subagent model pickers — pick it to run the full
+                tool-using investigation loop on your Cohere model instead of
+                Gemini.
+              </p>
+              <p>
+                The bearer token is stored encrypted in the secret store and is
+                never exposed to the agent. Keep <strong>TLS verification on</strong>;
+                for a private certificate authority, add the CA to the container
+                trust store rather than disabling verification. Embeddings for the
+                knowledge base continue to use Vertex.
+              </p>
+            </SubSection>
 
             <SubSection icon="route" title="Resolution logic">
               <p>

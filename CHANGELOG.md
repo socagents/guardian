@@ -10,6 +10,13 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.110] (2026-07-01) — *Cohere North provider — run Guardian on a private Cohere deployment*
+
+- **New model provider: Cohere North.** Configure a private / on-prem Cohere deployment (endpoint URL + agent id + bearer token) on the Providers page. Once the connection test passes, "Cohere North" appears on the Models page and in the chat / jobs / subagent model dropdowns — analysts can switch an investigation from Gemini to Cohere (and back) like any other model. The **full tool-using investigation loop** runs on it: the new `CohereProvider` adapter translates Guardian's tool calls to Cohere's format, POSTs `{endpoint}/api/v1/chat`, and polls `{endpoint}/api/v1/conversations/{id}` for the reply.
+- **Security:** the bearer token is a SecretStore value written only through the REST provider surface (never exposed to the agent as a tool). TLS verification is **on by default** — a private CA should be added to the container trust store rather than disabling it. Each model call uses a fresh conversation id so investigations don't bleed across cases.
+- **Embeddings stay on Vertex** (Cohere North has no embedding model), so the knowledge base is unaffected.
+- *Completes the model-agnostic-provider arc ([guardian#98](https://github.com/kite-production/guardian/issues/98)); builds on the v0.2.109 provider-adapter seam. Live tool-use validation against a real Cohere endpoint is pending a Cohere key / sandbox; the request/response translation is covered by an automated golden test.*
+
 ## [v0.2.109] (2026-07-01) — *Provider-adapter seam (de-hardcode Gemini) — internal refactor*
 
 - **Model backends now run through a provider adapter.** The chat-route's LLM dispatch was hardcoded to Google's Gemini/Vertex shape at every call site. It now resolves the chosen model to a provider id and dispatches through a small `LLMProvider` registry (`lib/llm/provider.ts`). The canonical interchange is still the Gemini request/response shape — each provider translates to/from it only at the wire, so the investigation loop (tool serialization, response decode, tool-result injection, cost accounting) is untouched.

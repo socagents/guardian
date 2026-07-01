@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.110",
+    date: "2026-07-01",
+    title: "Cohere North provider — run Guardian on a private Cohere deployment.",
+    highlights: [
+      "New provider: configure a private/on-prem Cohere North deployment (endpoint + agent id + bearer token) on the Providers page.",
+      "After a green connection test, Cohere North appears on the Models page and in the chat/jobs model dropdowns — switch investigations to it like any model.",
+      "The full tool-using investigation loop runs on Cohere: the adapter translates tool calls and polls the conversation for the reply.",
+      "Bearer token is SecretStore-encrypted and REST-only; TLS verify on by default; embeddings stay on Vertex.",
+    ],
+  },
+  {
     version: "0.2.109",
     date: "2026-07-01",
     title: "Provider-adapter seam — model backends now run through an adapter (internal refactor).",

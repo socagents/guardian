@@ -1011,6 +1011,48 @@ export const JOURNEYS: Journey[] = [
     components: ["settings", "models"],
   },
   {
+    id: "configure-cohere-north-provider",
+    category: "ops",
+    title: "Configure a Cohere North (private Cohere) provider",
+    summary:
+      "Point Guardian at a private/on-prem Cohere deployment (endpoint + agent id + bearer token). Once tested, the Cohere model is selectable in chat, jobs, and subagents — the full tool-using loop runs on it.",
+    difficulty: "starter",
+    durationMin: 3,
+    icon: "hub",
+    prompts: [],
+    toolsExercised: [],
+    apis: [
+      {
+        method: "PUT",
+        path: "/api/agent/providers/config",
+        description:
+          "Persists endpoint_url + agent_id (config) and bearer_token (SecretStore) as the cohere-north/primary-cohere-north provider instance. All three are required on first create.",
+      },
+      {
+        method: "POST",
+        path: "/api/agent/providers/cohere-north/test",
+        description:
+          "Probes reachability + auth: POSTs a minimal ping to {endpoint}/api/v1/chat. Returns { status, message }.",
+      },
+    ],
+    howToTest: [
+      "Visit /providers in the Guardian UI.",
+      "In the Cohere North card: enter the Endpoint URL (e.g. https://core.stc.com.sa), the Agent ID, and the Bearer Token; leave TLS verification on.",
+      "Click Test Connection — expect 'Endpoint reachable and bearer accepted.'",
+      "Click Save Changes.",
+      "Open a chat, click the model dropdown, and pick 'Cohere North'.",
+    ],
+    expectedResult:
+      "cohere-north/primary-cohere-north materializes in the ProviderStore. GET /api/agent/models now includes cohere-north-default. Selecting it routes the chat/job/subagent through the CohereProvider adapter (POST /api/v1/chat + poll the conversation).",
+    verifyVia: [
+      "GET /api/agent/models — cohere-north-default present once endpoint + bearer are configured.",
+      "GET /api/agent/instances — cohere-north/primary-cohere-north with secrets: 1/1.",
+      "Functional probe: switch a chat to Cohere North and ask a tool-using question; the turn should complete via the adapter.",
+    ],
+    related: ["configure-vertex-provider", "set-default-chat-model"],
+    components: ["settings", "models"],
+  },
+  {
     id: "set-default-chat-model",
     category: "ops",
     title: "Set the default chat model",

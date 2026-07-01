@@ -8135,12 +8135,22 @@ modelRequirements:
  adapter plus one registry entry; the loop is untouched.
  </li>
  </ul>
- <p className="text-sm text-on-surface-variant">
- Implementation gap: the Cohere North adapter is not yet wired.{" "}
- <Code>resolveProviderForModel</Code> returns{" "}
- <Code>cohere-north</Code> for cohere/command model names, but
- no such provider is registered until the Cohere release
- (guardian#98 R2).
+ <p>
+ Two adapters ship today: <Code>GeminiProvider</Code> (Vertex +
+ Gemini-API-key) and <Code>CohereProvider</Code> (
+ <Code>lib/llm/cohere-provider.ts</Code>) — the latter runs the
+ full tool-using loop on a private <Term>Cohere North</Term>
+ deployment. It translates the canonical Gemini shape to Cohere&apos;s
+ (<Code>functionDeclarations</Code> →{" "}
+ <Code>parameter_definitions</Code>, <Code>functionCall</Code> ↔{" "}
+ <Code>tool_calls</Code>, <Code>functionResponse</Code> ↔{" "}
+ <Code>tool_results</Code>), POSTs{" "}
+ <Code>{"{endpoint}"}/api/v1/chat</Code>, then <Term>polls</Term>{" "}
+ <Code>{"{endpoint}"}/api/v1/conversations/&#123;id&#125;</Code> and
+ synthesizes the Gemini-shaped response. A fresh conversation id
+ per call gives per-turn isolation; the bearer token is a
+ SecretStore value (REST-only). Configure it at{" "}
+ <Code>/providers</Code>; embeddings stay on Vertex.
  </p>
  </SubSection>
  </Section>
