@@ -1,0 +1,97 @@
+name: Publish installer image (public)
+
+# Publishes the Guardian installer as a PUBLIC OCI image on GHCR under the
+# socagents (public) org, so a customer whose firewall allows ghcr.io but NOT
+# github.com can obtain the installer via `podman pull` instead of curl:
+#
+#   podman pull ghcr.io/socagents/guardian-installer-podman:<version>
+#   podman run --rm ghcr.io/socagents/guardian-installer-podman:<version> \
+#     cat /guardian-installer > guardian-installer
+#   chmod +x guardian-installer && sudo ./guardian-installer
+#
+# The installer binary carries NO embedded secrets — it prompts for the
+# registry token at runtime and generates all runtime secrets on the host.
+#
+# The build downloads the installer asset from THIS repo's public release and
+# wraps it in a 2-line busybox image (COPY only). Runs on release publish, and
+# on-demand via workflow_dispatch for an already-published tag.
+#
+# NOTE on visibility: the first push creates the package PRIVATE. This workflow
+# makes a best-effort API call to set it public; if GitHub rejects that (the
+# GITHUB_TOKEN cannot always manage org package visibility), an org admin flips
+# it once in Package settings -> Change visibility -> Public. Later pushes then
+# inherit Public automatically.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to package (e.g. v0.2.110)"
+        required: true
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-installer-image:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ghcr.io
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - name: Resolve + validate release tag
+        id: tag
+        env:
+          # Untrusted inputs -> env vars, never interpolated directly into run:
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          TAG="${INPUT_TAG:-$RELEASE_TAG}"
+          if [ -z "$TAG" ]; then echo "::error::no tag resolved"; exit 1; fi
+          # Strict allow-list: vMAJOR.MINOR.PATCH with an optional pre-release suffix.
+          if ! printf '%s' "$TAG" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+([._-][A-Za-z0-9.]+)?$'; then
+            echo "::error::tag '$TAG' is not a valid version tag (expected vX.Y.Z)"; exit 1
+          fi
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "ver=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build + push public installer image(s) — docker + podman variants
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          VER: ${{ steps.tag.outputs.ver }}      # validated above
+          TAGV: ${{ steps.tag.outputs.tag }}     # validated above
+        run: |
+          echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
+          printf 'ARG SRC\nFROM busybox:stable\nARG SRC\nCOPY ${SRC} /guardian-installer\n' > Dockerfile.installer
+          # asset-name : package-name. Podman variant may be absent on very old releases.
+          for pair in "guardian-installer:guardian-installer" "guardian-installer-podman:guardian-installer-podman"; do
+            asset="${pair%%:*}"; pkg="${pair##*:}"
+            if ! gh release download "$TAGV" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --clobber 2>/dev/null; then
+              echo "::notice::asset '$asset' not present on $TAGV — skipping"; continue
+            fi
+            test -s "$asset"
+            echo "$asset first line: $(head -1 "$asset")  sha256: $(sha256sum "$asset" | cut -d' ' -f1)"
+            IMG="${REGISTRY}/${OWNER}/${pkg}"
+            docker build -f Dockerfile.installer --build-arg SRC="$asset" -t "$IMG:$VER" -t "$IMG:$TAGV" -t "$IMG:latest" .
+            docker push "$IMG:$VER"; docker push "$IMG:$TAGV"; docker push "$IMG:latest"
+            # Best-effort: make the package public via API (may be UI-only for org container packages).
+            if gh api --method PATCH -H "Accept: application/vnd.github+json" \
+                 "orgs/${OWNER}/packages/container/${pkg}/visibility" -f visibility=public 2>/dev/null; then
+              echo "::notice::${pkg} set PUBLIC via API"
+            else
+              echo "::warning::${pkg}: could not set public via API — flip once in Package settings -> Change visibility -> Public"
+            fi
+            {
+              echo "### Published \`ghcr.io/${OWNER}/${pkg}\`"
+              echo '```'
+              echo "podman pull ghcr.io/${OWNER}/${pkg}:${VER}"
+              echo "podman run --rm ghcr.io/${OWNER}/${pkg}:${VER} cat /guardian-installer > guardian-installer"
+              echo "chmod +x guardian-installer && sudo ./guardian-installer"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
