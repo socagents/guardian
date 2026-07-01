@@ -688,6 +688,56 @@ jobs:
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
       # ──────────────────────────────────────────────────────────────
+      # Public distribution mirror — copy every image to ghcr.io/socagents.
+      #
+      # After all images are pushed to ghcr.io/kite-production, mirror each
+      # into the PUBLIC socagents org so a customer pulls the entire stack
+      # (installer + all services) from one public namespace with no token.
+      #
+      # GATED on the SOCAGENTS_PACKAGES_PAT secret (a PAT with write:packages
+      # on socagents). If the secret is unset the step no-ops immediately, so
+      # this never fails a kite-production release. Non-fatal: a mirror hiccup
+      # warns but does not fail the release. Container-package visibility is
+      # UI-only for orgs, so the visibility call is best-effort (set each
+      # socagents package Public once; later pushes inherit it).
+      # ──────────────────────────────────────────────────────────────
+      - name: Mirror images to public socagents org
+        env:
+          V: ${{ steps.ver.outputs.version }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          SOCAGENTS_PAT: ${{ secrets.SOCAGENTS_PACKAGES_PAT }}
+        run: |
+          if [ -z "${SOCAGENTS_PAT:-}" ]; then
+            echo "::notice::SOCAGENTS_PACKAGES_PAT not set — skipping public socagents mirror (kite-production release unaffected)."
+            exit 0
+          fi
+          MM="${V%.*}"
+          IMAGES="guardian-agent guardian-updater guardian-browser guardian-connector-runtime guardian-connector-xsoar guardian-connector-xsiam guardian-connector-web guardian-connector-cortex-docs guardian-connector-splunk-mimic"
+          # 1) ensure each just-published kite-production image is local (GITHUB_TOKEN still authed)
+          for img in $IMAGES; do
+            docker pull "$REGISTRY/$OWNER/$img:$V" || echo "::warning::mirror: could not pull $OWNER/$img:$V — skipping"
+          done
+          # 2) switch ghcr.io credentials to the socagents-write PAT
+          echo "$SOCAGENTS_PAT" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
+          # 3) tag + push each image into the public socagents org
+          for img in $IMAGES; do
+            docker image inspect "$REGISTRY/$OWNER/$img:$V" >/dev/null 2>&1 || continue
+            docker tag "$REGISTRY/$OWNER/$img:$V" "$REGISTRY/socagents/$img:$V"
+            docker tag "$REGISTRY/$OWNER/$img:$V" "$REGISTRY/socagents/$img:$MM"
+            docker tag "$REGISTRY/$OWNER/$img:$V" "$REGISTRY/socagents/$img:latest"
+            docker push "$REGISTRY/socagents/$img:$V"     || echo "::warning::mirror push failed: socagents/$img:$V"
+            docker push "$REGISTRY/socagents/$img:$MM"    || true
+            docker push "$REGISTRY/socagents/$img:latest" || true
+            GH_TOKEN="$SOCAGENTS_PAT" gh api --method PATCH \
+              "orgs/socagents/packages/container/$img/visibility" -f visibility=public 2>/dev/null \
+              && echo "::notice::socagents/$img set public" \
+              || echo "::warning::socagents/$img: set visibility Public once in Package settings"
+          done
+          # 4) restore kite-production credentials for any later steps
+          echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
+
+      # ──────────────────────────────────────────────────────────────
       # v0.3.0 — Image digest manifest.
       #
       # After all images have been built/retagged AND pushed (RepoDigests
