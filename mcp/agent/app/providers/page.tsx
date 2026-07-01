@@ -36,6 +36,14 @@ interface ProviderConfig {
   vertexProjectId: string;
   /** Google Vertex AI — region, defaults to us-central1. Gemini 3 auto-routes to global. */
   vertexLocation: string;
+  /** Cohere North — base URL of the private deployment (e.g. https://core.stc.com.sa). Not a secret. */
+  cohereNorthEndpoint: string;
+  /** Cohere North — agent id to route requests to. Not a secret. */
+  cohereNorthAgentId: string;
+  /** Cohere North — bearer token. Encrypted in the SecretStore. */
+  cohereNorthBearerToken: string;
+  /** Cohere North — verify the endpoint's TLS cert ("true"/"false"). */
+  cohereNorthTlsVerify: string;
 }
 
 interface ConnectionStatus {
@@ -61,6 +69,10 @@ const DEFAULT_PROVIDER_CONFIG: ProviderConfig = {
   vertexServiceAccountJson: "",
   vertexProjectId: "",
   vertexLocation: "us-central1",
+  cohereNorthEndpoint: "",
+  cohereNorthAgentId: "",
+  cohereNorthBearerToken: "",
+  cohereNorthTlsVerify: "true",
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -100,6 +112,22 @@ function extractProviderConfig(
       typeof providers.vertexLocation === "string"
         ? providers.vertexLocation
         : "us-central1",
+    cohereNorthEndpoint:
+      typeof providers.cohereNorthEndpoint === "string"
+        ? providers.cohereNorthEndpoint
+        : "",
+    cohereNorthAgentId:
+      typeof providers.cohereNorthAgentId === "string"
+        ? providers.cohereNorthAgentId
+        : "",
+    cohereNorthBearerToken:
+      typeof providers.cohereNorthBearerToken === "string"
+        ? providers.cohereNorthBearerToken
+        : "",
+    cohereNorthTlsVerify:
+      typeof providers.cohereNorthTlsVerify === "string"
+        ? providers.cohereNorthTlsVerify
+        : "true",
   };
 }
 
@@ -271,7 +299,9 @@ export default function ProvidersSettingsPage() {
     setError(null);
   }
 
-  function isProviderDirty(provider: "anthropic" | "openai" | "vertex"): boolean {
+  function isProviderDirty(
+    provider: "anthropic" | "openai" | "vertex" | "cohere-north",
+  ): boolean {
     if (provider === "anthropic") {
       return (
         form.anthropicApiKey !== initialForm.current.anthropicApiKey ||
@@ -286,6 +316,14 @@ export default function ProvidersSettingsPage() {
         form.vertexLocation !== initialForm.current.vertexLocation
       );
     }
+    if (provider === "cohere-north") {
+      return (
+        form.cohereNorthEndpoint !== initialForm.current.cohereNorthEndpoint ||
+        form.cohereNorthAgentId !== initialForm.current.cohereNorthAgentId ||
+        form.cohereNorthBearerToken !== initialForm.current.cohereNorthBearerToken ||
+        form.cohereNorthTlsVerify !== initialForm.current.cohereNorthTlsVerify
+      );
+    }
     return (
       form.openaiApiKey !== initialForm.current.openaiApiKey ||
       form.openaiCodexToken !== initialForm.current.openaiCodexToken
@@ -294,7 +332,9 @@ export default function ProvidersSettingsPage() {
 
   // ── Save (per-card) ─────────────────────────────────────────────────────
 
-  async function handleSaveProvider(provider: "anthropic" | "openai" | "vertex") {
+  async function handleSaveProvider(
+    provider: "anthropic" | "openai" | "vertex" | "cohere-north",
+  ) {
     setSavingProvider(provider);
     setError(null);
 
@@ -307,6 +347,10 @@ export default function ProvidersSettingsPage() {
       vertexServiceAccountJson: form.vertexServiceAccountJson,
       vertexProjectId: form.vertexProjectId,
       vertexLocation: form.vertexLocation,
+      cohereNorthEndpoint: form.cohereNorthEndpoint,
+      cohereNorthAgentId: form.cohereNorthAgentId,
+      cohereNorthBearerToken: form.cohereNorthBearerToken,
+      cohereNorthTlsVerify: form.cohereNorthTlsVerify,
     };
 
     try {
@@ -445,6 +489,24 @@ export default function ProvidersSettingsPage() {
         service_account_json: form.vertexServiceAccountJson,
         project_id: form.vertexProjectId,
         location: form.vertexLocation || "us-central1",
+      };
+    } else if (provider === "cohere-north") {
+      if (!form.cohereNorthEndpoint || !form.cohereNorthAgentId || !form.cohereNorthBearerToken) {
+        setConnectionStatuses((prev) => ({
+          ...prev,
+          [provider]: {
+            provider,
+            status: "error",
+            message: "Endpoint URL, agent id, and bearer token are all required.",
+          },
+        }));
+        return;
+      }
+      body = {
+        endpoint_url: form.cohereNorthEndpoint,
+        agent_id: form.cohereNorthAgentId,
+        bearer_token: form.cohereNorthBearerToken,
+        tls_verify: form.cohereNorthTlsVerify,
       };
     } else {
       const apiKey =
@@ -829,6 +891,128 @@ export default function ProvidersSettingsPage() {
             </div>
           </section>
 
+          {/* ── Cohere North Card ───────────────────────────────────────── */}
+          <section className="rounded-xl overflow-hidden relative" style={glassCard}>
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-primary-container" />
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-primary-container/20 flex items-center justify-center text-primary">
+                    <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      hub
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-headline text-lg font-bold text-on-surface">Cohere North</h3>
+                    <p className="text-xs text-on-surface-variant mt-0.5">
+                      Private / on-prem Cohere deployment · chat + tool-use
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    disabled={
+                      connectionStatuses["cohere-north"]?.status === "testing" ||
+                      !form.cohereNorthEndpoint.trim() ||
+                      !form.cohereNorthAgentId.trim() ||
+                      !form.cohereNorthBearerToken.trim() ||
+                      form.cohereNorthBearerToken === "***"
+                    }
+                    onClick={() => testConnection("cohere-north")}
+                    className="px-4 py-2 text-xs font-bold font-headline rounded bg-transparent border border-outline-variant/30 text-on-surface hover:bg-surface-bright transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {connectionStatuses["cohere-north"]?.status === "testing"
+                      ? "Testing..."
+                      : "Test Connection"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingProvider !== null || !isProviderDirty("cohere-north")}
+                    onClick={() => handleSaveProvider("cohere-north")}
+                    className="px-6 py-2 text-xs font-bold font-headline rounded bg-primary-container text-on-primary-container hover:shadow-[0_0_15px_rgba(25,99,179,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {savingProvider === "cohere-north" ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </div>
+
+              {connectionStatuses["cohere-north"]?.message && (
+                <div
+                  className={`mb-6 text-xs font-label px-3 py-2 rounded ${
+                    connectionStatuses["cohere-north"]?.status === "success"
+                      ? "bg-primary-container/20 text-primary"
+                      : connectionStatuses["cohere-north"]?.status === "error"
+                        ? "bg-error-container/20 text-error"
+                        : "text-on-surface-variant"
+                  }`}
+                >
+                  {connectionStatuses["cohere-north"]?.message}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label htmlFor="cohere-endpoint" className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
+                    Endpoint URL
+                  </label>
+                  <input
+                    id="cohere-endpoint"
+                    type="text"
+                    value={form.cohereNorthEndpoint}
+                    onChange={(e) => updateField("cohereNorthEndpoint", e.target.value)}
+                    placeholder="https://core.stc.com.sa"
+                    className="w-full bg-surface-container-lowest border-none rounded-lg px-4 py-3 text-sm font-mono text-on-surface focus:ring-1 focus:ring-primary/40 transition-all outline-none"
+                  />
+                  <p className="text-[10px] text-on-surface-variant/60 font-label">
+                    Base URL. The adapter calls {"{url}"}/api/v1/chat and polls /api/v1/conversations/&#123;id&#125;.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="cohere-agent-id" className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
+                    Agent ID
+                  </label>
+                  <input
+                    id="cohere-agent-id"
+                    type="text"
+                    value={form.cohereNorthAgentId}
+                    onChange={(e) => updateField("cohereNorthAgentId", e.target.value)}
+                    placeholder="f78365f2-be10-466b-8fe4-..."
+                    className="w-full bg-surface-container-lowest border-none rounded-lg px-4 py-3 text-sm font-mono text-on-surface focus:ring-1 focus:ring-primary/40 transition-all outline-none"
+                  />
+                  <p className="text-[10px] text-on-surface-variant/60 font-label">
+                    The Cohere North agent to route requests to.
+                  </p>
+                </div>
+                <MaskedKeyInput
+                  id="cohere-bearer-token"
+                  label="Bearer Token"
+                  value={form.cohereNorthBearerToken}
+                  onChange={(v) => updateField("cohereNorthBearerToken", v)}
+                  placeholder="Bearer token for the Cohere North deployment"
+                  helpText="Sent as Authorization: Bearer <token>. Stored encrypted under primary-cohere-north.secrets.bearer_token (REST-only; never exposed to the agent)."
+                />
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
+                    TLS Verification
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-on-surface font-label pt-2">
+                    <input
+                      type="checkbox"
+                      checked={form.cohereNorthTlsVerify !== "false"}
+                      onChange={(e) => updateField("cohereNorthTlsVerify", e.target.checked ? "true" : "false")}
+                      className="accent-primary"
+                    />
+                    Verify the endpoint&apos;s TLS certificate
+                  </label>
+                  <p className="text-[10px] text-on-surface-variant/60 font-label">
+                    Keep enabled. For a private CA, add the CA to the container trust store rather than disabling.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* ── OpenAI Card (WORK IN PROGRESS) ─────────────────────────── */}
           <section
             className="rounded-xl overflow-hidden relative opacity-50"
@@ -994,6 +1178,9 @@ export default function ProvidersSettingsPage() {
                     form.openaiApiKey,
                     form.vertexServiceAccountJson && form.vertexProjectId
                       ? "vertex"
+                      : "",
+                    form.cohereNorthEndpoint && form.cohereNorthBearerToken
+                      ? "cohere-north"
                       : "",
                   ].filter(Boolean).length
                 } Configured
