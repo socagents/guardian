@@ -1,0 +1,62 @@
+# Cohere North provider for Guardian — an on-premises / private Cohere
+# deployment (e.g. a customer's core.stc.com.sa endpoint). Chat + tool-use
+# only; embeddings stay on Vertex (Cohere North exposes no embedding model).
+#
+# The chat dispatch itself lives in the Next.js agent layer (the CohereProvider
+# adapter in mcp/agent/lib/llm/cohere-provider.ts) — this bundle contributes the
+# provider metadata + the static model catalogue the resolver picks from.
+id: "cohere-north"
+version: "0.1.0"
+description: "Cohere North — private/on-prem Cohere Command deployment (chat + tool-use)."
+
+source:
+  language: "python"
+  entrypoint: "src.provider:Provider"
+
+runtimeMapping:
+  style: "class"
+
+executionMode: "persistent"
+
+configSchema:
+  type: "object"
+  required: ["endpoint_url", "agent_id"]
+  properties:
+    endpoint_url:
+      type: "string"
+      description: "Base URL of the Cohere North deployment (e.g. https://core.stc.com.sa). The adapter calls {endpoint_url}/api/v1/chat and polls {endpoint_url}/api/v1/conversations/{id}."
+    agent_id:
+      type: "string"
+      description: "Cohere North agent id to route requests to (the `agent.id` in the chat request body)."
+    tls_verify:
+      type: "boolean"
+      description: "Verify the endpoint's TLS certificate. Defaults to true — do not disable in production."
+      default: true
+    ca_pem:
+      type: "string"
+      description: "Optional PEM CA bundle to trust a private/internal certificate authority, instead of disabling TLS verification."
+    conversation_mode:
+      type: "string"
+      description: "How conversation ids are scoped. `stateless` (default) uses a fresh conversation id per model call and re-sends the full history — maximal isolation. `per_session` reuses one conversation id per Guardian session (reserved; requires an endpoint that accumulates server-side history)."
+      enum: ["stateless", "per_session"]
+      default: "stateless"
+
+secretSlots:
+  - name: "bearer_token"
+    description: |
+      Bearer token for authenticating to the Cohere North deployment. Sent as
+      `Authorization: Bearer <token>`. Stored in the SecretStore (AES-GCM at
+      rest); written only via the REST provider surface, never exposed to the
+      agent as a tool.
+    required: true
+
+spec:
+  models:
+    # Single static model — Cohere North exposes no model-discovery endpoint,
+    # so the catalogue is fixed. The id starts with "cohere" so the agent's
+    # resolveProviderForModel() routes it to the cohere-north adapter.
+    - id: "cohere-north-default"
+      family: "command"
+      kind: "chat"
+      contextWindow: 128000
+      supports: ["streaming", "tool_use"]

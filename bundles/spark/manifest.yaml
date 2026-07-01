@@ -258,6 +258,10 @@ providers:
     path: "./providers/vertex/"
     version: "0.1.0"
     required: true               # agent needs a configured LLM provider
+  - id: "cohere-north"
+    path: "./providers/cohere-north/"
+    version: "0.1.0"
+    required: false              # optional; vertex stays primary (+ embeddings)
 
 # Tool allow/deny. Connector tools are namespaced as `<id>/<tool>`;
 # built-in tools (memory_*, knowledge_*, sessions_*, skills_*) are
