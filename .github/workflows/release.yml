@@ -65,6 +65,12 @@ env:
 jobs:
   release:
     name: Build & push images, pack install kit
+    # Release engineering happens ONLY on the private origin. The customer-facing
+    # socagents mirror receives the same tags (so its GitHub Release + installer
+    # images line up), but must NOT re-run the build+push pipeline there — it has
+    # no build secrets and would post a red failure on the public repo. Skip
+    # cleanly (green) on any repo that isn't the private origin.
+    if: github.repository == 'kite-production/guardian'
     # We use GitHub-hosted runners (not the self-hosted guardian VM) for
     # releases specifically. The self-hosted runner sits behind GCP
     # Cloud NAT, which throttles concurrent egress connections — when
