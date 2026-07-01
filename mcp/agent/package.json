@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:json-to-yaml": "node scripts/test-json-to-yaml.mjs",
-    "test": "npm run test:json-to-yaml"
+    "test:provider-seam": "node scripts/test-provider-seam.mjs",
+    "test": "npm run test:json-to-yaml && npm run test:provider-seam"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
