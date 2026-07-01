@@ -580,10 +580,19 @@ validate_ghcr_token() {
   # the legacy Docker single-arch type, which made GHCR refuse to
   # serve the `:dev` manifest (OCI index) and v0.5.8's validation
   # appeared to reject valid tokens.
+  # Probe a tag GUARANTEED to exist for this installer's distribution so
+  # 200=authorized vs 404=unauthorized stays unambiguous: the release
+  # version for customer installers, or the rolling `dev` tag for
+  # dev-<sha> installers (whose images carry the `dev` tag, not the full
+  # dev-<sha> version string). A hardcoded `dev` probe broke installs off
+  # a mirror that has only version + `latest` tags (e.g. ghcr.io/kite-production),
+  # where guardian-agent:dev does not exist.
+  local probe_tag="$GUARDIAN_VERSION"
+  [[ "$probe_tag" == dev-* ]] && probe_tag="dev"
   http_code=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Authorization: Bearer $bearer" \
     -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
-    "https://${GHCR_REGISTRY}/v2/${GHCR_OWNER}/guardian-agent/manifests/dev" 2>/dev/null || echo "000")
+    "https://${GHCR_REGISTRY}/v2/${GHCR_OWNER}/guardian-agent/manifests/${probe_tag}" 2>/dev/null || echo "000")
   [[ "$http_code" == "200" ]]
 }
 

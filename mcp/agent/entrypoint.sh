@@ -427,9 +427,17 @@ else
 fi
 
 # Wait for MCP to be ready (or fail fast if it crashes during init).
-log "waiting for MCP /ping/ readiness ($MCP_PROBE_URL)..."
+# First boot on a COLD volume loads the full bundled knowledge base
+# (MITRE ATT&CK 697 + ATLAS 227 + XQL + SOC playbooks ≈ 1500 docs); that
+# iteration can exceed a minute on a modest VM, so the readiness budget
+# is generous and operator-tunable via MCP_READY_TIMEOUT_S. A genuine
+# crash still exits fast via the kill -0 liveness check below — the long
+# budget only extends patience for a slow-but-alive startup. (A fixed 60s
+# budget crash-looped fresh installs once the KB set outgrew it.)
+MCP_READY_TIMEOUT_S="${MCP_READY_TIMEOUT_S:-300}"
+log "waiting for MCP /ping/ readiness ($MCP_PROBE_URL, up to ${MCP_READY_TIMEOUT_S}s)..."
 MCP_READY=0
-for i in $(seq 1 60); do
+for i in $(seq 1 "$MCP_READY_TIMEOUT_S"); do
   if curl -sf $MCP_PROBE_OPTS "$MCP_PROBE_URL" >/dev/null 2>&1; then
     MCP_READY=1
     log "MCP ready after ${i}s"
@@ -442,7 +450,7 @@ for i in $(seq 1 60); do
   sleep 1
 done
 if [ "$MCP_READY" != "1" ]; then
-  log "MCP did not become ready within 60s; killing and exiting"
+  log "MCP did not become ready within ${MCP_READY_TIMEOUT_S}s; killing and exiting"
   kill -TERM "$MCP_PID" 2>/dev/null || true
   exit 1
 fi
