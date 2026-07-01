@@ -10,6 +10,12 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.2.109] (2026-07-01) — *Provider-adapter seam (de-hardcode Gemini) — internal refactor*
+
+- **Model backends now run through a provider adapter.** The chat-route's LLM dispatch was hardcoded to Google's Gemini/Vertex shape at every call site. It now resolves the chosen model to a provider id and dispatches through a small `LLMProvider` registry (`lib/llm/provider.ts`). The canonical interchange is still the Gemini request/response shape — each provider translates to/from it only at the wire, so the investigation loop (tool serialization, response decode, tool-result injection, cost accounting) is untouched.
+- **No operator-visible change.** The existing Vertex and Gemini-API-key paths behave byte-identically — same requests, same streaming, same cost accounting, same Vertex context-caching. This release only introduces the seam.
+- *Prerequisite for the Cohere North provider ([guardian#98](https://github.com/kite-production/guardian/issues/98)). The Cohere adapter — which lets Guardian's full tool-using investigation loop run on a customer's private Cohere deployment — ships as R2 on top of this seam.*
+
 ## [v0.2.108] (2026-07-01) — *Pre-release QA — doc-accuracy fixes across the XSOAR arc*
 
 A QA pass before sharing the v0.2.103–107 arc with customers caught a customer-visible documentation error and some spec/doc drift. No code behaviour changes — documentation + comments only.

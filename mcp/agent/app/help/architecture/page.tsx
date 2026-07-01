@@ -8104,6 +8104,45 @@ modelRequirements:
  <Code>error: true</Code>.
  </p>
  </SubSection>
+ <SubSection icon="swap_horiz" title="Provider-adapter dispatch">
+ <p>
+ Once a model name is resolved, the chat-route dispatches the
+ call through an <Term>LLM provider adapter</Term> rather than a
+ hardcoded Gemini branch.{" "}
+ <Code>resolveProviderForModel(name)</Code> maps the model to a
+ provider id, and{" "}
+ <Code>getProvider(id).invoke(payload, ctx)</Code> makes the
+ call.
+ </p>
+ <ul className="list-disc pl-5 space-y-1 text-sm">
+ <li>
+ <Term>Canonical interchange</Term> — the Gemini{" "}
+ <Code>generateContent</Code> request/response shape. Adapters
+ translate to/from it only at the wire, so the agent loop
+ (tool serialize, response decode, tool-result inject, cost
+ accounting) stays provider-agnostic.
+ </li>
+ <li>
+ <Term>Two-level dispatch</Term> — the outer level routes by
+ model → provider (<Code>gemini</Code>, and{" "}
+ <Code>cohere-north</Code> once configured); the inner Google
+ choice (Vertex SA vs <Code>GEMINI_API_KEY</Code>) stays inside
+ the Gemini adapter.
+ </li>
+ <li>
+ <Term>Registry</Term> — providers self-register at module load
+ (<Code>lib/llm/provider.ts</Code>). Adding a backend is one
+ adapter plus one registry entry; the loop is untouched.
+ </li>
+ </ul>
+ <p className="text-sm text-on-surface-variant">
+ Implementation gap: the Cohere North adapter is not yet wired.{" "}
+ <Code>resolveProviderForModel</Code> returns{" "}
+ <Code>cohere-north</Code> for cohere/command model names, but
+ no such provider is registered until the Cohere release
+ (guardian#98 R2).
+ </p>
+ </SubSection>
  </Section>
 );
 }

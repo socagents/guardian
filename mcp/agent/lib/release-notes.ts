@@ -37,6 +37,16 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.2.109",
+    date: "2026-07-01",
+    title: "Provider-adapter seam — model backends now run through an adapter (internal refactor).",
+    highlights: [
+      "LLM dispatch now routes through a provider adapter registry instead of a hardcoded Gemini branch — the groundwork for running Guardian on non-Google models.",
+      "No operator-visible change: the Vertex and Gemini-API-key paths behave identically (same requests, streaming, cost accounting, context caching).",
+      "Prerequisite for Cohere North support (guardian#98) — a customer's private Cohere deployment as Guardian's investigation model ships next.",
+    ],
+  },
+  {
     version: "0.2.108",
     date: "2026-07-01",
     title: "Pre-release QA — documentation-accuracy fixes (no behaviour change).",
