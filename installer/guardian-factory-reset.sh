@@ -137,7 +137,7 @@ else
 
        To recover:
          1. Download a fresh guardian-installer from
-            https://github.com/kite-production/guardian/releases
+            https://github.com/__INSTALLER_OWNER__/guardian/releases
          2. Run it (sudo ./guardian-installer) — it will self-install
             into $INSTALL_DIR/ as part of the normal install ceremony
          3. Re-run sudo $INSTALL_DIR/guardian-factory-reset"

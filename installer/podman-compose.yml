@@ -14,7 +14,7 @@
 #
 # This is the compose file shipped to customers in
 # guardian-installer-<VERSION>.tar.gz. It pulls pre-built images from
-# ghcr.io/kite-production/* — customers DO NOT have build context (no
+# ghcr.io/__INSTALLER_OWNER__/* — customers DO NOT have build context (no
 # source repo, no Dockerfiles) and DO NOT need them. Every service
 # uses `image:` only.
 #
@@ -83,7 +83,7 @@ services:
   # it off the host network is a hard requirement, not a preference.
   # ─────────────────────────────────────────────────────────────────
   guardian-browser:
-    image: ghcr.io/kite-production/guardian-browser@${DIGEST_GUARDIAN_BROWSER:-sha256:invalid_digest_run_installer_first}
+    image: ghcr.io/__INSTALLER_OWNER__/guardian-browser@${DIGEST_GUARDIAN_BROWSER:-sha256:invalid_digest_run_installer_first}
     container_name: guardian_browser
     restart: always   # PODMAN: see header note B (podman-restart.service on RHEL 8 only revives restart=always)
     profiles: ["browser"]
@@ -114,7 +114,7 @@ services:
   #     reachability, fail-closed auth.
   # ─────────────────────────────────────────────────────────────────
   guardian-updater:
-    image: ghcr.io/kite-production/guardian-updater@${DIGEST_GUARDIAN_UPDATER:-sha256:invalid_digest_run_installer_first}
+    image: ghcr.io/__INSTALLER_OWNER__/guardian-updater@${DIGEST_GUARDIAN_UPDATER:-sha256:invalid_digest_run_installer_first}
     container_name: guardian_updater
     restart: always   # PODMAN: see header note B (podman-restart.service on RHEL 8 only revives restart=always)
     # PODMAN/RHEL: the updater mounts the Podman API socket + the host
@@ -136,7 +136,7 @@ services:
       - GUARDIAN_REGISTRY_USER
       - GUARDIAN_REGISTRY_TOKEN
       - GUARDIAN_REGISTRY=ghcr.io
-      - GUARDIAN_OWNER=kite-production
+      - GUARDIAN_OWNER=__INSTALLER_OWNER__
       - HOST_INSTALL_DIR=/host
       # v0.5.51 — GUARDIAN_VERSION + DIGEST_GUARDIAN_* / DIGEST_GUARDIAN_CONNECTOR_*
       # are NO LONGER passed as env vars to guardian-updater. The updater
@@ -189,7 +189,7 @@ services:
   # embedded MCP on :8080 (same trust boundary, same container).
   # ─────────────────────────────────────────────────────────────────
   guardian-agent:
-    image: ghcr.io/kite-production/guardian-agent@${DIGEST_GUARDIAN_AGENT:-sha256:invalid_digest_run_installer_first}
+    image: ghcr.io/__INSTALLER_OWNER__/guardian-agent@${DIGEST_GUARDIAN_AGENT:-sha256:invalid_digest_run_installer_first}
     container_name: guardian_agent
     restart: always   # PODMAN: see header note B (podman-restart.service on RHEL 8 only revives restart=always)
     depends_on:

@@ -69,6 +69,17 @@ case "$RUNTIME" in
   podman)  COMPOSE="$SCRIPT_DIR/podman-compose.yml" ;;
   *) echo "ERROR: RUNTIME must be 'docker' or 'podman' (got: $RUNTIME)" >&2; exit 1 ;;
 esac
+
+# INSTALLER_OWNER selects the GHCR org the generated installer targets: the
+# default kite-production for the dev + private-release builds; socagents for
+# the public customer installer (release.yml passes INSTALLER_OWNER=socagents).
+# Baked into the template's __INSTALLER_OWNER__ markers (GHCR_OWNER + the
+# release/upgrade URLs) AND the embedded compose image refs at build time, so
+# the dev auto-deploy cycle is never repointed.
+INSTALLER_OWNER="${INSTALLER_OWNER:-kite-production}"
+if ! printf '%s' "$INSTALLER_OWNER" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9-]*$'; then
+  echo "ERROR: INSTALLER_OWNER must be a GitHub org/user slug (got: $INSTALLER_OWNER)" >&2; exit 1
+fi
 # v0.4.0: reset-ui-password.sh retired (replaced by image-baked
 # /app/cli/reset-admin.mjs — see template comment in the template
 # for context). The RESET_SH path is no longer read.
@@ -123,6 +134,7 @@ VERSION="$VERSION" \
   FACTORY_RESET_SH="$FACTORY_RESET_SH" \
   RESET_ADMIN_SH="$RESET_ADMIN_SH" \
   MANIFEST_CONTENTS="$MANIFEST_CONTENTS" \
+  INSTALLER_OWNER="$INSTALLER_OWNER" \
   python3 - "$OUTPUT" <<'PY'
 import os
 import sys
@@ -205,6 +217,12 @@ out = out.replace("__INSTALLER_DIGEST_MANIFEST__", manifest)
 out = out.replace("__INSTALLER_FACTORY_RESET_SH__", factory_reset)
 out = out.replace("__INSTALLER_RESET_PASSWORD_SH__", reset_admin)
 out = out.replace("__INSTALLER_RUNTIME__", runtime)
+# Owner (GHCR org) is a GLOBAL token — it appears many times (GHCR_OWNER,
+# the release/upgrade URLs, and every embedded compose image ref), so it is
+# NOT in the single-occurrence `markers` tuple. Substitute it last, after the
+# compose has been embedded, so both the template refs and the compose refs
+# are covered in one pass.
+out = out.replace("__INSTALLER_OWNER__", os.environ["INSTALLER_OWNER"])
 
 # Sanity: every marker must have been substituted.
 for marker in markers:
@@ -212,6 +230,10 @@ for marker in markers:
         print(f"ERROR: marker '{marker}' still present after build "
               f"(expected substitution didn't happen).", file=sys.stderr)
         sys.exit(1)
+if "__INSTALLER_OWNER__" in out:
+    print("ERROR: __INSTALLER_OWNER__ still present after build "
+          "(INSTALLER_OWNER substitution didn't happen).", file=sys.stderr)
+    sys.exit(1)
 
 with open(out_path, "w") as f:
     f.write(out)

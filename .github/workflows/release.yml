@@ -852,8 +852,14 @@ jobs:
         run: |
           mkdir -p dist/installer
           MANIFEST_PATH="$(pwd)/dist/installer/release-manifest-v${V}.env"
+          # INSTALLER_OWNER=socagents → the CUSTOMER installer pulls the whole
+          # stack from the public socagents org (token-gated), so a customer's
+          # firewall allow-list is socagents-only. The dev installer
+          # (build-dev-installer.yml) omits INSTALLER_OWNER and keeps the
+          # kite-production default — the dev auto-deploy cycle is untouched.
           VERSION="$V" \
             MANIFEST_PATH="$MANIFEST_PATH" \
+            INSTALLER_OWNER=socagents \
             OUTPUT_DIR="$(pwd)/dist/installer" \
             ./installer/build-guardian-installer.sh
           # RHEL/Podman-native installer (Docker-free) — same template +
@@ -861,6 +867,7 @@ jobs:
           VERSION="$V" \
             MANIFEST_PATH="$MANIFEST_PATH" \
             RUNTIME=podman \
+            INSTALLER_OWNER=socagents \
             OUTPUT_DIR="$(pwd)/dist/installer" \
             ./installer/build-guardian-installer.sh
           ls -lh dist/installer/guardian-installer*

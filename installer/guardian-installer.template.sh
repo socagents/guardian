@@ -60,7 +60,7 @@ GUARDIAN_VERSION="__INSTALLER_VERSION__"
 GUARDIAN_RUNTIME="__INSTALLER_RUNTIME__"
 GHCR_REGISTRY="ghcr.io"
 GHCR_USER="thekite-dev"
-GHCR_OWNER="kite-production"
+GHCR_OWNER="__INSTALLER_OWNER__"
 INSTALL_DIR="${GUARDIAN_INSTALL_DIR:-/opt/guardian}"
 # How long to wait for guardian-agent's first-boot healthcheck. The very first
 # boot does TLS cert generation + Next.js warm-up + embedded MCP subprocess
@@ -151,7 +151,7 @@ Examples:
   sudo GUARDIAN_REGISTRY_TOKEN=ghp_... ./guardian-installer
 
 Release notes + assets:
-  https://github.com/kite-production/guardian/releases/tag/v$GUARDIAN_VERSION
+  https://github.com/__INSTALLER_OWNER__/guardian/releases/tag/v$GUARDIAN_VERSION
 USAGE
       exit 0
       ;;
@@ -183,7 +183,7 @@ In v0.3.0+ each guardian-installer binary is sealed to a single version
 because it embeds the digest manifest for that version's images. To
 install v$UPGRADE_TO, download the v$UPGRADE_TO installer binary:
 
-  gh release download v$UPGRADE_TO --repo kite-production/guardian \\
+  gh release download v$UPGRADE_TO --repo __INSTALLER_OWNER__/guardian \\
     --pattern guardian-installer
   chmod +x guardian-installer
   sudo ./guardian-installer
@@ -585,7 +585,7 @@ validate_ghcr_token() {
   # version for customer installers, or the rolling `dev` tag for
   # dev-<sha> installers (whose images carry the `dev` tag, not the full
   # dev-<sha> version string). A hardcoded `dev` probe broke installs off
-  # a mirror that has only version + `latest` tags (e.g. ghcr.io/kite-production),
+  # a mirror that has only version + `latest` tags (e.g. ghcr.io/__INSTALLER_OWNER__),
   # where guardian-agent:dev does not exist.
   local probe_tag="$GUARDIAN_VERSION"
   [[ "$probe_tag" == dev-* ]] && probe_tag="dev"
@@ -952,7 +952,7 @@ if printf '%s' "$DIGEST_MANIFEST" | grep -q '^DIGEST_MANIFEST_MISSING=1'; then
 
        This is a build-time failure, not an operator-fixable runtime
        issue. Download a customer release binary from:
-         https://github.com/kite-production/guardian/releases/tag/v$GUARDIAN_VERSION"
+         https://github.com/__INSTALLER_OWNER__/guardian/releases/tag/v$GUARDIAN_VERSION"
 fi
 
 # Validate the manifest has the expected keys before we touch .env.
@@ -971,7 +971,7 @@ for key in "${_required_keys[@]}"; do
   if ! printf '%s' "$DIGEST_MANIFEST" | grep -q "^${key}"; then
     die "Embedded digest manifest is missing required key matching '${key}'.
          This binary appears corrupted; re-download from:
-           https://github.com/kite-production/guardian/releases/tag/v$GUARDIAN_VERSION"
+           https://github.com/__INSTALLER_OWNER__/guardian/releases/tag/v$GUARDIAN_VERSION"
   fi
 done
 
@@ -1314,7 +1314,7 @@ ${C_GREEN}  ✓ Guardian v$GUARDIAN_VERSION is running.${C_RESET}
                         across upgrades — only image digests + the
                         docker-compose.yml are refreshed.
 
-                            https://github.com/kite-production/guardian/releases
+                            https://github.com/__INSTALLER_OWNER__/guardian/releases
 
                         Guardian has no in-UI Update button by design;
                         upgrades happen via the installer only so the
