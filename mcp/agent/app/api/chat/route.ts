@@ -4,6 +4,13 @@ import { GoogleAuth } from 'google-auth-library';
 import { callMcpServer } from '@/lib/mcp-proxy';
 import { getEffectiveRuntimeConfig } from '@/lib/runtime-config';
 import type { EffectiveRuntimeConfig } from '@/lib/runtime-config';
+import {
+  registerProvider,
+  getProvider,
+  resolveProviderForModel,
+  GEMINI_PROVIDER_ID,
+} from '@/lib/llm/provider';
+import type { LLMProvider, LLMInvokeContext } from '@/lib/llm/provider';
 import { classifyRiskTier, isToolGated } from '@/lib/approvals-config';
 // Round-13 / Phase 1.3 — system-prompt text extracted to its own
 // module. ActionPolicy interface + renderActionPolicyBlock helper +
@@ -3187,6 +3194,54 @@ function isInvalidGeminiApiKeyError(error: unknown) {
     (error.message.includes('API_KEY_INVALID') || error.message.includes('API key not valid'))
   );
 }
+
+/**
+ * The Gemini/Vertex dispatch, extracted once from callGemini/callGeminiRaw
+ * (which held identical copies of this branch). Chooses the API-key path
+ * first (with a Vertex fallback on an invalid key), else the Vertex SA path.
+ * Behavior-identical to the pre-seam call sites — do not "improve" it.
+ */
+async function dispatchGeminiPayload(
+  payload: GeminiCallPayload,
+  runtimeConfig: EffectiveRuntimeConfig,
+  modelName: string,
+): Promise<unknown> {
+  if (runtimeConfig.GEMINI_API_KEY) {
+    try {
+      return await callGeminiWithApiKey(payload, runtimeConfig, modelName);
+    } catch (error) {
+      if (
+        runtimeConfig.GOOGLE_APPLICATION_CREDENTIALS &&
+        isInvalidGeminiApiKeyError(error)
+      ) {
+        return callGeminiWithVertex(payload, runtimeConfig, modelName);
+      }
+      throw error;
+    }
+  }
+  if (runtimeConfig.GOOGLE_APPLICATION_CREDENTIALS) {
+    return callGeminiWithVertex(payload, runtimeConfig, modelName);
+  }
+  throw new Error(
+    'No model provider is configured. Add a Vertex AI or Gemini API provider at /providers, then try again.',
+  );
+}
+
+/**
+ * The Gemini adapter — canonical interchange (`GeminiCallPayload`) in, a
+ * Gemini generateContent-shaped response out. R2 registers a CohereProvider
+ * alongside this one; the outer registry routes by model→provider.
+ */
+const geminiProvider: LLMProvider = {
+  id: GEMINI_PROVIDER_ID,
+  invoke: (payload, ctx: LLMInvokeContext) =>
+    dispatchGeminiPayload(
+      payload as GeminiCallPayload,
+      ctx.runtimeConfig,
+      ctx.modelName,
+    ),
+};
+registerProvider(geminiProvider);
 
 /**
  * Phase-11.1 — operator-tunable routing policy. The chat handler
