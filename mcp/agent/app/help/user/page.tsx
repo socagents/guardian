@@ -3117,7 +3117,7 @@ Networks documentation and returning evidence-backed, cited answers.
                 Mint these in XSIAM under Settings → Configurations → API Keys.
               </p>
               <p>
-                It brings <strong>54 tools</strong>: investigation — XQL
+                It brings <strong>56 tools</strong>: investigation — XQL
                 queries over the data lake, incidents / alerts / issues,
                 assets, audit logs, datamodel, parsers — and{" "}
                 <strong>EDR response</strong>: isolate / unisolate / scan /

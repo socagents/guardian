@@ -60,11 +60,33 @@
       "commit": "",
       "gate": "",
       "checker": "n/a"
+    },
+    {
+      "n": 7,
+      "started_at": "2026-07-01T22:30:42Z",
+      "focus": "connector-tool-count-doc-sync slice 1: xsiam tool count -> 56 across living surfaces",
+      "outcome": "fixed",
+      "summary": "Synced stale xsiam tool count to ground truth 56 (yaml spec.tools + test assertion) on 8 living surfaces: marketplace route longDescription+toolCount fallback, journeys.ts:4755, help/architecture:7379, help/user:3120, connectors/CLAUDE.md, CODEBASE_MAP.md xsiam row (also refreshed pre-Guardian description), xsiam test docstring. Keeps: frozen CHANGELOG/release-notes entries (incl. CHANGELOG:647 + release-notes:856 '54-tool' found by checker), route versions[], page.tsx:2942 comment, batch comments. Gate 7/7 after clearing stale .next cache (first tsc run failed on leftover detections type stubs, env issue not the diff). Checker approved. Unit stays active: 2 remaining slices (xsoar counts=39; aggregate/table sync). (tunnel: down)",
+      "commit": "",
+      "gate": "pass",
+      "checker": "approved"
     }
   ],
-  "next_focus": "Fresh self-heal scan (doc-sync, bug-family, spec-drift repo-only audits). jobs-chat-prompt-doc-sync remains in deferred[] but is resolved (issue #3 closed by human via f27e4e3+256f1c0) — never reopen, skip its scope.",
+  "next_focus": "Continue unit connector-tool-count-doc-sync slice 2: xsoar tool-count sync (yaml=39) — README.md:31, help/user:3255, journeys.ts:4143, external-connectors-anatomy.tsx:113",
   "open_findings": [],
-  "active_unit": null,
+  "active_unit": {
+    "id": "connector-tool-count-doc-sync",
+    "title": "Connector tool-count doc-sync: stale hardcoded counts on living surfaces vs connector.yaml ground truth",
+    "scope": "Slice 1 (this cycle, xsiam=56): route.ts:166,172; journeys.ts:4755; help/architecture:7379; help/user:3120; connectors/CLAUDE.md:11; CODEBASE_MAP.md:73; xsiam tests docstring:9. Keeps: CHANGELOG 905/917, release-notes.ts:964, route.ts:189 versions[], connectors/page.tsx:2942 comment, connector.py/yaml batch comments.",
+    "mode": "narrow",
+    "remaining_scope": [
+      "xsoar tool-count sync (yaml=39): README.md:31 '13 tools'; help/user/page.tsx:3255 '23 tools'; journeys.ts:4143 'other 18 tools'; diagrams/external-connectors-anatomy.tsx:113 '13 tools'",
+      "aggregate/table sync: CODEBASE_MAP.md phantom connector rows (cortex-xdr, cortex-content) + '~80 tools' full-platform-topology.tsx:231 / agent-knowledge-surfaces.tsx:106 / help/architecture:4926 + system-prompt.ts:335 '36 tools' catalog claim (verify each ground truth first)"
+    ],
+    "rejections": 0,
+    "reasons": "",
+    "status": "active"
+  },
   "deferred": [
     {
       "id": "jobs-chat-prompt-doc-sync",

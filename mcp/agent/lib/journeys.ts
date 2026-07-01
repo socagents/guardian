@@ -4752,7 +4752,7 @@ export const JOURNEYS: Journey[] = [
     category: "connectors",
     title: "Create a Cortex XSIAM instance",
     summary:
-      "Install the Cortex XSIAM connector (54 tools — investigation + EDR response) and create an instance with the Cortex public-API key pair (key id → x-xdr-auth-id, key → Authorization). Prerequisite for the XSIAM hunt-and-respond journey.",
+      "Install the Cortex XSIAM connector (56 tools — investigation + EDR response) and create an instance with the Cortex public-API key pair (key id → x-xdr-auth-id, key → Authorization). Prerequisite for the XSIAM hunt-and-respond journey.",
     difficulty: "starter",
     durationMin: 3,
     icon: "security",

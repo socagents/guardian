@@ -6,7 +6,7 @@ No network. Covers:
   2. connector helpers — the _xsiam_wrap error envelope + _xsiam_ok/_xsiam_err.
   3. A representative read tool (incidents_list) and a representative EDR-response
      tool (endpoints_isolate) — request shaping via a recording fetcher.
-  4. __all__ integrity — the 55 tools are exported + callable, and the
+  4. __all__ integrity — the 56 tools are exported + callable, and the
      dropped simulation-only tools are gone.
   5. compute-unit cost surfacing (run_xql_query) + get_xql_quota (v0.2.91).
 

@@ -7376,7 +7376,7 @@ function XsiamConnector() {
  </p>
  </SubSection>
 
- <SubSection icon="api" title="Tool families (55 tools)">
+ <SubSection icon="api" title="Tool families (56 tools)">
  <ul className="list-disc pl-5 space-y-1 text-sm">
  <li>
  <strong>Investigation</strong> — XQL query (start +

@@ -5,15 +5,17 @@
 
 ## Counters
 
-- Cycles total: **6**
-- Fixes shipped: **0**
+- Cycles total: **7**
+- Fixes shipped: **1**
 - No-ops: **2**
 - Gate failures: **0**
 - Checker rejections: **4**
 
 ## Active unit
 
-_none active_
+- **connector-tool-count-doc-sync** — Connector tool-count doc-sync: stale hardcoded counts on living surfaces vs connector.yaml ground truth
+  - mode: `narrow` · rejections: 0 · remaining slices: 2
+  - scope: Slice 1 (this cycle, xsiam=56): route.ts:166,172; journeys.ts:4755; help/architecture:7379; help/user:3120; connectors/CLAUDE.md:11; CODEBASE_MAP.md:73; xsiam tests docstring:9. Keeps: CHANGELOG 905/917, release-notes.ts:964, route.ts:189 versions[], connectors/page.tsx:2942 comment, connector.py/yaml batch comments.
 
 ## Deferred — needs human
 
@@ -22,7 +24,7 @@ _none active_
 
 ## Next focus
 
-Fresh self-heal scan (doc-sync, bug-family, spec-drift repo-only audits). jobs-chat-prompt-doc-sync remains in deferred[] but is resolved (issue #3 closed by human via f27e4e3+256f1c0) — never reopen, skip its scope.
+Continue unit connector-tool-count-doc-sync slice 2: xsoar tool-count sync (yaml=39) — README.md:31, help/user:3255, journeys.ts:4143, external-connectors-anatomy.tsx:113
 
 ## Open findings
 
@@ -38,3 +40,4 @@ _none_
 | 4 | 2026-06-12T04:06:59Z | FOURTH attempt blocked: jobs chat->prompt doc-sync redo (all cycle-3 surfaces + RunRow comment block) | checker-rejected | — | pass | rejected |
 | 5 | 2026-06-12T07:07:36Z | defer-after-K handoff: jobs-chat-prompt-doc-sync (wide, 3 checker rejections in cycles 2-4) | checker-rejected | — | — | n/a |
 | 6 | 2026-06-12T08:12:56Z | Fresh self-heal scan: doc-sync + bug-family + spec-drift repo-only audits | no-op | — | — | n/a |
+| 7 | 2026-07-01T22:30:42Z | connector-tool-count-doc-sync slice 1: xsiam tool count -> 56 across living surfaces | fixed | — | pass | approved |

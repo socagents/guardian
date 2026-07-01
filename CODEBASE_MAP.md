@@ -70,7 +70,7 @@ Each connector ships as its own image at release time. The agent dispatches to p
 
 | Connector | What it does |
 |-----------|--------------|
-| `xsiam` | Cortex XSIAM PAPI — XQL queries (with RAG-backed example retrieval), datasets, cases, issues, assets, lookups, webhook log delivery. 13 tools, `xsiam_` prefix. |
+| `xsiam` | Cortex XSIAM over the Cortex public API — investigation (XQL query/verify/quota, incidents, alerts, issues, assets, audit, datamodel, parsers, broker) + EDR response (endpoint isolate/scan/quarantine, scripts, IOC + hash blocklist). 56 tools, `xsiam_` prefix. |
 | `cortex-xdr` | Cortex XDR cases + issues (`xdr_` prefix). |
 | `cortex-docs` | Cortex documentation search (`cortex_` prefix). |
 | `cortex-content` | Cortex content catalog — baked local catalog at `bundles/spark/connectors/cortex-content/baked/`, no network egress. |
