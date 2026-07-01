@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test:json-to-yaml": "node scripts/test-json-to-yaml.mjs",
     "test:provider-seam": "node scripts/test-provider-seam.mjs",
-    "test": "npm run test:json-to-yaml && npm run test:provider-seam"
+    "test:cohere-translate": "node scripts/test-cohere-translate.mjs",
+    "test": "npm run test:json-to-yaml && npm run test:provider-seam && npm run test:cohere-translate"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",

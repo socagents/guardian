@@ -11,6 +11,9 @@ import {
   GEMINI_PROVIDER_ID,
 } from '@/lib/llm/provider';
 import type { LLMProvider, LLMInvokeContext } from '@/lib/llm/provider';
+// R2 — importing the module runs its `registerProvider(cohereProvider)` side
+// effect, so the cohere-north adapter is available to the dispatch registry.
+import '@/lib/llm/cohere-provider';
 import { classifyRiskTier, isToolGated } from '@/lib/approvals-config';
 // Round-13 / Phase 1.3 — system-prompt text extracted to its own
 // module. ActionPolicy interface + renderActionPolicyBlock helper +
