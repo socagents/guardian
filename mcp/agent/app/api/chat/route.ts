@@ -1256,25 +1256,10 @@ async function callGeminiRaw(
     // v0.2.3 — no maxOutputTokens cap; Gemini uses model's natural max.
   };
   const modelName = resolveModelName(modelOverride, runtimeConfig);
-  if (runtimeConfig.GEMINI_API_KEY) {
-    try {
-      return await callGeminiWithApiKey(payload, runtimeConfig, modelName);
-    } catch (error) {
-      if (
-        runtimeConfig.GOOGLE_APPLICATION_CREDENTIALS &&
-        isInvalidGeminiApiKeyError(error)
-      ) {
-        return callGeminiWithVertex(payload, runtimeConfig, modelName);
-      }
-      throw error;
-    }
-  }
-  if (runtimeConfig.GOOGLE_APPLICATION_CREDENTIALS) {
-    return callGeminiWithVertex(payload, runtimeConfig, modelName);
-  }
-  throw new Error(
-    'No model provider is configured. Add a Vertex AI or Gemini API provider at /providers, then retry — the subagent uses the same provider as the main chat agent.',
-  );
+  return getProvider(resolveProviderForModel(modelName)).invoke(payload, {
+    runtimeConfig,
+    modelName,
+  });
 }
 
 /**
@@ -3403,27 +3388,10 @@ async function summarizeViaGemini(
     // defeated its purpose.
   };
   const modelName = resolveModelName(modelOverride, runtimeConfig);
-  let result: { candidates?: Array<{ content?: { parts?: GeminiPart[] } }> };
-  if (runtimeConfig.GEMINI_API_KEY) {
-    try {
-      result = await callGeminiWithApiKey(payload, runtimeConfig, modelName);
-    } catch (error) {
-      if (
-        runtimeConfig.GOOGLE_APPLICATION_CREDENTIALS &&
-        isInvalidGeminiApiKeyError(error)
-      ) {
-        result = await callGeminiWithVertex(payload, runtimeConfig, modelName);
-      } else {
-        throw error;
-      }
-    }
-  } else if (runtimeConfig.GOOGLE_APPLICATION_CREDENTIALS) {
-    result = await callGeminiWithVertex(payload, runtimeConfig, modelName);
-  } else {
-    throw new Error(
-      'No model provider is configured for the conversation summarizer. Add a Vertex AI or Gemini API provider at /providers.',
-    );
-  }
+  const result = (await getProvider(resolveProviderForModel(modelName)).invoke(
+    payload,
+    { runtimeConfig, modelName },
+  )) as { candidates?: Array<{ content?: { parts?: GeminiPart[] } }> };
   const parts = result.candidates?.[0]?.content?.parts ?? [];
   return parts
     .map((p) => ('text' in p && p.text) || '')
@@ -3496,27 +3464,10 @@ async function callGemini(
 
   const modelName = resolveModelName(modelOverride, runtimeConfig);
 
-  if (runtimeConfig.GEMINI_API_KEY) {
-    try {
-      return await callGeminiWithApiKey(payload, runtimeConfig, modelName);
-    } catch (error) {
-      if (runtimeConfig.GOOGLE_APPLICATION_CREDENTIALS && isInvalidGeminiApiKeyError(error)) {
-        return callGeminiWithVertex(payload, runtimeConfig, modelName);
-      }
-      throw error;
-    }
-  }
-
-  if (runtimeConfig.GOOGLE_APPLICATION_CREDENTIALS) {
-    return callGeminiWithVertex(payload, runtimeConfig, modelName);
-  }
-
-  // v0.4.0 — operator-friendly message. Replaces the pre-v0.4.0 error
-  // that surfaced internal env-var names. The Vertex setup page is
-  // gone; operators configure providers at /providers post-login.
-  throw new Error(
-    'No model provider is configured. Add a Vertex AI or Gemini API provider at /providers, then try again.',
-  );
+  return getProvider(resolveProviderForModel(modelName)).invoke(payload, {
+    runtimeConfig,
+    modelName,
+  });
 }
 
 /**

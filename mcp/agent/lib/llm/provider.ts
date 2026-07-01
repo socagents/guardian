@@ -14,7 +14,11 @@ export type LLMInvokeContext = {
  */
 export interface LLMProvider {
   readonly id: string;
-  invoke(payload: unknown, ctx: LLMInvokeContext): Promise<unknown>;
+  // The canonical response is the Gemini generateContent JSON — dynamically
+  // shaped and read positionally by the agent loop (response.candidates[0]…).
+  // The pre-seam dispatch returned `response.json()` (any); we preserve that
+  // contract so the loop's existing reads type-check unchanged.
+  invoke(payload: unknown, ctx: LLMInvokeContext): Promise<any>;
 }
 
 export const GEMINI_PROVIDER_ID = "gemini";
