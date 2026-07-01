@@ -1,0 +1,93 @@
+name: Mirror release images to public socagents
+
+# One-shot / backfill: copy a released version's 9 service+connector images
+# from ghcr.io/kite-production (private) to the PUBLIC ghcr.io/socagents org,
+# so a customer can pull the whole stack from one public namespace with no
+# token. Reads the kite-production source with GITHUB_TOKEN; pushes to socagents
+# with SOCAGENTS_PACKAGES_PAT (a PAT with write:packages on socagents).
+#
+# Container-package visibility is UI-only for orgs, so the visibility call is
+# best-effort: set each socagents package Public once (later pushes inherit).
+#
+# The recurring per-release mirror lives in release.yml; this workflow is for
+# mirroring an ALREADY-published version on demand (e.g. the first cutover).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released version to mirror (e.g. 0.2.110)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ghcr.io
+      SRC_OWNER: kite-production
+      DST_OWNER: socagents
+    steps:
+      - name: Validate version
+        id: v
+        env:
+          IN: ${{ inputs.version }}
+        run: |
+          V="${IN#v}"
+          printf '%s' "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([._-][A-Za-z0-9.]+)?$' \
+            || { echo "::error::bad version '$IN'"; exit 1; }
+          echo "v=$V"        >> "$GITHUB_OUTPUT"
+          echo "mm=${V%.*}"  >> "$GITHUB_OUTPUT"
+
+      - name: Mirror service + connector images to socagents
+        env:
+          V: ${{ steps.v.outputs.v }}
+          MM: ${{ steps.v.outputs.mm }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOCAGENTS_PAT: ${{ secrets.SOCAGENTS_PACKAGES_PAT }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -uo pipefail
+          if [ -z "${SOCAGENTS_PAT:-}" ]; then echo "::error::SOCAGENTS_PACKAGES_PAT not set"; exit 1; fi
+          IMAGES="guardian-agent guardian-updater guardian-browser guardian-connector-runtime guardian-connector-xsoar guardian-connector-xsiam guardian-connector-web guardian-connector-cortex-docs guardian-connector-splunk-mimic"
+
+          # 1) read source images from kite-production (GITHUB_TOKEN has read)
+          echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
+          for img in $IMAGES; do
+            echo "::group::pull $SRC_OWNER/$img:$V"
+            docker pull "$REGISTRY/$SRC_OWNER/$img:$V" || echo "::warning::skip $img (no :$V in $SRC_OWNER)"
+            echo "::endgroup::"
+          done
+
+          # 2) switch ghcr.io credentials to the socagents-write PAT
+          echo "$SOCAGENTS_PAT" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
+
+          # 3) tag + push each into the public socagents org
+          ok=0; fail=0
+          for img in $IMAGES; do
+            docker image inspect "$REGISTRY/$SRC_OWNER/$img:$V" >/dev/null 2>&1 \
+              || { echo "::warning::no local $img — skipping"; fail=$((fail+1)); continue; }
+            docker tag "$REGISTRY/$SRC_OWNER/$img:$V" "$REGISTRY/$DST_OWNER/$img:$V"
+            docker tag "$REGISTRY/$SRC_OWNER/$img:$V" "$REGISTRY/$DST_OWNER/$img:$MM"
+            docker tag "$REGISTRY/$SRC_OWNER/$img:$V" "$REGISTRY/$DST_OWNER/$img:latest"
+            if docker push "$REGISTRY/$DST_OWNER/$img:$V" \
+               && docker push "$REGISTRY/$DST_OWNER/$img:$MM" \
+               && docker push "$REGISTRY/$DST_OWNER/$img:latest"; then
+              ok=$((ok+1)); echo "::notice::mirrored $DST_OWNER/$img:$V"
+            else
+              fail=$((fail+1)); echo "::error::push failed: $DST_OWNER/$img:$V"
+            fi
+            GH_TOKEN="$SOCAGENTS_PAT" gh api --method PATCH \
+              "orgs/$DST_OWNER/packages/container/$img/visibility" -f visibility=public 2>/dev/null \
+              && echo "::notice::$img → public via API" \
+              || echo "::warning::$img: set visibility Public once in Package settings"
+          done
+
+          {
+            echo "### Mirror to ghcr.io/$DST_OWNER — v$V"
+            echo "mirrored OK: **$ok** · failed: **$fail**"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$fail" -eq 0 ] || { echo "::error::$fail image(s) failed"; exit 1; }
