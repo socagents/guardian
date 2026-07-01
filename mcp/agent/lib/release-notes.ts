@@ -40,8 +40,9 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: "0.3.0",
     date: "2026-07-01",
     breaking: true,
-    title: "Public distribution — pull the whole stack from the public socagents org (one firewall namespace).",
+    title: "Public distribution — one-file offline install + pull the whole stack from the public socagents org.",
     highlights: [
+      "New: fully offline install — download one guardian-offline-vX.Y.Z.tar.gz (all images baked in) and run `guardian-installer --offline <bundle>`. No registry, no token; the firewall only needs github.com + release-assets.githubusercontent.com. Ideal for air-gapped SOCs.",
       "Customers now pull every Guardian image from ghcr.io/socagents/* (public org) instead of the private kite-production org — the outbound firewall allow-list is a single namespace + pkg-containers.githubusercontent.com, with no private-org reference.",
       "Images stay token-gated (the installer still authenticates with your Kite token), so the product isn't world-readable — only the namespace changed.",
       "MAJOR bump: the customer installer binary now targets socagents, so download the fresh installer rather than re-running the one on disk. The internal dev pipeline is untouched.",
