@@ -43,6 +43,15 @@ export type RuntimeConfigValues = {
   GOOGLE_APPLICATION_CREDENTIALS?: string;
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
+  // Cohere North provider (R2) — resolved from the ProviderStore (or env
+  // fallback) via lib/cohere-credentials.ts. Endpoint + agent id are config;
+  // the bearer token is a SecretStore value (REST-only). TLS_VERIFY/CA_PEM are
+  // carried as strings ("true"/"false", PEM text) like the other fields.
+  COHERE_NORTH_ENDPOINT?: string;
+  COHERE_NORTH_AGENT_ID?: string;
+  COHERE_NORTH_BEARER_TOKEN?: string;
+  COHERE_NORTH_TLS_VERIFY?: string;
+  COHERE_NORTH_CA_PEM?: string;
   SSL_CERT_PEM?: string;
   SSL_KEY_PEM?: string;
   GUARDIAN_TLS_VERIFY?: string;
@@ -126,6 +135,13 @@ export async function getEffectiveRuntimeConfig(): Promise<EffectiveRuntimeConfi
   );
   const vertexFromStore = await resolveVertexCredentialsFromStore();
 
+  // R2 — Cohere North provider credentials (endpoint + agent id + bearer
+  // token) resolve the same way as Vertex: ProviderStore first, env fallback.
+  // Dynamic import mirrors the Vertex pattern (avoids the circular import —
+  // cohere-credentials.ts reads MCP_URL/MCP_TOKEN from process.env directly).
+  const { resolveCohereNorthCreds } = await import("@/lib/cohere-credentials");
+  const cohere = await resolveCohereNorthCreds();
+
   return {
     MCP_URL: get("MCP_URL", "http://localhost:8080/api/v1/stream/mcp"),
     MCP_TOKEN: get("MCP_TOKEN"),
@@ -137,6 +153,12 @@ export async function getEffectiveRuntimeConfig(): Promise<EffectiveRuntimeConfi
       if (!fromEnv) noteModelFallback();
       return fromEnv || DEFAULT_MODEL;
     })(),
+    COHERE_NORTH_ENDPOINT: cohere.endpoint || get("COHERE_NORTH_ENDPOINT"),
+    COHERE_NORTH_AGENT_ID: cohere.agentId || get("COHERE_NORTH_AGENT_ID"),
+    COHERE_NORTH_BEARER_TOKEN:
+      cohere.bearerToken || get("COHERE_NORTH_BEARER_TOKEN"),
+    COHERE_NORTH_TLS_VERIFY: cohere.tlsVerify ? "true" : "false",
+    COHERE_NORTH_CA_PEM: cohere.caPem || get("COHERE_NORTH_CA_PEM"),
     SSL_CERT_PEM: get("SSL_CERT_PEM"),
     SSL_KEY_PEM: get("SSL_KEY_PEM"),
     GUARDIAN_TLS_VERIFY: get("GUARDIAN_TLS_VERIFY"),
