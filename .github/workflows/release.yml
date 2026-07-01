@@ -872,6 +872,29 @@ jobs:
             ./installer/build-guardian-installer.sh
           ls -lh dist/installer/guardian-installer*
 
+      - name: Build offline image bundle
+        # Air-gapped single-file bundle: `docker save` all 9 stack images,
+        # tagged under socagents:$V (matching what `guardian-installer
+        # --offline` loads and the :$V compose rewrite it does), into one
+        # gzipped tar. Self-tags from $OWNER:$V so it does not depend on the
+        # socagents mirror step running. Proven on RHEL 8.10 + Podman: flush
+        # to zero images → `--offline <bundle>` → both containers healthy,
+        # UI 200 — no registry, no token. Attached to the release below and
+        # mirrored to the PUBLIC socagents release for token-free download.
+        env:
+          V: ${{ steps.ver.outputs.version }}
+        run: |
+          mkdir -p dist/installer
+          IMAGES="guardian-agent guardian-updater guardian-browser guardian-connector-runtime guardian-connector-xsoar guardian-connector-xsiam guardian-connector-web guardian-connector-cortex-docs guardian-connector-splunk-mimic"
+          REFS=""
+          for img in $IMAGES; do
+            docker tag "$REGISTRY/$OWNER/$img:$V" "ghcr.io/socagents/$img:$V"
+            REFS="$REFS ghcr.io/socagents/$img:$V"
+          done
+          docker save $REFS | gzip > "dist/installer/guardian-offline-v${V}.tar.gz"
+          ( cd dist/installer && sha256sum "guardian-offline-v${V}.tar.gz" > "guardian-offline-v${V}.tar.gz.sha256" )
+          ls -lh "dist/installer/guardian-offline-v${V}.tar.gz"
+
       - name: Pack customer install kit
         # Builds a self-contained tarball customers extract on their
         # host. Bundles the digest-pinned compose, the .env.example,
@@ -1050,7 +1073,9 @@ jobs:
             "dist/installer/guardian-installer-$V.tar.gz" \
             "dist/installer/guardian-installer-$V.tar.gz.sha256" \
             "dist/installer/release-manifest-v$V.env" \
-            "dist/installer/release-manifest-v$V.env.sha256"
+            "dist/installer/release-manifest-v$V.env.sha256" \
+            "dist/installer/guardian-offline-v$V.tar.gz" \
+            "dist/installer/guardian-offline-v$V.tar.gz.sha256"
 
       - name: Clean up dev-latest prerelease
         # v0.5.9 — the dev cycle uses build-dev-installer.yml to
