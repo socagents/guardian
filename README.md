@@ -1,23 +1,41 @@
 # Guardian
 
-**Guardian** is an AI incident-response agent for Cortex XSIAM / XSOAR — it runs evidence-grounded investigations, XQL hunts, case enrichment, and response orchestration. It installs as a small set of containers on one Linux server.
+**Guardian** is an AI incident-response agent for Cortex XSIAM / XSOAR — it runs
+evidence-grounded investigations, XQL hunts, case enrichment, and response
+orchestration. It installs as a small set of containers on one Linux server.
 
-This repository hosts the **public installer**: a single self-extracting file that contains the entire product. One download, one command — no registry, no token.
+This repository hosts the **public installer**: a single self-extracting file
+that contains the entire product. One download, one command — no registry, no
+token, no `ghcr.io`.
 
-- 🚀 **Install** → [Install Guardian](#install-guardian)
+- 🚀 **Install** → [Requirements](#requirements) · [Install Guardian](#install-guardian)
 - 🔥 **Locking down a firewall first?** → [Network access](#network-access-firewall-allow-list) · [Air-gapped: allow only one URL](#air-gapped-allow-only-one-url-iptables)
 
 ---
 
-## Before you start
+## Requirements
 
-You need:
+| # | Requirement | Detail |
+|---|---|---|
+| 1 | **A Linux server** | One host you can log into with **`sudo`** (administrator) rights. See [tested operating systems](#tested-operating-systems) below. |
+| 2 | **A container runtime, already installed** | **Podman** or **Docker** must be present before you run the installer. The installer detects which one you have. It **cannot install a runtime itself** (that would need network access to a package repo), so this is the one prerequisite you provide. Podman ships in the RHEL / Rocky / AlmaLinux base repos:<br>• RHEL / Rocky / Alma: `sudo dnf install -y podman`<br>• Ubuntu / Debian: `sudo apt-get install -y docker.io` (or Docker CE)<br>Everything else — all 9 service images **and** the Docker Compose v2 provider — is bundled inside the one file. |
+| 3 | **Disk space** | ~**700 MB** for the download + ~**3 GB** free in the temp dir while it unpacks the bundled images (they load into the container store). Budget ~**10 GB** free total on a fresh box. |
+| 4 | **Memory** | 4 GB RAM minimum; **8 GB recommended** for comfortable operation of the agent + updater + any connectors you enable. |
+| 5 | **Outbound HTTPS (443)** | Only to download the one file — see [Network access](#network-access-firewall-allow-list). After install, Guardian needs outbound 443 only to your **AI model provider**. It needs **no inbound** internet access. |
+| 6 | **Browser access to port 3000** | The web UI listens on `https://<host>:3000`. Reach it directly, over your own network/VPN, or via a tunnel — it does not need to be internet-exposed. |
 
-1. **A Linux server** you can log into, with **`sudo`** (administrator) rights, and about **3 GB free disk** for the install.
-2. **A container runtime already installed** — **Podman** (ships in the RHEL / Rocky / AlmaLinux base repos: `sudo dnf install -y podman`) or **Docker**. The installer detects which one you have. It bundles everything else (all images + the Compose tool), but it cannot install a container engine with no network, so this one piece must be present first.
-3. **Outbound HTTPS (port 443)** to download the installer, and — once running — to reach your AI model provider. See [Network access](#network-access-firewall-allow-list).
+> **No Kite token needed.** The installer is a public download and carries every
+> image inside it — there is nothing to authenticate against.
 
-> **No token needed.** The installer is a public download and carries every image inside it — there is nothing to authenticate against.
+### Tested operating systems
+
+| OS | Status |
+|---|---|
+| RHEL / Rocky / AlmaLinux 8 and 9 | ✅ **Tested & supported** |
+| Ubuntu / Debian | Supported, not yet tested — the installer continues and tells you so |
+| Fedora / openSUSE / other systemd distros | Untested — the installer continues with a warning |
+
+The installer prints which tier your OS falls into during pre-flight.
 
 ---
 
@@ -37,29 +55,56 @@ chmod +x guardian-installer.sh
 sudo ./guardian-installer.sh
 ```
 
-That is the whole install. The installer:
+What the installer does, in order:
 
-- tells you whether your OS is **tested & supported** (RHEL / Rocky / AlmaLinux 8–9), **supported but not yet tested** (Ubuntu / Debian — it continues and says so), or **untested**;
-- detects **Podman** or **Docker** and installs down the right path;
-- loads every Guardian image from inside the file — no registry, no token, no other downloads;
-- brings the stack up (a few minutes) and prints a green **"Guardian is running"** message with a web address and a temporary password — keep that screen for [First login](#first-login).
+1. **Pre-flight** — checks `sudo`, disk, and prints your OS support tier.
+2. **Runtime** — auto-detects **Podman** or **Docker**; if neither is present it stops with a clear message (see [Requirements](#requirements) #2).
+3. **Self-extract** — unpacks the bundled images + the Compose v2 provider from inside the file (no registry, no `download.docker.com`).
+4. **Install** — loads every image, writes `/opt/guardian/{docker-compose.yml,.env}`, generates your secrets, and starts the stack.
+5. **Done** — prints the web address and a **temporary admin password** — keep that screen for [First login](#first-login).
 
-The file is large (~620 MB — every image is inside it). Installing a newer release later? Re-download and re-run — see [Updating](#updating).
+The file is large (~650 MB — every image is inside it). Installing a newer
+release later? Re-download and re-run — see [Updating](#updating).
+
+**Verify the download (optional):**
+
+```bash
+curl -fSL -O https://github.com/socagents/guardian/releases/latest/download/guardian-installer.sh.sha256
+sha256sum -c guardian-installer.sh.sha256
+```
 
 ---
 
 ## Network access (firewall allow-list)
 
-Guardian runs on **one Linux server**, makes only **outbound HTTPS (port 443)** connections, needs **no inbound** internet access, and does **not** phone home to any vendor. Allow-list by **hostname** — GitHub and Google rotate IP ranges, so hostname/SNI rules are far more stable than CIDRs.
+Guardian runs on **one Linux server**, makes only **outbound HTTPS (port 443)**
+connections, needs **no inbound** internet access, and does **not** phone home.
+Allow-list by **hostname** — GitHub and Google rotate IP ranges, so hostname/SNI
+rules are far more stable than CIDRs.
 
-**To install** (download the one file), allow just:
+**To install** (download the one file), allow exactly these two hosts:
 
 | Host | Purpose |
 |---|---|
-| `github.com` | Fetch the installer file |
-| `release-assets.githubusercontent.com` | The actual file bytes (`github.com` redirects here) |
+| `github.com` | The `releases/.../guardian-installer.sh` link — returns HTTP 302 redirects |
+| `release-assets.githubusercontent.com` | Serves the actual file bytes (GitHub redirects here) |
 
-That is the entire install allow-list — no `ghcr.io`, no registry, no token. Once installed, Guardian needs your **AI model provider** to run:
+That is the entire install allow-list — no `ghcr.io`, no registry, no token.
+
+<details><summary><b>Exactly what the download does (captured on RHEL 8.10)</b></summary>
+
+The one download resolves through **two** GitHub hosts and nothing else:
+
+1. `GET github.com/.../releases/latest/download/guardian-installer.sh` → **302** to the versioned URL (still `github.com`)
+2. `GET github.com/.../releases/download/vX.Y.Z/guardian-installer.sh` → **302** to a short-lived signed URL on `release-assets.githubusercontent.com`
+3. `GET release-assets.githubusercontent.com/...` → **206**, streams the file
+
+The signed URL contains a `...blob.core.windows.net` string **inside its token**
+(GitHub's server-side storage backend) — your host never opens a connection to
+it. Only `github.com` + `release-assets.githubusercontent.com` are contacted.
+</details>
+
+Once installed, Guardian needs your **AI model provider** to run:
 
 | Provider | Hosts (port 443) |
 |---|---|
@@ -71,14 +116,17 @@ Optional — only if you enable these connectors:
 
 | Host | When it's used |
 |---|---|
-| `docs-cortex.paloaltonetworks.com` | The **Cortex Docs** connector (searches public Palo Alto Cortex documentation) |
+| `docs-cortex.paloaltonetworks.com` | The **Cortex Docs** connector |
 | `api.anthropic.com` | Cortex Docs deep-research (only if you provide an Anthropic API key) |
 
-> Your **Cortex XSIAM / XSOAR tenant** is reached over your own network path (the host/port you configure on each connector) — it is **not** an internet allow-list entry, and you should never publish it.
+> Your **Cortex XSIAM / XSOAR tenant** is reached over your own network path (the
+> host/port you configure per connector) — it is **not** an internet allow-list
+> entry, and you should never publish it.
 
 ### Test your firewall
 
-Run on the server. **Any HTTP number (`200` / `301` / `404`) means reachable**; `curl: (28)` / `(7)` or a hang means blocked.
+Run on the server. **Any HTTP number (`200` / `206` / `301` / `404`) means
+reachable**; `curl: (28)` / `(7)` or a hang means blocked.
 
 ```bash
 # Install (download the one file)
@@ -96,7 +144,10 @@ curl -sS -o /dev/null -w '%{http_code}\n' --connect-timeout 8 https://generative
 
 ## Air-gapped: allow only one URL (iptables)
 
-Because the installer carries every image, a locked-down box can install with **only the two GitHub download hosts open** — nothing else. Example with `iptables` (default-drop egress, allow loopback + established + DNS + the download hosts):
+Because the installer carries every image, a locked-down box can install with
+**only the two GitHub download hosts open** — nothing else. Example with
+`iptables` (default-drop egress, allow loopback + established + DNS + the
+download hosts):
 
 ```bash
 # Prerequisite: a container runtime is already installed (e.g. sudo dnf install -y podman)
@@ -123,7 +174,10 @@ done
 sudo ./guardian-installer.sh
 ```
 
-> To let Guardian **run** afterwards, allow your AI model provider host (see the table above) the same way. The install itself contacts nothing beyond the two GitHub hosts. GitHub rotates IPs, so re-resolve the hosts if you re-download later — hostname/SNI-based firewalls avoid that entirely.
+> To let Guardian **run** afterward, allow your AI model provider host (see the
+> table above) the same way. The install itself contacts nothing beyond the two
+> GitHub hosts. GitHub rotates IPs, so re-resolve the hosts if you re-download
+> later — hostname/SNI-based firewalls avoid that entirely.
 
 ---
 
@@ -149,7 +203,8 @@ chmod +x guardian-installer.sh
 sudo ./guardian-installer.sh
 ```
 
-It detects your existing install and **keeps all your settings, passwords, and data** — only the software is updated.
+It detects your existing install at `/opt/guardian` and **keeps all your
+settings, passwords, and data** — only the software is updated.
 
 ## Troubleshooting
 
