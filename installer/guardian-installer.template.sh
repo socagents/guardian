@@ -398,13 +398,20 @@ install_bundled_compose() {
 # (d) Offline + podman needs the `docker` CLI shim (the stack + this installer
 # call `docker`). podman-docker provides it, but it may be absent and we can't
 # dnf-install it offline — so synthesize the one-line shim ourselves.
+#
+# IMPORTANT: write it to /usr/bin (the same path podman-docker uses), NOT
+# /usr/local/bin. The installer runs under sudo, whose `secure_path` is
+# /sbin:/bin:/usr/sbin:/usr/bin and does NOT include /usr/local/bin — a shim
+# there is invisible to every `docker` call in this script ("command not
+# found"), so `docker compose` verification fails even though `podman compose`
+# works. (Caught live on RHEL 8.10 + podman 4.9.)
 ensure_docker_shim_offline() {
   [ "$GUARDIAN_RUNTIME" = "podman" ] || return 0
   [ -n "$OFFLINE_BUNDLE" ] || return 0
   command -v docker >/dev/null 2>&1 && return 0
-  printf '#!/bin/sh\nexec podman "$@"\n' > /usr/local/bin/docker \
-    && chmod 0755 /usr/local/bin/docker \
-    && ok "Created docker→podman shim at /usr/local/bin/docker (offline; podman-docker absent)"
+  printf '#!/bin/sh\nexec podman "$@"\n' > /usr/bin/docker \
+    && chmod 0755 /usr/bin/docker \
+    && ok "Created docker→podman shim at /usr/bin/docker (offline; podman-docker absent)"
 }
 
 # ─── Step 2: container runtime (Docker, or Podman on RHEL/Podman builds) ──

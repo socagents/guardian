@@ -109,6 +109,16 @@ services:
       # Same bearer the agent uses — the agent attaches it when
       # proxying /api/updates/* requests through to this service.
       - MCP_TOKEN
+      # v0.4.0 — the updater's startup bootstrap initialises the shared
+      # SecretStore (it reads per-instance connector secrets when starting
+      # connector containers), so it needs the same encryption-at-rest KEK the
+      # agent uses. Without it the updater crash-loops with "GUARDIAN_SECRET_KEK
+      # is required but not set" (caught on the RHEL 8.10 one-file install smoke).
+      # Unlike DIGEST_*/VERSION these are STABLE across upgrades, so passing them
+      # as env vars does NOT cause upgrade-time container churn.
+      - GUARDIAN_SECRET_KEK
+      - GUARDIAN_SECRET_KEK_ALLOW_PLAINTEXT
+      - GUARDIAN_DEFAULT_ADMIN_PASSWORD
       # GHCR pull credentials. The updater runs `docker login` against
       # the host's daemon at startup; subsequent pulls inherit those
       # credentials. Customer rotates these in .env, then restarts
