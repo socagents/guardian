@@ -18,6 +18,18 @@
 # Pinning keeps the guardian-updater image content-addressed across
 # source-unchanged rebuilds. See CLAUDE.md § Per-service path-filter
 # contract.
+#
+# v0.4.0 — FORCE A REBUILD from this (clean uvicorn) Dockerfile. The shipped
+# guardian-updater image had drifted to a stale agent-based build (ENTRYPOINT
+# tini + CMD /app/entrypoint.sh, running the agent's skills/TLS/auth_store
+# bootstrap) carried forward by release.yml's retag-when-source-unchanged path.
+# On RHEL/podman it crash-looped — first "GUARDIAN_SECRET_KEK is required but
+# not set", then "MCP_URL: unbound variable" — because that agent entrypoint
+# needs agent-only env the updater never gets. This clean image is just
+# `uvicorn src.main:app` (CMD below); it reads the KEK from /host/.env at
+# runtime, so it needs none of that. This comment is the intentional source
+# change that flips release.yml's change-detection so v0.4.0 rebuilds instead
+# of retagging the stale image. Caught on the v0.4.0 one-file RHEL 8.10 smoke.
 FROM python:3.12-slim@sha256:401f6e1a67dad31a1bd78e9ad22d0ee0a3b52154e6bd30e90be696bb6a3d7461 AS runtime
 
 # Install docker CLI + compose plugin from Docker's apt repo. Pinned
