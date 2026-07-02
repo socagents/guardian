@@ -10,6 +10,22 @@ Each release section is written in operator language, not git-shortlog language.
 
 ---
 
+## [v0.4.0] (2026-07-02) — *One file, one URL: the self-extracting installer*
+
+- **New — the entire product is now a single file.** The public download is one self-extracting script, `guardian-installer.sh`, that carries every Guardian image inside it. Install is:
+  ```
+  curl -fSL -o guardian-installer.sh \
+    https://github.com/socagents/guardian/releases/latest/download/guardian-installer.sh
+  chmod +x guardian-installer.sh
+  sudo ./guardian-installer.sh
+  ```
+  No registry, no token, no `ghcr.io` — the customer firewall allow-list collapses to a single download host chain (`github.com` + `release-assets.githubusercontent.com`). The one-file installer replaces both the separate installer binary and the offline `.tar.gz` bundle from v0.3.0.
+- **Auto-detects the environment.** The script reads `/etc/os-release` and reports whether your OS is **tested & supported** (RHEL/Rocky/AlmaLinux 8–9), **supported but not yet tested** (Ubuntu/Debian — it continues and says so), or untested; and it auto-detects whether the host runs **Podman** or **Docker** and installs down the right path. The 9 images are identical for both runtimes — detection picks the runtime, not different images.
+- **Truly air-gapped.** The installer also embeds the Docker Compose v2 provider, so a locked-down RHEL box that can reach only the one download URL (everything else blocked with iptables) installs end-to-end with no other network access. It requires only that a container runtime (Podman ships in the RHEL base repos) is already present — if neither Podman nor Docker is found, it says so clearly and stops rather than failing halfway.
+- **Fails loudly, never silently.** Not enough disk to unpack, a truncated download, or a runtime that can't load the images — each stops with a specific message and a non-zero exit.
+- **socagents hosts one file per release.** The public org no longer mirrors a registry of separate images; it publishes the single `guardian-installer.sh`. The private `kite-production` release (per-image + digest manifest) and the internal dev-deploy cycle are unchanged.
+- *This is a **major** release because the customer download artifact changed shape — download the new `guardian-installer.sh` rather than re-running a prior installer. ([guardian#100](https://github.com/kite-production/guardian/issues/100))*
+
 ## [v0.3.0] (2026-07-01) — *Public distribution: pull the whole stack from the socagents org*
 
 - **New — fully offline install (one file, no registry, no token).** Download a single `guardian-offline-vX.Y.Z.tar.gz` (every image baked in) from the release and run `sudo ./guardian-installer --offline guardian-offline-vX.Y.Z.tar.gz`. The installer `docker load`s the whole stack from the bundle — no `ghcr.io`, no token. The firewall then only needs `github.com` + `release-assets.githubusercontent.com`, so a customer's entire allow-list is one download host. Ideal for air-gapped SOCs. *Verified on a fresh RHEL 8.10 + Podman VM flushed to zero images: the 619 MB bundle loads all 9 stack images, both containers come up healthy, UI reachable.*

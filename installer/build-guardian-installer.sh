@@ -9,7 +9,8 @@
 # into a single executable `guardian-installer` file by substituting
 # four markers in the template:
 #
-#   __INSTALLER_COMPOSE_YAML__         ← replaced with the compose YAML
+#   __INSTALLER_COMPOSE_DOCKER__       ← replaced with docker-compose.yml
+#   __INSTALLER_COMPOSE_PODMAN__       ← replaced with podman-compose.yml
 #   __INSTALLER_VERSION__              ← replaced with the literal version
 #   (the __INSTALLER_RESET_PASSWORD_SH__ marker was retired in v0.4.0
 #    along with the recovery script — see notes below)
@@ -65,10 +66,14 @@ TEMPLATE="$SCRIPT_DIR/guardian-installer.template.sh"
 # Podman compose variant (SELinux security_opt on the socket-mounting updater).
 RUNTIME="${RUNTIME:-docker}"
 case "$RUNTIME" in
-  docker)  COMPOSE="$SCRIPT_DIR/docker-compose.yml" ;;
-  podman)  COMPOSE="$SCRIPT_DIR/podman-compose.yml" ;;
-  *) echo "ERROR: RUNTIME must be 'docker' or 'podman' (got: $RUNTIME)" >&2; exit 1 ;;
+  docker|podman|auto) : ;;
+  *) echo "ERROR: RUNTIME must be 'docker', 'podman', or 'auto' (got: $RUNTIME)" >&2; exit 1 ;;
 esac
+# Both compose variants are ALWAYS embedded; the installer writes the one
+# matching the runtime — fixed at build time for docker/podman builds, or
+# detected at install time for the one-file 'auto' (self-extracting) build.
+COMPOSE_DOCKER="$SCRIPT_DIR/docker-compose.yml"
+COMPOSE_PODMAN="$SCRIPT_DIR/podman-compose.yml"
 
 # INSTALLER_OWNER selects the GHCR org the generated installer targets: the
 # default kite-production for the dev + private-release builds; socagents for
@@ -117,7 +122,8 @@ DIGEST_MANIFEST_MISSING=1"
 fi
 
 [[ -f "$TEMPLATE" ]]          || { echo "ERROR: $TEMPLATE missing" >&2; exit 1; }
-[[ -f "$COMPOSE" ]]           || { echo "ERROR: $COMPOSE missing" >&2; exit 1; }
+[[ -f "$COMPOSE_DOCKER" ]]    || { echo "ERROR: $COMPOSE_DOCKER missing" >&2; exit 1; }
+[[ -f "$COMPOSE_PODMAN" ]]    || { echo "ERROR: $COMPOSE_PODMAN missing" >&2; exit 1; }
 [[ -f "$FACTORY_RESET_SH" ]]  || { echo "ERROR: $FACTORY_RESET_SH missing (v0.5.3+)" >&2; exit 1; }
 [[ -f "$RESET_ADMIN_SH" ]]    || { echo "ERROR: $RESET_ADMIN_SH missing (v0.5.3+)" >&2; exit 1; }
 
@@ -130,7 +136,8 @@ mkdir -p "$OUTPUT_DIR"
 VERSION="$VERSION" \
   RUNTIME="$RUNTIME" \
   TEMPLATE="$TEMPLATE" \
-  COMPOSE="$COMPOSE" \
+  COMPOSE_DOCKER="$COMPOSE_DOCKER" \
+  COMPOSE_PODMAN="$COMPOSE_PODMAN" \
   FACTORY_RESET_SH="$FACTORY_RESET_SH" \
   RESET_ADMIN_SH="$RESET_ADMIN_SH" \
   MANIFEST_CONTENTS="$MANIFEST_CONTENTS" \
@@ -145,8 +152,10 @@ runtime = os.environ["RUNTIME"]
 
 with open(os.environ["TEMPLATE"]) as f:
     template = f.read()
-with open(os.environ["COMPOSE"]) as f:
-    compose = f.read()
+with open(os.environ["COMPOSE_DOCKER"]) as f:
+    compose_docker = f.read()
+with open(os.environ["COMPOSE_PODMAN"]) as f:
+    compose_podman = f.read()
 with open(os.environ["FACTORY_RESET_SH"]) as f:
     factory_reset = f.read()
 with open(os.environ["RESET_ADMIN_SH"]) as f:
@@ -170,7 +179,8 @@ manifest = os.environ["MANIFEST_CONTENTS"]
 # just gives operators a clean invocation shape consistent with the
 # factory-reset script's.
 markers = (
-    "__INSTALLER_COMPOSE_YAML__",
+    "__INSTALLER_COMPOSE_DOCKER__",
+    "__INSTALLER_COMPOSE_PODMAN__",
     "__INSTALLER_VERSION__",
     "__INSTALLER_DIGEST_MANIFEST__",
     "__INSTALLER_FACTORY_RESET_SH__",
@@ -199,7 +209,8 @@ for marker in markers:
 # terminator, or it'll prematurely close the heredoc. Each payload
 # uses its own terminator so they can't collide with each other.
 embeddings = (
-    (compose,       "_GUARDIAN_COMPOSE_HEREDOC_END_",          "compose YAML"),
+    (compose_docker, "_GUARDIAN_COMPOSE_DOCKER_END_",          "docker compose YAML"),
+    (compose_podman, "_GUARDIAN_COMPOSE_PODMAN_END_",          "podman compose YAML"),
     (manifest,      "_GUARDIAN_DIGEST_MANIFEST_HEREDOC_END_",  "digest manifest"),
     (factory_reset, "_GUARDIAN_FACTORY_RESET_HEREDOC_END_",    "factory-reset script"),
     (reset_admin,   "_GUARDIAN_RESET_PASSWORD_HEREDOC_END_",   "reset-admin-password script"),
@@ -211,7 +222,8 @@ for payload, terminator, label in embeddings:
         sys.exit(1)
 
 # Substitutions on the template.
-out = template.replace("__INSTALLER_COMPOSE_YAML__", compose)
+out = template.replace("__INSTALLER_COMPOSE_DOCKER__", compose_docker)
+out = out.replace("__INSTALLER_COMPOSE_PODMAN__", compose_podman)
 out = out.replace("__INSTALLER_VERSION__", version)
 out = out.replace("__INSTALLER_DIGEST_MANIFEST__", manifest)
 out = out.replace("__INSTALLER_FACTORY_RESET_SH__", factory_reset)

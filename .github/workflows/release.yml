@@ -694,54 +694,15 @@ jobs:
             "$IMG:$V" "$IMG:$MM" "$IMG:latest"
 
       # ──────────────────────────────────────────────────────────────
-      # Public distribution mirror — copy every image to ghcr.io/socagents.
-      #
-      # After all images are pushed to ghcr.io/kite-production, mirror each
-      # into the PUBLIC socagents org so a customer pulls the entire stack
-      # (installer + all services) from one public namespace with no token.
-      #
-      # GATED on the SOCAGENTS_PACKAGES_PAT secret (a PAT with write:packages
-      # on socagents). If the secret is unset the step no-ops immediately, so
-      # this never fails a kite-production release. Non-fatal: a mirror hiccup
-      # warns but does not fail the release. Container-package visibility is
-      # UI-only for orgs, so the visibility call is best-effort (set each
-      # socagents package Public once; later pushes inherit it).
+      # [v0.4.0] Retired: "Mirror images to public socagents org".
+      # socagents is now distributed as ONE self-extracting file per release
+      # (guardian-installer.sh — built below, every image embedded), so the
+      # public org no longer hosts a registry of separate images. The customer
+      # firewall allow-list collapses to github.com + release-assets.github-
+      # usercontent.com. Private kite-production images + the internal dev cycle
+      # are unchanged. The self-extracting installer is assembled in the "Build
+      # one-file self-extracting installer" step below.
       # ──────────────────────────────────────────────────────────────
-      - name: Mirror images to public socagents org
-        env:
-          V: ${{ steps.ver.outputs.version }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ACTOR: ${{ github.actor }}
-          SOCAGENTS_PAT: ${{ secrets.SOCAGENTS_PACKAGES_PAT }}
-        run: |
-          if [ -z "${SOCAGENTS_PAT:-}" ]; then
-            echo "::notice::SOCAGENTS_PACKAGES_PAT not set — skipping public socagents mirror (kite-production release unaffected)."
-            exit 0
-          fi
-          MM="${V%.*}"
-          IMAGES="guardian-agent guardian-updater guardian-browser guardian-connector-runtime guardian-connector-xsoar guardian-connector-xsiam guardian-connector-web guardian-connector-cortex-docs guardian-connector-splunk-mimic"
-          # 1) ensure each just-published kite-production image is local (GITHUB_TOKEN still authed)
-          for img in $IMAGES; do
-            docker pull "$REGISTRY/$OWNER/$img:$V" || echo "::warning::mirror: could not pull $OWNER/$img:$V — skipping"
-          done
-          # 2) switch ghcr.io credentials to the socagents-write PAT
-          echo "$SOCAGENTS_PAT" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
-          # 3) tag + push each image into the public socagents org
-          for img in $IMAGES; do
-            docker image inspect "$REGISTRY/$OWNER/$img:$V" >/dev/null 2>&1 || continue
-            docker tag "$REGISTRY/$OWNER/$img:$V" "$REGISTRY/socagents/$img:$V"
-            docker tag "$REGISTRY/$OWNER/$img:$V" "$REGISTRY/socagents/$img:$MM"
-            docker tag "$REGISTRY/$OWNER/$img:$V" "$REGISTRY/socagents/$img:latest"
-            docker push "$REGISTRY/socagents/$img:$V"     || echo "::warning::mirror push failed: socagents/$img:$V"
-            docker push "$REGISTRY/socagents/$img:$MM"    || true
-            docker push "$REGISTRY/socagents/$img:latest" || true
-            GH_TOKEN="$SOCAGENTS_PAT" gh api --method PATCH \
-              "orgs/socagents/packages/container/$img/visibility" -f visibility=public 2>/dev/null \
-              && echo "::notice::socagents/$img set public" \
-              || echo "::warning::socagents/$img: set visibility Public once in Package settings"
-          done
-          # 4) restore kite-production credentials for any later steps
-          echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
 
       # ──────────────────────────────────────────────────────────────
       # v0.3.0 — Image digest manifest.
@@ -858,14 +819,15 @@ jobs:
         run: |
           mkdir -p dist/installer
           MANIFEST_PATH="$(pwd)/dist/installer/release-manifest-v${V}.env"
-          # INSTALLER_OWNER=socagents → the CUSTOMER installer pulls the whole
-          # stack from the public socagents org (token-gated), so a customer's
-          # firewall allow-list is socagents-only. The dev installer
-          # (build-dev-installer.yml) omits INSTALLER_OWNER and keeps the
-          # kite-production default — the dev auto-deploy cycle is untouched.
+          # v0.4.0: these registry-based baked installers default to
+          # INSTALLER_OWNER=kite-production (the PRIVATE registry that actually
+          # holds the images) — they are INTERNAL artifacts on the private
+          # release, not the customer path. The customer path is the one-file
+          # self-extracting guardian-installer.sh (built below, socagents-owned,
+          # every image embedded — no registry). The dev installer
+          # (build-dev-installer.yml) likewise keeps the kite-production default.
           VERSION="$V" \
             MANIFEST_PATH="$MANIFEST_PATH" \
-            INSTALLER_OWNER=socagents \
             OUTPUT_DIR="$(pwd)/dist/installer" \
             ./installer/build-guardian-installer.sh
           # RHEL/Podman-native installer (Docker-free) — same template +
@@ -873,20 +835,18 @@ jobs:
           VERSION="$V" \
             MANIFEST_PATH="$MANIFEST_PATH" \
             RUNTIME=podman \
-            INSTALLER_OWNER=socagents \
             OUTPUT_DIR="$(pwd)/dist/installer" \
             ./installer/build-guardian-installer.sh
           ls -lh dist/installer/guardian-installer*
 
-      - name: Build offline image bundle
-        # Air-gapped single-file bundle: `docker save` all 9 stack images,
-        # tagged under socagents:$V (matching what `guardian-installer
-        # --offline` loads and the :$V compose rewrite it does), into one
-        # gzipped tar. Self-tags from $OWNER:$V so it does not depend on the
-        # socagents mirror step running. Proven on RHEL 8.10 + Podman: flush
-        # to zero images → `--offline <bundle>` → both containers healthy,
-        # UI 200 — no registry, no token. Attached to the release below and
-        # mirrored to the PUBLIC socagents release for token-free download.
+      - name: Build one-file self-extracting installer
+        # v0.4.0 — the socagents public deliverable: ONE self-extracting
+        # guardian-installer.sh that carries every image + the Docker Compose
+        # v2 provider, auto-detects OS + runtime (docker/podman), and installs
+        # the whole stack with no registry, no token, no download.docker.com.
+        # Images are self-tagged socagents:$V locally (NOT pushed) so the
+        # installer's offline path loads them by the :$V tag its compose rewrite
+        # expects. See installer/build-self-extracting-installer.sh.
         env:
           V: ${{ steps.ver.outputs.version }}
         run: |
@@ -897,9 +857,15 @@ jobs:
             docker tag "$REGISTRY/$OWNER/$img:$V" "ghcr.io/socagents/$img:$V"
             REFS="$REFS ghcr.io/socagents/$img:$V"
           done
-          docker save $REFS | gzip > "dist/installer/guardian-offline-v${V}.tar.gz"
-          ( cd dist/installer && sha256sum "guardian-offline-v${V}.tar.gz" > "guardian-offline-v${V}.tar.gz.sha256" )
-          ls -lh "dist/installer/guardian-offline-v${V}.tar.gz"
+          VERSION="$V" \
+            INSTALLER_OWNER=socagents \
+            MANIFEST_PATH="$(pwd)/dist/installer/release-manifest-v${V}.env" \
+            IMAGES="$REFS" \
+            CONTAINER_CLI=docker \
+            OUTPUT_DIR="$(pwd)/dist/installer" \
+            OUTPUT_NAME=guardian-installer.sh \
+            ./installer/build-self-extracting-installer.sh
+          ls -lh dist/installer/guardian-installer.sh*
 
       - name: Pack customer install kit
         # Builds a self-contained tarball customers extract on their
@@ -1080,8 +1046,8 @@ jobs:
             "dist/installer/guardian-installer-$V.tar.gz.sha256" \
             "dist/installer/release-manifest-v$V.env" \
             "dist/installer/release-manifest-v$V.env.sha256" \
-            "dist/installer/guardian-offline-v$V.tar.gz" \
-            "dist/installer/guardian-offline-v$V.tar.gz.sha256"
+            "dist/installer/guardian-installer.sh" \
+            "dist/installer/guardian-installer.sh.sha256"
 
       - name: Clean up dev-latest prerelease
         # v0.5.9 — the dev cycle uses build-dev-installer.yml to

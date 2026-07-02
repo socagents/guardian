@@ -54,9 +54,11 @@ esac
 
 # ─── Constants ────────────────────────────────────────────────────────
 GUARDIAN_VERSION="__INSTALLER_VERSION__"
-# Container runtime this installer targets: "docker" (default) or "podman"
-# (RHEL/Podman-native build). Substituted at build time by
-# build-guardian-installer.sh. Drives Step 2 (runtime install/validation).
+# Container runtime this installer targets: "docker" (default), "podman"
+# (RHEL/Podman-native build), or "auto" (the one-file self-extracting
+# installer — the runtime is DETECTED at install time from what's present
+# on the box). Substituted at build time by build-guardian-installer.sh.
+# Drives Step 2 (runtime install/validation) + which compose is written.
 GUARDIAN_RUNTIME="__INSTALLER_RUNTIME__"
 GHCR_REGISTRY="ghcr.io"
 GHCR_USER="thekite-dev"
@@ -291,17 +293,21 @@ if [[ ! -f /etc/os-release ]]; then
 fi
 # shellcheck disable=SC1091
 . /etc/os-release
-case "${ID:-}:${ID_LIKE:-}" in
-  ubuntu*|debian*|*ubuntu*|*debian*|rhel*|*rhel*|fedora*|*fedora*|\
-  centos*|*centos*|rocky*|*rocky*|almalinux*|*almalinux*|\
-  opensuse*|*opensuse*|sles*|*sles*)
-    ok "OS detected: ${PRETTY_NAME:-${ID}}"
+# Tested-OS matrix. The one-file installer carries every image, so it has
+# essentially no OS package dependency — but we still tell the operator
+# whether THIS OS is one we've verified end-to-end, one we support but
+# haven't tested for this release, or one we've never seen. We never block
+# on this (the install may well succeed); we're just honest about the
+# confidence level so the operator knows what they're on.
+case "${ID:-}:${VERSION_ID:-}" in
+  rhel:8*|rhel:9*|rocky:8*|rocky:9*|almalinux:8*|almalinux:9*|centos:8*|centos:9*)
+    ok "OS: ${PRETTY_NAME:-${ID}} — tested & supported"
+    ;;
+  ubuntu:*|debian:*|rhel:*|rocky:*|almalinux:*|centos:*|fedora:*|opensuse*:*|sles:*)
+    warn "OS: ${PRETTY_NAME:-${ID}} — supported, but not yet tested for this release; continuing"
     ;;
   *)
-    die "Unsupported OS: ${PRETTY_NAME:-${ID}}.
-       Guardian auto-install supports Ubuntu/Debian/RHEL/Fedora/Rocky/
-       AlmaLinux/openSUSE. For other distros, install Docker manually
-       and run installer/install.sh from the multi-file kit instead."
+    warn "OS: ${PRETTY_NAME:-${ID:-unknown}} — untested; continuing anyway (please report results to Kite)"
     ;;
 esac
 
@@ -311,6 +317,95 @@ case "$ARCH" in
   x86_64|amd64|aarch64|arm64) ok "Architecture: $ARCH" ;;
   *) die "Unsupported architecture: $ARCH (need amd64 or arm64)." ;;
 esac
+
+# ─── Runtime auto-detection + self-extracting payload (one-file installer) ──
+# The one-file `guardian-installer.sh` is built with GUARDIAN_RUNTIME="auto"
+# and carries every image (+ the Docker Compose v2 provider) appended below a
+# marker line. Detect the runtime, unpack the payload, and drive the existing
+# offline install path from it — no registry, no token, no network.
+
+# (a) Auto-detect the container runtime when the build didn't bake a specific one.
+if [ "$GUARDIAN_RUNTIME" = "auto" ]; then
+  if command -v podman >/dev/null 2>&1; then
+    GUARDIAN_RUNTIME="podman"
+  elif command -v docker >/dev/null 2>&1; then
+    GUARDIAN_RUNTIME="docker"
+  else
+    die "No container runtime found (neither podman nor docker).
+       Guardian's one-file installer bundles every image but cannot install a
+       container runtime with no network access. Install one first, then re-run:
+         RHEL / Rocky / AlmaLinux:  sudo dnf install -y podman podman-docker
+         Ubuntu / Debian:           sudo apt-get install -y docker.io
+       (podman ships in the RHEL base repos, so this works air-gapped from
+        your RHEL installation media / subscription.)"
+  fi
+  ok "Container runtime auto-detected: $GUARDIAN_RUNTIME"
+fi
+
+# (b) Extract the appended image payload, if present. build-self-extracting-
+# installer.sh appends `exit 0`, then a `__GUARDIAN_PAYLOAD_BELOW__` marker
+# line, then a gzipped tar. `tail -n +N` is byte-safe for the tail (it skips
+# N-1 text lines of header, then streams every remaining byte verbatim), so
+# the binary payload survives intact. awk finds the marker line and exits
+# before touching the payload, so it stays fast even on a ~620 MB file.
+PAYLOAD_MARKER="__GUARDIAN_PAYLOAD_BELOW__"
+BUNDLED_COMPOSE_DIR=""
+_payload_line="$(awk -v m="$PAYLOAD_MARKER" '$0==m{print NR+1; exit}' "$0" 2>/dev/null || true)"
+if [ -n "$_payload_line" ]; then
+  info "One-file installer detected — unpacking bundled images…"
+  # Disk preflight: images unpack to ~2 GB; require headroom in the temp dir.
+  _tmpbase="${TMPDIR:-/tmp}"
+  _free_kb="$(df -Pk "$_tmpbase" 2>/dev/null | awk 'NR==2{print $4}')"
+  if [ -n "$_free_kb" ] && [ "$_free_kb" -lt 3145728 ]; then
+    die "Not enough free space in $_tmpbase to unpack the bundled images
+       (need ~3 GB, have $(( _free_kb / 1024 )) MB free). Free some space or
+       set TMPDIR to a larger filesystem, then re-run."
+  fi
+  PAYLOAD_DIR="$(mktemp -d "${_tmpbase%/}/guardian-payload.XXXXXX")" \
+    || die "Could not create a temp dir for payload extraction."
+  # Clean up the (large) extracted payload on any exit.
+  trap 'rm -rf "$PAYLOAD_DIR"' EXIT
+  if ! tail -n +"$_payload_line" "$0" | tar -xz -C "$PAYLOAD_DIR" 2>/dev/null; then
+    die "Failed to unpack the embedded image payload. The download may be
+       truncated — re-download guardian-installer.sh and verify its sha256."
+  fi
+  [ -f "$PAYLOAD_DIR/images.tar.gz" ] \
+    || die "Embedded payload is missing images.tar.gz (corrupt download?)."
+  OFFLINE_BUNDLE="$PAYLOAD_DIR/images.tar.gz"
+  [ -d "$PAYLOAD_DIR/compose" ] && BUNDLED_COMPOSE_DIR="$PAYLOAD_DIR/compose"
+  ok "Bundled images unpacked ($(du -h "$OFFLINE_BUNDLE" 2>/dev/null | cut -f1 || echo '?'))"
+fi
+
+# (c) Helper — install the bundled Docker Compose v2 provider (offline path).
+# An air-gapped box can't reach download.docker.com, so the one-file installer
+# carries the provider binary for the host arch. Returns 1 if none is bundled.
+install_bundled_compose() {
+  [ -n "$BUNDLED_COMPOSE_DIR" ] || return 1
+  local arch bin
+  arch="$(uname -m)"
+  bin="$BUNDLED_COMPOSE_DIR/docker-compose-${arch}"
+  [ -f "$bin" ] || return 1
+  install -d /usr/libexec/docker/cli-plugins
+  install -m 0755 "$bin" /usr/libexec/docker/cli-plugins/docker-compose || return 1
+  if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
+    mkdir -p /etc/containers/containers.conf.d
+    printf '[engine]\ncompose_providers=["/usr/libexec/docker/cli-plugins/docker-compose"]\ncompose_warning_logs=false\n' \
+      > /etc/containers/containers.conf.d/guardian-compose.conf
+  fi
+  return 0
+}
+
+# (d) Offline + podman needs the `docker` CLI shim (the stack + this installer
+# call `docker`). podman-docker provides it, but it may be absent and we can't
+# dnf-install it offline — so synthesize the one-line shim ourselves.
+ensure_docker_shim_offline() {
+  [ "$GUARDIAN_RUNTIME" = "podman" ] || return 0
+  [ -n "$OFFLINE_BUNDLE" ] || return 0
+  command -v docker >/dev/null 2>&1 && return 0
+  printf '#!/bin/sh\nexec podman "$@"\n' > /usr/local/bin/docker \
+    && chmod 0755 /usr/local/bin/docker \
+    && ok "Created docker→podman shim at /usr/local/bin/docker (offline; podman-docker absent)"
+}
 
 # ─── Step 2: container runtime (Docker, or Podman on RHEL/Podman builds) ──
 if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
@@ -334,11 +429,15 @@ if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
   else
     # Podman present — make sure the docker-compat shim is installed too
     # (it provides the `docker` command + /var/run/docker.sock symlink).
-    if ! command -v docker >/dev/null 2>&1; then
+    # Offline can't dnf-install it; ensure_docker_shim_offline (below) creates
+    # a one-line shim instead, so skip the network install when offline.
+    if ! command -v docker >/dev/null 2>&1 && [ -z "$OFFLINE_BUNDLE" ]; then
       if command -v dnf >/dev/null 2>&1; then dnf install -y -q podman-docker || true
       elif command -v yum >/dev/null 2>&1; then yum install -y -q podman-docker || true; fi
     fi
   fi
+  # Offline + podman-docker absent: synthesize the docker→podman shim ourselves.
+  ensure_docker_shim_offline
   ok "Podman present: $(podman --version)"
 
   # Rootful Docker-compatible API socket — the updater drives it to manage
@@ -386,29 +485,38 @@ if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
   # com.docker.compose.* labels, so guardian-updater's project detection works
   # identically to Docker.
   if ! docker compose version >/dev/null 2>&1; then
-    warn "Installing Docker Compose v2 (compose CLI only — the Docker engine is NOT installed; runtime stays Podman)…"
-    if command -v dnf >/dev/null 2>&1; then
-      dnf install -y -q dnf-plugins-core 2>/dev/null || true
-      dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo 2>/dev/null || true
-      dnf install -y -q docker-compose-plugin 2>/dev/null || true
-    elif command -v yum >/dev/null 2>&1; then
-      yum install -y -q yum-utils 2>/dev/null || true
-      yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo 2>/dev/null || true
-      yum install -y -q docker-compose-plugin 2>/dev/null || true
-    fi
-    # The plugin lands as a cli-plugin binary; podman's `compose` won't find it
-    # on PATH automatically, so register it explicitly as the compose provider.
-    _compose_bin=""
-    for _p in /usr/libexec/docker/cli-plugins/docker-compose \
-              /usr/lib/docker/cli-plugins/docker-compose \
-              /usr/local/lib/docker/cli-plugins/docker-compose; do
-      [ -x "$_p" ] && _compose_bin="$_p" && break
-    done
-    if [ -n "$_compose_bin" ]; then
-      mkdir -p /etc/containers/containers.conf.d
-      printf '[engine]\ncompose_providers=["%s"]\ncompose_warning_logs=false\n' "$_compose_bin" \
-        > /etc/containers/containers.conf.d/guardian-compose.conf
-      ok "Docker Compose v2 plugin registered as Podman's compose provider: $_compose_bin"
+    if [ -n "$OFFLINE_BUNDLE" ]; then
+      # Air-gapped: never touch download.docker.com — install the bundled provider.
+      install_bundled_compose \
+        || die "Offline install needs a Docker Compose v2 provider and none is
+       bundled for $(uname -m). Re-download guardian-installer.sh (the bundle may
+       be truncated), or install docker-compose-plugin manually, then re-run."
+      ok "Docker Compose v2 provider installed from the bundle (offline)"
+    else
+      warn "Installing Docker Compose v2 (compose CLI only — the Docker engine is NOT installed; runtime stays Podman)…"
+      if command -v dnf >/dev/null 2>&1; then
+        dnf install -y -q dnf-plugins-core 2>/dev/null || true
+        dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo 2>/dev/null || true
+        dnf install -y -q docker-compose-plugin 2>/dev/null || true
+      elif command -v yum >/dev/null 2>&1; then
+        yum install -y -q yum-utils 2>/dev/null || true
+        yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo 2>/dev/null || true
+        yum install -y -q docker-compose-plugin 2>/dev/null || true
+      fi
+      # The plugin lands as a cli-plugin binary; podman's `compose` won't find it
+      # on PATH automatically, so register it explicitly as the compose provider.
+      _compose_bin=""
+      for _p in /usr/libexec/docker/cli-plugins/docker-compose \
+                /usr/lib/docker/cli-plugins/docker-compose \
+                /usr/local/lib/docker/cli-plugins/docker-compose; do
+        [ -x "$_p" ] && _compose_bin="$_p" && break
+      done
+      if [ -n "$_compose_bin" ]; then
+        mkdir -p /etc/containers/containers.conf.d
+        printf '[engine]\ncompose_providers=["%s"]\ncompose_warning_logs=false\n' "$_compose_bin" \
+          > /etc/containers/containers.conf.d/guardian-compose.conf
+        ok "Docker Compose v2 plugin registered as Podman's compose provider: $_compose_bin"
+      fi
     fi
   fi
 else
@@ -416,6 +524,12 @@ else
   info "Step 2/7 — Docker"
 
   if ! command -v docker >/dev/null 2>&1; then
+    if [ -n "$OFFLINE_BUNDLE" ]; then
+      die "Offline install: Docker is not present and cannot be installed
+       without network access. Install Docker (or Podman) first, then re-run.
+         Ubuntu / Debian:  sudo apt-get install -y docker.io
+         RHEL / Rocky:     sudo dnf install -y podman podman-docker"
+    fi
     warn "Docker not found — installing via get.docker.com…"
     warn "(This pulls and runs Docker's official convenience script.)"
 
@@ -452,7 +566,9 @@ fi
 # installs it; older boxes that pre-date the plugin-era of compose
 # may need a manual nudge.
 if ! docker compose version >/dev/null 2>&1; then
-  if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
+  if [ -n "$OFFLINE_BUNDLE" ] && install_bundled_compose && docker compose version >/dev/null 2>&1; then
+    ok "Docker Compose v2 provider installed from the bundle (offline)"
+  elif [ "$GUARDIAN_RUNTIME" = "podman" ]; then
     die "Docker Compose v2 is not resolvable through Podman's compose shim.
        The installer tried to install the Compose v2 plugin (CLI only — not the
        Docker engine) from download.docker.com and register it as Podman's
@@ -793,15 +909,26 @@ info "Step 6/7 — refreshing $INSTALL_DIR/{docker-compose.yml,.env}"
 mkdir -p "$INSTALL_DIR"
 chmod 755 "$INSTALL_DIR"
 
-# docker-compose.yml — ALWAYS write fresh. The embedded YAML below is
-# sealed at the installer's version (deterministic from VERSION), so
-# overwriting on every run is safe and ensures the operator gets
-# whatever compose-level fixes the installer version brings. Customers
-# are not expected to hand-edit this file; if you do, it'll be replaced
-# next time you run the installer.
-cat > "$INSTALL_DIR/docker-compose.yml" <<'_GUARDIAN_COMPOSE_HEREDOC_END_'
-__INSTALLER_COMPOSE_YAML__
-_GUARDIAN_COMPOSE_HEREDOC_END_
+# docker-compose.yml — ALWAYS write fresh. Both the Docker and Podman
+# compose variants are embedded (the build fills both markers); we write
+# the one matching the runtime. For baked-runtime installers this is fixed
+# at build time; for the one-file "auto" installer it follows the runtime
+# auto-detected above. The embedded YAML is sealed at the installer's
+# version (deterministic from VERSION), so overwriting on every run is safe.
+# Customers aren't expected to hand-edit this file; it's replaced each run.
+GUARDIAN_COMPOSE_DOCKER=$(cat <<'_GUARDIAN_COMPOSE_DOCKER_END_'
+__INSTALLER_COMPOSE_DOCKER__
+_GUARDIAN_COMPOSE_DOCKER_END_
+)
+GUARDIAN_COMPOSE_PODMAN=$(cat <<'_GUARDIAN_COMPOSE_PODMAN_END_'
+__INSTALLER_COMPOSE_PODMAN__
+_GUARDIAN_COMPOSE_PODMAN_END_
+)
+if [ "$GUARDIAN_RUNTIME" = "podman" ]; then
+  printf '%s\n' "$GUARDIAN_COMPOSE_PODMAN" > "$INSTALL_DIR/docker-compose.yml"
+else
+  printf '%s\n' "$GUARDIAN_COMPOSE_DOCKER" > "$INSTALL_DIR/docker-compose.yml"
+fi
 chmod 644 "$INSTALL_DIR/docker-compose.yml"
 if [[ -n "$OFFLINE_BUNDLE" ]]; then
   # Offline: the bundle's images are tagged by version, not addressed by
@@ -1157,8 +1284,12 @@ if [[ -n "$OFFLINE_BUNDLE" ]]; then
   #    rewritten to :$GUARDIAN_VERSION tags in Step 6, matching the tags the
   #    bundle carries.
   info "Loading images from the offline bundle (this can take a minute)…"
-  docker load -i "$OFFLINE_BUNDLE"
-  ok "Images loaded from $(basename "$OFFLINE_BUNDLE")"
+  docker load -i "$OFFLINE_BUNDLE" \
+    || die "Failed to load images from the bundle via '$GUARDIAN_RUNTIME'.
+       Check that the runtime is healthy ('$GUARDIAN_RUNTIME info') and that
+       the download wasn't truncated (verify guardian-installer.sh's sha256),
+       then re-run."
+  ok "Images loaded from the bundle"
 else
 
 # docker login. --password-stdin keeps the token out of process listings

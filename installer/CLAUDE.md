@@ -24,6 +24,41 @@ Both use the SAME install ceremony + SAME compose + SAME env-file format + SAME 
 
 The customer installer has zero knowledge of dev — no flags, no branches, no toggles.
 
+## The one-file self-extracting installer (v0.4.0+) — the socagents customer artifact
+
+The public `socagents` release is a **single self-extracting `guardian-installer.sh`**
+built by [`build-self-extracting-installer.sh`](build-self-extracting-installer.sh):
+
+```
+[ header ]  ← build-guardian-installer.sh output with RUNTIME=auto (both compose
+              variants embedded; runtime detected at install time)
+exit 0      ← stops bash before the binary payload
+__GUARDIAN_PAYLOAD_BELOW__
+[ payload ] ← gzipped tar: images.tar.gz (docker save of all 9 images) +
+              compose/docker-compose-{x86_64,aarch64} (Compose v2 provider)
+```
+
+Contract:
+- **`RUNTIME=auto`** makes the template detect podman-vs-docker at install time and
+  write the matching compose. The template ALWAYS embeds both composes now
+  (`__INSTALLER_COMPOSE_DOCKER__` + `__INSTALLER_COMPOSE_PODMAN__`); baked
+  docker/podman builds still work (they just fix the runtime at build time).
+- **Everything is bundled** so the install needs no registry, no token, and no
+  `download.docker.com` (the Compose v2 provider is in the payload). The one true
+  external prerequisite is that a container runtime is already present — Podman
+  ships in the RHEL base repos. If neither podman nor docker is found, the
+  installer says so and exits.
+- **The offline path is reused, not reinvented**: the header extracts its own
+  payload, sets `OFFLINE_BUNDLE=<images.tar.gz>`, and runs the same offline
+  install ceremony the `--offline <bundle>` flag uses.
+- **socagents = one file per release.** `release.yml` no longer mirrors separate
+  images to socagents; it builds the `.sh` and attaches it. The private
+  kite-production release keeps per-image + the baked registry installers
+  (INTERNAL, `INSTALLER_OWNER=kite-production`), and the dev cycle is unchanged.
+- **When editing the runtime/compose/offline path**, `bash -n` all three variants
+  (`RUNTIME=docker|podman|auto`) and re-run the payload round-trip
+  (`awk` marker → `tail -n +N` → `tar -xz`) before pushing.
+
 ## Compose: digest pinning contract
 
 `docker-compose.yml` here uses `image: ghcr.io/.../<svc>@${DIGEST_GUARDIAN_<SVC>}` substitution. The matching `${DIGEST_*}` values come from:

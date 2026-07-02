@@ -37,6 +37,20 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.4.0",
+    date: "2026-07-02",
+    breaking: true,
+    title: "One file, one URL — the self-extracting installer that carries every image.",
+    highlights: [
+      "New: the whole product is a single self-extracting guardian-installer.sh. Download one file, `chmod +x`, `sudo ./guardian-installer.sh` — no registry, no token, no ghcr.io. The firewall allow-list is one download host chain (github.com + release-assets.githubusercontent.com).",
+      "Auto-detects the OS (tells you if it's tested/supported/untested) and the container runtime (Podman or Docker), then installs down the right path. Same images for both runtimes.",
+      "Truly air-gapped: it also embeds the Docker Compose v2 provider, so a locked-down box that reaches only the one download URL installs end-to-end. Requires only that Podman (RHEL base) or Docker is already present; if neither, it says so and stops.",
+      "Fails loudly, never halfway: low disk, a truncated download, or a runtime that can't load the images each stops with a specific message.",
+      "socagents now hosts one file per release (no separate images). The private kite-production release and the internal dev cycle are unchanged.",
+      "MAJOR bump: the download artifact changed shape — grab the new guardian-installer.sh rather than re-running a prior installer.",
+    ],
+  },
+  {
     version: "0.3.0",
     date: "2026-07-01",
     breaking: true,
